@@ -23,6 +23,11 @@ fn main() {
 #[derive(Component)]
 struct Player;
 
+struct JumpState {
+    is_jumping: bool,
+    term_vel: u32
+}
+
 #[derive(Component)]
 struct Ball;
 
@@ -62,6 +67,8 @@ fn apply_velocity(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>
     for (mut transform, velocity) in &mut query {
         transform.translation.x += velocity.x * time.delta_secs();
         transform.translation.y += velocity.y * time.delta_secs();
+
+        // TODO: apply gravity here i think
     }
 }
 
@@ -80,6 +87,10 @@ fn move_player(
             p_transform.translation.x =
                 p_transform.translation.x + left_stick_x * P_SPEED * time.delta_secs();
         }
+
+        if gamepad.just_pressed(GamepadButton::South) {
+            info!("{} just pressed South jp", entity);
+        }
     }
 }
 
@@ -93,10 +104,6 @@ fn gamepad_log_system(gamepads: Query<(Entity, &Gamepad)>) {
 
         if gamepad.just_pressed(GamepadButton::East) {
             info!("{} just pressed East", entity);
-        }
-
-        if gamepad.just_pressed(GamepadButton::South) {
-            info!("{} just pressed South", entity);
         }
 
         if gamepad.just_pressed(GamepadButton::West) {
