@@ -1,8 +1,8 @@
-use bevy::prelude::*;
+use bevy::{math::bounding::Aabb2d, prelude::*};
 
 const BACKGROUND_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
 const FLOOR_COLOR: Color = Color::srgb(0.0, 0.0, 0.0);
-const FLOOR_SIZE: Vec2 = Vec2::new(1300.0, 2.0);
+const FLOOR_SIZE: Vec2 = Vec2::new(1300.0, 200.0);
 const P1_COLOR: Color = Color::srgb(0.3, 0.3, 0.7);
 const P_SIZE: Vec2 = Vec2::new(32.0, 64.0);
 const P_SPEED: f32 = 500.0;
@@ -25,7 +25,7 @@ struct Player;
 
 struct JumpState {
     is_jumping: bool,
-    term_vel: u32
+    term_vel: u32,
 }
 
 #[derive(Component)]
@@ -37,6 +37,10 @@ struct Velocity(Vec2);
 // Default must be implemented to define this as a required component for the floors
 #[derive(Component, Default)]
 struct Collider;
+
+#[derive(Component)]
+#[require(Collider)]
+struct Floor;
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
@@ -56,11 +60,11 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         Sprite::from_color(FLOOR_COLOR, Vec2::ONE),
         Transform {
-            translation: Vec3::new(0.0, -232.0, 0.0),
+            translation: Vec3::new(0.0, -382.0, 0.0),
             scale: FLOOR_SIZE.extend(1.0),
             ..default()
         },
-        Collider,
+        Floor,
     ));
 }
 
@@ -98,7 +102,29 @@ fn move_player(
     }
 }
 
-fn check_for_collisions() {}
+fn check_for_collisions(
+    player_query: Single<(&mut Velocity, &Transform), With<Player>>,
+    collider_query: Query<(Entity, &Transform, Option<&Floor>), With<Collider>>,
+) {
+    let (mut player_velocity, player_transform) = player_query.into_inner();
+    for (collider_entity, collider_transform, maybe_floor) in &collider_query {
+        let player_box = Aabb2d::new(
+            player_transform.translation.truncate(),
+            player_transform.scale.truncate() / 2.,
+        );
+        let collider_box = Aabb2d::new(
+            collider_transform.translation.truncate(),
+            collider_transform.scale.truncate() / 2.,
+        );
+        if !player_box.intersects(&collider_box) {
+            continue;
+        }
+
+        if maybe_floor.is_some() {
+            player_velocity.y = 0.;
+        }
+    }
+}
 
 fn gamepad_log_system(gamepads: Query<(Entity, &Gamepad)>) {
     for (entity, gamepad) in &gamepads {
