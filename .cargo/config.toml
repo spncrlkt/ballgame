@@ -1,0 +1,3 @@
+[build]
+# Force static linking to solve macOS dyld issues
+rustflags = ["-C", "prefer-dynamic=false"]
