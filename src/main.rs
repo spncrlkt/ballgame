@@ -49,6 +49,7 @@ fn setup(mut commands: Commands) {
             ..default()
         },
         Player,
+        Velocity(Vec2::ZERO),
         Collider,
     ));
 
@@ -63,20 +64,22 @@ fn setup(mut commands: Commands) {
     ));
 }
 
-fn apply_velocity(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>) {
-    for (mut transform, velocity) in &mut query {
+fn apply_velocity(mut query: Query<(&mut Transform, &mut Velocity)>, time: Res<Time>) {
+    for (mut transform, mut velocity) in &mut query {
         transform.translation.x += velocity.x * time.delta_secs();
         transform.translation.y += velocity.y * time.delta_secs();
 
         // TODO: apply gravity here i think
+        velocity.y -= 10.0 * time.delta_secs();
     }
 }
 
 fn move_player(
     gamepads: Query<(Entity, &Gamepad)>,
-    mut p_transform: Single<&mut Transform, With<Player>>,
+    player: Single<(&mut Transform, &mut Velocity), With<Player>>,
     time: Res<Time>,
 ) {
+    let (mut p_transform, mut p_velocity) = player.into_inner();
     for (entity, gamepad) in &gamepads {
         let left_stick_x = gamepad.get(GamepadAxis::LeftStickX).unwrap();
         if left_stick_x.abs() > 0.05 {
@@ -90,6 +93,7 @@ fn move_player(
 
         if gamepad.just_pressed(GamepadButton::South) {
             info!("{} just pressed South jp", entity);
+            p_velocity.y += 20.0;
         }
     }
 }
