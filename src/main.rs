@@ -18,11 +18,15 @@ const DEBUG_TEXT_PADDING: Val = Val::Px(5.0);
 #[derive(Resource)]
 struct DebugInfo {
     elapsed_time: f64,
+    is_between: bool,
 }
 
 impl Default for DebugInfo {
     fn default() -> Self {
-        Self { elapsed_time: 0.0 }
+        Self {
+            elapsed_time: 0.0,
+            is_between: false,
+        }
     }
 }
 
@@ -176,7 +180,7 @@ fn move_player(
         if gamepad.just_pressed(GamepadButton::South) {
             info!("{} just pressed South jp", entity);
             if !p_movestate.is_jumping {
-                p_transform.translation.y += 3.0;
+                p_transform.translation.y += 10.;
                 p_velocity.y += 200.0;
                 p_movestate.is_jumping = true;
             }
@@ -185,31 +189,58 @@ fn move_player(
 }
 
 fn check_for_collisions(
+    mut debug_info: ResMut<DebugInfo>,
     player_query: Single<(&mut Velocity, &Transform, &mut MoveState), With<Player>>,
     collider_query: Query<(Entity, &Transform, Option<&Floor>), With<Collider>>,
 ) {
     let (mut player_velocity, player_transform, mut player_movestate) = player_query.into_inner();
     for (collider_entity, collider_transform, maybe_floor) in &collider_query {
-        let player_box = Aabb2d::new(
+        let p_box = Aabb2d::new(
             player_transform.translation.truncate(),
             player_transform.scale.truncate() / 2.,
         );
-        let collider_box = Aabb2d::new(
+        let c_box = Aabb2d::new(
             collider_transform.translation.truncate(),
             collider_transform.scale.truncate() / 2.,
         );
-        if !player_box.intersects(&collider_box) {
+        if !p_box.intersects(&c_box) {
             continue;
         }
 
         if maybe_floor.is_some() {
-            player_velocity.y = 0.;
-            let higher = player_transform.translation.y >= collider_transform.translation.y;
-            let between = player_transform.translation.x >= collider_box.min.x
-                && player_transform.translation.x <= collider_box.max.x;
-            if higher && between {
-                player_movestate.is_jumping = false;
-            };
+            player_movestate.is_jumping = false;
+            let above = p_box.min.y >=c_box.max.y;
+            let between = p_box.max.x >= c_box.min.x || p_box.min.x <=c_box.max.x;
+            debug_info.is_between = between;
+            if above && between {
+                player_velocity.y = 0.;
+                // player_transform.translation.y = c_box.max.y;
+            } else if above && !between || !above && !between{
+                player_velocity.x = 0.;
+            } else if !above && between {
+                player_velocity.y = 0.;
+            } else {
+                assert!(false);
+            }
+
+            /*
+            let p_translation = player_transform.translation.truncate();
+            let c_translation = collider_transform.translation.truncate();
+            let offset = p_translation - c_translation;
+            let between = p_translation.x >= collider_box.min.x
+                && p_translation.x <=collider_box.max.x;
+            debug_info.is_between = between;
+            let above = p_translation.y >= c_translation.y;
+            if !between {
+                player_velocity.x = 0.;
+            } else {
+                player_velocity.y = 0.;
+                if above {
+                    player_movestate.is_jumping = false;
+                }
+            }
+            */
+
         }
     }
 }
@@ -254,14 +285,10 @@ fn debug_update_system(
 ) {
     for mut text in &mut query {
         text.0 = format!(
-            "Player Speed: {:.2}\n\
-             Collisions: {}\n\
-             Last Side: {}\n\
-             Frame Time: {:.3} ms",
+            "Elapsed time: {:.2}\n\
+             is_between: {}",
             debug_info.elapsed_time,
-            debug_info.elapsed_time,
-            debug_info.elapsed_time,
-            debug_info.elapsed_time,
+            debug_info.is_between,
         );
     }
 }
