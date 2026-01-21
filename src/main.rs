@@ -23,6 +23,9 @@ const COLLISION_EPSILON: f32 = 0.5; // Skin width for collision detection
 const COYOTE_TIME: f32 = 0.1; // Seconds after leaving ground you can still jump
 const JUMP_BUFFER_TIME: f32 = 0.1; // Seconds before landing that jump input is remembered
 
+// Spawn
+const PLAYER_SPAWN: Vec3 = Vec3::new(0.0, 100.0, 0.0);
+
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, FrameTimeDiagnosticsPlugin::default()))
@@ -30,7 +33,7 @@ fn main() {
         .init_resource::<PlayerInput>()
         .init_resource::<DebugSettings>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (capture_input, toggle_debug, update_debug_text))
+        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text))
         .add_systems(
             FixedUpdate,
             (
@@ -102,7 +105,7 @@ fn setup(mut commands: Commands) {
     // Player - spawns above the floor
     commands.spawn((
         Sprite::from_color(PLAYER_COLOR, PLAYER_SIZE),
-        Transform::from_xyz(0.0, 100.0, 0.0),
+        Transform::from_translation(PLAYER_SPAWN),
         Player,
         Velocity::default(),
         Grounded(false),
@@ -192,6 +195,22 @@ fn capture_input(
         input.jump_buffer_timer = JUMP_BUFFER_TIME;
     } else {
         input.jump_buffer_timer = (input.jump_buffer_timer - time.delta_secs()).max(0.0);
+    }
+}
+
+fn respawn_player(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
+    mut player: Query<(&mut Transform, &mut Velocity), With<Player>>,
+) {
+    let respawn_pressed = keyboard.just_pressed(KeyCode::KeyR)
+        || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::Start));
+
+    if respawn_pressed {
+        if let Ok((mut transform, mut velocity)) = player.single_mut() {
+            transform.translation = PLAYER_SPAWN;
+            velocity.0 = Vec2::ZERO;
+        }
     }
 }
 
