@@ -14,7 +14,8 @@ const PLATFORM_SIZE: Vec2 = Vec2::new(150.0, 20.0);
 // Physics constants
 const GRAVITY_RISE: f32 = 980.0; // Gravity while rising
 const GRAVITY_FALL: f32 = 1400.0; // Gravity while falling (fast fall)
-const JUMP_VELOCITY: f32 = 450.0; // Increased to compensate for fast fall
+const JUMP_VELOCITY: f32 = 650.0; // Full jump height (hold button)
+const JUMP_CUT_MULTIPLIER: f32 = 0.4; // Velocity multiplier when releasing jump early
 const MOVE_SPEED: f32 = 300.0;
 const COLLISION_EPSILON: f32 = 0.5; // Skin width for collision detection
 
@@ -49,6 +50,7 @@ fn main() {
 struct PlayerInput {
     move_x: f32,
     jump_buffer_timer: f32, // Time remaining in jump buffer
+    jump_held: bool,        // Is jump button currently held
 }
 
 #[derive(Resource)]
@@ -77,6 +79,11 @@ struct Grounded(bool);
 struct CoyoteTimer(f32); // Time remaining where jump is still allowed after leaving ground
 
 #[derive(Component, Default)]
+struct JumpState {
+    is_jumping: bool, // Currently in a jump (for variable height)
+}
+
+#[derive(Component, Default)]
 struct Collider;
 
 #[derive(Component)]
@@ -100,6 +107,7 @@ fn setup(mut commands: Commands) {
         Velocity::default(),
         Grounded(false),
         CoyoteTimer::default(),
+        JumpState::default(),
         Collider,
     ));
 
@@ -168,12 +176,18 @@ fn capture_input(
 
     input.move_x = move_x.clamp(-1.0, 1.0);
 
-    // Jump buffering - reset timer on press, count down otherwise
+    // Jump button state
     let jump_pressed = keyboard.just_pressed(KeyCode::Space)
         || keyboard.just_pressed(KeyCode::KeyW)
         || keyboard.just_pressed(KeyCode::ArrowUp)
         || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::South));
 
+    input.jump_held = keyboard.pressed(KeyCode::Space)
+        || keyboard.pressed(KeyCode::KeyW)
+        || keyboard.pressed(KeyCode::ArrowUp)
+        || gamepads.iter().any(|gp| gp.pressed(GamepadButton::South));
+
+    // Jump buffering - reset timer on press, count down otherwise
     if jump_pressed {
         input.jump_buffer_timer = JUMP_BUFFER_TIME;
     } else {
@@ -184,10 +198,10 @@ fn capture_input(
 /// Runs in FixedUpdate to apply captured input to physics
 fn apply_input(
     mut input: ResMut<PlayerInput>,
-    mut player: Query<(&mut Velocity, &mut CoyoteTimer, &Grounded), With<Player>>,
+    mut player: Query<(&mut Velocity, &mut CoyoteTimer, &mut JumpState, &Grounded), With<Player>>,
     time: Res<Time>,
 ) {
-    let Ok((mut velocity, mut coyote, grounded)) = player.single_mut() else {
+    let Ok((mut velocity, mut coyote, mut jump_state, grounded)) = player.single_mut() else {
         return;
     };
 
@@ -196,6 +210,7 @@ fn apply_input(
     // Update coyote timer
     if grounded.0 {
         coyote.0 = COYOTE_TIME;
+        jump_state.is_jumping = false; // Reset jump state when grounded
     } else {
         coyote.0 = (coyote.0 - time.delta_secs()).max(0.0);
     }
@@ -208,6 +223,14 @@ fn apply_input(
         velocity.0.y = JUMP_VELOCITY;
         input.jump_buffer_timer = 0.0; // Consume the buffered jump
         coyote.0 = 0.0; // Consume coyote time so we can't double jump
+        jump_state.is_jumping = true; // Mark that we're in a jump
+    }
+
+    // Variable jump height: cut velocity if button released while rising
+    // Check: in a jump + rising + button NOT held = cut velocity
+    if jump_state.is_jumping && velocity.0.y > 0.0 && !input.jump_held {
+        velocity.0.y *= JUMP_CUT_MULTIPLIER;
+        jump_state.is_jumping = false; // Only cut once per jump
     }
 }
 
