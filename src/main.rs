@@ -1,294 +1,319 @@
-use bevy::{
-    color::palettes::css::BLACK, math::bounding::Aabb2d, math::bounding::IntersectsVolume,
-    prelude::*,
-};
+use bevy::prelude::*;
 
+// Visual constants
 const BACKGROUND_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
-const FLOOR_COLOR: Color = Color::srgb(0.0, 0.0, 0.0);
-const FLOOR_SIZE: Vec2 = Vec2::new(1300.0, 200.0);
-const PLATFORM_COLOR: Color = Color::srgb(0.7, 0.3, 0.3);
-const PLATFORM_SIZE: Vec2 = Vec2::new(100.0, 20.0);
-const P1_COLOR: Color = Color::srgb(0.3, 0.3, 0.7);
-const P_SIZE: Vec2 = Vec2::new(32.0, 64.0);
-const P_SPEED: f32 = 500.0;
+const FLOOR_COLOR: Color = Color::srgb(0.2, 0.2, 0.2);
+const PLATFORM_COLOR: Color = Color::srgb(0.5, 0.3, 0.3);
+const PLAYER_COLOR: Color = Color::srgb(0.3, 0.3, 0.7);
 
-const DEBUG_FONT_SIZE: f32 = 33.0;
-const DEBUG_TEXT_PADDING: Val = Val::Px(5.0);
+// Size constants
+const PLAYER_SIZE: Vec2 = Vec2::new(32.0, 64.0);
+const FLOOR_SIZE: Vec2 = Vec2::new(800.0, 40.0);
+const PLATFORM_SIZE: Vec2 = Vec2::new(150.0, 20.0);
 
-#[derive(Resource)]
-struct DebugInfo {
-    elapsed_time: f64,
-    is_between: bool,
-}
-
-impl Default for DebugInfo {
-    fn default() -> Self {
-        Self {
-            elapsed_time: 0.0,
-            is_between: false,
-        }
-    }
-}
+// Physics constants
+const GRAVITY: f32 = 980.0;
+const JUMP_VELOCITY: f32 = 400.0;
+const MOVE_SPEED: f32 = 300.0;
+const COLLISION_EPSILON: f32 = 0.5; // Skin width for collision detection
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .insert_resource(ClearColor(BACKGROUND_COLOR))
-        .insert_resource(DebugInfo::default())
+        .init_resource::<PlayerInput>()
         .add_systems(Startup, setup)
-        .add_systems(Update, gamepad_log_system)
+        .add_systems(Update, (capture_input, update_debug_text))
         .add_systems(
             FixedUpdate,
-            (apply_velocity, move_player, check_for_collisions).chain(),
+            (
+                apply_input,
+                apply_gravity,
+                apply_velocity,
+                check_collisions,
+            )
+                .chain(),
         )
-        .add_systems(Update, debug_update_system)
         .run();
 }
+
+// Resources
+
+#[derive(Resource, Default)]
+struct PlayerInput {
+    move_x: f32,
+    jump: bool,
+    // Debug tracking
+    jump_pressed_frame: u32,
+    jump_consumed_frame: u32,
+    frame_counter: u32,
+}
+
+// Components
 
 #[derive(Component)]
 struct Player;
 
-#[derive(Component)]
-struct MoveState {
-    is_jumping: bool,
-    term_vel: u32,
-}
-
-#[derive(Component)]
-struct Ball;
-
-#[derive(Component, Deref, DerefMut)]
+#[derive(Component, Default)]
 struct Velocity(Vec2);
 
-// Default must be implemented to define this as a required component for the floors
+#[derive(Component)]
+struct Grounded(bool);
+
 #[derive(Component, Default)]
 struct Collider;
 
 #[derive(Component)]
 #[require(Collider)]
-struct Floor;
+struct Platform;
 
 #[derive(Component)]
 struct DebugText;
 
+// Systems
+
 fn setup(mut commands: Commands) {
+    // Camera
     commands.spawn(Camera2d);
 
+    // Player - spawns above the floor
     commands.spawn((
-        Sprite::from_color(P1_COLOR, Vec2::ONE),
-        Transform {
-            translation: Vec3::new(0.0, -100.0, 0.0),
-            scale: P_SIZE.extend(1.0),
-            ..default()
-        },
+        Sprite::from_color(PLAYER_COLOR, PLAYER_SIZE),
+        Transform::from_xyz(0.0, 100.0, 0.0),
         Player,
-        MoveState {
-            is_jumping: true,
-            term_vel: 0,
-        },
-        Velocity(Vec2::ZERO),
+        Velocity::default(),
+        Grounded(false),
         Collider,
     ));
 
+    // Main floor
     commands.spawn((
-        Sprite::from_color(FLOOR_COLOR, Vec2::ONE),
-        Transform {
-            translation: Vec3::new(0.0, -382.0, 0.0),
-            scale: FLOOR_SIZE.extend(1.0),
-            ..default()
-        },
-        Floor,
+        Sprite::from_color(FLOOR_COLOR, FLOOR_SIZE),
+        Transform::from_xyz(0.0, -200.0, 0.0),
+        Platform,
+    ));
+
+    // Floating platforms
+    commands.spawn((
+        Sprite::from_color(PLATFORM_COLOR, PLATFORM_SIZE),
+        Transform::from_xyz(-200.0, -50.0, 0.0),
+        Platform,
     ));
 
     commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::ONE),
-        Transform {
-            translation: Vec3::new(-100.0, -200.0, 1.0),
-            scale: PLATFORM_SIZE.extend(1.0),
-            ..default()
-        },
-        Floor,
+        Sprite::from_color(PLATFORM_COLOR, PLATFORM_SIZE),
+        Transform::from_xyz(150.0, 50.0, 0.0),
+        Platform,
     ));
 
+    // Debug UI
     commands.spawn((
-        Text::new("XXXXXXXX"),
-        DebugText,
+        Text::new("Debug"),
         TextFont {
-            font_size: 22.0,
+            font_size: 16.0,
             ..default()
         },
-        TextColor(BLACK.into()),
+        TextColor(Color::BLACK),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(10.0),
+            left: Val::Px(10.0),
+            ..default()
+        },
+        DebugText,
     ));
-
-    /*
-    commands
-        .spawn((
-            // Create a Text with multiple child spans.
-            Text::new("DEBUG: "),
-            TextFont {
-                font_size: 42.0,
-                ..default()
-            },
-            TextColor(BLACK.into()),
-        ))
-        .with_child((
-            TextSpan::default(),
-            TextFont {
-                font_size: 33.0,
-                // If no font is specified, the default font (a minimal subset of FiraMono) will be used.
-                ..default()
-            },
-            TextColor(BLACK.into()),
-            DebugText,
-        ));
-    */
 }
 
-fn apply_velocity(
-    mut debug_info: ResMut<DebugInfo>,
-    mut query: Query<(&mut Transform, &mut Velocity)>,
-    time: Res<Time>,
+/// Runs in Update to capture input state before it's cleared
+fn capture_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
+    mut input: ResMut<PlayerInput>,
 ) {
-    for (mut transform, mut velocity) in &mut query {
-        transform.translation.x += velocity.x * time.delta_secs();
-        transform.translation.y += velocity.y * time.delta_secs();
+    input.frame_counter += 1;
 
-        // TODO: apply gravity here i think
-        velocity.y -= 200.0 * time.delta_secs();
+    // Horizontal movement (continuous - overwrite each frame)
+    let mut move_x = 0.0;
+
+    if keyboard.pressed(KeyCode::KeyA) || keyboard.pressed(KeyCode::ArrowLeft) {
+        move_x -= 1.0;
     }
-    debug_info.elapsed_time += 1.
-}
+    if keyboard.pressed(KeyCode::KeyD) || keyboard.pressed(KeyCode::ArrowRight) {
+        move_x += 1.0;
+    }
 
-fn move_player(
-    mut debug_info: ResMut<DebugInfo>,
-    gamepads: Query<(Entity, &Gamepad)>,
-    player: Single<(&mut Transform, &mut Velocity, &mut MoveState), With<Player>>,
-    time: Res<Time>,
-) {
-    let (mut p_transform, mut p_velocity, mut p_movestate) = player.into_inner();
-    for (entity, gamepad) in &gamepads {
-        let left_stick_x = gamepad.get(GamepadAxis::LeftStickX).unwrap();
-        if left_stick_x.abs() > 0.05 {
-            info!("{} LeftStickX value is {}", entity, left_stick_x);
-
-            // Update the player position with the result of:
-            // Calculate the new horizontal player position based on player input
-            p_transform.translation.x =
-                p_transform.translation.x + left_stick_x * P_SPEED * time.delta_secs();
-        }
-
-        if gamepad.just_pressed(GamepadButton::South) {
-            info!("{} just pressed South jp", entity);
-            if !p_movestate.is_jumping {
-                p_transform.translation.y += 10.;
-                p_velocity.y += 200.0;
-                p_movestate.is_jumping = true;
+    for gamepad in &gamepads {
+        if let Some(stick_x) = gamepad.get(GamepadAxis::LeftStickX) {
+            if stick_x.abs() > 0.1 {
+                move_x += stick_x;
             }
         }
     }
+
+    input.move_x = move_x.clamp(-1.0, 1.0);
+
+    // Jump (edge-triggered - accumulate until consumed)
+    let jump_pressed = keyboard.just_pressed(KeyCode::Space)
+        || keyboard.just_pressed(KeyCode::KeyW)
+        || keyboard.just_pressed(KeyCode::ArrowUp)
+        || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::South));
+
+    if jump_pressed {
+        input.jump = true;
+        input.jump_pressed_frame = input.frame_counter;
+    }
 }
 
-fn check_for_collisions(
-    mut debug_info: ResMut<DebugInfo>,
-    player_query: Single<(&mut Velocity, &Transform, &mut MoveState), With<Player>>,
-    collider_query: Query<(Entity, &Transform, Option<&Floor>), With<Collider>>,
+/// Runs in FixedUpdate to apply captured input to physics
+fn apply_input(
+    mut input: ResMut<PlayerInput>,
+    mut player: Query<(&mut Velocity, &Grounded), With<Player>>,
 ) {
-    let (mut player_velocity, player_transform, mut player_movestate) = player_query.into_inner();
-    for (collider_entity, collider_transform, maybe_floor) in &collider_query {
-        let p_box = Aabb2d::new(
-            player_transform.translation.truncate(),
-            player_transform.scale.truncate() / 2.,
-        );
-        let c_box = Aabb2d::new(
-            collider_transform.translation.truncate(),
-            collider_transform.scale.truncate() / 2.,
-        );
-        if !p_box.intersects(&c_box) {
+    let Ok((mut velocity, grounded)) = player.single_mut() else {
+        return;
+    };
+
+    velocity.0.x = input.move_x * MOVE_SPEED;
+
+    if input.jump {
+        if grounded.0 {
+            velocity.0.y = JUMP_VELOCITY;
+        }
+        // Consume the jump input so it only fires once
+        input.jump = false;
+        input.jump_consumed_frame = input.frame_counter;
+    }
+}
+
+fn apply_gravity(mut query: Query<(&mut Velocity, &Grounded)>, time: Res<Time>) {
+    for (mut velocity, grounded) in &mut query {
+        if !grounded.0 {
+            velocity.0.y -= GRAVITY * time.delta_secs();
+        }
+    }
+}
+
+fn apply_velocity(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>) {
+    for (mut transform, velocity) in &mut query {
+        transform.translation.x += velocity.0.x * time.delta_secs();
+        transform.translation.y += velocity.0.y * time.delta_secs();
+    }
+}
+
+fn check_collisions(
+    mut player_query: Query<(&mut Transform, &mut Velocity, &mut Grounded, &Sprite), With<Player>>,
+    platform_query: Query<(&Transform, &Sprite), (With<Platform>, Without<Player>)>,
+) {
+    let Ok((mut player_transform, mut player_velocity, mut grounded, player_sprite)) =
+        player_query.single_mut()
+    else {
+        return;
+    };
+
+    let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
+    let player_half = player_size / 2.0;
+
+    // Assume not grounded until we find a floor beneath us
+    grounded.0 = false;
+
+    for (platform_transform, platform_sprite) in &platform_query {
+        let platform_size = platform_sprite.custom_size.unwrap_or(PLATFORM_SIZE);
+        let platform_half = platform_size / 2.0;
+
+        let player_pos = player_transform.translation.truncate();
+        let platform_pos = platform_transform.translation.truncate();
+
+        // Calculate overlap
+        let diff = player_pos - platform_pos;
+        let overlap_x = player_half.x + platform_half.x - diff.x.abs();
+        let overlap_y = player_half.y + platform_half.y - diff.y.abs();
+
+        // No collision
+        if overlap_x <= 0.0 || overlap_y <= 0.0 {
             continue;
         }
 
-        if maybe_floor.is_some() {
-            player_movestate.is_jumping = false;
-            let above = p_box.min.y >=c_box.max.y;
-            let between = p_box.max.x >= c_box.min.x || p_box.min.x <=c_box.max.x;
-            debug_info.is_between = between;
-            if above && between {
-                player_velocity.y = 0.;
-                // player_transform.translation.y = c_box.max.y;
-            } else if above && !between || !above && !between{
-                player_velocity.x = 0.;
-            } else if !above && between {
-                player_velocity.y = 0.;
+        // Resolve collision along the smallest overlap axis
+        if overlap_y < overlap_x {
+            // Vertical collision
+            if diff.y > 0.0 {
+                // Player is above - land on platform
+                // Position slightly inside (EPSILON) so next frame still detects collision
+                player_transform.translation.y =
+                    platform_pos.y + platform_half.y + player_half.y - COLLISION_EPSILON;
+                if player_velocity.0.y <= 0.0 {
+                    player_velocity.0.y = 0.0;
+                    grounded.0 = true;
+                }
             } else {
-                assert!(false);
-            }
-
-            /*
-            let p_translation = player_transform.translation.truncate();
-            let c_translation = collider_transform.translation.truncate();
-            let offset = p_translation - c_translation;
-            let between = p_translation.x >= collider_box.min.x
-                && p_translation.x <=collider_box.max.x;
-            debug_info.is_between = between;
-            let above = p_translation.y >= c_translation.y;
-            if !between {
-                player_velocity.x = 0.;
-            } else {
-                player_velocity.y = 0.;
-                if above {
-                    player_movestate.is_jumping = false;
+                // Player hit ceiling
+                player_transform.translation.y =
+                    platform_pos.y - platform_half.y - player_half.y + COLLISION_EPSILON;
+                if player_velocity.0.y > 0.0 {
+                    player_velocity.0.y = 0.0;
                 }
             }
-            */
-
+        } else {
+            // Horizontal collision - push player out
+            if diff.x > 0.0 {
+                player_transform.translation.x =
+                    platform_pos.x + platform_half.x + player_half.x - COLLISION_EPSILON;
+            } else {
+                player_transform.translation.x =
+                    platform_pos.x - platform_half.x - player_half.x + COLLISION_EPSILON;
+            }
+            // Don't zero horizontal velocity - let player slide along walls
         }
     }
 }
 
-fn gamepad_log_system(gamepads: Query<(Entity, &Gamepad)>) {
-    for (entity, gamepad) in &gamepads {
-        if gamepad.just_pressed(GamepadButton::North) {
-            info!("{} just pressed North", entity);
-        }
-
-        if gamepad.just_pressed(GamepadButton::East) {
-            info!("{} just pressed East", entity);
-        }
-
-        if gamepad.just_pressed(GamepadButton::West) {
-            info!("{} just pressed West", entity);
-        }
-
-        if gamepad.just_pressed(GamepadButton::RightTrigger) {
-            info!("{} just pressed R", entity);
-        }
-
-        if gamepad.just_pressed(GamepadButton::LeftTrigger) {
-            info!("{} just pressed L", entity);
-        }
-
-        let left_stick_x = gamepad.get(GamepadAxis::LeftStickX).unwrap();
-        if left_stick_x.abs() > 0.05 {
-            info!("{} LeftStickX value is {}", entity, left_stick_x);
-        }
-
-        let left_stick_y = gamepad.get(GamepadAxis::LeftStickY).unwrap();
-        if left_stick_y.abs() > 0.05 {
-            info!("{} LeftStickY value is {}", entity, left_stick_y);
-        }
-    }
-}
-
-fn debug_update_system(
-    mut debug_info: ResMut<DebugInfo>,
-    mut query: Query<&mut Text, With<DebugText>>,
+fn update_debug_text(
+    input: Res<PlayerInput>,
+    player: Query<(&Velocity, &Grounded), With<Player>>,
+    gamepads: Query<&Gamepad>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut text_query: Query<&mut Text, With<DebugText>>,
 ) {
-    for mut text in &mut query {
-        text.0 = format!(
-            "Elapsed time: {:.2}\n\
-             is_between: {}",
-            debug_info.elapsed_time,
-            debug_info.is_between,
-        );
+    let Ok((velocity, grounded)) = player.single() else {
+        return;
+    };
+    let Ok(mut text) = text_query.single_mut() else {
+        return;
+    };
+
+    let frames_since_press = input.frame_counter.saturating_sub(input.jump_pressed_frame);
+    let frames_since_consume = input.frame_counter.saturating_sub(input.jump_consumed_frame);
+
+    // Check raw button states
+    let mut gp_south_pressed = false;
+    let mut gp_south_just_pressed = false;
+    for gamepad in &gamepads {
+        gp_south_pressed |= gamepad.pressed(GamepadButton::South);
+        gp_south_just_pressed |= gamepad.just_pressed(GamepadButton::South);
     }
+    let kb_space_pressed = keyboard.pressed(KeyCode::Space);
+    let kb_space_just_pressed = keyboard.just_pressed(KeyCode::Space);
+
+    text.0 = format!(
+        "Frame: {}\n\
+         Input: move_x={:.2} jump_buffered={}\n\
+         Player: vel=({:.0}, {:.0}) grounded={}\n\
+         Jump pressed: {} frames ago\n\
+         Jump consumed: {} frames ago\n\
+         ---\n\
+         GP South: held={} just={}\n\
+         KB Space: held={} just={}",
+        input.frame_counter,
+        input.move_x,
+        input.jump,
+        velocity.0.x,
+        velocity.0.y,
+        grounded.0,
+        frames_since_press,
+        frames_since_consume,
+        gp_south_pressed,
+        gp_south_just_pressed,
+        kb_space_pressed,
+        kb_space_just_pressed,
+    );
 }
