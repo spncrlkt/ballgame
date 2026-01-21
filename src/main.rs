@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 
 // Visual constants
 const BACKGROUND_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
@@ -19,11 +19,12 @@ const COLLISION_EPSILON: f32 = 0.5; // Skin width for collision detection
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins((DefaultPlugins, FrameTimeDiagnosticsPlugin::default()))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .init_resource::<PlayerInput>()
+        .init_resource::<DebugSettings>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (capture_input, update_debug_text))
+        .add_systems(Update, (capture_input, toggle_debug, update_debug_text))
         .add_systems(
             FixedUpdate,
             (
@@ -43,10 +44,17 @@ fn main() {
 struct PlayerInput {
     move_x: f32,
     jump: bool,
-    // Debug tracking
-    jump_pressed_frame: u32,
-    jump_consumed_frame: u32,
-    frame_counter: u32,
+}
+
+#[derive(Resource)]
+struct DebugSettings {
+    visible: bool,
+}
+
+impl Default for DebugSettings {
+    fn default() -> Self {
+        Self { visible: true }
+    }
 }
 
 // Components
@@ -130,8 +138,6 @@ fn capture_input(
     gamepads: Query<&Gamepad>,
     mut input: ResMut<PlayerInput>,
 ) {
-    input.frame_counter += 1;
-
     // Horizontal movement (continuous - overwrite each frame)
     let mut move_x = 0.0;
 
@@ -160,7 +166,6 @@ fn capture_input(
 
     if jump_pressed {
         input.jump = true;
-        input.jump_pressed_frame = input.frame_counter;
     }
 }
 
@@ -181,7 +186,6 @@ fn apply_input(
         }
         // Consume the jump input so it only fires once
         input.jump = false;
-        input.jump_consumed_frame = input.frame_counter;
     }
 }
 
@@ -267,53 +271,59 @@ fn check_collisions(
     }
 }
 
-fn update_debug_text(
-    input: Res<PlayerInput>,
-    player: Query<(&Velocity, &Grounded), With<Player>>,
-    gamepads: Query<&Gamepad>,
+fn toggle_debug(
     keyboard: Res<ButtonInput<KeyCode>>,
+    mut settings: ResMut<DebugSettings>,
+    mut text_query: Query<&mut Visibility, With<DebugText>>,
+) {
+    if keyboard.just_pressed(KeyCode::Tab) {
+        settings.visible = !settings.visible;
+        if let Ok(mut visibility) = text_query.single_mut() {
+            *visibility = if settings.visible {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            };
+        }
+    }
+}
+
+fn update_debug_text(
+    debug_settings: Res<DebugSettings>,
+    diagnostics: Res<bevy::diagnostic::DiagnosticsStore>,
+    player: Query<(&Transform, &Velocity, &Grounded), With<Player>>,
     mut text_query: Query<&mut Text, With<DebugText>>,
 ) {
-    let Ok((velocity, grounded)) = player.single() else {
+    if !debug_settings.visible {
+        return;
+    }
+
+    let Ok((transform, velocity, grounded)) = player.single() else {
         return;
     };
     let Ok(mut text) = text_query.single_mut() else {
         return;
     };
 
-    let frames_since_press = input.frame_counter.saturating_sub(input.jump_pressed_frame);
-    let frames_since_consume = input.frame_counter.saturating_sub(input.jump_consumed_frame);
+    let fps = diagnostics
+        .get(&bevy::diagnostic::FrameTimeDiagnosticsPlugin::FPS)
+        .and_then(|d| d.smoothed())
+        .unwrap_or(0.0);
 
-    // Check raw button states
-    let mut gp_south_pressed = false;
-    let mut gp_south_just_pressed = false;
-    for gamepad in &gamepads {
-        gp_south_pressed |= gamepad.pressed(GamepadButton::South);
-        gp_south_just_pressed |= gamepad.just_pressed(GamepadButton::South);
-    }
-    let kb_space_pressed = keyboard.pressed(KeyCode::Space);
-    let kb_space_just_pressed = keyboard.just_pressed(KeyCode::Space);
+    let pos = transform.translation;
 
     text.0 = format!(
-        "Frame: {}\n\
-         Input: move_x={:.2} jump_buffered={}\n\
-         Player: vel=({:.0}, {:.0}) grounded={}\n\
-         Jump pressed: {} frames ago\n\
-         Jump consumed: {} frames ago\n\
-         ---\n\
-         GP South: held={} just={}\n\
-         KB Space: held={} just={}",
-        input.frame_counter,
-        input.move_x,
-        input.jump,
+        "FPS: {:.0}\n\
+         Pos: ({:.0}, {:.0})\n\
+         Vel: ({:.0}, {:.0})\n\
+         Grounded: {}\n\
+         \n\
+         [Tab] hide",
+        fps,
+        pos.x,
+        pos.y,
         velocity.0.x,
         velocity.0.y,
         grounded.0,
-        frames_since_press,
-        frames_since_consume,
-        gp_south_pressed,
-        gp_south_just_pressed,
-        kb_space_pressed,
-        kb_space_just_pressed,
     );
 }
