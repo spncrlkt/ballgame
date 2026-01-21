@@ -12,10 +12,15 @@ const FLOOR_SIZE: Vec2 = Vec2::new(800.0, 40.0);
 const PLATFORM_SIZE: Vec2 = Vec2::new(150.0, 20.0);
 
 // Physics constants
-const GRAVITY: f32 = 980.0;
-const JUMP_VELOCITY: f32 = 400.0;
+const GRAVITY_RISE: f32 = 980.0; // Gravity while rising
+const GRAVITY_FALL: f32 = 1400.0; // Gravity while falling (fast fall)
+const JUMP_VELOCITY: f32 = 450.0; // Increased to compensate for fast fall
 const MOVE_SPEED: f32 = 300.0;
 const COLLISION_EPSILON: f32 = 0.5; // Skin width for collision detection
+
+// Game feel constants
+const COYOTE_TIME: f32 = 0.1; // Seconds after leaving ground you can still jump
+const JUMP_BUFFER_TIME: f32 = 0.1; // Seconds before landing that jump input is remembered
 
 fn main() {
     App::new()
@@ -43,7 +48,7 @@ fn main() {
 #[derive(Resource, Default)]
 struct PlayerInput {
     move_x: f32,
-    jump: bool,
+    jump_buffer_timer: f32, // Time remaining in jump buffer
 }
 
 #[derive(Resource)]
@@ -69,6 +74,9 @@ struct Velocity(Vec2);
 struct Grounded(bool);
 
 #[derive(Component, Default)]
+struct CoyoteTimer(f32); // Time remaining where jump is still allowed after leaving ground
+
+#[derive(Component, Default)]
 struct Collider;
 
 #[derive(Component)]
@@ -91,6 +99,7 @@ fn setup(mut commands: Commands) {
         Player,
         Velocity::default(),
         Grounded(false),
+        CoyoteTimer::default(),
         Collider,
     ));
 
@@ -137,6 +146,7 @@ fn capture_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut input: ResMut<PlayerInput>,
+    time: Res<Time>,
 ) {
     // Horizontal movement (continuous - overwrite each frame)
     let mut move_x = 0.0;
@@ -158,41 +168,59 @@ fn capture_input(
 
     input.move_x = move_x.clamp(-1.0, 1.0);
 
-    // Jump (edge-triggered - accumulate until consumed)
+    // Jump buffering - reset timer on press, count down otherwise
     let jump_pressed = keyboard.just_pressed(KeyCode::Space)
         || keyboard.just_pressed(KeyCode::KeyW)
         || keyboard.just_pressed(KeyCode::ArrowUp)
         || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::South));
 
     if jump_pressed {
-        input.jump = true;
+        input.jump_buffer_timer = JUMP_BUFFER_TIME;
+    } else {
+        input.jump_buffer_timer = (input.jump_buffer_timer - time.delta_secs()).max(0.0);
     }
 }
 
 /// Runs in FixedUpdate to apply captured input to physics
 fn apply_input(
     mut input: ResMut<PlayerInput>,
-    mut player: Query<(&mut Velocity, &Grounded), With<Player>>,
+    mut player: Query<(&mut Velocity, &mut CoyoteTimer, &Grounded), With<Player>>,
+    time: Res<Time>,
 ) {
-    let Ok((mut velocity, grounded)) = player.single_mut() else {
+    let Ok((mut velocity, mut coyote, grounded)) = player.single_mut() else {
         return;
     };
 
     velocity.0.x = input.move_x * MOVE_SPEED;
 
-    if input.jump {
-        if grounded.0 {
-            velocity.0.y = JUMP_VELOCITY;
-        }
-        // Consume the jump input so it only fires once
-        input.jump = false;
+    // Update coyote timer
+    if grounded.0 {
+        coyote.0 = COYOTE_TIME;
+    } else {
+        coyote.0 = (coyote.0 - time.delta_secs()).max(0.0);
+    }
+
+    // Can jump if grounded OR within coyote time
+    let can_jump = grounded.0 || coyote.0 > 0.0;
+
+    // Jump if we have buffered input and can jump
+    if input.jump_buffer_timer > 0.0 && can_jump {
+        velocity.0.y = JUMP_VELOCITY;
+        input.jump_buffer_timer = 0.0; // Consume the buffered jump
+        coyote.0 = 0.0; // Consume coyote time so we can't double jump
     }
 }
 
 fn apply_gravity(mut query: Query<(&mut Velocity, &Grounded)>, time: Res<Time>) {
     for (mut velocity, grounded) in &mut query {
         if !grounded.0 {
-            velocity.0.y -= GRAVITY * time.delta_secs();
+            // Fast fall: use higher gravity when falling than rising
+            let gravity = if velocity.0.y > 0.0 {
+                GRAVITY_RISE
+            } else {
+                GRAVITY_FALL
+            };
+            velocity.0.y -= gravity * time.delta_secs();
         }
     }
 }
@@ -291,14 +319,15 @@ fn toggle_debug(
 fn update_debug_text(
     debug_settings: Res<DebugSettings>,
     diagnostics: Res<bevy::diagnostic::DiagnosticsStore>,
-    player: Query<(&Transform, &Velocity, &Grounded), With<Player>>,
+    input: Res<PlayerInput>,
+    player: Query<(&Transform, &Velocity, &Grounded, &CoyoteTimer), With<Player>>,
     mut text_query: Query<&mut Text, With<DebugText>>,
 ) {
     if !debug_settings.visible {
         return;
     }
 
-    let Ok((transform, velocity, grounded)) = player.single() else {
+    let Ok((transform, velocity, grounded, coyote)) = player.single() else {
         return;
     };
     let Ok(mut text) = text_query.single_mut() else {
@@ -317,6 +346,8 @@ fn update_debug_text(
          Pos: ({:.0}, {:.0})\n\
          Vel: ({:.0}, {:.0})\n\
          Grounded: {}\n\
+         Coyote: {:.0}ms\n\
+         JumpBuf: {:.0}ms\n\
          \n\
          [Tab] hide",
         fps,
@@ -325,5 +356,7 @@ fn update_debug_text(
         velocity.0.x,
         velocity.0.y,
         grounded.0,
+        coyote.0 * 1000.0,
+        input.jump_buffer_timer * 1000.0,
     );
 }
