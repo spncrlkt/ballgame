@@ -23,6 +23,7 @@ const COLLISION_EPSILON: f32 = 0.5; // Skin width for collision detection
 // Game feel constants
 const COYOTE_TIME: f32 = 0.1; // Seconds after leaving ground you can still jump
 const JUMP_BUFFER_TIME: f32 = 0.1; // Seconds before landing that jump input is remembered
+const STICK_DEADZONE: f32 = 0.25; // Analog stick deadzone to prevent rebound direction changes
 
 // Ball physics
 const BALL_GRAVITY: f32 = 800.0;
@@ -30,7 +31,7 @@ const BALL_BOUNCE: f32 = 0.7; // Coefficient of restitution (0 = no bounce, 1 = 
 const BALL_FRICTION: f32 = 0.98; // Horizontal velocity retention per frame
 const BALL_MIN_BOUNCE_VEL: f32 = 50.0; // Below this, ball stops bouncing
 const BALL_PICKUP_RADIUS: f32 = 100.0; // How close player must be to pick up ball (forgiving)
-const BALL_FREE_SPEED: f32 = 100.0; // Ball becomes Free when speed drops below this
+const BALL_FREE_SPEED: f32 = 200.0; // Ball becomes Free when speed drops below this (2x pickup radius speed)
 
 // Shooting - heights: tap=2x player height (128), full=6x player height (384)
 // Using h = v_y²/(2g), v_y = sqrt(2*g*h): tap needs v_y≈452, full needs v_y≈784
@@ -77,7 +78,7 @@ fn main() {
         .init_resource::<StealContest>()
         .init_resource::<Score>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text))
+        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text, animate_pickable_ball, update_facing_arrow))
         .add_systems(
             FixedUpdate,
             (
@@ -201,6 +202,11 @@ struct BallPlayerContact {
     overlapping: bool, // Track if currently overlapping to apply effects once on entry
 }
 
+#[derive(Component, Default)]
+struct BallPulse {
+    timer: f32, // Animation timer for pickup indicator
+}
+
 #[derive(Component, Clone, Copy, PartialEq)]
 enum Basket {
     Left,
@@ -210,9 +216,16 @@ enum Basket {
 #[derive(Component)]
 struct DebugText;
 
+#[derive(Component)]
+struct FacingArrow;
+
 // Systems
 
-fn setup(mut commands: Commands) {
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
     // Camera - orthographic, shows entire arena
     // Using scale to zoom out and show full arena (default is 1.0 = 1 pixel per unit)
     // With 1600x900 arena, we need to scale so it fits in typical window sizes
@@ -225,19 +238,40 @@ fn setup(mut commands: Commands) {
         }),
     ));
 
-    // Player - spawns above the floor
-    commands.spawn((
-        Sprite::from_color(PLAYER_COLOR, PLAYER_SIZE),
-        Transform::from_translation(PLAYER_SPAWN),
-        Player,
-        Velocity::default(),
-        Grounded(false),
-        CoyoteTimer::default(),
-        JumpState::default(),
-        Facing::default(),
-        ChargingShot::default(),
-        Collider,
+    // Create arrow mesh (triangle pointing right)
+    let arrow_mesh = meshes.add(Triangle2d::new(
+        Vec2::new(-8.0, -6.0),  // Bottom left
+        Vec2::new(-8.0, 6.0),   // Top left
+        Vec2::new(8.0, 0.0),    // Right point
     ));
+    let arrow_material = materials.add(ColorMaterial::from_color(Color::WHITE));
+
+    // Player - spawns above the floor
+    let player_entity = commands
+        .spawn((
+            Sprite::from_color(PLAYER_COLOR, PLAYER_SIZE),
+            Transform::from_translation(PLAYER_SPAWN),
+            Player,
+            Velocity::default(),
+            Grounded(false),
+            CoyoteTimer::default(),
+            JumpState::default(),
+            Facing::default(),
+            ChargingShot::default(),
+            Collider,
+        ))
+        .id();
+
+    // Spawn facing arrow as child of player
+    let arrow_entity = commands
+        .spawn((
+            Mesh2d(arrow_mesh),
+            MeshMaterial2d(arrow_material),
+            Transform::from_xyz(0.0, 0.0, 1.0), // Centered, slightly in front
+            FacingArrow,
+        ))
+        .id();
+    commands.entity(player_entity).add_child(arrow_entity);
 
     // Ball
     commands.spawn((
@@ -247,6 +281,7 @@ fn setup(mut commands: Commands) {
         BallState::default(),
         Velocity::default(),
         BallPlayerContact::default(),
+        BallPulse::default(),
     ));
 
     // Arena floor (spans most of the arena width)
@@ -373,7 +408,7 @@ fn capture_input(
 
     for gamepad in &gamepads {
         if let Some(stick_x) = gamepad.get(GamepadAxis::LeftStickX) {
-            if stick_x.abs() > 0.1 {
+            if stick_x.abs() > STICK_DEADZONE {
                 move_x += stick_x;
             }
         }
@@ -996,6 +1031,76 @@ fn toggle_debug(
             } else {
                 Visibility::Hidden
             };
+        }
+    }
+}
+
+fn animate_pickable_ball(
+    time: Res<Time>,
+    players: Query<(&Transform, Option<&HoldingBall>), With<Player>>,
+    mut ball_query: Query<(&Transform, &BallState, &mut Sprite, &mut BallPulse), With<Ball>>,
+) {
+    for (ball_transform, ball_state, mut sprite, mut pulse) in &mut ball_query {
+        // Only pulse if ball is Free
+        if *ball_state != BallState::Free {
+            // Reset to normal when not free
+            sprite.custom_size = Some(BALL_SIZE);
+            sprite.color = BALL_COLOR;
+            pulse.timer = 0.0;
+            continue;
+        }
+
+        let ball_pos = ball_transform.translation.truncate();
+
+        // Check if any player without a ball is close enough to pick up
+        let mut can_pickup = false;
+        for (player_transform, holding) in &players {
+            if holding.is_some() {
+                continue; // Player already has a ball
+            }
+            let distance = ball_pos.distance(player_transform.translation.truncate());
+            if distance < BALL_PICKUP_RADIUS {
+                can_pickup = true;
+                break;
+            }
+        }
+
+        if can_pickup {
+            // Animate pulse - gentle size and color variation
+            pulse.timer += time.delta_secs();
+            let t = pulse.timer * 3.0; // Pulse speed (3 cycles per second)
+            let pulse_factor = t.sin(); // -1 to 1
+
+            // Size: pulse between 90% and 110%
+            let scale_factor = 1.0 + 0.1 * pulse_factor;
+            sprite.custom_size = Some(BALL_SIZE * scale_factor);
+
+            // Color: pulse brightness (orange gets brighter/dimmer)
+            let brightness = 0.85 + 0.15 * pulse_factor; // 0.7 to 1.0
+            sprite.color = Color::srgb(
+                (0.9 * brightness).min(1.0),
+                0.5 * brightness,
+                0.1 * brightness,
+            );
+        } else {
+            // Reset to normal
+            sprite.custom_size = Some(BALL_SIZE);
+            sprite.color = BALL_COLOR;
+            pulse.timer = 0.0;
+        }
+    }
+}
+
+fn update_facing_arrow(
+    player_query: Query<(&Facing, &Children), With<Player>>,
+    mut arrow_query: Query<&mut Transform, With<FacingArrow>>,
+) {
+    for (facing, children) in &player_query {
+        for child in children.iter() {
+            if let Ok(mut arrow_transform) = arrow_query.get_mut(child) {
+                // Flip the arrow by scaling X negative when facing left
+                arrow_transform.scale.x = facing.0;
+            }
         }
     }
 }
