@@ -29,6 +29,7 @@ This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component 
 - `CurrentLevel` - Current level number (1-10)
 - `PhysicsTweaks` - Runtime-adjustable physics values with panel UI
 - `LevelDatabase` - Loaded level definitions from assets/levels.txt
+- `LastShotInfo` - Debug info about the most recent shot (angle, power, variance breakdown)
 
 **Player Components:**
 - `Player` - Marker for player entities
@@ -54,10 +55,10 @@ This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component 
 - `Collider` - Marker for collidable entities
 - `Basket` - Scoring zone (Left or Right)
 - `LevelPlatform` - Marks platforms that belong to current level (despawned on level change)
-- `LevelBasket` - Marks baskets that belong to current level (despawned on level change)
 
 **UI Components:**
-- `DebugText` - Debug info display
+- `DebugText` - Debug info display (last shot details)
+- `ScoreLevelText` - Score and level display (top of screen)
 - `ChargeGaugeBackground` / `ChargeGaugeFill` - Shot charge indicator (inside player)
 - `TweakPanel` / `TweakRow` - Physics tweak panel UI
 - `ScoreFlash` - Score animation (flashes basket/player on goal)
@@ -65,7 +66,7 @@ This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component 
 
 ### System Execution Order
 
-**Update schedule:** `capture_input` → `respawn_player` → `toggle_debug` → `update_debug_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `update_target_marker` → `toggle_tweak_panel` → `update_tweak_panel`
+**Update schedule:** `capture_input` → `respawn_player` → `toggle_debug` → `update_debug_text` → `update_score_level_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `update_target_marker` → `toggle_tweak_panel` → `update_tweak_panel`
 
 **FixedUpdate schedule (chained):** `apply_input` → `cycle_target` → `apply_gravity` → `ball_gravity` → `apply_velocity` → `check_collisions` → `ball_collisions` → `ball_state_update` → `ball_player_collision` → `ball_follow_holder` → `pickup_ball` → `steal_contest_update` → `update_shot_charge` → `throw_ball` → `check_scoring`
 

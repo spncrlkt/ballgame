@@ -111,8 +111,9 @@ fn main() {
         .init_resource::<Score>()
         .init_resource::<CurrentLevel>()
         .init_resource::<PhysicsTweaks>()
+        .init_resource::<LastShotInfo>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text, animate_pickable_ball, animate_score_flash, update_charge_gauge, update_target_marker, toggle_tweak_panel, update_tweak_panel))
+        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text, update_score_level_text, animate_pickable_ball, animate_score_flash, update_charge_gauge, update_target_marker, toggle_tweak_panel, update_tweak_panel))
         .add_systems(
             FixedUpdate,
             (
@@ -184,6 +185,22 @@ impl Default for CurrentLevel {
     fn default() -> Self {
         Self(1)
     }
+}
+
+/// Information about the last shot taken (for debug display)
+#[derive(Resource, Default)]
+struct LastShotInfo {
+    power: f32,
+    arc: f32,
+    angle_degrees: f32,
+    speed: f32,
+    base_variance: f32,
+    air_penalty: f32,
+    move_penalty: f32,
+    distance_penalty: f32,
+    arc_penalty: f32,
+    total_variance: f32,
+    target: Option<Basket>,
 }
 
 /// Runtime-adjustable physics values for tweaking gameplay feel
@@ -338,19 +355,12 @@ enum PlatformDef {
     Center { y: f32, width: f32 },           // Spawns at x=0
 }
 
-/// Basket definition in level data (additional baskets beyond the main two)
-#[derive(Clone, Debug)]
-enum BasketDef {
-    Mirror { x: f32, y: f32 },  // Spawns Left at -x and Right at +x
-}
-
 /// Single level definition
 #[derive(Clone, Debug)]
 struct LevelData {
     name: String,
     basket_height: f32,
     platforms: Vec<PlatformDef>,
-    baskets: Vec<BasketDef>,
 }
 
 /// Database of all loaded levels
@@ -400,7 +410,6 @@ impl LevelDatabase {
                     name: name.trim().to_string(),
                     basket_height: 400.0, // default
                     platforms: Vec::new(),
-                    baskets: Vec::new(),
                 });
             } else if let Some(height_str) = line.strip_prefix("basket:") {
                 if let Some(level) = &mut current_level {
@@ -433,18 +442,6 @@ impl LevelDatabase {
                         }
                     }
                 }
-            } else if let Some(params) = line.strip_prefix("basket_mirror:") {
-                if let Some(level) = &mut current_level {
-                    let parts: Vec<&str> = params.split_whitespace().collect();
-                    if parts.len() >= 2 {
-                        if let (Ok(x), Ok(y)) = (
-                            parts[0].parse::<f32>(),
-                            parts[1].parse::<f32>(),
-                        ) {
-                            level.baskets.push(BasketDef::Mirror { x, y });
-                        }
-                    }
-                }
             }
         }
 
@@ -470,7 +467,6 @@ impl LevelDatabase {
                     name: "Simple".to_string(),
                     basket_height: 350.0,
                     platforms: vec![PlatformDef::Mirror { x: 400.0, y: 150.0, width: 200.0 }],
-                    baskets: vec![],
                 },
                 LevelData {
                     name: "Default".to_string(),
@@ -479,7 +475,6 @@ impl LevelDatabase {
                         PlatformDef::Mirror { x: 400.0, y: 150.0, width: 180.0 },
                         PlatformDef::Center { y: 280.0, width: 200.0 },
                     ],
-                    baskets: vec![],
                 },
             ],
         }
@@ -523,9 +518,6 @@ struct Platform;
 
 #[derive(Component)]
 struct LevelPlatform; // Marks platforms that belong to current level (despawned on level change)
-
-#[derive(Component)]
-struct LevelBasket; // Marks baskets that belong to current level (despawned on level change)
 
 // Player state
 #[derive(Component)]
@@ -593,6 +585,9 @@ enum Basket {
 
 #[derive(Component)]
 struct DebugText;
+
+#[derive(Component)]
+struct ScoreLevelText;
 
 #[derive(Component)]
 struct ChargeGaugeBackground;
@@ -733,11 +728,29 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
         Basket::Right,
     ));
 
-    // Debug UI - bottom center
+    // Score/Level display - top center
     commands.spawn((
-        Text::new("Debug"),
+        Text::new("Score"),
         TextFont {
-            font_size: 16.0,
+            font_size: 24.0,
+            ..default()
+        },
+        TextColor(Color::BLACK),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(10.0),
+            width: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+        ScoreLevelText,
+    ));
+
+    // Debug UI - bottom center (shot info)
+    commands.spawn((
+        Text::new(""),
+        TextFont {
+            font_size: 14.0,
             ..default()
         },
         TextColor(Color::BLACK),
@@ -893,8 +906,7 @@ fn respawn_player(
     mut player: Query<(Entity, &mut Transform, &mut Velocity, Option<&HoldingBall>), With<Player>>,
     mut ball: Query<(&mut Transform, &mut Velocity, &mut BallState, &mut BallRolling), (With<Ball>, Without<Player>)>,
     level_platforms: Query<Entity, With<LevelPlatform>>,
-    level_baskets: Query<Entity, With<LevelBasket>>,
-    mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>, Without<LevelBasket>)>,
+    mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>)>,
 ) {
     let respawn_pressed = keyboard.just_pressed(KeyCode::KeyR)
         || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::Start));
@@ -924,15 +936,12 @@ fn respawn_player(
         current_level.0 = (current_level.0 % num_levels as u32) + 1;
         let level_index = (current_level.0 - 1) as usize;
 
-        // Despawn old level platforms and baskets
+        // Despawn old level platforms
         for entity in &level_platforms {
             commands.entity(entity).despawn();
         }
-        for entity in &level_baskets {
-            commands.entity(entity).despawn();
-        }
 
-        // Spawn new level platforms and baskets
+        // Spawn new level platforms
         spawn_level_platforms(&mut commands, &level_db, level_index);
 
         // Update basket heights for new level
@@ -1472,18 +1481,25 @@ fn cycle_target(
 }
 
 fn update_target_marker(
-    player_query: Query<&TargetBasket, With<Player>>,
+    player_query: Query<(&Transform, &TargetBasket), With<Player>>,
     baskets: Query<(&Transform, &Basket), Without<TargetMarker>>,
-    mut marker_query: Query<&mut Transform, With<TargetMarker>>,
+    mut marker_query: Query<&mut Transform, (With<TargetMarker>, Without<Player>)>,
 ) {
-    let Ok(target) = player_query.single() else {
+    let Ok((player_transform, target)) = player_query.single() else {
         return;
     };
 
-    // Find a basket matching the target type
+    let player_pos = player_transform.translation.truncate();
+
+    // Find the closest basket matching the target type
     let target_pos = baskets
         .iter()
-        .find(|(_, basket)| **basket == target.0)
+        .filter(|(_, basket)| **basket == target.0)
+        .min_by(|(a, _), (b, _)| {
+            let dist_a = player_pos.distance_squared(a.translation.truncate());
+            let dist_b = player_pos.distance_squared(b.translation.truncate());
+            dist_a.partial_cmp(&dist_b).unwrap()
+        })
         .map(|(transform, _)| transform.translation);
 
     let Some(basket_pos) = target_pos else {
@@ -1598,6 +1614,7 @@ fn throw_ball(
     mut input: ResMut<PlayerInput>,
     tweaks: Res<PhysicsTweaks>,
     mut commands: Commands,
+    mut shot_info: ResMut<LastShotInfo>,
     mut player_query: Query<
         (Entity, &Transform, &Velocity, &TargetBasket, &Grounded, &mut ChargingShot, Option<&HoldingBall>),
         With<Player>,
@@ -1640,15 +1657,20 @@ fn throw_ball(
     // Calculate charge percentage (0.0 to 1.0)
     let charge_pct = (charging.charge_time / tweaks.shot_charge_time).min(1.0);
 
-    // Find target basket position based on player's target selection
-    let target_basket_pos = basket_query
-        .iter()
-        .find(|(_, basket)| **basket == target.0)
-        .map(|(transform, _)| transform.translation.truncate());
-
     let mut rng = rand::thread_rng();
     let player_pos = player_transform.translation.truncate();
     let ceiling_y = ARENA_HEIGHT / 2.0;
+
+    // Find closest basket matching the target type
+    let target_basket_pos = basket_query
+        .iter()
+        .filter(|(_, basket)| **basket == target.0)
+        .min_by(|(a, _), (b, _)| {
+            let dist_a = player_pos.distance_squared(a.translation.truncate());
+            let dist_b = player_pos.distance_squared(b.translation.truncate());
+            dist_a.partial_cmp(&dist_b).unwrap()
+        })
+        .map(|(transform, _)| transform.translation.truncate());
 
     // Calculate optimal trajectory to basket
     let trajectory = if let Some(basket_pos) = target_basket_pos {
@@ -1659,25 +1681,25 @@ fn throw_ball(
     };
 
     // Base variance from charge level: 50% at 0 charge → 2% at full charge
-    let mut variance = SHOT_MAX_VARIANCE - (SHOT_MAX_VARIANCE - SHOT_MIN_VARIANCE) * charge_pct;
+    let base_variance = SHOT_MAX_VARIANCE - (SHOT_MAX_VARIANCE - SHOT_MIN_VARIANCE) * charge_pct;
+    let mut variance = base_variance;
 
     // Air shot penalty: +10% variance when airborne
-    if !grounded.0 {
-        variance += SHOT_AIR_VARIANCE_PENALTY;
-    }
+    let air_penalty = if !grounded.0 { SHOT_AIR_VARIANCE_PENALTY } else { 0.0 };
+    variance += air_penalty;
 
     // Horizontal movement penalty: 0-10% variance based on horizontal speed
     let move_penalty = (player_velocity.0.x.abs() / MOVE_SPEED).min(1.0) * SHOT_MOVE_VARIANCE_PENALTY;
     variance += move_penalty;
 
     // Get base power and arc from trajectory calculation, add distance/arc penalties
-    let (base_power, base_arc) = if let Some(traj) = &trajectory {
+    let (base_power, base_arc, distance_penalty, arc_penalty) = if let Some(traj) = &trajectory {
         variance += traj.distance_penalty;
         variance += traj.arc_penalty;
-        (traj.power, traj.arc)
+        (traj.power, traj.arc, traj.distance_penalty, traj.arc_penalty)
     } else {
         // Fallback for impossible trajectories
-        (SHOT_MAX_POWER, SHOT_MIN_ARC)
+        (SHOT_MAX_POWER, SHOT_MIN_ARC, 0.0, 0.0)
     };
 
     // Apply variance to arc and power
@@ -1713,6 +1735,23 @@ fn throw_ball(
     *ball_state = BallState::InFlight {
         shooter: player_entity,
         power: final_power,
+    };
+
+    // Record shot info for debug display
+    let final_speed = (vx * vx + vy * vy).sqrt();
+    let angle_degrees = vy.atan2(vx.abs()).to_degrees();
+    *shot_info = LastShotInfo {
+        power: final_power,
+        arc: final_arc,
+        angle_degrees,
+        speed: final_speed,
+        base_variance,
+        air_penalty,
+        move_penalty,
+        distance_penalty,
+        arc_penalty,
+        total_variance: variance,
+        target: Some(target.0),
     };
 
     // Reset charge and release ball
@@ -1983,24 +2022,6 @@ fn spawn_center_platform(commands: &mut Commands, y: f32, width: f32) {
     ));
 }
 
-/// Helper to spawn mirrored baskets (Left at -x, Right at +x)
-fn spawn_mirrored_baskets(commands: &mut Commands, x: f32, y: f32) {
-    // Left basket
-    commands.spawn((
-        Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
-        Transform::from_xyz(-x, y, -0.1),
-        Basket::Left,
-        LevelBasket,
-    ));
-    // Right basket
-    commands.spawn((
-        Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
-        Transform::from_xyz(x, y, -0.1),
-        Basket::Right,
-        LevelBasket,
-    ));
-}
-
 fn spawn_level_platforms(commands: &mut Commands, level_db: &LevelDatabase, level_index: usize) {
     let Some(level) = level_db.get(level_index) else {
         warn!("Level {} not found, spawning empty", level_index);
@@ -2017,49 +2038,25 @@ fn spawn_level_platforms(commands: &mut Commands, level_db: &LevelDatabase, leve
             }
         }
     }
-
-    for basket in &level.baskets {
-        match basket {
-            BasketDef::Mirror { x, y } => {
-                spawn_mirrored_baskets(commands, *x, ARENA_FLOOR_Y + y);
-            }
-        }
-    }
 }
 
 fn update_debug_text(
     debug_settings: Res<DebugSettings>,
-    diagnostics: Res<bevy::diagnostic::DiagnosticsStore>,
+    shot_info: Res<LastShotInfo>,
     steal_contest: Res<StealContest>,
-    score: Res<Score>,
-    current_level: Res<CurrentLevel>,
-    level_db: Res<LevelDatabase>,
-    tweaks: Res<PhysicsTweaks>,
-    player: Query<(&Transform, &ChargingShot), With<Player>>,
     mut text_query: Query<&mut Text, With<DebugText>>,
 ) {
     if !debug_settings.visible {
         return;
     }
 
-    let Ok((transform, charging)) = player.single() else {
-        return;
-    };
     let Ok(mut text) = text_query.single_mut() else {
         return;
     };
 
-    let fps = diagnostics
-        .get(&bevy::diagnostic::FrameTimeDiagnosticsPlugin::FPS)
-        .and_then(|d| d.smoothed())
-        .unwrap_or(0.0);
-
-    let pos = transform.translation;
-    let charge_pct = ((charging.charge_time / tweaks.shot_charge_time) * 100.0).min(100.0);
-
     let steal_str = if steal_contest.active {
         format!(
-            "Steal: A:{} D:{} ({:.1}s)",
+            " | Steal: A:{} D:{} ({:.1}s)",
             steal_contest.attacker_presses,
             steal_contest.defender_presses,
             steal_contest.timer
@@ -2068,22 +2065,54 @@ fn update_debug_text(
         String::new()
     };
 
+    // Show last shot info
+    if shot_info.target.is_some() {
+        let target_str = match shot_info.target {
+            Some(Basket::Left) => "Left",
+            Some(Basket::Right) => "Right",
+            None => "?",
+        };
+        text.0 = format!(
+            "Last Shot: {:.0}° {:.0}u/s | Power:{:.0} Arc:{:.2} | Variance: base {:.0}% + air {:.0}% + move {:.0}% + dist {:.0}% + arc {:.0}% = {:.0}% | Target: {}{}",
+            shot_info.angle_degrees,
+            shot_info.speed,
+            shot_info.power,
+            shot_info.arc,
+            shot_info.base_variance * 100.0,
+            shot_info.air_penalty * 100.0,
+            shot_info.move_penalty * 100.0,
+            shot_info.distance_penalty * 100.0,
+            shot_info.arc_penalty * 100.0,
+            shot_info.total_variance * 100.0,
+            target_str,
+            steal_str,
+        );
+    } else {
+        text.0 = format!("No shots yet{}", steal_str);
+    }
+}
+
+fn update_score_level_text(
+    score: Res<Score>,
+    current_level: Res<CurrentLevel>,
+    level_db: Res<LevelDatabase>,
+    mut text_query: Query<&mut Text, With<ScoreLevelText>>,
+) {
+    let Ok(mut text) = text_query.single_mut() else {
+        return;
+    };
+
     let level_index = (current_level.0 - 1) as usize;
     let level_name = level_db.get(level_index).map(|l| l.name.as_str()).unwrap_or("???");
     let num_levels = level_db.len();
 
     text.0 = format!(
-        "Lv:{}/{} {}  |  SCORE: {} - {}  |  FPS: {:.0}  |  Pos: ({:.0}, {:.0})  |  Charge: {:.0}%  {}",
+        "Lv {}/{}: {}  |  {} - {}",
         current_level.0,
         num_levels,
         level_name,
         score.left,
         score.right,
-        fps,
-        pos.x,
-        pos.y,
-        charge_pct,
-        steal_str,
     );
 }
 

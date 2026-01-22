@@ -6,7 +6,6 @@
 #   basket: <height>        Main basket height above floor (8 dunkable: <560, 2 high: >560)
 #   mirror: <x> <y> <w>     Platform at (-x, y) and (+x, y) with width w
 #   center: <y> <w>         Centered platform at (0, y) with width w
-#   basket_mirror: <x> <y>  Additional baskets at (-x, y) Left and (+x, y) Right
 #
 # Heights are relative to ARENA_FLOOR_Y
 # Player max jump ≈ 215 units above platform
@@ -15,9 +14,8 @@
 # Blank lines and # comments are ignored
 
 level: Bounce Test
-basket: 2000
+basket: 400
 center: 200 400
-basket_mirror: 650 680
 
 level: V-Shape
 basket: 380
