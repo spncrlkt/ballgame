@@ -4,6 +4,84 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Audit: 2026-01-21 (Session 2)
+
+### Session Summary
+
+Major shooting mechanics overhaul and movement system improvement.
+
+### Changes Made
+
+**Auto-Aim Shooting System:**
+- Added `calculate_perfect_shot_power()` function using projectile motion physics
+- Formula: `vx = sqrt(g * dx² / (2 * (arc * dx - dy)))`
+- Grounded shots auto-aim to target basket based on facing direction
+- Friction compensation for long-distance shots (symmetric around 75%, range 50%-100%)
+
+**Progressive Variance System:**
+- Replaced `SHOT_MAX_RANDOMNESS` with progressive variance
+- `SHOT_MAX_VARIANCE = 0.50` (50% at zero charge)
+- `SHOT_MIN_VARIANCE = 0.02` (2% at full charge)
+- Variance applied to both angle and power
+- Every shot has some variance, even at full charge
+
+**Shooting Penalties:**
+- `SHOT_AIR_VARIANCE_PENALTY = 0.10` (10% for airborne shots)
+- `SHOT_MOVE_VARIANCE_PENALTY = 0.10` (10% at full horizontal speed, proportional)
+- Penalties stack: grounded+stationary = 2%, airborne+moving = 22%
+
+**Charge Time:**
+- `SHOT_CHARGE_TIME` reduced from 2.0s to 1.6s
+
+**Acceleration-Based Movement:**
+- Replaced instant velocity assignment with acceleration/deceleration system
+- Added `move_toward()` helper function
+- New constants:
+  - `GROUND_ACCEL = 2400` (snappy start)
+  - `GROUND_DECEL = 1800` (slight slide when stopping)
+  - `AIR_ACCEL = 1500` (committed but adjustable jumps)
+  - `AIR_DECEL = 900` (momentum preserved in air)
+- All four values added to `PhysicsTweaks` for runtime tuning
+- Movement feels smoother and more natural
+
+### Audit Findings
+
+**Compilation:** Clean `cargo check`, no errors
+
+**Clippy:** 25 warnings (all style, not bugs):
+- 1x `dead_code` - `save_to_file` method never used
+- 1x `derivable_impls` - `LevelDatabase::Default` can use derive
+- 8x `collapsible_if` - nested if statements
+- 2x `trim_split_whitespace` - unnecessary trim before split
+- 7x `type_complexity` - complex query types (standard for Bevy)
+- 2x `too_many_arguments` - functions with 9 args
+- 1x `collapsible_else_if` - else { if } can collapse
+- 1x `manual_range_patterns` - `5 | 6 | 7` can be `5..=7`
+
+**Dead Code:** `LevelDatabase::save_to_file()` is never used (line 467)
+
+**Minor Magic Number:** Ball shot grace period `0.1` (line 1487) could be a constant
+
+**Input Buffering:** Correct - all press inputs in Update, consumed in FixedUpdate
+
+**Frame-Rate Independence:** Correct
+- Friction uses `.powf(time.delta_secs())`
+- Gravity/velocity uses `* time.delta_secs()`
+- New acceleration uses `* time.delta_secs()`
+
+**Collision Epsilon:** Correct - used in all ground contact positioning
+
+**System Order:** Correct chain in FixedUpdate
+
+**CLAUDE.md:** Accurate - no updates needed, architecture matches code
+
+### Files Modified
+
+- `src/main.rs` - Shooting and movement systems
+- `audit_record.md` - This entry
+
+---
+
 ## Audit: 2026-01-21
 
 ### Session Summary

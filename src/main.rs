@@ -21,6 +21,10 @@ const GRAVITY_FALL: f32 = 1400.0; // Gravity while falling (fast fall)
 const JUMP_VELOCITY: f32 = 650.0; // Full jump height (hold button)
 const JUMP_CUT_MULTIPLIER: f32 = 0.4; // Velocity multiplier when releasing jump early
 const MOVE_SPEED: f32 = 300.0;
+const GROUND_ACCEL: f32 = 2400.0; // Ground acceleration (pixels/sec²) - snappy start
+const GROUND_DECEL: f32 = 1800.0; // Ground deceleration - slight slide when stopping
+const AIR_ACCEL: f32 = 1500.0; // Air acceleration - committed but adjustable jumps
+const AIR_DECEL: f32 = 900.0; // Air deceleration - momentum preserved in air
 const COLLISION_EPSILON: f32 = 0.5; // Skin width for collision detection
 
 // Game feel constants
@@ -42,11 +46,15 @@ const BALL_FREE_SPEED: f32 = 200.0; // Ball becomes Free when speed drops below 
 // Using h = v_y²/(2g), v_y = sqrt(2*g*h): tap needs v_y≈452, full needs v_y≈784
 const SHOT_MIN_POWER: f32 = 380.0; // Minimum throw velocity (tap shot: 380*1.2=456 → h≈130)
 const SHOT_MAX_POWER: f32 = 660.0; // Maximum throw velocity (full charge: 660*1.2=792 → h≈392)
-const SHOT_CHARGE_TIME: f32 = 2.0; // Seconds to reach full charge
+const SHOT_CHARGE_TIME: f32 = 1.6; // Seconds to reach full charge
 const SHOT_BASE_ARC: f32 = 1.2; // Upward component multiplier
-const SHOT_MAX_RANDOMNESS: f32 = 0.4; // Max angle/power variance at zero charge (40%)
-const SHOT_AIR_ACCURACY_PENALTY: f32 = 0.2; // Additional randomness when airborne (20%)
+const SHOT_MAX_VARIANCE: f32 = 0.50; // Variance at zero charge (50%)
+const SHOT_MIN_VARIANCE: f32 = 0.02; // Variance at full charge (2%)
+const SHOT_AIR_VARIANCE_PENALTY: f32 = 0.10; // Additional variance when airborne (10%)
+const SHOT_MOVE_VARIANCE_PENALTY: f32 = 0.10; // Additional variance at full horizontal speed (10%)
 const SHOT_AIR_POWER_PENALTY: f32 = 0.7; // Power multiplier when airborne
+const SHOT_FRICTION_COMPENSATION_FACTOR: f32 = 25000.0; // Divisor for distance-based friction compensation
+const SHOT_GRACE_PERIOD: f32 = 0.1; // Post-shot grace period (no friction/player drag)
 
 // Ball-player collision
 const BALL_PLAYER_DRAG_X: f32 = 0.7; // Horizontal velocity multiplier when ball hits player
@@ -76,6 +84,15 @@ const BALL_SPAWN: Vec3 = Vec3::new(0.0, ARENA_FLOOR_Y + 50.0, 2.0); // Center, z
 
 // Level file path
 const LEVELS_FILE: &str = "assets/levels.txt";
+
+/// Move a value toward a target by a maximum delta
+fn move_toward(current: f32, target: f32, max_delta: f32) -> f32 {
+    if (target - current).abs() <= max_delta {
+        target
+    } else {
+        current + (target - current).signum() * max_delta
+    }
+}
 
 fn main() {
     // Load level database from file
@@ -171,6 +188,10 @@ struct PhysicsTweaks {
     gravity_fall: f32,
     jump_velocity: f32,
     move_speed: f32,
+    ground_accel: f32,
+    ground_decel: f32,
+    air_accel: f32,
+    air_decel: f32,
     ball_gravity: f32,
     ball_bounce: f32,
     ball_air_friction: f32,
@@ -189,6 +210,10 @@ impl Default for PhysicsTweaks {
             gravity_fall: GRAVITY_FALL,
             jump_velocity: JUMP_VELOCITY,
             move_speed: MOVE_SPEED,
+            ground_accel: GROUND_ACCEL,
+            ground_decel: GROUND_DECEL,
+            air_accel: AIR_ACCEL,
+            air_decel: AIR_DECEL,
             ball_gravity: BALL_GRAVITY,
             ball_bounce: BALL_BOUNCE,
             ball_air_friction: BALL_AIR_FRICTION,
@@ -203,11 +228,15 @@ impl Default for PhysicsTweaks {
 }
 
 impl PhysicsTweaks {
-    const LABELS: [&'static str; 11] = [
+    const LABELS: [&'static str; 15] = [
         "Gravity Rise",
         "Gravity Fall",
         "Jump Velocity",
         "Move Speed",
+        "Ground Accel",
+        "Ground Decel",
+        "Air Accel",
+        "Air Decel",
         "Ball Gravity",
         "Ball Bounce",
         "Ball Air Friction",
@@ -223,13 +252,17 @@ impl PhysicsTweaks {
             1 => self.gravity_fall,
             2 => self.jump_velocity,
             3 => self.move_speed,
-            4 => self.ball_gravity,
-            5 => self.ball_bounce,
-            6 => self.ball_air_friction,
-            7 => self.ball_roll_friction,
-            8 => self.shot_min_power,
-            9 => self.shot_max_power,
-            10 => self.shot_charge_time,
+            4 => self.ground_accel,
+            5 => self.ground_decel,
+            6 => self.air_accel,
+            7 => self.air_decel,
+            8 => self.ball_gravity,
+            9 => self.ball_bounce,
+            10 => self.ball_air_friction,
+            11 => self.ball_roll_friction,
+            12 => self.shot_min_power,
+            13 => self.shot_max_power,
+            14 => self.shot_charge_time,
             _ => 0.0,
         }
     }
@@ -240,13 +273,17 @@ impl PhysicsTweaks {
             1 => GRAVITY_FALL,
             2 => JUMP_VELOCITY,
             3 => MOVE_SPEED,
-            4 => BALL_GRAVITY,
-            5 => BALL_BOUNCE,
-            6 => BALL_AIR_FRICTION,
-            7 => BALL_ROLL_FRICTION,
-            8 => SHOT_MIN_POWER,
-            9 => SHOT_MAX_POWER,
-            10 => SHOT_CHARGE_TIME,
+            4 => GROUND_ACCEL,
+            5 => GROUND_DECEL,
+            6 => AIR_ACCEL,
+            7 => AIR_DECEL,
+            8 => BALL_GRAVITY,
+            9 => BALL_BOUNCE,
+            10 => BALL_AIR_FRICTION,
+            11 => BALL_ROLL_FRICTION,
+            12 => SHOT_MIN_POWER,
+            13 => SHOT_MAX_POWER,
+            14 => SHOT_CHARGE_TIME,
             _ => 0.0,
         }
     }
@@ -257,13 +294,17 @@ impl PhysicsTweaks {
             1 => self.gravity_fall = value,
             2 => self.jump_velocity = value,
             3 => self.move_speed = value,
-            4 => self.ball_gravity = value,
-            5 => self.ball_bounce = value,
-            6 => self.ball_air_friction = value,
-            7 => self.ball_roll_friction = value,
-            8 => self.shot_min_power = value,
-            9 => self.shot_max_power = value,
-            10 => self.shot_charge_time = value,
+            4 => self.ground_accel = value,
+            5 => self.ground_decel = value,
+            6 => self.air_accel = value,
+            7 => self.air_decel = value,
+            8 => self.ball_gravity = value,
+            9 => self.ball_bounce = value,
+            10 => self.ball_air_friction = value,
+            11 => self.ball_roll_friction = value,
+            12 => self.shot_min_power = value,
+            13 => self.shot_max_power = value,
+            14 => self.shot_charge_time = value,
             _ => {}
         }
     }
@@ -424,37 +465,6 @@ impl LevelDatabase {
     }
 
     /// Save all levels to file
-    fn save_to_file(&self, path: &str) -> Result<(), std::io::Error> {
-        let mut content = String::new();
-        content.push_str("# Ballgame Level Data\n");
-        content.push_str("# ====================\n");
-        content.push_str("#\n");
-        content.push_str("# Format:\n");
-        content.push_str("#   level: <name>           Start a new level\n");
-        content.push_str("#   basket: <height>        Basket height above floor\n");
-        content.push_str("#   mirror: <x> <y> <w>     Platform at (-x, y) and (+x, y)\n");
-        content.push_str("#   center: <y> <w>         Centered platform at (0, y)\n");
-        content.push_str("#\n\n");
-
-        for level in &self.levels {
-            content.push_str(&format!("level: {}\n", level.name));
-            content.push_str(&format!("basket: {}\n", level.basket_height));
-            for platform in &level.platforms {
-                match platform {
-                    PlatformDef::Mirror { x, y, width } => {
-                        content.push_str(&format!("mirror: {} {} {}\n", x, y, width));
-                    }
-                    PlatformDef::Center { y, width } => {
-                        content.push_str(&format!("center: {} {}\n", y, width));
-                    }
-                }
-            }
-            content.push('\n');
-        }
-
-        fs::write(path, content)
-    }
-
     fn get(&self, index: usize) -> Option<&LevelData> {
         self.levels.get(index)
     }
@@ -896,9 +906,25 @@ fn apply_input(
         return;
     };
 
-    velocity.0.x = input.move_x * tweaks.move_speed;
+    // Acceleration-based horizontal movement
+    let target_speed = input.move_x * tweaks.move_speed;
+    let current_speed = velocity.0.x;
 
-    // Update facing direction based on movement
+    // Determine if accelerating (toward input) or decelerating (stopping/reversing)
+    let has_input = input.move_x.abs() > STICK_DEADZONE;
+    let same_direction = target_speed.signum() == current_speed.signum() || current_speed.abs() < 1.0;
+    let is_accelerating = has_input && same_direction;
+
+    // Select appropriate acceleration rate based on ground state and direction
+    let rate = if grounded.0 {
+        if is_accelerating { tweaks.ground_accel } else { tweaks.ground_decel }
+    } else {
+        if is_accelerating { tweaks.air_accel } else { tweaks.air_decel }
+    };
+
+    velocity.0.x = move_toward(current_speed, target_speed, rate * time.delta_secs());
+
+    // Update facing direction based on input (not velocity, so turning feels responsive)
     if input.move_x > STICK_DEADZONE {
         facing.0 = 1.0;
     } else if input.move_x < -STICK_DEADZONE {
@@ -1357,15 +1383,49 @@ fn update_shot_charge(
     }
 }
 
+/// Calculate the required horizontal velocity to hit a target using projectile motion.
+/// Returns None if the target cannot be reached with the given arc (e.g., target too high).
+/// friction_random: -1.0 to 1.0, scales compensation symmetrically around 75% (50% to 100%)
+fn calculate_perfect_shot_power(
+    shooter_pos: Vec2,
+    target_pos: Vec2,
+    gravity: f32,
+    arc_ratio: f32, // vy = vx * arc_ratio
+    friction_random: f32, // -1.0 = 50% compensation (undershoot), +1.0 = 100% compensation (overshoot)
+) -> Option<f32> {
+    let dx = (target_pos.x - shooter_pos.x).abs();
+    let dy = target_pos.y - shooter_pos.y;
+
+    // Formula: vx² = g * dx² / (2 * (arc * dx - dy))
+    // For trajectory to be valid, denominator must be positive
+    let denominator = 2.0 * (arc_ratio * dx - dy);
+    if denominator <= 0.0 {
+        return None; // Arc too shallow to reach target
+    }
+
+    let vx_squared = gravity * dx * dx / denominator;
+    let vx = vx_squared.sqrt();
+
+    // Apply friction compensation: longer distances need more power
+    // Symmetric around 75%: ranges from 50% (-1.0) to 100% (+1.0)
+    let compensation_scale = 0.75 + 0.25 * friction_random;
+    let friction_compensation = 1.0 + (dx / SHOT_FRICTION_COMPENSATION_FACTOR) * compensation_scale;
+    Some(vx * friction_compensation)
+}
+
 fn throw_ball(
     mut input: ResMut<PlayerInput>,
     tweaks: Res<PhysicsTweaks>,
     mut commands: Commands,
     mut player_query: Query<
-        (Entity, &Facing, &Grounded, &mut ChargingShot, Option<&HoldingBall>),
+        (Entity, &Transform, &Velocity, &Facing, &Grounded, &mut ChargingShot, Option<&HoldingBall>),
         With<Player>,
     >,
-    mut ball_query: Query<(&mut Velocity, &mut BallState, &mut BallRolling, &mut BallShotGrace), With<Ball>>,
+    mut ball_query: Query<
+        (&mut Velocity, &mut BallState, &mut BallRolling, &mut BallShotGrace),
+        (With<Ball>, Without<Player>),
+    >,
+    basket_query: Query<(&Transform, &Basket), Without<Player>>,
 ) {
     if !input.throw_released {
         return;
@@ -1374,7 +1434,8 @@ fn throw_ball(
     // Consume the throw_released flag immediately
     input.throw_released = false;
 
-    let Ok((player_entity, facing, grounded, mut charging, holding)) = player_query.single_mut()
+    let Ok((player_entity, player_transform, player_velocity, facing, grounded, mut charging, holding)) =
+        player_query.single_mut()
     else {
         return;
     };
@@ -1385,43 +1446,74 @@ fn throw_ball(
         return;
     };
 
-    let Ok((mut ball_velocity, mut ball_state, mut rolling, mut grace)) = ball_query.get_mut(holding_ball.0)
+    let Ok((mut ball_velocity, mut ball_state, mut rolling, mut grace)) =
+        ball_query.get_mut(holding_ball.0)
     else {
         return;
     };
 
     // Ball is being thrown - no longer rolling, start grace period
     rolling.0 = false;
-    grace.0 = 0.1; // 100ms grace period - no friction or player drag
+    grace.0 = SHOT_GRACE_PERIOD;
 
     // Calculate charge percentage (0.0 to 1.0)
     let charge_pct = (charging.charge_time / tweaks.shot_charge_time).min(1.0);
 
-    // Power scales with charge
-    let mut power = tweaks.shot_min_power + (tweaks.shot_max_power - tweaks.shot_min_power) * charge_pct;
+    // Progressive variance: 50% at 0 charge → 2% at full charge
+    // Each 100ms of charge progressively improves accuracy
+    let mut variance = SHOT_MAX_VARIANCE - (SHOT_MAX_VARIANCE - SHOT_MIN_VARIANCE) * charge_pct;
 
-    // Calculate randomness (less charge = more randomness)
-    let mut randomness = SHOT_MAX_RANDOMNESS * (1.0 - charge_pct);
-
-    // Air shot penalties
+    // Air shot penalty: +10% variance when airborne
     if !grounded.0 {
-        power *= SHOT_AIR_POWER_PENALTY;
-        randomness += SHOT_AIR_ACCURACY_PENALTY;
+        variance += SHOT_AIR_VARIANCE_PENALTY;
     }
 
-    // Apply randomness to power and angle (only if randomness > 0)
-    let (power_variance, angle_variance) = if randomness > 0.01 {
-        let mut rng = rand::thread_rng();
-        (
-            1.0 + rng.gen_range(-randomness..randomness),
-            rng.gen_range(-randomness..randomness),
-        )
+    // Horizontal movement penalty: 0-10% variance based on horizontal speed
+    let move_penalty = (player_velocity.0.x.abs() / MOVE_SPEED).min(1.0) * SHOT_MOVE_VARIANCE_PENALTY;
+    variance += move_penalty;
+
+    let mut rng = rand::thread_rng();
+
+    // Apply variance to angle
+    let angle_variance = rng.gen_range(-variance..variance);
+    let arc = SHOT_BASE_ARC + angle_variance;
+
+    // Apply variance to power (multiplier centered on 1.0)
+    let power_variance = 1.0 + rng.gen_range(-variance..variance);
+
+    // Find target basket based on facing direction
+    let target_basket_type = if facing.0 > 0.0 {
+        Basket::Right
     } else {
-        (1.0, 0.0) // Full charge = perfect accuracy
+        Basket::Left
     };
 
-    let final_power = power * power_variance;
-    let arc = SHOT_BASE_ARC + angle_variance;
+    let target_basket_pos = basket_query
+        .iter()
+        .find(|(_, basket)| **basket == target_basket_type)
+        .map(|(transform, _)| transform.translation.truncate());
+
+    // Calculate final power - use auto-aim when grounded, charge-based otherwise
+    let base_power = if grounded.0 {
+        // Grounded = auto-aim to basket with friction compensation
+        if let Some(basket_pos) = target_basket_pos {
+            let player_pos = player_transform.translation.truncate();
+            // Symmetric friction compensation: -1.0 to +1.0, centered at 75% (range 50%-100%)
+            let friction_random = rng.gen_range(-1.0..=1.0);
+            calculate_perfect_shot_power(player_pos, basket_pos, BALL_GRAVITY, arc, friction_random)
+                .unwrap_or(tweaks.shot_max_power) // Fallback if trajectory impossible
+        } else {
+            tweaks.shot_max_power
+        }
+    } else {
+        // Airborne = charge-based power with air penalty
+        let charge_power =
+            tweaks.shot_min_power + (tweaks.shot_max_power - tweaks.shot_min_power) * charge_pct;
+        charge_power * SHOT_AIR_POWER_PENALTY
+    };
+
+    // Apply power variance to base power
+    let final_power = base_power * power_variance;
 
     // Set ball velocity in arc
     ball_velocity.0.x = facing.0 * final_power;
