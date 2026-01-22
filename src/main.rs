@@ -1067,12 +1067,42 @@ fn respawn_player(
     corner_ramps: Query<Entity, With<CornerRamp>>,
     mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>)>,
 ) {
-    let respawn_pressed = keyboard.just_pressed(KeyCode::KeyR)
+    // Reset current level (R / Start)
+    let reset_pressed = keyboard.just_pressed(KeyCode::KeyR)
         || gamepads
             .iter()
             .any(|gp| gp.just_pressed(GamepadButton::Start));
 
-    if respawn_pressed {
+    // Cycle to next level (] / Right Trigger)
+    let next_level_pressed = keyboard.just_pressed(KeyCode::BracketRight)
+        || gamepads
+            .iter()
+            .any(|gp| gp.just_pressed(GamepadButton::RightTrigger2));
+
+    // Cycle to previous level ([ / Left Trigger)
+    let prev_level_pressed = keyboard.just_pressed(KeyCode::BracketLeft)
+        || gamepads
+            .iter()
+            .any(|gp| gp.just_pressed(GamepadButton::LeftTrigger2));
+
+    // Determine if we need to change level
+    let num_levels = level_db.len() as u32;
+    let mut level_changed = false;
+
+    if next_level_pressed {
+        current_level.0 = (current_level.0 % num_levels) + 1;
+        level_changed = true;
+    } else if prev_level_pressed {
+        current_level.0 = if current_level.0 <= 1 {
+            num_levels
+        } else {
+            current_level.0 - 1
+        };
+        level_changed = true;
+    }
+
+    // Reset player and ball on any of: reset, next level, prev level
+    if reset_pressed || level_changed {
         // Reset player
         if let Ok((player_entity, mut p_transform, mut p_velocity, holding)) = player.single_mut() {
             p_transform.translation = PLAYER_SPAWN;
@@ -1092,10 +1122,10 @@ fn respawn_player(
             *b_state = BallState::Free;
             b_rolling.0 = false;
         }
+    }
 
-        // Cycle to next level (0-indexed internally)
-        let num_levels = level_db.len();
-        current_level.0 = (current_level.0 % num_levels as u32) + 1;
+    // Update level geometry if level changed
+    if level_changed {
         let level_index = (current_level.0 - 1) as usize;
 
         // Despawn old level platforms

@@ -80,7 +80,9 @@ Keyboard + Gamepad supported:
 - E or West button: Pickup ball / Steal
 - F or Right Bumper: Charge and throw (hold to charge, release to throw)
 - Q or Left Bumper: Cycle target basket
-- R or Start: Respawn (cycles through 10 levels)
+- R or Start: Reset current level
+- ] or Right Trigger: Next level
+- [ or Left Trigger: Previous level
 - Tab: Toggle debug UI
 - F1: Toggle physics tweak panel
 
