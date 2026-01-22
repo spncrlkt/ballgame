@@ -28,6 +28,7 @@ This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component 
 - `DebugSettings` - Debug UI visibility
 - `CurrentLevel` - Current level number (1-10)
 - `PhysicsTweaks` - Runtime-adjustable physics values with panel UI
+- `LevelDatabase` - Loaded level definitions from assets/levels.txt
 
 **Player Components:**
 - `Player` - Marker for player entities

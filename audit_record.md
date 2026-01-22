@@ -4,6 +4,65 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Audit: 2026-01-22
+
+### Session Summary
+
+Routine audit with no code changes since last session.
+
+### Changes Made
+
+**CLAUDE.md Fix:**
+- Added missing `LevelDatabase` resource to the Resources section
+
+### Audit Findings
+
+**Compilation:** Clean `cargo check`, no errors
+
+**Clippy:** 24 warnings (all style suggestions, same as previous audit):
+- 1x `derivable_impls` - LevelDatabase::Default can use derive
+- 8x `collapsible_if` - nested if statements
+- 2x `trim_split_whitespace` - unnecessary trim before split_whitespace
+- 7x `type_complexity` - complex Query types (standard for Bevy)
+- 2x `too_many_arguments` - functions with 9 args
+- 1x `collapsible_else_if`
+- 1x `manual_range_patterns` - `5 | 6 | 7` can be `5..=7`
+
+**CLAUDE.md:** Was missing `LevelDatabase` resource - now fixed
+
+**Input Buffering:** Correct
+- All `just_pressed` inputs captured in `capture_input` (Update)
+- Buffered via `PlayerInput` resource
+- Consumed in FixedUpdate systems (`apply_input`, `pickup_ball`, `throw_ball`)
+
+**Frame-Rate Independence:** Correct
+- Gravity: `* time.delta_secs()` (lines 971, 1071)
+- Friction: `.powf(time.delta_secs())` (lines 1067, 1073)
+- Acceleration: `* time.delta_secs()` (line 922)
+- Timers: `- time.delta_secs()` (lines 812, 936, 1058, 1338, 1678)
+
+**Collision Epsilon:** Correct
+- Player floor landing: line 1023 uses `- COLLISION_EPSILON`
+- Ball floor landing: line 1126 uses `- COLLISION_EPSILON`
+- All resting entities properly embedded into platforms
+
+**System Order:** Matches CLAUDE.md documentation exactly
+
+**No Dead Code:** Previous `save_to_file` removal confirmed
+
+**No Pattern Violations:** No raw input reads in FixedUpdate systems
+
+### Files Modified
+
+- `CLAUDE.md` - Added LevelDatabase to Resources
+- `audit_record.md` - This entry
+
+### Code Stats
+
+- `src/main.rs`: 2034 lines (approaching 2000 line threshold mentioned in Future Plans)
+
+---
+
 ## Audit: 2026-01-21 (Session 3)
 
 ### Session Summary
