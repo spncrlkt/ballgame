@@ -533,9 +533,9 @@ fn apply_input(
     velocity.0.x = input.move_x * MOVE_SPEED;
 
     // Update facing direction based on movement
-    if input.move_x > 0.1 {
+    if input.move_x > STICK_DEADZONE {
         facing.0 = 1.0;
-    } else if input.move_x < -0.1 {
+    } else if input.move_x < -STICK_DEADZONE {
         facing.0 = -1.0;
     }
 
