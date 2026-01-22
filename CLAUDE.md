@@ -26,6 +26,8 @@ This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component 
 - `StealContest` - Active steal contest state
 - `Score` - Left/right team scores
 - `DebugSettings` - Debug UI visibility
+- `CurrentLevel` - Current level number (1-10)
+- `PhysicsTweaks` - Runtime-adjustable physics values with panel UI
 
 **Player Components:**
 - `Player` - Marker for player entities
@@ -42,20 +44,24 @@ This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component 
 - `BallState` - Free, Held(Entity), or InFlight { shooter, power }
 - `BallPlayerContact` - Tracks overlap for collision effects
 - `BallPulse` - Animation timer for pickup indicator
+- `BallRolling` - Whether ball is rolling on ground (vs bouncing/flying)
+- `BallShotGrace` - Post-shot grace timer (100ms of no friction/player drag)
 
 **World Components:**
 - `Platform` - Collidable platform (requires `Collider`)
 - `Collider` - Marker for collidable entities
 - `Basket` - Scoring zone (Left or Right)
+- `LevelPlatform` - Marks platforms that belong to current level (despawned on level change)
 
 **UI Components:**
 - `DebugText` - Debug info display
-- `FacingArrow` - Direction indicator inside player
-- `ChargeGaugeBackground` / `ChargeGaugeFill` - Shot charge indicator
+- `ChargeGaugeBackground` / `ChargeGaugeFill` - Shot charge indicator (inside player)
+- `TweakPanel` / `TweakRow` - Physics tweak panel UI
+- `ScoreFlash` - Score animation (flashes basket/player on goal)
 
 ### System Execution Order
 
-**Update schedule:** `capture_input` → `respawn_player` → `toggle_debug` → `update_debug_text` → `animate_pickable_ball` → `update_facing_arrow` → `update_charge_gauge`
+**Update schedule:** `capture_input` → `respawn_player` → `toggle_debug` → `update_debug_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `toggle_tweak_panel` → `update_tweak_panel`
 
 **FixedUpdate schedule (chained):** `apply_input` → `apply_gravity` → `ball_gravity` → `apply_velocity` → `check_collisions` → `ball_collisions` → `ball_state_update` → `ball_player_collision` → `ball_follow_holder` → `pickup_ball` → `steal_contest_update` → `update_shot_charge` → `throw_ball` → `check_scoring`
 
@@ -66,8 +72,15 @@ Keyboard + Gamepad supported:
 - Space/W or South button: Jump
 - E or West button: Pickup ball / Steal
 - F or Right Trigger: Charge and throw (hold to charge, release to throw)
-- R or Start: Respawn
+- R or Start: Respawn (cycles through 10 levels)
 - Tab: Toggle debug UI
+- F1: Toggle physics tweak panel
+
+**In tweak panel:**
+- Up/Down: Select parameter
+- Left/Right: Adjust value by ~10%
+- R: Reset selected parameter to default
+- Shift+R: Reset all parameters to defaults
 
 ---
 
@@ -186,6 +199,10 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 7. **Collision epsilon** - All entities resting on platforms must use `- COLLISION_EPSILON` positioning to ensure overlap is detected next frame (prevents floating/falling through)
 8. **Frame-rate independent physics** - All continuous physics (gravity, friction, drag) must use `* time.delta_secs()` or `.powf(time.delta_secs())`. Per-frame multipliers like `velocity *= 0.98` are bugs.
 9. **Compilation** - Run `cargo check` and `cargo clippy`
+
+**After auditing:**
+- Compact the conversation context and get a fresh read of the codebase
+- Write the audit findings and changes since last audit to `audit_record.md`
 
 ---
 
