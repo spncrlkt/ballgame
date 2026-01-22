@@ -1670,8 +1670,9 @@ fn throw_ball(
         (fallback_angle, SHOT_MAX_SPEED, 0.0)
     };
 
-    // Apply variance to angle only (speed comes from trajectory)
-    let angle_variance = rng.gen_range(-variance..variance) * std::f32::consts::FRAC_PI_2;
+    // Apply variance to angle (max ±30° at full variance)
+    let max_angle_variance = 30.0_f32.to_radians();
+    let angle_variance = rng.gen_range(-variance..variance) * max_angle_variance;
     let final_angle = base_angle + angle_variance;
     let final_speed = base_speed;
 
