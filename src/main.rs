@@ -51,7 +51,7 @@ const SHOT_MAX_VARIANCE: f32 = 0.50; // Variance at zero charge (50%)
 const SHOT_MIN_VARIANCE: f32 = 0.02; // Variance at full charge (2%)
 const SHOT_AIR_VARIANCE_PENALTY: f32 = 0.10; // Additional variance when airborne (10%)
 const SHOT_MOVE_VARIANCE_PENALTY: f32 = 0.10; // Additional variance at full horizontal speed (10%)
-const SHOT_DISTANCE_VARIANCE_FACTOR: f32 = 0.0003; // Variance per unit of distance (30% at 1000 units)
+const SHOT_DISTANCE_SPEED_BONUS: f32 = 0.0005; // Speed bonus per unit of distance (50% at 1000 units)
 const SHOT_GRACE_PERIOD: f32 = 0.1; // Post-shot grace period (no friction/player drag)
 
 // Ball-player collision
@@ -185,15 +185,12 @@ impl Default for CurrentLevel {
 /// Information about the last shot taken (for debug display)
 #[derive(Resource, Default)]
 struct LastShotInfo {
-    power: f32,
-    arc: f32,
     angle_degrees: f32,
     speed: f32,
     base_variance: f32,
     air_penalty: f32,
     move_penalty: f32,
-    distance_penalty: f32,
-    arc_penalty: f32,
+    distance_speed_bonus: f32,
     total_variance: f32,
     target: Option<Basket>,
 }
@@ -1501,53 +1498,58 @@ fn update_target_marker(
     }
 }
 
-/// Shot trajectory result containing angle, speed, and variance penalties
+/// Shot trajectory result containing angle and speed bonus
 struct ShotTrajectory {
-    angle: f32,           // Absolute angle in radians (0=right, π/2=up, π=left)
-    speed: f32,           // Ball speed (usually max, but can vary for special cases)
-    distance_penalty: f32, // Variance penalty for distance
+    angle: f32,            // Absolute angle in radians (0=right, π/2=up, π=left)
+    speed_bonus: f32,      // Speed multiplier bonus from distance (e.g., 0.5 = +50%)
 }
 
-/// Calculate shot trajectory to hit target at max speed.
-/// Returns the angle needed to hit target, always using full power.
+/// Calculate shot trajectory to hit target.
+/// Returns the angle needed to hit target and a speed bonus based on distance.
+/// The trajectory is calculated using the boosted speed (base + distance bonus).
 fn calculate_shot_trajectory(
     shooter_pos: Vec2,
     target_pos: Vec2,
     gravity: f32,
-    max_speed: f32,
+    base_speed: f32,
 ) -> Option<ShotTrajectory> {
     let delta = target_pos - shooter_pos;
     let tx = delta.x; // Positive = target is right, negative = left
     let ty = delta.y; // Positive = target is above, negative = below
     let dx = tx.abs(); // Horizontal distance (always positive)
+    let distance = delta.length();
+
+    // Speed bonus based on distance (longer shots get more power)
+    let speed_bonus = distance * SHOT_DISTANCE_SPEED_BONUS;
+
+    // Use boosted speed for trajectory calculation
+    let effective_speed = base_speed * (1.0 + speed_bonus);
 
     // Directly under/over target - shoot straight up or down
     if dx < 1.0 {
         if ty > 0.0 {
-            // Target above - shoot straight up at full speed
+            // Target above - shoot straight up
             return Some(ShotTrajectory {
                 angle: std::f32::consts::FRAC_PI_2, // 90° straight up
-                speed: max_speed,
-                distance_penalty: 0.0,
+                speed_bonus,
             });
         } else {
-            // Target below - shoot straight down at half speed
+            // Target below - shoot straight down
             return Some(ShotTrajectory {
                 angle: -std::f32::consts::FRAC_PI_2, // -90° straight down
-                speed: max_speed * 0.5,
-                distance_penalty: 0.0,
+                speed_bonus,
             });
         }
     }
 
-    // Calculate angle to hit target at max_speed
+    // Calculate angle to hit target at effective_speed (with distance bonus applied)
     // Quadratic: k*u² - dx*u + (ty + k) = 0, where u = tan(θ), k = g*dx²/(2v²)
-    let v2 = max_speed * max_speed;
+    let v2 = effective_speed * effective_speed;
     let k = gravity * dx * dx / (2.0 * v2);
     let discriminant = dx * dx - 4.0 * k * (ty + k);
 
     if discriminant < 0.0 {
-        return None; // Target out of range at max speed
+        return None; // Target out of range even with boosted speed
     }
 
     let sqrt_d = discriminant.sqrt();
@@ -1561,14 +1563,9 @@ fn calculate_shot_trajectory(
         std::f32::consts::PI - elevation
     };
 
-    // Distance penalty for variance
-    let distance = delta.length();
-    let distance_penalty = distance * SHOT_DISTANCE_VARIANCE_FACTOR;
-
     Some(ShotTrajectory {
         angle,
-        speed: max_speed,
-        distance_penalty,
+        speed_bonus,
     })
 }
 
@@ -1652,10 +1649,9 @@ fn throw_ball(
     let move_penalty = (player_velocity.0.x.abs() / MOVE_SPEED).min(1.0) * SHOT_MOVE_VARIANCE_PENALTY;
     variance += move_penalty;
 
-    // Get base angle and speed from trajectory, add penalties to variance
-    let (base_angle, base_speed, distance_penalty) = if let Some(traj) = &trajectory {
-        variance += traj.distance_penalty;
-        (traj.angle, traj.speed, traj.distance_penalty)
+    // Get base angle and speed bonus from trajectory
+    let (base_angle, distance_speed_bonus) = if let Some(traj) = &trajectory {
+        (traj.angle, traj.speed_bonus)
     } else {
         // Fallback for impossible trajectories - 45° toward target or right
         let fallback_angle = if let Some(basket_pos) = target_basket_pos {
@@ -1667,14 +1663,16 @@ fn throw_ball(
         } else {
             std::f32::consts::FRAC_PI_4 // Default: 45° right
         };
-        (fallback_angle, SHOT_MAX_SPEED, 0.0)
+        (fallback_angle, 0.0)
     };
 
     // Apply variance to angle (max ±30° at full variance)
     let max_angle_variance = 30.0_f32.to_radians();
     let angle_variance = rng.gen_range(-variance..variance) * max_angle_variance;
     let final_angle = base_angle + angle_variance;
-    let final_speed = base_speed;
+
+    // Apply distance speed bonus (longer shots get more power)
+    let final_speed = SHOT_MAX_SPEED * (1.0 + distance_speed_bonus);
 
     // Convert angle + speed to velocity (simple and direct!)
     // Angle is absolute: 0=right, π/2=up, π=left
@@ -1691,17 +1689,13 @@ fn throw_ball(
     };
 
     // Record shot info for debug display
-    let angle_degrees = final_angle.to_degrees();
     *shot_info = LastShotInfo {
-        power: final_speed,
-        arc: final_angle.tan(), // For legacy display compatibility
-        angle_degrees,
+        angle_degrees: final_angle.to_degrees(),
         speed: final_speed,
         base_variance,
         air_penalty,
         move_penalty,
-        distance_penalty,
-        arc_penalty: 0.0, // No longer used
+        distance_speed_bonus,
         total_variance: variance,
         target: Some(target.0),
     };
@@ -2025,17 +2019,14 @@ fn update_debug_text(
             None => "?",
         };
         text.0 = format!(
-            "Last Shot: {:.0}° {:.0}u/s | Power:{:.0} Arc:{:.2} | Variance: base {:.0}% + air {:.0}% + move {:.0}% + dist {:.0}% + arc {:.0}% = {:.0}% | Target: {}{}",
+            "Last Shot: {:.0}° {:.0}u/s | Variance: base {:.0}% + air {:.0}% + move {:.0}% = {:.0}% | Dist bonus: +{:.0}% speed | Target: {}{}",
             shot_info.angle_degrees,
             shot_info.speed,
-            shot_info.power,
-            shot_info.arc,
             shot_info.base_variance * 100.0,
             shot_info.air_penalty * 100.0,
             shot_info.move_penalty * 100.0,
-            shot_info.distance_penalty * 100.0,
-            shot_info.arc_penalty * 100.0,
             shot_info.total_variance * 100.0,
+            shot_info.distance_speed_bonus * 100.0,
             target_str,
             steal_str,
         );
