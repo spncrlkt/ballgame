@@ -47,8 +47,6 @@ const BALL_FREE_SPEED: f32 = 200.0; // Ball becomes Free when speed drops below 
 const SHOT_MAX_POWER: f32 = 900.0; // Maximum horizontal velocity (fallback for extreme shots)
 const SHOT_MAX_SPEED: f32 = 800.0; // Maximum total ball speed (caps velocity magnitude)
 const SHOT_CHARGE_TIME: f32 = 1.6; // Seconds to reach full charge
-const SHOT_MIN_ARC: f32 = 0.5; // Minimum arc ratio (flat shot, ~27°)
-const SHOT_MAX_ARC: f32 = 3.0; // Maximum arc ratio (lob shot, ~72°)
 const SHOT_MAX_VARIANCE: f32 = 0.50; // Variance at zero charge (50%)
 const SHOT_MIN_VARIANCE: f32 = 0.02; // Variance at full charge (2%)
 const SHOT_AIR_VARIANCE_PENALTY: f32 = 0.10; // Additional variance when airborne (10%)
@@ -57,6 +55,9 @@ const SHOT_DISTANCE_VARIANCE_FACTOR: f32 = 0.0003; // Variance per unit of dista
 const SHOT_ARC_VARIANCE_FACTOR: f32 = 0.15; // Variance per unit of arc deviation from optimal
 const SHOT_CEILING_MARGIN: f32 = 60.0; // Stay this far below ceiling
 const SHOT_FRICTION_COMPENSATION_FACTOR: f32 = 25000.0; // Divisor for distance-based friction compensation
+// Max height ball can reach from vertical throw: h = v²/(2g)
+// Only apply ceiling constraints if player_y + this height > ceiling
+const SHOT_MAX_VERTICAL_HEIGHT: f32 = (SHOT_MAX_SPEED * SHOT_MAX_SPEED) / (2.0 * BALL_GRAVITY);
 const SHOT_GRACE_PERIOD: f32 = 0.1; // Post-shot grace period (no friction/player drag)
 
 // Ball-player collision
@@ -1543,44 +1544,53 @@ fn calculate_shot_trajectory(
     let optimal_arc = theta_optimal.tan();
 
     // Minimum arc needed to reach target (arc * dx must be > dy)
+    // For targets below player, allow very flat shots
     let min_arc = if dy > 0.0 {
         (dy / dx) + 0.05 // Small margin above minimum
     } else {
-        SHOT_MIN_ARC
+        0.01 // Allow nearly flat shots for targets at or below
     };
 
-    // Calculate apex height for a given arc
-    // apex_height = arc² * dx² / (4 * (arc * dx - dy))
-    let calc_apex_height = |arc: f32| -> f32 {
-        let denom = arc * dx - dy;
-        if denom <= 0.0 {
-            f32::MAX
-        } else {
-            arc * arc * dx * dx / (4.0 * denom)
-        }
-    };
+    // Only apply ceiling constraints if player is high enough that a max vertical shot could hit
+    let ceiling_threshold = ceiling_y - SHOT_CEILING_MARGIN - SHOT_MAX_VERTICAL_HEIGHT;
+    let max_arc = if shooter_pos.y > ceiling_threshold {
+        // Player is high enough to potentially hit ceiling - calculate constraint
+        let max_apex = ceiling_y - SHOT_CEILING_MARGIN - shooter_pos.y;
 
-    // Maximum allowed apex height (ceiling - margin - shooter height)
-    let max_apex = ceiling_y - SHOT_CEILING_MARGIN - shooter_pos.y;
-
-    // Find maximum arc that stays below ceiling (binary search)
-    let mut max_arc = SHOT_MAX_ARC;
-    if calc_apex_height(max_arc) > max_apex {
-        let mut low = min_arc;
-        let mut high = SHOT_MAX_ARC;
-        for _ in 0..10 {
-            let mid = (low + high) / 2.0;
-            if calc_apex_height(mid) > max_apex {
-                high = mid;
+        // Calculate apex height for a given arc
+        // apex_height = arc² * dx² / (4 * (arc * dx - dy))
+        let calc_apex_height = |arc: f32| -> f32 {
+            let denom = arc * dx - dy;
+            if denom <= 0.0 {
+                f32::MAX
             } else {
-                low = mid;
+                arc * arc * dx * dx / (4.0 * denom)
             }
-        }
-        max_arc = low;
-    }
+        };
 
-    // Clamp arc between min and max
-    let final_arc = optimal_arc.clamp(min_arc.max(SHOT_MIN_ARC), max_arc);
+        // Find maximum arc that stays below ceiling (binary search)
+        let mut max = 10.0; // High upper bound (~84°)
+        if calc_apex_height(max) > max_apex {
+            let mut low = min_arc;
+            let mut high = 10.0;
+            for _ in 0..10 {
+                let mid = (low + high) / 2.0;
+                if calc_apex_height(mid) > max_apex {
+                    high = mid;
+                } else {
+                    low = mid;
+                }
+            }
+            max = low;
+        }
+        max
+    } else {
+        // Player is low enough - no ceiling constraint needed
+        10.0 // Effectively unlimited (atan(10) ≈ 84°)
+    };
+
+    // Use optimal arc, only constrained by physical limits (reaching target, ceiling)
+    let final_arc = optimal_arc.clamp(min_arc, max_arc);
 
     // Check if trajectory is possible
     let denominator = 2.0 * (final_arc * dx - dy);
@@ -1698,35 +1708,38 @@ fn throw_ball(
         variance += traj.arc_penalty;
         (traj.power, traj.arc, traj.distance_penalty, traj.arc_penalty)
     } else {
-        // Fallback for impossible trajectories
-        (SHOT_MAX_POWER, SHOT_MIN_ARC, 0.0, 0.0)
+        // Fallback for impossible trajectories - moderate arc (45°)
+        (SHOT_MAX_POWER, 1.0, 0.0, 0.0)
     };
 
-    // Apply variance to arc and power
-    let arc_variance = rng.gen_range(-variance..variance);
-    let final_arc = (base_arc + arc_variance).clamp(SHOT_MIN_ARC, SHOT_MAX_ARC);
-
-    let power_variance = 1.0 + rng.gen_range(-variance..variance);
-    let final_power = (base_power * power_variance).min(SHOT_MAX_POWER);
-
-    // Calculate direction to target basket
+    // Calculate direction to target basket (determines base angle orientation)
     let dir_x = if let Some(basket_pos) = target_basket_pos {
         (basket_pos.x - player_pos.x).signum()
     } else {
         1.0 // Fallback: shoot right
     };
 
-    // Calculate velocity components
-    let mut vx = dir_x * final_power;
-    let mut vy = final_power * final_arc;
+    // Convert arc ratio to angle (radians) - this is the ideal angle from auto-aim
+    let ideal_angle = base_arc.atan();
 
-    // Cap total speed while preserving direction (prevents rocket shots under basket)
-    let speed = (vx * vx + vy * vy).sqrt();
-    if speed > SHOT_MAX_SPEED {
-        let scale = SHOT_MAX_SPEED / speed;
-        vx *= scale;
-        vy *= scale;
-    }
+    // Auto-aim's power is horizontal velocity (vx). Convert to total magnitude.
+    // Since vx = speed * cos(θ), we need speed = vx / cos(θ) = power / cos(ideal_angle)
+    let base_speed = base_power / ideal_angle.cos();
+
+    // Apply variance to angle - can rotate shot in any direction
+    // Variance is a ratio, scale it to radians (±variance * 90° at max)
+    let angle_variance = rng.gen_range(-variance..variance) * std::f32::consts::FRAC_PI_2;
+    let final_angle = ideal_angle + angle_variance;
+
+    // Apply variance to speed (was power)
+    let speed_variance = 1.0 + rng.gen_range(-variance..variance);
+    let final_speed_uncapped = base_speed * speed_variance;
+
+    // Cap speed and convert angle + speed to velocity components
+    // Angle is measured from horizontal: 0° = flat, 90° = straight up, negative = downward
+    let final_speed = final_speed_uncapped.min(SHOT_MAX_SPEED);
+    let vx = dir_x * final_speed * final_angle.cos();
+    let vy = final_speed * final_angle.sin();
 
     // Set ball velocity
     ball_velocity.0.x = vx;
@@ -1734,14 +1747,14 @@ fn throw_ball(
 
     *ball_state = BallState::InFlight {
         shooter: player_entity,
-        power: final_power,
+        power: final_speed,
     };
 
     // Record shot info for debug display
-    let final_speed = (vx * vx + vy * vy).sqrt();
     let angle_degrees = vy.atan2(vx.abs()).to_degrees();
+    let final_arc = final_angle.tan(); // For debug display
     *shot_info = LastShotInfo {
-        power: final_power,
+        power: final_speed,
         arc: final_arc,
         angle_degrees,
         speed: final_speed,
