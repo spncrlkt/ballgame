@@ -108,34 +108,26 @@ pub fn calculate_shot_trajectory(
         });
     }
 
-    // Choose a preferred elevation angle (60° gives nice arc)
-    let elevation = 60.0_f32.to_radians();
+    // Calculate optimal angle for minimum energy trajectory
+    // θ = atan2(dy + sqrt(dx² + dy²), dx)
+    let distance_to_target = (dx * dx + ty * ty).sqrt();
+    let optimal_elevation = (ty + distance_to_target).atan2(dx);
+
+    // Clamp to reasonable range (don't go below ~30° or above ~85°)
+    let min_angle = 30.0_f32.to_radians();
+    let max_angle = 85.0_f32.to_radians();
+    let final_elevation = optimal_elevation.clamp(min_angle, max_angle);
 
     // Calculate required speed: v² = g*dx² / (2*cos²(θ)*(dx*tan(θ) - dy))
-    let cos_e = elevation.cos();
-    let tan_e = elevation.tan();
+    let cos_e = final_elevation.cos();
+    let tan_e = final_elevation.tan();
     let denominator = 2.0 * cos_e * cos_e * (dx * tan_e - ty);
 
-    // If denominator <= 0, angle is too low to reach target height
-    // Try a higher angle
-    let (final_elevation, required_speed) = if denominator <= 0.0 {
-        // Need steeper angle - try 75°
-        let steep = 75.0_f32.to_radians();
-        let cos_s = steep.cos();
-        let tan_s = steep.tan();
-        let denom2 = 2.0 * cos_s * cos_s * (dx * tan_s - ty);
-        if denom2 <= 0.0 {
-            // Even 75° can't reach - use near-vertical
-            let very_steep = 85.0_f32.to_radians();
-            let cos_vs = very_steep.cos();
-            let tan_vs = very_steep.tan();
-            let denom3 = 2.0 * cos_vs * cos_vs * (dx * tan_vs - ty);
-            (very_steep, (gravity * dx * dx / denom3).sqrt())
-        } else {
-            (steep, (gravity * dx * dx / denom2).sqrt())
-        }
+    let required_speed = if denominator > 0.0 {
+        (gravity * dx * dx / denominator).sqrt()
     } else {
-        (elevation, (gravity * dx * dx / denominator).sqrt())
+        // Fallback for edge cases (nearly vertical)
+        (2.0 * gravity * ty.abs()).sqrt()
     };
 
     // Convert elevation to absolute angle based on target direction
