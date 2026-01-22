@@ -54,7 +54,9 @@ This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component 
 - `Platform` - Collidable platform (requires `Collider`)
 - `Collider` - Marker for collidable entities
 - `Basket` - Scoring zone (Left or Right)
+- `BasketRim` - Marks rim platforms attached to baskets (for collision filtering)
 - `LevelPlatform` - Marks platforms that belong to current level (despawned on level change)
+- `CornerRamp` - Marks corner step platforms (despawned on level change)
 
 **UI Components:**
 - `DebugText` - Debug info display (last shot details)

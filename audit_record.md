@@ -4,6 +4,73 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Audit: 2026-01-22 (Session 2)
+
+### Session Summary
+
+Routine audit with no gameplay code changes since last session.
+
+### Changes Made
+
+**CLAUDE.md Fix:**
+- Added missing `BasketRim` component to World Components section
+- Added missing `CornerRamp` component to World Components section
+
+### Audit Findings
+
+**Compilation:** Clean `cargo check`, no errors
+
+**Clippy:** 22 warnings (all style suggestions, down from 24):
+- 1x `derivable_impls` - LevelDatabase::Default can use derive
+- 7x `collapsible_if` - nested if statements
+- 1x `trim_split_whitespace` - unnecessary trim before split_whitespace
+- 6x `type_complexity` - complex Query types (standard for Bevy)
+- 1x `too_many_arguments` - respawn_player with 10 args
+- 1x `collapsible_else_if`
+- 1x `manual_range_patterns` - `5 | 6 | 7` can be `5..=7`
+
+**CLAUDE.md:** Was missing `BasketRim` and `CornerRamp` components - now fixed
+
+**Input Buffering:** Correct
+- All `just_pressed` inputs captured in `capture_input` (Update)
+- Buffered via `PlayerInput` resource fields
+- Consumed in FixedUpdate systems:
+  - `apply_input` consumes `jump_buffer_timer` (line 1152)
+  - `pickup_ball` consumes `pickup_pressed` (lines 1527, 1537)
+  - `throw_ball` consumes `throw_released` (line 1743)
+  - `cycle_target` consumes `cycle_target_pressed` (line 1644)
+
+**Frame-Rate Independence:** Correct
+- Gravity: `* time.delta_secs()` (lines 1178, 1283)
+- Friction: `.powf(time.delta_secs())` (lines 1279, 1285)
+- Acceleration: `move_toward(..., rate * time.delta_secs())` (line 1129)
+- Timers: `- time.delta_secs()` (lines 1143, 1270, 1591, 1629, 1959, 2033)
+
+**Collision Epsilon:** Correct
+- Player floor landing: line 1234-1235 uses `- COLLISION_EPSILON`
+- Ball floor landing: line 1360-1361 uses `- COLLISION_EPSILON`
+- All resting entities properly embedded into platforms
+
+**System Order:** Matches CLAUDE.md documentation exactly
+- Update: 11 systems
+- FixedUpdate: 15 systems chained
+
+**No Dead Code:** No unused code warnings from clippy
+
+**No Pattern Violations:** No raw input reads in FixedUpdate systems
+
+### Files Modified
+
+- `CLAUDE.md` - Added BasketRim and CornerRamp to World Components
+- `audit_record.md` - This entry
+
+### Code Stats
+
+- `src/main.rs`: ~2367 lines (over the 2000 line threshold - consider modularization)
+- `src/lib.rs`: 146 lines (shared trajectory calculation)
+
+---
+
 ## Audit: 2026-01-22
 
 ### Session Summary
