@@ -131,6 +131,44 @@ All tunable values go in constants at the top of `main.rs`, grouped by category:
 
 Use specific queries with `With<T>` and `Without<T>` filters to avoid ambiguity and improve performance. When querying related entities (player and children), use separate queries.
 
+### 6. Collision Epsilon for Ground Contact
+
+Entities that rest on platforms (player, ball when rolling) must be positioned slightly INTO the platform using `COLLISION_EPSILON`:
+```rust
+// Correct - ensures overlap detected next frame
+transform.translation.y = platform_top + entity_half_height - COLLISION_EPSILON;
+
+// Wrong - zero overlap, ground contact detection fails
+transform.translation.y = platform_top + entity_half_height;
+```
+
+Without this, entities positioned exactly on top have zero overlap, collision detection fails, and:
+- Rolling balls won't detect ground contact and fall through logic breaks
+- Grounded state flickers
+- Entities may float or behave erratically
+
+### 7. Frame-Rate Independent Physics
+
+All continuous physics must be time-based, not per-frame:
+```rust
+// Correct - time-based
+velocity.y -= GRAVITY * time.delta_secs();           // Subtraction
+velocity.x *= FRICTION.powf(time.delta_secs());      // Multiplicative decay
+
+// Wrong - frame-rate dependent
+velocity.y -= GRAVITY;        // Faster at higher FPS
+velocity.x *= 0.98;           // Faster decay at higher FPS
+```
+
+**What needs time-scaling:**
+- Gravity, acceleration (use `* delta_secs`)
+- Friction, drag, decay (use `.powf(delta_secs)`)
+- Timers, cooldowns (use `- delta_secs`)
+
+**What does NOT need time-scaling:**
+- One-time events (bounce, jump impulse, collision response)
+- State changes (pickup, throw)
+
 ---
 
 ## Maintenance Checklist
@@ -145,7 +183,9 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 4. **System order** - Verify FixedUpdate chain matches documented order
 5. **Unused code** - Look for dead code, unused imports, commented-out blocks
 6. **Pattern violations** - Check for raw input reads in FixedUpdate, unbuffered press inputs
-7. **Compilation** - Run `cargo check` and `cargo clippy`
+7. **Collision epsilon** - All entities resting on platforms must use `- COLLISION_EPSILON` positioning to ensure overlap is detected next frame (prevents floating/falling through)
+8. **Frame-rate independent physics** - All continuous physics (gravity, friction, drag) must use `* time.delta_secs()` or `.powf(time.delta_secs())`. Per-frame multipliers like `velocity *= 0.98` are bugs.
+9. **Compilation** - Run `cargo check` and `cargo clippy`
 
 ---
 

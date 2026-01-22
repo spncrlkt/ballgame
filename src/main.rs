@@ -30,8 +30,10 @@ const STICK_DEADZONE: f32 = 0.25; // Analog stick deadzone to prevent rebound di
 // Ball physics
 const BALL_GRAVITY: f32 = 800.0;
 const BALL_BOUNCE: f32 = 0.7; // Coefficient of restitution (0 = no bounce, 1 = perfect bounce)
-const BALL_FRICTION: f32 = 0.98; // Horizontal velocity retention per frame
-const BALL_MIN_BOUNCE_VEL: f32 = 50.0; // Below this, ball stops bouncing
+const BALL_AIR_FRICTION: f32 = 0.95; // Horizontal velocity retained after 1 second in air (low drag)
+const BALL_GROUND_FRICTION: f32 = 0.6; // Horizontal velocity retained per bounce
+const BALL_ROLL_FRICTION: f32 = 0.6; // Horizontal velocity retained after 1 second while rolling
+const BALL_BOUNCE_HEIGHT_MULT: f32 = 1.7; // Ball must bounce this × its height to keep bouncing, else rolls
 const BALL_PICKUP_RADIUS: f32 = 100.0; // How close player must be to pick up ball (forgiving)
 const BALL_FREE_SPEED: f32 = 200.0; // Ball becomes Free when speed drops below this (2x pickup radius speed)
 
@@ -69,7 +71,22 @@ const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - 120.0;
 
 // Spawn
 const PLAYER_SPAWN: Vec3 = Vec3::new(-200.0, ARENA_FLOOR_Y + 100.0, 0.0);
-const BALL_SPAWN: Vec3 = Vec3::new(0.0, ARENA_FLOOR_Y + 50.0, 0.0); // Center
+const BALL_SPAWN: Vec3 = Vec3::new(0.0, ARENA_FLOOR_Y + 50.0, 2.0); // Center, z=2 to render in front
+
+// Levels
+const NUM_LEVELS: u32 = 10;
+const LEVEL_NAMES: [&str; 10] = [
+    "Simple",
+    "Three Tiers",
+    "Tower",
+    "V-Shape",
+    "Inverted V",
+    "Double Stack",
+    "Diamond",
+    "Zigzag",
+    "Fortress",
+    "Arena",
+];
 
 fn main() {
     App::new()
@@ -79,8 +96,10 @@ fn main() {
         .init_resource::<DebugSettings>()
         .init_resource::<StealContest>()
         .init_resource::<Score>()
+        .init_resource::<CurrentLevel>()
+        .init_resource::<PhysicsTweaks>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text, animate_pickable_ball, update_facing_arrow, update_charge_gauge))
+        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text, animate_pickable_ball, animate_score_flash, update_charge_gauge, toggle_tweak_panel, update_tweak_panel))
         .add_systems(
             FixedUpdate,
             (
@@ -143,6 +162,142 @@ struct Score {
     right: u32, // Team scoring in RIGHT basket
 }
 
+#[derive(Resource)]
+struct CurrentLevel(u32);
+
+impl Default for CurrentLevel {
+    fn default() -> Self {
+        Self(1)
+    }
+}
+
+/// Runtime-adjustable physics values for tweaking gameplay feel
+#[derive(Resource)]
+struct PhysicsTweaks {
+    gravity_rise: f32,
+    gravity_fall: f32,
+    jump_velocity: f32,
+    move_speed: f32,
+    ball_gravity: f32,
+    ball_bounce: f32,
+    ball_air_friction: f32,
+    ball_roll_friction: f32,
+    shot_min_power: f32,
+    shot_max_power: f32,
+    shot_charge_time: f32,
+    selected_index: usize, // Which value is currently selected for adjustment
+    panel_visible: bool,
+}
+
+impl Default for PhysicsTweaks {
+    fn default() -> Self {
+        Self {
+            gravity_rise: GRAVITY_RISE,
+            gravity_fall: GRAVITY_FALL,
+            jump_velocity: JUMP_VELOCITY,
+            move_speed: MOVE_SPEED,
+            ball_gravity: BALL_GRAVITY,
+            ball_bounce: BALL_BOUNCE,
+            ball_air_friction: BALL_AIR_FRICTION,
+            ball_roll_friction: BALL_ROLL_FRICTION,
+            shot_min_power: SHOT_MIN_POWER,
+            shot_max_power: SHOT_MAX_POWER,
+            shot_charge_time: SHOT_CHARGE_TIME,
+            selected_index: 0,
+            panel_visible: false,
+        }
+    }
+}
+
+impl PhysicsTweaks {
+    const LABELS: [&'static str; 11] = [
+        "Gravity Rise",
+        "Gravity Fall",
+        "Jump Velocity",
+        "Move Speed",
+        "Ball Gravity",
+        "Ball Bounce",
+        "Ball Air Friction",
+        "Ball Roll Friction",
+        "Shot Min Power",
+        "Shot Max Power",
+        "Shot Charge Time",
+    ];
+
+    fn get_value(&self, index: usize) -> f32 {
+        match index {
+            0 => self.gravity_rise,
+            1 => self.gravity_fall,
+            2 => self.jump_velocity,
+            3 => self.move_speed,
+            4 => self.ball_gravity,
+            5 => self.ball_bounce,
+            6 => self.ball_air_friction,
+            7 => self.ball_roll_friction,
+            8 => self.shot_min_power,
+            9 => self.shot_max_power,
+            10 => self.shot_charge_time,
+            _ => 0.0,
+        }
+    }
+
+    fn get_default_value(index: usize) -> f32 {
+        match index {
+            0 => GRAVITY_RISE,
+            1 => GRAVITY_FALL,
+            2 => JUMP_VELOCITY,
+            3 => MOVE_SPEED,
+            4 => BALL_GRAVITY,
+            5 => BALL_BOUNCE,
+            6 => BALL_AIR_FRICTION,
+            7 => BALL_ROLL_FRICTION,
+            8 => SHOT_MIN_POWER,
+            9 => SHOT_MAX_POWER,
+            10 => SHOT_CHARGE_TIME,
+            _ => 0.0,
+        }
+    }
+
+    fn set_value(&mut self, index: usize, value: f32) {
+        match index {
+            0 => self.gravity_rise = value,
+            1 => self.gravity_fall = value,
+            2 => self.jump_velocity = value,
+            3 => self.move_speed = value,
+            4 => self.ball_gravity = value,
+            5 => self.ball_bounce = value,
+            6 => self.ball_air_friction = value,
+            7 => self.ball_roll_friction = value,
+            8 => self.shot_min_power = value,
+            9 => self.shot_max_power = value,
+            10 => self.shot_charge_time = value,
+            _ => {}
+        }
+    }
+
+    fn is_modified(&self, index: usize) -> bool {
+        let current = self.get_value(index);
+        let default = Self::get_default_value(index);
+        (current - default).abs() > 0.001
+    }
+
+    fn reset_value(&mut self, index: usize) {
+        self.set_value(index, Self::get_default_value(index));
+    }
+
+    fn reset_all(&mut self) {
+        for i in 0..Self::LABELS.len() {
+            self.reset_value(i);
+        }
+    }
+
+    fn get_step(&self, index: usize) -> f32 {
+        // Step size is ~10% of default value
+        let default = Self::get_default_value(index);
+        (default * 0.1).max(0.01) // At least 0.01 for small values
+    }
+}
+
 // Components
 
 #[derive(Component)]
@@ -168,6 +323,9 @@ struct Collider;
 #[derive(Component)]
 #[require(Collider)]
 struct Platform;
+
+#[derive(Component)]
+struct LevelPlatform; // Marks platforms that belong to current level (despawned on level change)
 
 // Player state
 #[derive(Component)]
@@ -209,6 +367,12 @@ struct BallPulse {
     timer: f32, // Animation timer for pickup indicator
 }
 
+#[derive(Component, Default)]
+struct BallRolling(bool); // True when ball is rolling on ground
+
+#[derive(Component, Default)]
+struct BallShotGrace(f32); // Timer for post-shot grace period (no friction/player drag)
+
 #[derive(Component, Clone, Copy, PartialEq)]
 enum Basket {
     Left,
@@ -219,21 +383,27 @@ enum Basket {
 struct DebugText;
 
 #[derive(Component)]
-struct FacingArrow;
-
-#[derive(Component)]
 struct ChargeGaugeBackground;
 
 #[derive(Component)]
 struct ChargeGaugeFill;
 
+#[derive(Component)]
+struct TweakPanel;
+
+#[derive(Component)]
+struct TweakRow(usize); // Index of this row's parameter
+
+#[derive(Component)]
+struct ScoreFlash {
+    timer: f32,            // Time remaining in flash
+    flash_color: Color,    // Color to flash to
+    original_color: Color, // Color to restore after flash
+}
+
 // Systems
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
+fn setup(mut commands: Commands) {
     // Camera - orthographic, shows entire arena
     // Using scale to zoom out and show full arena (default is 1.0 = 1 pixel per unit)
     // With 1600x900 arena, we need to scale so it fits in typical window sizes
@@ -245,14 +415,6 @@ fn setup(
             ..OrthographicProjection::default_2d()
         }),
     ));
-
-    // Create arrow mesh (triangle pointing right)
-    let arrow_mesh = meshes.add(Triangle2d::new(
-        Vec2::new(-8.0, -6.0),  // Bottom left
-        Vec2::new(-8.0, 6.0),   // Top left
-        Vec2::new(8.0, 0.0),    // Right point
-    ));
-    let arrow_material = materials.add(ColorMaterial::from_color(Color::WHITE));
 
     // Player - spawns above the floor
     let player_entity = commands
@@ -270,20 +432,9 @@ fn setup(
         ))
         .id();
 
-    // Spawn facing arrow as child of player
-    let arrow_entity = commands
-        .spawn((
-            Mesh2d(arrow_mesh),
-            MeshMaterial2d(arrow_material),
-            Transform::from_xyz(0.0, 0.0, 1.0), // Centered, slightly in front
-            FacingArrow,
-        ))
-        .id();
-    commands.entity(player_entity).add_child(arrow_entity);
-
-    // Charge gauge - position will be updated dynamically (opposite side of ball)
+    // Charge gauge - inside player, opposite side of ball
     // Start on left side (default facing is right, so ball is right, gauge is left)
-    let gauge_x = -(PLAYER_SIZE.x / 2.0 + CHARGE_GAUGE_WIDTH / 2.0 + 2.0);
+    let gauge_x = -PLAYER_SIZE.x / 4.0;
 
     // Background (black bar, always visible, centered vertically on player)
     let gauge_bg = commands
@@ -314,6 +465,8 @@ fn setup(
         Velocity::default(),
         BallPlayerContact::default(),
         BallPulse::default(),
+        BallRolling::default(),
+        BallShotGrace::default(),
     ));
 
     // Arena floor (spans most of the arena width)
@@ -344,66 +497,22 @@ fn setup(
         Platform,
     ));
 
-    // Floating platforms - spread across arena
-    commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::new(200.0, 20.0)),
-        Transform::from_xyz(-400.0, ARENA_FLOOR_Y + 150.0, 0.0),
-        Platform,
-    ));
+    // Spawn level 1 platforms
+    spawn_level_platforms(&mut commands, 1);
 
-    commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::new(200.0, 20.0)),
-        Transform::from_xyz(400.0, ARENA_FLOOR_Y + 150.0, 0.0),
-        Platform,
-    ));
-
-    commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::new(250.0, 20.0)),
-        Transform::from_xyz(0.0, ARENA_FLOOR_Y + 300.0, 0.0),
-        Platform,
-    ));
-
-    commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::new(150.0, 20.0)),
-        Transform::from_xyz(-500.0, ARENA_FLOOR_Y + 400.0, 0.0),
-        Platform,
-    ));
-
-    commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::new(150.0, 20.0)),
-        Transform::from_xyz(500.0, ARENA_FLOOR_Y + 400.0, 0.0),
-        Platform,
-    ));
-
-    // Left basket platform
-    commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::new(120.0, 20.0)),
-        Transform::from_xyz(LEFT_BASKET_X, BASKET_HEIGHT - BASKET_SIZE.y / 2.0 - 10.0, 0.0),
-        Platform,
-    ));
-
-    // Left basket (scoring zone)
+    // Baskets (goals)
     commands.spawn((
         Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
-        Transform::from_xyz(LEFT_BASKET_X, BASKET_HEIGHT, 0.0),
+        Transform::from_xyz(LEFT_BASKET_X, BASKET_HEIGHT, -0.1), // Slightly behind
         Basket::Left,
     ));
-
-    // Right basket platform
-    commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::new(120.0, 20.0)),
-        Transform::from_xyz(RIGHT_BASKET_X, BASKET_HEIGHT - BASKET_SIZE.y / 2.0 - 10.0, 0.0),
-        Platform,
-    ));
-
-    // Right basket (scoring zone)
     commands.spawn((
         Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
-        Transform::from_xyz(RIGHT_BASKET_X, BASKET_HEIGHT, 0.0),
+        Transform::from_xyz(RIGHT_BASKET_X, BASKET_HEIGHT, -0.1),
         Basket::Right,
     ));
 
-    // Debug UI
+    // Debug UI - bottom center
     commands.spawn((
         Text::new("Debug"),
         TextFont {
@@ -413,12 +522,70 @@ fn setup(
         TextColor(Color::BLACK),
         Node {
             position_type: PositionType::Absolute,
-            top: Val::Px(10.0),
-            left: Val::Px(10.0),
+            bottom: Val::Px(10.0),
+            width: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
             ..default()
         },
         DebugText,
     ));
+
+    // Physics Tweak Panel (hidden by default, toggle with F1)
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                right: Val::Px(10.0),
+                top: Val::Px(10.0),
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::all(Val::Px(10.0)),
+                row_gap: Val::Px(4.0),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
+            Visibility::Hidden,
+            TweakPanel,
+        ))
+        .with_children(|parent| {
+            // Title
+            parent.spawn((
+                Text::new("Physics Tweaks (F1 to close)"),
+                TextFont {
+                    font_size: 14.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+            ));
+            parent.spawn((
+                Text::new("Up/Down: select | Left/Right: +/-10%"),
+                TextFont {
+                    font_size: 12.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.7, 0.7, 0.7)),
+            ));
+            parent.spawn((
+                Text::new("R: reset selected | Shift+R: reset all"),
+                TextFont {
+                    font_size: 12.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.7, 0.7, 0.7)),
+            ));
+
+            // Create a row for each tweakable parameter
+            for i in 0..PhysicsTweaks::LABELS.len() {
+                parent.spawn((
+                    Text::new(format!("{}: ---", PhysicsTweaks::LABELS[i])),
+                    TextFont {
+                        font_size: 13.0,
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                    TweakRow(i),
+                ));
+            }
+        });
 }
 
 /// Runs in Update to capture input state before it's cleared
@@ -426,8 +593,13 @@ fn capture_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut input: ResMut<PlayerInput>,
+    tweaks: Res<PhysicsTweaks>,
     time: Res<Time>,
 ) {
+    // Don't capture game input when tweak panel is open (uses arrow keys)
+    if tweaks.panel_visible {
+        return;
+    }
     // Horizontal movement (continuous - overwrite each frame)
     let mut move_x = 0.0;
 
@@ -488,8 +660,10 @@ fn respawn_player(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut commands: Commands,
+    mut current_level: ResMut<CurrentLevel>,
     mut player: Query<(Entity, &mut Transform, &mut Velocity, Option<&HoldingBall>), With<Player>>,
-    mut ball: Query<(&mut Transform, &mut Velocity, &mut BallState), (With<Ball>, Without<Player>)>,
+    mut ball: Query<(&mut Transform, &mut Velocity, &mut BallState, &mut BallRolling), (With<Ball>, Without<Player>)>,
+    level_platforms: Query<Entity, With<LevelPlatform>>,
 ) {
     let respawn_pressed = keyboard.just_pressed(KeyCode::KeyR)
         || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::Start));
@@ -507,17 +681,30 @@ fn respawn_player(
         }
 
         // Reset ball
-        if let Ok((mut b_transform, mut b_velocity, mut b_state)) = ball.single_mut() {
+        if let Ok((mut b_transform, mut b_velocity, mut b_state, mut b_rolling)) = ball.single_mut() {
             b_transform.translation = BALL_SPAWN;
             b_velocity.0 = Vec2::ZERO;
             *b_state = BallState::Free;
+            b_rolling.0 = false;
         }
+
+        // Cycle to next level
+        current_level.0 = (current_level.0 % NUM_LEVELS) + 1;
+
+        // Despawn old level platforms
+        for entity in &level_platforms {
+            commands.entity(entity).despawn();
+        }
+
+        // Spawn new level platforms
+        spawn_level_platforms(&mut commands, current_level.0);
     }
 }
 
 /// Runs in FixedUpdate to apply captured input to physics
 fn apply_input(
     mut input: ResMut<PlayerInput>,
+    tweaks: Res<PhysicsTweaks>,
     mut player: Query<
         (&mut Velocity, &mut CoyoteTimer, &mut JumpState, &mut Facing, &Grounded),
         With<Player>,
@@ -530,7 +717,7 @@ fn apply_input(
         return;
     };
 
-    velocity.0.x = input.move_x * MOVE_SPEED;
+    velocity.0.x = input.move_x * tweaks.move_speed;
 
     // Update facing direction based on movement
     if input.move_x > STICK_DEADZONE {
@@ -552,7 +739,7 @@ fn apply_input(
 
     // Jump if we have buffered input and can jump
     if input.jump_buffer_timer > 0.0 && can_jump {
-        velocity.0.y = JUMP_VELOCITY;
+        velocity.0.y = tweaks.jump_velocity;
         input.jump_buffer_timer = 0.0; // Consume the buffered jump
         coyote.0 = 0.0; // Consume coyote time so we can't double jump
         jump_state.is_jumping = true; // Mark that we're in a jump
@@ -566,14 +753,18 @@ fn apply_input(
     }
 }
 
-fn apply_gravity(mut query: Query<(&mut Velocity, &Grounded)>, time: Res<Time>) {
+fn apply_gravity(
+    tweaks: Res<PhysicsTweaks>,
+    mut query: Query<(&mut Velocity, &Grounded)>,
+    time: Res<Time>,
+) {
     for (mut velocity, grounded) in &mut query {
         if !grounded.0 {
             // Fast fall: use higher gravity when falling than rising
             let gravity = if velocity.0.y > 0.0 {
-                GRAVITY_RISE
+                tweaks.gravity_rise
             } else {
-                GRAVITY_FALL
+                tweaks.gravity_fall
             };
             velocity.0.y -= gravity * time.delta_secs();
         }
@@ -654,14 +845,32 @@ fn check_collisions(
     }
 }
 
-fn ball_gravity(mut query: Query<(&mut Velocity, &BallState), With<Ball>>, time: Res<Time>) {
-    for (mut velocity, state) in &mut query {
-        // Only apply gravity when ball is free or in flight
+fn ball_gravity(
+    tweaks: Res<PhysicsTweaks>,
+    mut query: Query<(&mut Velocity, &BallState, &BallRolling, &mut BallShotGrace), With<Ball>>,
+    time: Res<Time>,
+) {
+    for (mut velocity, state, rolling, mut grace) in &mut query {
+        // Decrement grace timer
+        if grace.0 > 0.0 {
+            grace.0 = (grace.0 - time.delta_secs()).max(0.0);
+        }
+
         match state {
             BallState::Free | BallState::InFlight { .. } => {
-                velocity.0.y -= BALL_GRAVITY * time.delta_secs();
-                // Apply friction to horizontal movement
-                velocity.0.x *= BALL_FRICTION;
+                if rolling.0 {
+                    // Rolling on ground - no gravity, apply rolling friction (skip if grace active)
+                    velocity.0.y = 0.0;
+                    if grace.0 <= 0.0 {
+                        velocity.0.x *= tweaks.ball_roll_friction.powf(time.delta_secs());
+                    }
+                } else {
+                    // In air - apply gravity, apply air friction only if no grace
+                    velocity.0.y -= tweaks.ball_gravity * time.delta_secs();
+                    if grace.0 <= 0.0 {
+                        velocity.0.x *= tweaks.ball_air_friction.powf(time.delta_secs());
+                    }
+                }
             }
             BallState::Held(_) => {
                 // Ball follows player, no gravity
@@ -672,10 +881,11 @@ fn ball_gravity(mut query: Query<(&mut Velocity, &BallState), With<Ball>>, time:
 }
 
 fn ball_collisions(
-    mut ball_query: Query<(&mut Transform, &mut Velocity, &BallState, &Sprite), With<Ball>>,
+    tweaks: Res<PhysicsTweaks>,
+    mut ball_query: Query<(&mut Transform, &mut Velocity, &BallState, &Sprite, &mut BallRolling), With<Ball>>,
     platform_query: Query<(&Transform, &Sprite), (With<Platform>, Without<Ball>)>,
 ) {
-    for (mut ball_transform, mut ball_velocity, state, ball_sprite) in &mut ball_query {
+    for (mut ball_transform, mut ball_velocity, state, ball_sprite, mut rolling) in &mut ball_query {
         // Skip collision for held balls
         if matches!(state, BallState::Held(_)) {
             continue;
@@ -683,6 +893,10 @@ fn ball_collisions(
 
         let ball_size = ball_sprite.custom_size.unwrap_or(BALL_SIZE);
         let ball_half = ball_size / 2.0;
+
+        // Track if ball has ground contact this frame (for rolling detection)
+        let was_rolling = rolling.0;
+        let mut has_ground_contact = false;
 
         for (platform_transform, platform_sprite) in &platform_query {
             let platform_size = platform_sprite.custom_size.unwrap_or(Vec2::new(100.0, 20.0));
@@ -703,15 +917,28 @@ fn ball_collisions(
             if overlap_y < overlap_x {
                 // Vertical collision
                 if diff.y > 0.0 {
-                    // Ball above platform
+                    // Ball above platform (landed on floor)
+                    has_ground_contact = true;
+                    // Position slightly into platform so collision is detected next frame
                     ball_transform.translation.y =
-                        platform_pos.y + platform_half.y + ball_half.y;
+                        platform_pos.y + platform_half.y + ball_half.y - COLLISION_EPSILON;
                     if ball_velocity.0.y < 0.0 {
-                        // Bounce with energy loss
-                        if ball_velocity.0.y.abs() > BALL_MIN_BOUNCE_VEL {
-                            ball_velocity.0.y = -ball_velocity.0.y * BALL_BOUNCE;
+                        // Apply ground friction to horizontal velocity
+                        ball_velocity.0.x *= BALL_GROUND_FRICTION;
+
+                        // Calculate post-bounce velocity
+                        let post_bounce_vel = ball_velocity.0.y.abs() * tweaks.ball_bounce;
+                        // Calculate max height: h = v² / (2g)
+                        let max_bounce_height = (post_bounce_vel * post_bounce_vel) / (2.0 * tweaks.ball_gravity);
+
+                        // Only bounce if ball will rise above threshold height
+                        if max_bounce_height > ball_size.y * BALL_BOUNCE_HEIGHT_MULT {
+                            ball_velocity.0.y = -ball_velocity.0.y * tweaks.ball_bounce;
+                            rolling.0 = false; // Ball is bouncing, not rolling
                         } else {
+                            // Bounce too small - start rolling
                             ball_velocity.0.y = 0.0;
+                            rolling.0 = true;
                         }
                     }
                 } else {
@@ -719,7 +946,7 @@ fn ball_collisions(
                     ball_transform.translation.y =
                         platform_pos.y - platform_half.y - ball_half.y;
                     if ball_velocity.0.y > 0.0 {
-                        ball_velocity.0.y = -ball_velocity.0.y * BALL_BOUNCE;
+                        ball_velocity.0.y = -ball_velocity.0.y * tweaks.ball_bounce;
                     }
                 }
             } else {
@@ -731,8 +958,13 @@ fn ball_collisions(
                     ball_transform.translation.x =
                         platform_pos.x - platform_half.x - ball_half.x;
                 }
-                ball_velocity.0.x = -ball_velocity.0.x * BALL_BOUNCE;
+                ball_velocity.0.x = -ball_velocity.0.x * tweaks.ball_bounce;
             }
+        }
+
+        // If ball was rolling but lost ground contact, start falling
+        if was_rolling && !has_ground_contact {
+            rolling.0 = false;
         }
     }
 }
@@ -751,12 +983,13 @@ fn ball_state_update(mut ball_query: Query<(&Velocity, &mut BallState), With<Bal
 
 fn ball_player_collision(
     mut ball_query: Query<
-        (&Transform, &mut Velocity, &mut BallPlayerContact, &BallState, &Sprite),
+        (&Transform, &mut Velocity, &mut BallPlayerContact, &BallState, &Sprite, &mut BallRolling, &BallShotGrace),
         With<Ball>,
     >,
     mut player_query: Query<(&Transform, &mut Velocity, &Sprite), (With<Player>, Without<Ball>)>,
 ) {
-    for (ball_transform, mut ball_velocity, mut contact, ball_state, ball_sprite) in &mut ball_query
+    for (ball_transform, mut ball_velocity, mut contact, ball_state, ball_sprite, mut rolling, grace) in
+        &mut ball_query
     {
         // Skip held balls
         if matches!(ball_state, BallState::Held(_)) {
@@ -782,8 +1015,8 @@ fn ball_player_collision(
             if overlap_x > 0.0 && overlap_y > 0.0 {
                 is_overlapping = true;
 
-                // Only apply effects on first frame of contact
-                if !contact.overlapping {
+                // Only apply effects on first frame of contact, and skip if in grace period
+                if !contact.overlapping && grace.0 <= 0.0 {
                     let ball_speed = ball_velocity.0.length();
                     let player_speed = player_velocity.0.length();
 
@@ -796,6 +1029,7 @@ fn ball_player_collision(
                         let kick_dir = if player_velocity.0.x > 0.0 { 1.0 } else { -1.0 };
                         ball_velocity.0.x += kick_dir * BALL_KICK_STRENGTH;
                         ball_velocity.0.y += BALL_KICK_STRENGTH * 0.3; // Small upward nudge
+                        rolling.0 = false; // Ball is kicked into the air
                     }
                 }
             }
@@ -812,11 +1046,10 @@ fn ball_follow_holder(
     for (mut ball_transform, state) in &mut ball_query {
         if let BallState::Held(holder_entity) = state {
             if let Ok((player_transform, facing)) = player_query.get(*holder_entity) {
-                // Position ball in front of player based on facing direction
+                // Position ball inside player, on facing side, at middle height
                 ball_transform.translation.x =
-                    player_transform.translation.x + facing.0 * (PLAYER_SIZE.x / 2.0 + BALL_SIZE.x / 2.0 + 5.0);
-                ball_transform.translation.y =
-                    player_transform.translation.y + PLAYER_SIZE.y / 4.0; // Slightly above center
+                    player_transform.translation.x + facing.0 * (PLAYER_SIZE.x / 4.0);
+                ball_transform.translation.y = player_transform.translation.y; // Center height
             }
         }
     }
@@ -826,7 +1059,7 @@ fn pickup_ball(
     mut input: ResMut<PlayerInput>,
     mut commands: Commands,
     mut steal_contest: ResMut<StealContest>,
-    non_holding_players: Query<(Entity, &Transform), (With<Player>, Without<HoldingBall>)>,
+    mut non_holding_players: Query<(Entity, &Transform, &mut ChargingShot), (With<Player>, Without<HoldingBall>)>,
     holding_players: Query<(Entity, &Transform, &HoldingBall), With<Player>>,
     mut ball_query: Query<(Entity, &Transform, &mut BallState), With<Ball>>,
 ) {
@@ -849,7 +1082,7 @@ fn pickup_ball(
     input.pickup_pressed = false;
 
     // Check each non-holding player
-    for (player_entity, player_transform) in &non_holding_players {
+    for (player_entity, player_transform, mut charging) in &mut non_holding_players {
         let player_pos = player_transform.translation.truncate();
 
         // First, try to pick up a free ball
@@ -863,6 +1096,8 @@ fn pickup_ball(
             if distance < BALL_PICKUP_RADIUS {
                 *ball_state = BallState::Held(player_entity);
                 commands.entity(player_entity).insert(HoldingBall(ball_entity));
+                // Reset charge so it starts fresh (even if throw button is held)
+                charging.charge_time = 0.0;
                 return; // Done - picked up ball
             }
         }
@@ -943,12 +1178,13 @@ fn update_shot_charge(
 
 fn throw_ball(
     mut input: ResMut<PlayerInput>,
+    tweaks: Res<PhysicsTweaks>,
     mut commands: Commands,
     mut player_query: Query<
         (Entity, &Facing, &Grounded, &mut ChargingShot, Option<&HoldingBall>),
         With<Player>,
     >,
-    mut ball_query: Query<(&mut Velocity, &mut BallState), With<Ball>>,
+    mut ball_query: Query<(&mut Velocity, &mut BallState, &mut BallRolling, &mut BallShotGrace), With<Ball>>,
 ) {
     if !input.throw_released {
         return;
@@ -968,15 +1204,20 @@ fn throw_ball(
         return;
     };
 
-    let Ok((mut ball_velocity, mut ball_state)) = ball_query.get_mut(holding_ball.0) else {
+    let Ok((mut ball_velocity, mut ball_state, mut rolling, mut grace)) = ball_query.get_mut(holding_ball.0)
+    else {
         return;
     };
 
+    // Ball is being thrown - no longer rolling, start grace period
+    rolling.0 = false;
+    grace.0 = 0.1; // 100ms grace period - no friction or player drag
+
     // Calculate charge percentage (0.0 to 1.0)
-    let charge_pct = (charging.charge_time / SHOT_CHARGE_TIME).min(1.0);
+    let charge_pct = (charging.charge_time / tweaks.shot_charge_time).min(1.0);
 
     // Power scales with charge
-    let mut power = SHOT_MIN_POWER + (SHOT_MAX_POWER - SHOT_MIN_POWER) * charge_pct;
+    let mut power = tweaks.shot_min_power + (tweaks.shot_max_power - tweaks.shot_min_power) * charge_pct;
 
     // Calculate randomness (less charge = more randomness)
     let mut randomness = SHOT_MAX_RANDOMNESS * (1.0 - charge_pct);
@@ -1016,19 +1257,17 @@ fn throw_ball(
 }
 
 fn check_scoring(
+    mut commands: Commands,
     mut score: ResMut<Score>,
     mut ball_query: Query<(&mut Transform, &mut Velocity, &mut BallState, &Sprite), With<Ball>>,
-    basket_query: Query<(&Transform, &Basket, &Sprite), Without<Ball>>,
+    basket_query: Query<(Entity, &Transform, &Basket, &Sprite), Without<Ball>>,
+    player_query: Query<(Entity, &Sprite), With<Player>>,
 ) {
     for (mut ball_transform, mut ball_velocity, mut ball_state, _ball_sprite) in &mut ball_query {
-        // Only score with free or in-flight balls (not held)
-        if matches!(*ball_state, BallState::Held(_)) {
-            continue;
-        }
-
         let ball_pos = ball_transform.translation.truncate();
+        let is_held = matches!(*ball_state, BallState::Held(_));
 
-        for (basket_transform, basket, basket_sprite) in &basket_query {
+        for (basket_entity, basket_transform, basket, basket_sprite) in &basket_query {
             let basket_size = basket_sprite.custom_size.unwrap_or(BASKET_SIZE);
             let basket_pos = basket_transform.translation.truncate();
             let basket_half = basket_size / 2.0;
@@ -1040,10 +1279,37 @@ fn check_scoring(
                 && ball_pos.y < basket_pos.y + basket_half.y;
 
             if in_basket {
-                // Score!
+                // Determine points: 2 for carry-in, 1 for throw
+                let points = if is_held { 2 } else { 1 };
+
                 match basket {
-                    Basket::Left => score.left += 1,
-                    Basket::Right => score.right += 1,
+                    Basket::Left => score.left += points,
+                    Basket::Right => score.right += points,
+                }
+
+                // Flash the basket (gold/yellow for carry-in, white for throw)
+                let flash_color = if is_held {
+                    Color::srgb(1.0, 0.85, 0.0) // Gold for 2-point carry
+                } else {
+                    Color::srgb(1.0, 1.0, 1.0) // White for 1-point throw
+                };
+                commands.entity(basket_entity).insert(ScoreFlash {
+                    timer: 0.6,
+                    flash_color,
+                    original_color: BASKET_COLOR,
+                });
+
+                // If held, also flash the player who scored
+                if let BallState::Held(holder) = *ball_state {
+                    if let Ok((player_entity, _player_sprite)) = player_query.get(holder) {
+                        commands.entity(player_entity).insert(ScoreFlash {
+                            timer: 0.6,
+                            flash_color,
+                            original_color: PLAYER_COLOR,
+                        });
+                        // Remove HoldingBall from the player
+                        commands.entity(player_entity).remove::<HoldingBall>();
+                    }
                 }
 
                 // Reset ball to center
@@ -1051,8 +1317,38 @@ fn check_scoring(
                 ball_velocity.0 = Vec2::ZERO;
                 *ball_state = BallState::Free;
 
-                info!("SCORE! Left: {} Right: {}", score.left, score.right);
+                info!("SCORE {}pts! Left: {} Right: {}", points, score.left, score.right);
             }
+        }
+    }
+}
+
+fn animate_score_flash(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut Sprite, &mut ScoreFlash)>,
+) {
+    for (entity, mut sprite, mut flash) in &mut query {
+        flash.timer -= time.delta_secs();
+
+        if flash.timer <= 0.0 {
+            // Flash complete - restore original color
+            sprite.color = flash.original_color;
+            commands.entity(entity).remove::<ScoreFlash>();
+        } else {
+            // Fast flicker between flash color and original
+            let t = (flash.timer * 25.0).sin(); // ~4 flashes per 0.6 seconds
+            let blend = (t + 1.0) / 2.0; // 0 to 1
+
+            // Extract RGB from both colors and interpolate
+            let flash_rgba = flash.flash_color.to_srgba();
+            let orig_rgba = flash.original_color.to_srgba();
+
+            sprite.color = Color::srgb(
+                orig_rgba.red + (flash_rgba.red - orig_rgba.red) * blend,
+                orig_rgba.green + (flash_rgba.green - orig_rgba.green) * blend,
+                orig_rgba.blue + (flash_rgba.blue - orig_rgba.blue) * blend,
+            );
         }
     }
 }
@@ -1105,22 +1401,38 @@ fn animate_pickable_ball(
         }
 
         if can_pickup {
-            // Animate pulse - gentle size and color variation
+            // Animate pulse - 5 cycles per second
+            // Pattern: dark -> regular -> light -> regular
             pulse.timer += time.delta_secs();
-            let t = pulse.timer * 3.0; // Pulse speed (3 cycles per second)
-            let pulse_factor = t.sin(); // -1 to 1
+            let t = pulse.timer * 5.0 * std::f32::consts::TAU;
+            let pulse_factor = -(t.cos()); // -1 (dark) -> 0 (regular) -> 1 (light) -> 0 (regular)
 
-            // Size: pulse between 90% and 110%
-            let scale_factor = 1.0 + 0.1 * pulse_factor;
+            // Size: pulse between 97% and 103% (subtle)
+            let scale_factor = 1.0 + 0.03 * pulse_factor;
             sprite.custom_size = Some(BALL_SIZE * scale_factor);
 
-            // Color: pulse brightness (orange gets brighter/dimmer)
-            let brightness = 0.85 + 0.15 * pulse_factor; // 0.7 to 1.0
-            sprite.color = Color::srgb(
-                (0.9 * brightness).min(1.0),
-                0.5 * brightness,
-                0.1 * brightness,
-            );
+            // Color interpolation: dark orange <-> regular orange <-> light orange-cyan mix
+            // Regular orange: (0.9, 0.5, 0.1)
+            // Dark orange: (0.5, 0.25, 0.05)
+            // Light (orange + cyan-white): (0.95, 0.75, 0.55)
+            let (r, g, b) = if pulse_factor < 0.0 {
+                // Dark to regular (pulse_factor: -1 to 0)
+                let blend = pulse_factor + 1.0; // 0 to 1
+                (
+                    0.5 + 0.4 * blend,   // 0.5 -> 0.9
+                    0.25 + 0.25 * blend, // 0.25 -> 0.5
+                    0.05 + 0.05 * blend, // 0.05 -> 0.1
+                )
+            } else {
+                // Regular to light (pulse_factor: 0 to 1)
+                let blend = pulse_factor; // 0 to 1
+                (
+                    0.9 + 0.05 * blend,  // 0.9 -> 0.95
+                    0.5 + 0.25 * blend,  // 0.5 -> 0.75
+                    0.1 + 0.45 * blend,  // 0.1 -> 0.55
+                )
+            };
+            sprite.color = Color::srgb(r, g, b);
         } else {
             // Reset to normal
             sprite.custom_size = Some(BALL_SIZE);
@@ -1130,32 +1442,18 @@ fn animate_pickable_ball(
     }
 }
 
-fn update_facing_arrow(
-    player_query: Query<(&Facing, &Children), With<Player>>,
-    mut arrow_query: Query<&mut Transform, With<FacingArrow>>,
-) {
-    for (facing, children) in &player_query {
-        for child in children.iter() {
-            if let Ok(mut arrow_transform) = arrow_query.get_mut(child) {
-                // Flip the arrow by scaling X negative when facing left
-                arrow_transform.scale.x = facing.0;
-            }
-        }
-    }
-}
-
 fn update_charge_gauge(
+    tweaks: Res<PhysicsTweaks>,
     player_query: Query<(&ChargingShot, &Facing, &Children, Option<&HoldingBall>), With<Player>>,
     mut bg_query: Query<&mut Transform, (With<ChargeGaugeBackground>, Without<ChargeGaugeFill>)>,
     mut fill_query: Query<(&mut Sprite, &mut Transform), With<ChargeGaugeFill>>,
 ) {
-    // Gauge X position (opposite side of ball/facing)
-    let gauge_offset = PLAYER_SIZE.x / 2.0 + CHARGE_GAUGE_WIDTH / 2.0 + 2.0;
+    // Gauge inside player, opposite side of ball
     let fill_height = CHARGE_GAUGE_HEIGHT - 2.0;
 
     for (charging, facing, children, holding) in &player_query {
-        // Gauge is on opposite side of facing (ball is on facing side)
-        let gauge_x = -facing.0 * gauge_offset;
+        // Gauge is inside player, opposite side of facing (ball is on facing side)
+        let gauge_x = -facing.0 * (PLAYER_SIZE.x / 4.0);
 
         for child in children.iter() {
             // Update background position
@@ -1167,7 +1465,7 @@ fn update_charge_gauge(
             if let Ok((mut sprite, mut transform)) = fill_query.get_mut(child) {
                 transform.translation.x = gauge_x;
 
-                let charge_pct = (charging.charge_time / SHOT_CHARGE_TIME).min(1.0);
+                let charge_pct = (charging.charge_time / tweaks.shot_charge_time).min(1.0);
 
                 // Only show fill when holding ball and charging
                 if holding.is_none() || charging.charge_time < 0.001 {
@@ -1193,20 +1491,113 @@ fn update_charge_gauge(
     }
 }
 
+/// Helper to spawn a platform mirrored on both sides (symmetric)
+fn spawn_mirrored_platform(commands: &mut Commands, x: f32, y: f32, width: f32) {
+    // Left side
+    commands.spawn((
+        Sprite::from_color(PLATFORM_COLOR, Vec2::new(width, 20.0)),
+        Transform::from_xyz(-x, y, 0.0),
+        Platform,
+        LevelPlatform,
+    ));
+    // Right side (mirrored)
+    commands.spawn((
+        Sprite::from_color(PLATFORM_COLOR, Vec2::new(width, 20.0)),
+        Transform::from_xyz(x, y, 0.0),
+        Platform,
+        LevelPlatform,
+    ));
+}
+
+/// Helper to spawn a centered platform
+fn spawn_center_platform(commands: &mut Commands, y: f32, width: f32) {
+    commands.spawn((
+        Sprite::from_color(PLATFORM_COLOR, Vec2::new(width, 20.0)),
+        Transform::from_xyz(0.0, y, 0.0),
+        Platform,
+        LevelPlatform,
+    ));
+}
+
+fn spawn_level_platforms(commands: &mut Commands, level: u32) {
+    match level {
+        1 => {
+            // Level 1: Simple - two mid platforms near baskets
+            spawn_mirrored_platform(commands, 400.0, ARENA_FLOOR_Y + 150.0, 200.0);
+        }
+        2 => {
+            // Level 2: Three tiers - platforms at low, mid, high
+            spawn_mirrored_platform(commands, 500.0, ARENA_FLOOR_Y + 100.0, 180.0);
+            spawn_mirrored_platform(commands, 300.0, ARENA_FLOOR_Y + 220.0, 160.0);
+            spawn_mirrored_platform(commands, 150.0, ARENA_FLOOR_Y + 340.0, 140.0);
+        }
+        3 => {
+            // Level 3: Central tower with side approaches
+            spawn_center_platform(commands, ARENA_FLOOR_Y + 120.0, 300.0);
+            spawn_center_platform(commands, ARENA_FLOOR_Y + 240.0, 200.0);
+            spawn_center_platform(commands, ARENA_FLOOR_Y + 360.0, 100.0);
+            spawn_mirrored_platform(commands, 450.0, ARENA_FLOOR_Y + 180.0, 150.0);
+        }
+        4 => {
+            // Level 4: V-shape - high outer, low inner
+            spawn_mirrored_platform(commands, 500.0, ARENA_FLOOR_Y + 280.0, 180.0);
+            spawn_mirrored_platform(commands, 250.0, ARENA_FLOOR_Y + 150.0, 180.0);
+        }
+        5 => {
+            // Level 5: Inverted V - low outer, high center
+            spawn_mirrored_platform(commands, 450.0, ARENA_FLOOR_Y + 120.0, 180.0);
+            spawn_mirrored_platform(commands, 200.0, ARENA_FLOOR_Y + 250.0, 160.0);
+            spawn_center_platform(commands, ARENA_FLOOR_Y + 380.0, 200.0);
+        }
+        6 => {
+            // Level 6: Double stack - two columns
+            spawn_mirrored_platform(commands, 350.0, ARENA_FLOOR_Y + 140.0, 200.0);
+            spawn_mirrored_platform(commands, 350.0, ARENA_FLOOR_Y + 300.0, 160.0);
+        }
+        7 => {
+            // Level 7: Diamond - center with four corners
+            spawn_center_platform(commands, ARENA_FLOOR_Y + 200.0, 180.0);
+            spawn_mirrored_platform(commands, 400.0, ARENA_FLOOR_Y + 120.0, 150.0);
+            spawn_mirrored_platform(commands, 400.0, ARENA_FLOOR_Y + 320.0, 150.0);
+        }
+        8 => {
+            // Level 8: Zigzag stairs - ascending to center from both sides
+            spawn_mirrored_platform(commands, 550.0, ARENA_FLOOR_Y + 100.0, 140.0);
+            spawn_mirrored_platform(commands, 350.0, ARENA_FLOOR_Y + 200.0, 140.0);
+            spawn_mirrored_platform(commands, 150.0, ARENA_FLOOR_Y + 300.0, 140.0);
+        }
+        9 => {
+            // Level 9: Fortress - multiple tiers with gaps
+            spawn_mirrored_platform(commands, 500.0, ARENA_FLOOR_Y + 150.0, 160.0);
+            spawn_mirrored_platform(commands, 280.0, ARENA_FLOOR_Y + 150.0, 120.0);
+            spawn_mirrored_platform(commands, 400.0, ARENA_FLOOR_Y + 300.0, 200.0);
+            spawn_center_platform(commands, ARENA_FLOOR_Y + 300.0, 120.0);
+        }
+        10 | _ => {
+            // Level 10: Arena - elevated ring around center
+            spawn_mirrored_platform(commands, 550.0, ARENA_FLOOR_Y + 200.0, 150.0);
+            spawn_mirrored_platform(commands, 300.0, ARENA_FLOOR_Y + 350.0, 180.0);
+            spawn_center_platform(commands, ARENA_FLOOR_Y + 150.0, 250.0);
+            spawn_center_platform(commands, ARENA_FLOOR_Y + 450.0, 150.0);
+        }
+    }
+}
+
 fn update_debug_text(
     debug_settings: Res<DebugSettings>,
     diagnostics: Res<bevy::diagnostic::DiagnosticsStore>,
     steal_contest: Res<StealContest>,
     score: Res<Score>,
-    player: Query<(&Transform, &Facing, &Grounded, &ChargingShot, Option<&HoldingBall>), With<Player>>,
-    ball_query: Query<&BallState, With<Ball>>,
+    current_level: Res<CurrentLevel>,
+    tweaks: Res<PhysicsTweaks>,
+    player: Query<(&Transform, &ChargingShot), With<Player>>,
     mut text_query: Query<&mut Text, With<DebugText>>,
 ) {
     if !debug_settings.visible {
         return;
     }
 
-    let Ok((transform, facing, grounded, charging, holding)) = player.single() else {
+    let Ok((transform, charging)) = player.single() else {
         return;
     };
     let Ok(mut text) = text_query.single_mut() else {
@@ -1219,50 +1610,121 @@ fn update_debug_text(
         .unwrap_or(0.0);
 
     let pos = transform.translation;
-    let facing_str = if facing.0 > 0.0 { "R" } else { "L" };
-    let holding_str = if holding.is_some() { "Yes" } else { "No" };
-
-    let charge_pct = ((charging.charge_time / SHOT_CHARGE_TIME) * 100.0).min(100.0);
-
-    let ball_state_str = ball_query
-        .iter()
-        .next()
-        .map(|s| match s {
-            BallState::Free => "Free".to_string(),
-            BallState::Held(_) => "Held".to_string(),
-            BallState::InFlight { power, .. } => format!("Flight({:.0})", power),
-        })
-        .unwrap_or("None".to_string());
+    let charge_pct = ((charging.charge_time / tweaks.shot_charge_time) * 100.0).min(100.0);
 
     let steal_str = if steal_contest.active {
         format!(
-            "A:{} D:{} ({:.1}s)",
+            "Steal: A:{} D:{} ({:.1}s)",
             steal_contest.attacker_presses,
             steal_contest.defender_presses,
             steal_contest.timer
         )
     } else {
-        "-".to_string()
+        String::new()
     };
 
+    let level_name = LEVEL_NAMES.get((current_level.0 - 1) as usize).unwrap_or(&"???");
+
     text.0 = format!(
-        "SCORE: {} - {}\n\
-         FPS: {:.0} | Pos: ({:.0}, {:.0})\n\
-         Face: {} | Ground: {} | Hold: {}\n\
-         Ball: {} | Charge: {:.0}%\n\
-         Steal: {}\n\
-         \n\
-         [E] pickup [F] charge/throw [Tab] hide",
+        "Lv:{}/{} {}  |  SCORE: {} - {}  |  FPS: {:.0}  |  Pos: ({:.0}, {:.0})  |  Charge: {:.0}%  {}",
+        current_level.0,
+        NUM_LEVELS,
+        level_name,
         score.left,
         score.right,
         fps,
         pos.x,
         pos.y,
-        facing_str,
-        grounded.0,
-        holding_str,
-        ball_state_str,
         charge_pct,
         steal_str,
     );
+}
+
+fn toggle_tweak_panel(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut tweaks: ResMut<PhysicsTweaks>,
+    mut panel_query: Query<&mut Visibility, With<TweakPanel>>,
+) {
+    // F1 toggles panel visibility
+    if keyboard.just_pressed(KeyCode::F1) {
+        tweaks.panel_visible = !tweaks.panel_visible;
+        if let Ok(mut visibility) = panel_query.single_mut() {
+            *visibility = if tweaks.panel_visible {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            };
+        }
+    }
+
+    // Only process input when panel is visible
+    if !tweaks.panel_visible {
+        return;
+    }
+
+    let num_params = PhysicsTweaks::LABELS.len();
+
+    // Up/Down to select parameter
+    if keyboard.just_pressed(KeyCode::ArrowUp) {
+        tweaks.selected_index = (tweaks.selected_index + num_params - 1) % num_params;
+    }
+    if keyboard.just_pressed(KeyCode::ArrowDown) {
+        tweaks.selected_index = (tweaks.selected_index + 1) % num_params;
+    }
+
+    // Left/Right to adjust value (10% increments)
+    let idx = tweaks.selected_index;
+    let step = tweaks.get_step(idx);
+    if keyboard.just_pressed(KeyCode::ArrowLeft) {
+        let current = tweaks.get_value(idx);
+        tweaks.set_value(idx, (current - step).max(0.01));
+    }
+    if keyboard.just_pressed(KeyCode::ArrowRight) {
+        let current = tweaks.get_value(idx);
+        tweaks.set_value(idx, current + step);
+    }
+
+    // R to reset selected parameter to default
+    if keyboard.just_pressed(KeyCode::KeyR) {
+        if keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight) {
+            // Shift+R resets ALL parameters
+            tweaks.reset_all();
+        } else {
+            // R resets just the selected parameter
+            tweaks.reset_value(idx);
+        }
+    }
+}
+
+fn update_tweak_panel(
+    tweaks: Res<PhysicsTweaks>,
+    mut row_query: Query<(&mut Text, &mut TextColor, &TweakRow)>,
+) {
+    if !tweaks.panel_visible {
+        return;
+    }
+
+    for (mut text, mut color, row) in &mut row_query {
+        let value = tweaks.get_value(row.0);
+        let label = PhysicsTweaks::LABELS[row.0];
+        let is_modified = tweaks.is_modified(row.0);
+
+        // Format based on value type (friction shows 2 decimals, others show 0-1)
+        let value_str = match row.0 {
+            5 | 6 | 7 => format!("{:.2}", value), // Bounce/friction
+            10 => format!("{:.1}s", value),        // Charge time
+            _ => format!("{:.0}", value),          // Velocities
+        };
+
+        text.0 = format!("{}: {}", label, value_str);
+
+        // Color priority: selected (yellow) > modified (red) > default (white)
+        if row.0 == tweaks.selected_index {
+            color.0 = Color::srgb(1.0, 1.0, 0.0); // Yellow for selected
+        } else if is_modified {
+            color.0 = Color::srgb(1.0, 0.4, 0.4); // Red for modified
+        } else {
+            color.0 = Color::WHITE;
+        }
+    }
 }
