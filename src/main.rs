@@ -53,11 +53,7 @@ const SHOT_AIR_VARIANCE_PENALTY: f32 = 0.10; // Additional variance when airborn
 const SHOT_MOVE_VARIANCE_PENALTY: f32 = 0.10; // Additional variance at full horizontal speed (10%)
 const SHOT_DISTANCE_VARIANCE_FACTOR: f32 = 0.0003; // Variance per unit of distance (30% at 1000 units)
 const SHOT_ARC_VARIANCE_FACTOR: f32 = 0.15; // Variance per unit of arc deviation from optimal
-const SHOT_CEILING_MARGIN: f32 = 60.0; // Stay this far below ceiling
 const SHOT_FRICTION_COMPENSATION_FACTOR: f32 = 25000.0; // Divisor for distance-based friction compensation
-// Max height ball can reach from vertical throw: h = v²/(2g)
-// Only apply ceiling constraints if player_y + this height > ceiling
-const SHOT_MAX_VERTICAL_HEIGHT: f32 = (SHOT_MAX_SPEED * SHOT_MAX_SPEED) / (2.0 * BALL_GRAVITY);
 const SHOT_GRACE_PERIOD: f32 = 0.1; // Post-shot grace period (no friction/player drag)
 
 // Ball-player collision
@@ -692,24 +688,17 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
         Platform,
     ));
 
-    // Left wall
+    // Left wall (extends high above viewport)
     commands.spawn((
-        Sprite::from_color(FLOOR_COLOR, Vec2::new(40.0, ARENA_HEIGHT)),
-        Transform::from_xyz(-ARENA_WIDTH / 2.0 + 20.0, 0.0, 0.0),
+        Sprite::from_color(FLOOR_COLOR, Vec2::new(40.0, 5000.0)),
+        Transform::from_xyz(-ARENA_WIDTH / 2.0 + 20.0, 2000.0, 0.0),
         Platform,
     ));
 
-    // Right wall
+    // Right wall (extends high above viewport)
     commands.spawn((
-        Sprite::from_color(FLOOR_COLOR, Vec2::new(40.0, ARENA_HEIGHT)),
-        Transform::from_xyz(ARENA_WIDTH / 2.0 - 20.0, 0.0, 0.0),
-        Platform,
-    ));
-
-    // Ceiling
-    commands.spawn((
-        Sprite::from_color(FLOOR_COLOR, Vec2::new(ARENA_WIDTH - 100.0, 40.0)),
-        Transform::from_xyz(0.0, ARENA_HEIGHT / 2.0 - 20.0, 0.0),
+        Sprite::from_color(FLOOR_COLOR, Vec2::new(40.0, 5000.0)),
+        Transform::from_xyz(ARENA_WIDTH / 2.0 - 20.0, 2000.0, 0.0),
         Platform,
     ));
 
@@ -1522,12 +1511,11 @@ struct ShotTrajectory {
     arc_penalty: f32,     // Variance penalty for non-optimal arc
 }
 
-/// Calculate optimal shot trajectory considering target position and ceiling.
+/// Calculate optimal shot trajectory to target position.
 /// Returns the power, arc ratio, and variance penalties.
 fn calculate_shot_trajectory(
     shooter_pos: Vec2,
     target_pos: Vec2,
-    ceiling_y: f32,
     gravity: f32,
     friction_random: f32, // -1.0 to 1.0 for power variance
 ) -> Option<ShotTrajectory> {
@@ -1551,46 +1539,8 @@ fn calculate_shot_trajectory(
         0.01 // Allow nearly flat shots for targets at or below
     };
 
-    // Only apply ceiling constraints if player is high enough that a max vertical shot could hit
-    let ceiling_threshold = ceiling_y - SHOT_CEILING_MARGIN - SHOT_MAX_VERTICAL_HEIGHT;
-    let max_arc = if shooter_pos.y > ceiling_threshold {
-        // Player is high enough to potentially hit ceiling - calculate constraint
-        let max_apex = ceiling_y - SHOT_CEILING_MARGIN - shooter_pos.y;
-
-        // Calculate apex height for a given arc
-        // apex_height = arc² * dx² / (4 * (arc * dx - dy))
-        let calc_apex_height = |arc: f32| -> f32 {
-            let denom = arc * dx - dy;
-            if denom <= 0.0 {
-                f32::MAX
-            } else {
-                arc * arc * dx * dx / (4.0 * denom)
-            }
-        };
-
-        // Find maximum arc that stays below ceiling (binary search)
-        let mut max = 10.0; // High upper bound (~84°)
-        if calc_apex_height(max) > max_apex {
-            let mut low = min_arc;
-            let mut high = 10.0;
-            for _ in 0..10 {
-                let mid = (low + high) / 2.0;
-                if calc_apex_height(mid) > max_apex {
-                    high = mid;
-                } else {
-                    low = mid;
-                }
-            }
-            max = low;
-        }
-        max
-    } else {
-        // Player is low enough - no ceiling constraint needed
-        10.0 // Effectively unlimited (atan(10) ≈ 84°)
-    };
-
-    // Use optimal arc, only constrained by physical limits (reaching target, ceiling)
-    let final_arc = optimal_arc.clamp(min_arc, max_arc);
+    // Use optimal arc, only constrained by minimum needed to reach target
+    let final_arc = optimal_arc.max(min_arc);
 
     // Check if trajectory is possible
     let denominator = 2.0 * (final_arc * dx - dy);
@@ -1669,7 +1619,6 @@ fn throw_ball(
 
     let mut rng = rand::thread_rng();
     let player_pos = player_transform.translation.truncate();
-    let ceiling_y = ARENA_HEIGHT / 2.0;
 
     // Find closest basket matching the target type
     let target_basket_pos = basket_query
@@ -1685,7 +1634,7 @@ fn throw_ball(
     // Calculate optimal trajectory to basket
     let trajectory = if let Some(basket_pos) = target_basket_pos {
         let friction_random = rng.gen_range(-1.0..=1.0);
-        calculate_shot_trajectory(player_pos, basket_pos, ceiling_y, BALL_GRAVITY, friction_random)
+        calculate_shot_trajectory(player_pos, basket_pos, BALL_GRAVITY, friction_random)
     } else {
         None
     };
