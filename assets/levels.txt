@@ -1,0 +1,73 @@
+# Ballgame Level Data
+# ====================
+#
+# Format:
+#   level: <name>           Start a new level
+#   basket: <height>        Basket height above floor (8 dunkable: <560, 2 high: >560)
+#   mirror: <x> <y> <w>     Platform at (-x, y) and (+x, y) with width w
+#   center: <y> <w>         Centered platform at (0, y) with width w
+#
+# Heights are relative to ARENA_FLOOR_Y
+# Player max jump ≈ 215 units above platform
+# For throw-only: basket_bottom (height-40) > highest_platform + 215
+#
+# Blank lines and # comments are ignored
+
+level: Bounce Test
+basket: 2000
+center: 200 400
+
+level: V-Shape
+basket: 380
+mirror: 500 280 180
+mirror: 250 150 180
+
+level: Arena
+basket: 720
+mirror: 550 200 150
+mirror: 300 350 180
+center: 150 250
+center: 450 150
+
+level: Three Tiers
+basket: 400
+mirror: 500 100 180
+mirror: 300 220 160
+mirror: 150 340 140
+
+level: Tower
+basket: 480
+center: 120 300
+center: 240 200
+center: 360 100
+mirror: 450 180 150
+
+level: Inverted V
+basket: 500
+mirror: 450 120 180
+mirror: 200 250 160
+center: 380 200
+
+level: Double Stack
+basket: 420
+mirror: 350 140 200
+mirror: 350 300 160
+
+level: Diamond
+basket: 450
+center: 200 180
+mirror: 400 120 150
+mirror: 400 320 150
+
+level: Zigzag
+basket: 360
+mirror: 550 100 140
+mirror: 350 200 140
+mirror: 150 300 140
+
+level: Fortress
+basket: 580
+mirror: 500 150 160
+mirror: 280 150 120
+mirror: 400 300 200
+center: 300 120

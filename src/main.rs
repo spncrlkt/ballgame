@@ -1,5 +1,6 @@
 use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use rand::Rng;
+use std::fs;
 
 // Visual constants
 const BACKGROUND_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
@@ -34,7 +35,7 @@ const BALL_AIR_FRICTION: f32 = 0.95; // Horizontal velocity retained after 1 sec
 const BALL_GROUND_FRICTION: f32 = 0.6; // Horizontal velocity retained per bounce
 const BALL_ROLL_FRICTION: f32 = 0.6; // Horizontal velocity retained after 1 second while rolling
 const BALL_BOUNCE_HEIGHT_MULT: f32 = 1.7; // Ball must bounce this × its height to keep bouncing, else rolls
-const BALL_PICKUP_RADIUS: f32 = 100.0; // How close player must be to pick up ball (forgiving)
+const BALL_PICKUP_RADIUS: f32 = 50.0; // How close player must be to pick up ball
 const BALL_FREE_SPEED: f32 = 200.0; // Ball becomes Free when speed drops below this (2x pickup radius speed)
 
 // Shooting - heights: tap=2x player height (128), full=6x player height (384)
@@ -48,7 +49,8 @@ const SHOT_AIR_ACCURACY_PENALTY: f32 = 0.2; // Additional randomness when airbor
 const SHOT_AIR_POWER_PENALTY: f32 = 0.7; // Power multiplier when airborne
 
 // Ball-player collision
-const BALL_PLAYER_DRAG: f32 = 0.7; // Velocity multiplier when ball passes through player
+const BALL_PLAYER_DRAG_X: f32 = 0.7; // Horizontal velocity multiplier when ball hits player
+const BALL_PLAYER_DRAG_Y: f32 = 0.4; // Vertical velocity multiplier (higher friction than X)
 const BALL_KICK_STRENGTH: f32 = 100.0; // How much velocity player imparts to stationary ball
 const BALL_KICK_THRESHOLD: f32 = 30.0; // Ball speed below this counts as "stationary"
 
@@ -65,7 +67,6 @@ const ARENA_FLOOR_Y: f32 = -ARENA_HEIGHT / 2.0 + 20.0; // Floor near bottom
 // Baskets
 const BASKET_COLOR: Color = Color::srgb(0.8, 0.2, 0.2); // Red
 const BASKET_SIZE: Vec2 = Vec2::new(60.0, 80.0);
-const BASKET_HEIGHT: f32 = ARENA_FLOOR_Y + 500.0; // Elevated
 const LEFT_BASKET_X: f32 = -ARENA_WIDTH / 2.0 + 120.0;
 const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - 120.0;
 
@@ -73,25 +74,17 @@ const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - 120.0;
 const PLAYER_SPAWN: Vec3 = Vec3::new(-200.0, ARENA_FLOOR_Y + 100.0, 0.0);
 const BALL_SPAWN: Vec3 = Vec3::new(0.0, ARENA_FLOOR_Y + 50.0, 2.0); // Center, z=2 to render in front
 
-// Levels
-const NUM_LEVELS: u32 = 10;
-const LEVEL_NAMES: [&str; 10] = [
-    "Simple",
-    "Three Tiers",
-    "Tower",
-    "V-Shape",
-    "Inverted V",
-    "Double Stack",
-    "Diamond",
-    "Zigzag",
-    "Fortress",
-    "Arena",
-];
+// Level file path
+const LEVELS_FILE: &str = "assets/levels.txt";
 
 fn main() {
+    // Load level database from file
+    let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
+
     App::new()
         .add_plugins((DefaultPlugins, FrameTimeDiagnosticsPlugin::default()))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
+        .insert_resource(level_db)
         .init_resource::<PlayerInput>()
         .init_resource::<DebugSettings>()
         .init_resource::<StealContest>()
@@ -298,6 +291,179 @@ impl PhysicsTweaks {
     }
 }
 
+/// Platform definition in level data
+#[derive(Clone, Debug)]
+enum PlatformDef {
+    Mirror { x: f32, y: f32, width: f32 },  // Spawns at -x and +x
+    Center { y: f32, width: f32 },           // Spawns at x=0
+}
+
+/// Single level definition
+#[derive(Clone, Debug)]
+struct LevelData {
+    name: String,
+    basket_height: f32,
+    platforms: Vec<PlatformDef>,
+}
+
+/// Database of all loaded levels
+#[derive(Resource)]
+struct LevelDatabase {
+    levels: Vec<LevelData>,
+}
+
+impl Default for LevelDatabase {
+    fn default() -> Self {
+        Self { levels: Vec::new() }
+    }
+}
+
+impl LevelDatabase {
+    /// Load levels from file, returns default hardcoded levels on error
+    fn load_from_file(path: &str) -> Self {
+        match fs::read_to_string(path) {
+            Ok(content) => Self::parse(&content),
+            Err(e) => {
+                warn!("Failed to load levels from {}: {}, using defaults", path, e);
+                Self::default_levels()
+            }
+        }
+    }
+
+    /// Parse level data from string
+    fn parse(content: &str) -> Self {
+        let mut levels = Vec::new();
+        let mut current_level: Option<LevelData> = None;
+
+        for line in content.lines() {
+            let line = line.trim();
+
+            // Skip empty lines and comments
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            if let Some(name) = line.strip_prefix("level:") {
+                // Save previous level if exists
+                if let Some(level) = current_level.take() {
+                    levels.push(level);
+                }
+                // Start new level
+                current_level = Some(LevelData {
+                    name: name.trim().to_string(),
+                    basket_height: 400.0, // default
+                    platforms: Vec::new(),
+                });
+            } else if let Some(height_str) = line.strip_prefix("basket:") {
+                if let Some(level) = &mut current_level {
+                    if let Ok(height) = height_str.trim().parse::<f32>() {
+                        level.basket_height = height;
+                    }
+                }
+            } else if let Some(params) = line.strip_prefix("mirror:") {
+                if let Some(level) = &mut current_level {
+                    let parts: Vec<&str> = params.trim().split_whitespace().collect();
+                    if parts.len() >= 3 {
+                        if let (Ok(x), Ok(y), Ok(w)) = (
+                            parts[0].parse::<f32>(),
+                            parts[1].parse::<f32>(),
+                            parts[2].parse::<f32>(),
+                        ) {
+                            level.platforms.push(PlatformDef::Mirror { x, y, width: w });
+                        }
+                    }
+                }
+            } else if let Some(params) = line.strip_prefix("center:") {
+                if let Some(level) = &mut current_level {
+                    let parts: Vec<&str> = params.trim().split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let (Ok(y), Ok(w)) = (
+                            parts[0].parse::<f32>(),
+                            parts[1].parse::<f32>(),
+                        ) {
+                            level.platforms.push(PlatformDef::Center { y, width: w });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Don't forget the last level
+        if let Some(level) = current_level {
+            levels.push(level);
+        }
+
+        if levels.is_empty() {
+            warn!("No levels parsed, using defaults");
+            return Self::default_levels();
+        }
+
+        info!("Loaded {} levels from file", levels.len());
+        Self { levels }
+    }
+
+    /// Hardcoded fallback levels
+    fn default_levels() -> Self {
+        Self {
+            levels: vec![
+                LevelData {
+                    name: "Simple".to_string(),
+                    basket_height: 350.0,
+                    platforms: vec![PlatformDef::Mirror { x: 400.0, y: 150.0, width: 200.0 }],
+                },
+                LevelData {
+                    name: "Default".to_string(),
+                    basket_height: 400.0,
+                    platforms: vec![
+                        PlatformDef::Mirror { x: 400.0, y: 150.0, width: 180.0 },
+                        PlatformDef::Center { y: 280.0, width: 200.0 },
+                    ],
+                },
+            ],
+        }
+    }
+
+    /// Save all levels to file
+    fn save_to_file(&self, path: &str) -> Result<(), std::io::Error> {
+        let mut content = String::new();
+        content.push_str("# Ballgame Level Data\n");
+        content.push_str("# ====================\n");
+        content.push_str("#\n");
+        content.push_str("# Format:\n");
+        content.push_str("#   level: <name>           Start a new level\n");
+        content.push_str("#   basket: <height>        Basket height above floor\n");
+        content.push_str("#   mirror: <x> <y> <w>     Platform at (-x, y) and (+x, y)\n");
+        content.push_str("#   center: <y> <w>         Centered platform at (0, y)\n");
+        content.push_str("#\n\n");
+
+        for level in &self.levels {
+            content.push_str(&format!("level: {}\n", level.name));
+            content.push_str(&format!("basket: {}\n", level.basket_height));
+            for platform in &level.platforms {
+                match platform {
+                    PlatformDef::Mirror { x, y, width } => {
+                        content.push_str(&format!("mirror: {} {} {}\n", x, y, width));
+                    }
+                    PlatformDef::Center { y, width } => {
+                        content.push_str(&format!("center: {} {}\n", y, width));
+                    }
+                }
+            }
+            content.push('\n');
+        }
+
+        fs::write(path, content)
+    }
+
+    fn get(&self, index: usize) -> Option<&LevelData> {
+        self.levels.get(index)
+    }
+
+    fn len(&self) -> usize {
+        self.levels.len()
+    }
+}
+
 // Components
 
 #[derive(Component)]
@@ -403,7 +569,7 @@ struct ScoreFlash {
 
 // Systems
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
     // Camera - orthographic, shows entire arena
     // Using scale to zoom out and show full arena (default is 1.0 = 1 pixel per unit)
     // With 1600x900 arena, we need to scale so it fits in typical window sizes
@@ -498,17 +664,18 @@ fn setup(mut commands: Commands) {
     ));
 
     // Spawn level 1 platforms
-    spawn_level_platforms(&mut commands, 1);
+    spawn_level_platforms(&mut commands, &level_db, 0);
 
-    // Baskets (goals)
+    // Baskets (goals) - height varies per level
+    let basket_y = level_db.get(0).map(|l| ARENA_FLOOR_Y + l.basket_height).unwrap_or(ARENA_FLOOR_Y + 400.0);
     commands.spawn((
         Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
-        Transform::from_xyz(LEFT_BASKET_X, BASKET_HEIGHT, -0.1), // Slightly behind
+        Transform::from_xyz(LEFT_BASKET_X, basket_y, -0.1), // Slightly behind
         Basket::Left,
     ));
     commands.spawn((
         Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
-        Transform::from_xyz(RIGHT_BASKET_X, BASKET_HEIGHT, -0.1),
+        Transform::from_xyz(RIGHT_BASKET_X, basket_y, -0.1),
         Basket::Right,
     ));
 
@@ -660,10 +827,12 @@ fn respawn_player(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut commands: Commands,
+    level_db: Res<LevelDatabase>,
     mut current_level: ResMut<CurrentLevel>,
     mut player: Query<(Entity, &mut Transform, &mut Velocity, Option<&HoldingBall>), With<Player>>,
     mut ball: Query<(&mut Transform, &mut Velocity, &mut BallState, &mut BallRolling), (With<Ball>, Without<Player>)>,
     level_platforms: Query<Entity, With<LevelPlatform>>,
+    mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>)>,
 ) {
     let respawn_pressed = keyboard.just_pressed(KeyCode::KeyR)
         || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::Start));
@@ -688,8 +857,10 @@ fn respawn_player(
             b_rolling.0 = false;
         }
 
-        // Cycle to next level
-        current_level.0 = (current_level.0 % NUM_LEVELS) + 1;
+        // Cycle to next level (0-indexed internally)
+        let num_levels = level_db.len();
+        current_level.0 = (current_level.0 % num_levels as u32) + 1;
+        let level_index = (current_level.0 - 1) as usize;
 
         // Despawn old level platforms
         for entity in &level_platforms {
@@ -697,7 +868,15 @@ fn respawn_player(
         }
 
         // Spawn new level platforms
-        spawn_level_platforms(&mut commands, current_level.0);
+        spawn_level_platforms(&mut commands, &level_db, level_index);
+
+        // Update basket heights for new level
+        if let Some(level) = level_db.get(level_index) {
+            let basket_y = ARENA_FLOOR_Y + level.basket_height;
+            for mut basket_transform in &mut baskets {
+                basket_transform.translation.y = basket_y;
+            }
+        }
     }
 }
 
@@ -1021,8 +1200,10 @@ fn ball_player_collision(
                     let player_speed = player_velocity.0.length();
 
                     // Both slow down when passing through each other
-                    ball_velocity.0 *= BALL_PLAYER_DRAG;
-                    player_velocity.0 *= BALL_PLAYER_DRAG;
+                    // Ball has higher Y friction (gravity effect) than X
+                    ball_velocity.0.x *= BALL_PLAYER_DRAG_X;
+                    ball_velocity.0.y *= BALL_PLAYER_DRAG_Y;
+                    player_velocity.0 *= BALL_PLAYER_DRAG_X;
 
                     // If ball is slow/stationary and player is moving, kick the ball
                     if ball_speed < BALL_KICK_THRESHOLD && player_speed > BALL_KICK_THRESHOLD {
@@ -1519,66 +1700,20 @@ fn spawn_center_platform(commands: &mut Commands, y: f32, width: f32) {
     ));
 }
 
-fn spawn_level_platforms(commands: &mut Commands, level: u32) {
-    match level {
-        1 => {
-            // Level 1: Simple - two mid platforms near baskets
-            spawn_mirrored_platform(commands, 400.0, ARENA_FLOOR_Y + 150.0, 200.0);
-        }
-        2 => {
-            // Level 2: Three tiers - platforms at low, mid, high
-            spawn_mirrored_platform(commands, 500.0, ARENA_FLOOR_Y + 100.0, 180.0);
-            spawn_mirrored_platform(commands, 300.0, ARENA_FLOOR_Y + 220.0, 160.0);
-            spawn_mirrored_platform(commands, 150.0, ARENA_FLOOR_Y + 340.0, 140.0);
-        }
-        3 => {
-            // Level 3: Central tower with side approaches
-            spawn_center_platform(commands, ARENA_FLOOR_Y + 120.0, 300.0);
-            spawn_center_platform(commands, ARENA_FLOOR_Y + 240.0, 200.0);
-            spawn_center_platform(commands, ARENA_FLOOR_Y + 360.0, 100.0);
-            spawn_mirrored_platform(commands, 450.0, ARENA_FLOOR_Y + 180.0, 150.0);
-        }
-        4 => {
-            // Level 4: V-shape - high outer, low inner
-            spawn_mirrored_platform(commands, 500.0, ARENA_FLOOR_Y + 280.0, 180.0);
-            spawn_mirrored_platform(commands, 250.0, ARENA_FLOOR_Y + 150.0, 180.0);
-        }
-        5 => {
-            // Level 5: Inverted V - low outer, high center
-            spawn_mirrored_platform(commands, 450.0, ARENA_FLOOR_Y + 120.0, 180.0);
-            spawn_mirrored_platform(commands, 200.0, ARENA_FLOOR_Y + 250.0, 160.0);
-            spawn_center_platform(commands, ARENA_FLOOR_Y + 380.0, 200.0);
-        }
-        6 => {
-            // Level 6: Double stack - two columns
-            spawn_mirrored_platform(commands, 350.0, ARENA_FLOOR_Y + 140.0, 200.0);
-            spawn_mirrored_platform(commands, 350.0, ARENA_FLOOR_Y + 300.0, 160.0);
-        }
-        7 => {
-            // Level 7: Diamond - center with four corners
-            spawn_center_platform(commands, ARENA_FLOOR_Y + 200.0, 180.0);
-            spawn_mirrored_platform(commands, 400.0, ARENA_FLOOR_Y + 120.0, 150.0);
-            spawn_mirrored_platform(commands, 400.0, ARENA_FLOOR_Y + 320.0, 150.0);
-        }
-        8 => {
-            // Level 8: Zigzag stairs - ascending to center from both sides
-            spawn_mirrored_platform(commands, 550.0, ARENA_FLOOR_Y + 100.0, 140.0);
-            spawn_mirrored_platform(commands, 350.0, ARENA_FLOOR_Y + 200.0, 140.0);
-            spawn_mirrored_platform(commands, 150.0, ARENA_FLOOR_Y + 300.0, 140.0);
-        }
-        9 => {
-            // Level 9: Fortress - multiple tiers with gaps
-            spawn_mirrored_platform(commands, 500.0, ARENA_FLOOR_Y + 150.0, 160.0);
-            spawn_mirrored_platform(commands, 280.0, ARENA_FLOOR_Y + 150.0, 120.0);
-            spawn_mirrored_platform(commands, 400.0, ARENA_FLOOR_Y + 300.0, 200.0);
-            spawn_center_platform(commands, ARENA_FLOOR_Y + 300.0, 120.0);
-        }
-        10 | _ => {
-            // Level 10: Arena - elevated ring around center
-            spawn_mirrored_platform(commands, 550.0, ARENA_FLOOR_Y + 200.0, 150.0);
-            spawn_mirrored_platform(commands, 300.0, ARENA_FLOOR_Y + 350.0, 180.0);
-            spawn_center_platform(commands, ARENA_FLOOR_Y + 150.0, 250.0);
-            spawn_center_platform(commands, ARENA_FLOOR_Y + 450.0, 150.0);
+fn spawn_level_platforms(commands: &mut Commands, level_db: &LevelDatabase, level_index: usize) {
+    let Some(level) = level_db.get(level_index) else {
+        warn!("Level {} not found, spawning empty", level_index);
+        return;
+    };
+
+    for platform in &level.platforms {
+        match platform {
+            PlatformDef::Mirror { x, y, width } => {
+                spawn_mirrored_platform(commands, *x, ARENA_FLOOR_Y + y, *width);
+            }
+            PlatformDef::Center { y, width } => {
+                spawn_center_platform(commands, ARENA_FLOOR_Y + y, *width);
+            }
         }
     }
 }
@@ -1589,6 +1724,7 @@ fn update_debug_text(
     steal_contest: Res<StealContest>,
     score: Res<Score>,
     current_level: Res<CurrentLevel>,
+    level_db: Res<LevelDatabase>,
     tweaks: Res<PhysicsTweaks>,
     player: Query<(&Transform, &ChargingShot), With<Player>>,
     mut text_query: Query<&mut Text, With<DebugText>>,
@@ -1623,12 +1759,14 @@ fn update_debug_text(
         String::new()
     };
 
-    let level_name = LEVEL_NAMES.get((current_level.0 - 1) as usize).unwrap_or(&"???");
+    let level_index = (current_level.0 - 1) as usize;
+    let level_name = level_db.get(level_index).map(|l| l.name.as_str()).unwrap_or("???");
+    let num_levels = level_db.len();
 
     text.0 = format!(
         "Lv:{}/{} {}  |  SCORE: {} - {}  |  FPS: {:.0}  |  Pos: ({:.0}, {:.0})  |  Charge: {:.0}%  {}",
         current_level.0,
-        NUM_LEVELS,
+        num_levels,
         level_name,
         score.left,
         score.right,
