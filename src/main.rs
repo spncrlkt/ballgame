@@ -76,9 +76,9 @@ const ARENA_FLOOR_Y: f32 = -ARENA_HEIGHT / 2.0 + 20.0; // Floor near bottom
 // Baskets
 const BASKET_COLOR: Color = Color::srgb(0.8, 0.2, 0.2); // Red
 const BASKET_SIZE: Vec2 = Vec2::new(60.0, 80.0);
-const LEFT_BASKET_X: f32 = -ARENA_WIDTH / 2.0 + 170.0;
-const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - 170.0;
 const RIM_THICKNESS: f32 = 10.0;
+const WALL_THICKNESS: f32 = 40.0; // Walls are 40 wide
+const BASKET_PUSH_IN: f32 = 156.0; // Default distance from wall inner edge to basket center
 
 // Corner steps
 const CORNER_STEP_TOTAL_HEIGHT: f32 = 320.0;
@@ -126,6 +126,7 @@ fn main() {
                 capture_input,
                 respawn_player,
                 toggle_debug,
+                reload_levels,
                 update_debug_text,
                 update_score_level_text,
                 animate_pickable_ball,
@@ -381,10 +382,19 @@ enum PlatformDef {
 struct LevelData {
     name: String,
     basket_height: f32,
+    basket_push_in: f32,  // Distance from wall inner edge to basket center
     platforms: Vec<PlatformDef>,
     step_count: usize,   // 0 = no steps, otherwise number of steps per corner
     corner_height: f32,  // Total height of corner ramp
     corner_width: f32,   // Total width of corner ramp
+}
+
+/// Calculate basket X positions from wall offset
+fn basket_x_from_offset(offset: f32) -> (f32, f32) {
+    let wall_inner = ARENA_WIDTH / 2.0 - WALL_THICKNESS;
+    let left_x = -wall_inner + offset;
+    let right_x = wall_inner - offset;
+    (left_x, right_x)
 }
 
 /// Database of all loaded levels
@@ -433,12 +443,13 @@ impl LevelDatabase {
                 current_level = Some(LevelData {
                     name: name.trim().to_string(),
                     basket_height: 400.0, // default
+                    basket_push_in: BASKET_PUSH_IN, // default
                     platforms: Vec::new(),
                     step_count: CORNER_STEP_COUNT,       // default
                     corner_height: CORNER_STEP_TOTAL_HEIGHT, // default
                     corner_width: CORNER_STEP_TOTAL_WIDTH,   // default
                 });
-            } else if let Some(height_str) = line.strip_prefix("basket:") {
+            } else if let Some(height_str) = line.strip_prefix("basket_height:") {
                 if let Some(level) = &mut current_level {
                     if let Ok(height) = height_str.trim().parse::<f32>() {
                         level.basket_height = height;
@@ -484,6 +495,12 @@ impl LevelDatabase {
                         level.corner_width = width;
                     }
                 }
+            } else if let Some(offset_str) = line.strip_prefix("basket_push_in:") {
+                if let Some(level) = &mut current_level {
+                    if let Ok(offset) = offset_str.trim().parse::<f32>() {
+                        level.basket_push_in = offset;
+                    }
+                }
             }
         }
 
@@ -508,6 +525,7 @@ impl LevelDatabase {
                 LevelData {
                     name: "Simple".to_string(),
                     basket_height: 350.0,
+                    basket_push_in: BASKET_PUSH_IN,
                     platforms: vec![PlatformDef::Mirror {
                         x: 400.0,
                         y: 150.0,
@@ -520,6 +538,7 @@ impl LevelDatabase {
                 LevelData {
                     name: "Default".to_string(),
                     basket_height: 400.0,
+                    basket_push_in: BASKET_PUSH_IN,
                     platforms: vec![
                         PlatformDef::Mirror {
                             x: 400.0,
@@ -787,11 +806,15 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
     // Spawn level 1 platforms
     spawn_level_platforms(&mut commands, &level_db, 0);
 
-    // Baskets (goals) - height varies per level
-    let basket_y = level_db
-        .get(0)
+    // Baskets (goals) - height and X position vary per level
+    let initial_level = level_db.get(0);
+    let basket_y = initial_level
         .map(|l| ARENA_FLOOR_Y + l.basket_height)
         .unwrap_or(ARENA_FLOOR_Y + 400.0);
+    let basket_push_in = initial_level
+        .map(|l| l.basket_push_in)
+        .unwrap_or(BASKET_PUSH_IN);
+    let (left_basket_x, right_basket_x) = basket_x_from_offset(basket_push_in);
 
     // Rim dimensions (RIM_THICKNESS is now a top-level constant)
     let rim_outer_height = BASKET_SIZE.y * 0.5; // 50% - wall side
@@ -805,7 +828,7 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
     commands
         .spawn((
             Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
-            Transform::from_xyz(LEFT_BASKET_X, basket_y, -0.1), // Slightly behind
+            Transform::from_xyz(left_basket_x, basket_y, -0.1), // Slightly behind
             Basket::Left,
         ))
         .with_children(|parent| {
@@ -836,7 +859,7 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
     commands
         .spawn((
             Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
-            Transform::from_xyz(RIGHT_BASKET_X, basket_y, -0.1),
+            Transform::from_xyz(right_basket_x, basket_y, -0.1),
             Basket::Right,
         ))
         .with_children(|parent| {
@@ -1065,7 +1088,7 @@ fn respawn_player(
     >,
     level_platforms: Query<Entity, With<LevelPlatform>>,
     corner_ramps: Query<Entity, With<CornerRamp>>,
-    mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>)>,
+    mut baskets: Query<(&mut Transform, &Basket), (Without<Player>, Without<Ball>)>,
 ) {
     // Reset current level (R / Start)
     let reset_pressed = keyboard.just_pressed(KeyCode::KeyR)
@@ -1136,11 +1159,16 @@ fn respawn_player(
         // Spawn new level platforms
         spawn_level_platforms(&mut commands, &level_db, level_index);
 
-        // Update basket heights and corner ramps for new level
+        // Update basket positions and corner ramps for new level
         if let Some(level) = level_db.get(level_index) {
             let basket_y = ARENA_FLOOR_Y + level.basket_height;
-            for mut basket_transform in &mut baskets {
+            let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
+            for (mut basket_transform, basket) in &mut baskets {
                 basket_transform.translation.y = basket_y;
+                basket_transform.translation.x = match basket {
+                    Basket::Left => left_x,
+                    Basket::Right => right_x,
+                };
             }
 
             // Despawn old corner ramps and spawn new ones for new level
@@ -2146,6 +2174,55 @@ fn toggle_debug(
                 Visibility::Hidden
             };
         }
+    }
+}
+
+/// Hot reload levels from file (F2)
+fn reload_levels(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    mut level_db: ResMut<LevelDatabase>,
+    current_level: Res<CurrentLevel>,
+    level_platforms: Query<Entity, With<LevelPlatform>>,
+    corner_ramps: Query<Entity, With<CornerRamp>>,
+    mut baskets: Query<(&mut Transform, &Basket)>,
+) {
+    if !keyboard.just_pressed(KeyCode::F2) {
+        return;
+    }
+
+    // Reload level database from file
+    *level_db = LevelDatabase::load_from_file(LEVELS_FILE);
+    info!("Reloaded levels from {}", LEVELS_FILE);
+
+    let level_index = (current_level.0 - 1) as usize;
+
+    // Despawn old level platforms
+    for entity in &level_platforms {
+        commands.entity(entity).despawn();
+    }
+
+    // Despawn old corner ramps
+    for entity in &corner_ramps {
+        commands.entity(entity).despawn();
+    }
+
+    // Spawn new level geometry
+    spawn_level_platforms(&mut commands, &level_db, level_index);
+
+    // Update basket positions and spawn corner ramps
+    if let Some(level) = level_db.get(level_index) {
+        let basket_y = ARENA_FLOOR_Y + level.basket_height;
+        let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
+        for (mut basket_transform, basket) in &mut baskets {
+            basket_transform.translation.y = basket_y;
+            basket_transform.translation.x = match basket {
+                Basket::Left => left_x,
+                Basket::Right => right_x,
+            };
+        }
+
+        spawn_corner_ramps(&mut commands, level.step_count, level.corner_height, level.corner_width);
     }
 }
 
