@@ -11,9 +11,16 @@
 
 use ballgame::{
     calculate_shot_trajectory, ARENA_FLOOR_Y, ARENA_HEIGHT, ARENA_WIDTH, BALL_BOUNCE, BALL_GRAVITY,
-    BALL_SIZE, BASKET_SIZE_X, BASKET_SIZE_Y, RIGHT_BASKET_X, RIM_THICKNESS, SHOT_DISTANCE_VARIANCE,
-    SHOT_MIN_VARIANCE,
+    RIM_THICKNESS, SHOT_DISTANCE_VARIANCE, SHOT_MIN_VARIANCE, WALL_THICKNESS, BASKET_PUSH_IN,
 };
+
+// Basket dimensions (matching ballgame constants)
+const BASKET_SIZE_X: f32 = 60.0;
+const BASKET_SIZE_Y: f32 = 80.0;
+const BALL_RADIUS: f32 = 12.0;
+
+// Derived basket position (wall_inner - basket_push_in)
+const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - WALL_THICKNESS - BASKET_PUSH_IN;
 use image::{Rgb, RgbImage};
 use rand::Rng;
 
@@ -135,7 +142,7 @@ fn simulate_ball_flight(
     let mut vy = angle.sin() * speed;
     let mut t = 0.0;
 
-    let ball_radius = BALL_SIZE / 2.0;
+    let ball_radius = BALL_RADIUS;
     let rims = build_rim_geometry(basket_x, basket_y);
 
     // Scoring zone (inside basket)

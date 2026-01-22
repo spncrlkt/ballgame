@@ -1,62 +1,42 @@
-//! Shared constants and utilities for ballgame
+//! Ballgame - A 2v2 ball sport game built with Bevy
 //!
-//! This module is used by both the main game and tools like the heatmap generator.
+//! This crate provides all game components, resources, and systems organized into modules.
+
+// Core modules
+pub mod constants;
+pub mod helpers;
+
+// Game logic modules
+pub mod ball;
+pub mod input;
+pub mod levels;
+pub mod player;
+pub mod scoring;
+pub mod shooting;
+pub mod steal;
+pub mod ui;
+pub mod world;
+
+// Re-export commonly used types for convenience
+pub use ball::{Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallState};
+pub use constants::*;
+pub use helpers::*;
+pub use input::PlayerInput;
+pub use levels::{LevelData, LevelDatabase, PlatformDef};
+pub use player::{
+    CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, Velocity,
+};
+pub use scoring::{CurrentLevel, Score};
+pub use shooting::{ChargingShot, LastShotInfo, TargetBasket, TargetMarker};
+pub use steal::StealContest;
+pub use ui::{
+    ChargeGaugeBackground, ChargeGaugeFill, DebugSettings, DebugText, PhysicsTweaks,
+    ScoreFlash, ScoreLevelText, TitleFlash, TweakPanel, TweakRow,
+};
+pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 
 // =============================================================================
-// ARENA DIMENSIONS
-// =============================================================================
-
-pub const ARENA_WIDTH: f32 = 1600.0;
-pub const ARENA_HEIGHT: f32 = 900.0;
-pub const ARENA_FLOOR_Y: f32 = -ARENA_HEIGHT / 2.0 + 20.0;
-
-// =============================================================================
-// BASKETS
-// =============================================================================
-
-pub const BASKET_SIZE_X: f32 = 60.0;
-pub const BASKET_SIZE_Y: f32 = 80.0;
-pub const LEFT_BASKET_X: f32 = -ARENA_WIDTH / 2.0 + 140.0;
-pub const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - 140.0;
-pub const RIM_THICKNESS: f32 = 10.0;
-
-// =============================================================================
-// BALL PHYSICS
-// =============================================================================
-
-pub const BALL_SIZE: f32 = 24.0;
-pub const BALL_GRAVITY: f32 = 800.0;
-pub const BALL_BOUNCE: f32 = 0.7;
-pub const BALL_AIR_FRICTION: f32 = 0.95;
-pub const BALL_GROUND_FRICTION: f32 = 0.6;
-
-// =============================================================================
-// SHOOTING
-// =============================================================================
-
-pub const SHOT_MAX_POWER: f32 = 900.0;
-pub const SHOT_MAX_SPEED: f32 = 800.0;
-pub const SHOT_CHARGE_TIME: f32 = 1.6;
-pub const SHOT_MAX_VARIANCE: f32 = 0.50;
-pub const SHOT_MIN_VARIANCE: f32 = 0.02;
-pub const SHOT_AIR_VARIANCE_PENALTY: f32 = 0.10;
-pub const SHOT_MOVE_VARIANCE_PENALTY: f32 = 0.10;
-pub const SHOT_DISTANCE_VARIANCE: f32 = 0.00025;
-pub const SHOT_QUICK_THRESHOLD: f32 = 0.4;
-pub const SHOT_DEFAULT_ANGLE: f32 = 60.0;
-pub const SHOT_GRACE_PERIOD: f32 = 0.1;
-
-// =============================================================================
-// CORNER STEPS
-// =============================================================================
-
-pub const CORNER_STEP_TOTAL_HEIGHT: f32 = 320.0;
-pub const CORNER_STEP_TOTAL_WIDTH: f32 = 170.0;
-pub const CORNER_STEP_COUNT: usize = 12;
-pub const CORNER_STEP_THICKNESS: f32 = 20.0;
-
-// =============================================================================
-// TRAJECTORY CALCULATION
+// TRAJECTORY CALCULATION (shared with tools like heatmap generator)
 // =============================================================================
 
 /// Shot trajectory result containing angle, required speed, and distance variance
@@ -69,6 +49,9 @@ pub struct ShotTrajectory {
     /// Variance penalty from distance
     pub distance_variance: f32,
 }
+
+/// Variance per unit distance for trajectory calculation
+pub const SHOT_DISTANCE_VARIANCE: f32 = 0.00025;
 
 /// Calculate shot trajectory to hit target.
 /// Returns the angle and exact speed needed to hit the target.
@@ -95,7 +78,7 @@ pub fn calculate_shot_trajectory(
             // v² = 2*g*h → v = sqrt(2*g*h)
             (2.0 * gravity * ty).sqrt()
         } else {
-            SHOT_MAX_SPEED * 0.3 // Minimal speed for dropping down
+            constants::SHOT_MAX_SPEED * 0.3 // Minimal speed for dropping down
         };
         return Some(ShotTrajectory {
             angle: if ty > 0.0 {

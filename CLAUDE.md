@@ -15,9 +15,35 @@ cargo clippy          # Lint code
 
 No tests exist yet. Dynamic linking is disabled in `.cargo/config.toml` to avoid macOS dyld issues.
 
+## Todo Management
+
+**Check `todo.md` at the start of each session.** When completing work:
+- Move completed items to the "Done" section at the bottom
+- Add new tasks discovered during development
+- Keep categories organized (Immediate Fixes, Level Design, Multiplayer, AI, Equipment)
+
 ## Architecture
 
-This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component System (ECS) pattern. The entire game is in `src/main.rs`.
+This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component System (ECS) pattern.
+
+### Module Structure
+
+```
+src/
+├── main.rs          # App setup, system registration, setup() function
+├── lib.rs           # Re-exports all public types
+├── constants.rs     # All tunable values
+├── helpers.rs       # Utility functions (move_toward, basket_x_from_offset)
+├── input/           # PlayerInput resource, capture_input system
+├── player/          # Player components + physics systems
+├── ball/            # Ball components, physics, interaction systems
+├── shooting/        # Charge, throw, targeting systems
+├── scoring/         # Score resource, check_scoring system
+├── steal.rs         # StealContest resource + system
+├── levels/          # LevelDatabase, spawning, hot reload
+├── world/           # Platform, Collider, Basket, BasketRim components
+└── ui/              # Debug, HUD, animations, charge gauge, tweak panel
+```
 
 ### ECS Structure
 
@@ -146,9 +172,9 @@ commands.entity(player_entity).add_child(child);
 
 Update their transforms relative to player in Update systems.
 
-### 4. Constants at Top of File
+### 4. Constants in constants.rs
 
-All tunable values go in constants at the top of `main.rs`, grouped by category:
+All tunable values go in `src/constants.rs`, grouped by category:
 - Visual constants (colors, sizes)
 - Physics constants (gravity, speeds)
 - Game feel constants (timers, thresholds)
@@ -206,7 +232,7 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 
 1. **CLAUDE.md accuracy** - Verify architecture section matches actual code (components, resources, systems)
 2. **Input buffering** - All `just_pressed` inputs consumed in FixedUpdate must be buffered
-3. **Constants** - No magic numbers in code; all tunable values in constants section
+3. **Constants** - No magic numbers in code; all tunable values in `src/constants.rs`
 4. **System order** - Verify FixedUpdate chain matches documented order
 5. **Unused code** - Look for dead code, unused imports, commented-out blocks
 6. **Pattern violations** - Check for raw input reads in FixedUpdate, unbuffered press inputs
@@ -217,11 +243,5 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 **After auditing:**
 - Compact the conversation context and get a fresh read of the codebase
 - Write the audit findings and changes since last audit to `audit_record.md`
+- Update `todo.md` - move completed items to Done section, add any new tasks discovered
 
----
-
-## Future Plans
-
-- 4-player multiplayer support
-- Equipment system (clubs, rackets, mallets)
-- Consider splitting into modules when file exceeds ~2000 lines
