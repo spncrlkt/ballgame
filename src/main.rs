@@ -82,7 +82,7 @@ const RIM_THICKNESS: f32 = 10.0;
 
 // Corner steps
 const CORNER_STEP_TOTAL_HEIGHT: f32 = 320.0;
-const CORNER_STEP_TOTAL_WIDTH: f32 = 170.0;
+const CORNER_STEP_TOTAL_WIDTH: f32 = 200.0;
 const CORNER_STEP_COUNT: usize = 13;
 const CORNER_STEP_THICKNESS: f32 = 20.0;
 const STEP_BOUNCE_RETENTION: f32 = 0.92; // Steps keep more velocity than normal bounce
@@ -382,6 +382,9 @@ struct LevelData {
     name: String,
     basket_height: f32,
     platforms: Vec<PlatformDef>,
+    step_count: usize,   // 0 = no steps, otherwise number of steps per corner
+    corner_height: f32,  // Total height of corner ramp
+    corner_width: f32,   // Total width of corner ramp
 }
 
 /// Database of all loaded levels
@@ -431,6 +434,9 @@ impl LevelDatabase {
                     name: name.trim().to_string(),
                     basket_height: 400.0, // default
                     platforms: Vec::new(),
+                    step_count: CORNER_STEP_COUNT,       // default
+                    corner_height: CORNER_STEP_TOTAL_HEIGHT, // default
+                    corner_width: CORNER_STEP_TOTAL_WIDTH,   // default
                 });
             } else if let Some(height_str) = line.strip_prefix("basket:") {
                 if let Some(level) = &mut current_level {
@@ -458,6 +464,24 @@ impl LevelDatabase {
                         if let (Ok(y), Ok(w)) = (parts[0].parse::<f32>(), parts[1].parse::<f32>()) {
                             level.platforms.push(PlatformDef::Center { y, width: w });
                         }
+                    }
+                }
+            } else if let Some(count_str) = line.strip_prefix("steps:") {
+                if let Some(level) = &mut current_level {
+                    if let Ok(count) = count_str.trim().parse::<usize>() {
+                        level.step_count = count;
+                    }
+                }
+            } else if let Some(height_str) = line.strip_prefix("corner_height:") {
+                if let Some(level) = &mut current_level {
+                    if let Ok(height) = height_str.trim().parse::<f32>() {
+                        level.corner_height = height;
+                    }
+                }
+            } else if let Some(width_str) = line.strip_prefix("corner_width:") {
+                if let Some(level) = &mut current_level {
+                    if let Ok(width) = width_str.trim().parse::<f32>() {
+                        level.corner_width = width;
                     }
                 }
             }
@@ -489,6 +513,9 @@ impl LevelDatabase {
                         y: 150.0,
                         width: 200.0,
                     }],
+                    step_count: CORNER_STEP_COUNT,
+                    corner_height: CORNER_STEP_TOTAL_HEIGHT,
+                    corner_width: CORNER_STEP_TOTAL_WIDTH,
                 },
                 LevelData {
                     name: "Default".to_string(),
@@ -504,6 +531,9 @@ impl LevelDatabase {
                             width: 200.0,
                         },
                     ],
+                    step_count: CORNER_STEP_COUNT,
+                    corner_height: CORNER_STEP_TOTAL_HEIGHT,
+                    corner_width: CORNER_STEP_TOTAL_WIDTH,
                 },
             ],
         }
@@ -834,8 +864,11 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
         });
 
     // Corner ramps - angled walls in bottom corners
-    let initial_basket_height = level_db.get(0).map(|l| l.basket_height).unwrap_or(400.0);
-    spawn_corner_ramps(&mut commands, initial_basket_height);
+    let initial_level = level_db.get(0);
+    let initial_step_count = initial_level.map(|l| l.step_count).unwrap_or(CORNER_STEP_COUNT);
+    let initial_corner_height = initial_level.map(|l| l.corner_height).unwrap_or(CORNER_STEP_TOTAL_HEIGHT);
+    let initial_corner_width = initial_level.map(|l| l.corner_width).unwrap_or(CORNER_STEP_TOTAL_WIDTH);
+    spawn_corner_ramps(&mut commands, initial_step_count, initial_corner_height, initial_corner_width);
 
     // Score/Level display - top center
     commands.spawn((
@@ -1080,11 +1113,11 @@ fn respawn_player(
                 basket_transform.translation.y = basket_y;
             }
 
-            // Despawn old corner ramps and spawn new ones with updated basket height
+            // Despawn old corner ramps and spawn new ones for new level
             for entity in &corner_ramps {
                 commands.entity(entity).despawn();
             }
-            spawn_corner_ramps(&mut commands, level.basket_height);
+            spawn_corner_ramps(&mut commands, level.step_count, level.corner_height, level.corner_width);
         }
     }
 }
@@ -2236,21 +2269,25 @@ fn spawn_center_platform(commands: &mut Commands, y: f32, width: f32) {
 }
 
 /// Spawn corner steps in the bottom corners
-/// Fixed dimensions: 420 tall, 200 wide, with 6 steps
-fn spawn_corner_ramps(commands: &mut Commands, _basket_height: f32) {
+/// step_count of 0 means no steps
+fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_height: f32, corner_width: f32) {
+    if step_count == 0 {
+        return;
+    }
+
     // Wall inner edges (walls are 40 wide, centered at ±(ARENA_WIDTH/2 - 20))
     let left_wall_inner = -ARENA_WIDTH / 2.0 + 40.0;
     let right_wall_inner = ARENA_WIDTH / 2.0 - 40.0;
 
     // Step dimensions
-    let step_height = CORNER_STEP_TOTAL_HEIGHT / CORNER_STEP_COUNT as f32;
-    let step_width = CORNER_STEP_TOTAL_WIDTH / CORNER_STEP_COUNT as f32;
+    let step_height = corner_height / step_count as f32;
+    let step_width = corner_width / step_count as f32;
 
     // Left steps: go from wall (high) toward center (low)
     // Step 0 is highest (closest to wall), step N-1 is lowest (closest to center)
     let floor_top = ARENA_FLOOR_Y + 20.0;
-    for i in 0..CORNER_STEP_COUNT {
-        let step_num = (CORNER_STEP_COUNT - 1 - i) as f32; // Reverse so 0 is lowest
+    for i in 0..step_count {
+        let step_num = (step_count - 1 - i) as f32; // Reverse so 0 is lowest
         let y = floor_top + step_height * (step_num + 0.5);
         let x = left_wall_inner + step_width * (i as f32 + 0.5);
 
@@ -2275,8 +2312,8 @@ fn spawn_corner_ramps(commands: &mut Commands, _basket_height: f32) {
     }
 
     // Right steps: mirror of left (go from wall toward center)
-    for i in 0..CORNER_STEP_COUNT {
-        let step_num = (CORNER_STEP_COUNT - 1 - i) as f32;
+    for i in 0..step_count {
+        let step_num = (step_count - 1 - i) as f32;
         let y = floor_top + step_height * (step_num + 0.5);
         let x = right_wall_inner - step_width * (i as f32 + 0.5);
 

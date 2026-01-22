@@ -78,11 +78,15 @@ Keyboard + Gamepad supported:
 - A/D or Left Stick: Horizontal movement
 - Space/W or South button: Jump
 - E or West button: Pickup ball / Steal
-- F or Right Trigger: Charge and throw (hold to charge, release to throw)
-- Q or Left Bumper: Cycle target basket
+- F or Right Bumper: Charge and throw (hold to charge, release to throw)
+- Q or Left Trigger: Cycle target basket
 - R or Start: Respawn (cycles through 10 levels)
 - Tab: Toggle debug UI
 - F1: Toggle physics tweak panel
+
+**Bevy GamepadButton naming (counterintuitive):**
+- `LeftTrigger` / `RightTrigger` = Bumpers (LB/RB, digital shoulder buttons)
+- `LeftTrigger2` / `RightTrigger2` = Triggers (LT/RT, analog triggers)
 
 **In tweak panel:**
 - Up/Down: Select parameter

@@ -4,6 +4,9 @@
 # Format:
 #   level: <name>           Start a new level
 #   basket: <height>        Main basket height above floor (8 dunkable: <560, 2 high: >560)
+#   steps: <count>          Corner steps count (0 = no steps, default = 13)
+#   corner_height: <h>      Total corner ramp height (default = 320)
+#   corner_width: <w>       Total corner ramp width (default = 200)
 #   mirror: <x> <y> <w>     Platform at (-x, y) and (+x, y) with width w
 #   center: <y> <w>         Centered platform at (0, y) with width w
 #
@@ -15,49 +18,70 @@
 
 level: Open Floor
 basket: 660
+steps: 0
 
-level: V-Shape
+level: Slopes
 basket: 670
-mirror: 250 150 180
-
-level: Arena
-basket: 640
-mirror: 550 200 150
-mirror: 300 350 180
-center: 150 250
-
-level: Three Tiers
-basket: 690
-mirror: 500 100 180
-mirror: 300 220 160
+steps: 8
+mirror: 235 200 180
 
 level: Tower
 basket: 620
-center: 120 300
-center: 240 200
-center: 360 100
+steps: 11
+corner_height: 360
+corner_width: 220
+center: 120 340
+center: 240 230
+center: 360 120
 
-level: Inverted V
-basket: 680
-mirror: 450 120 180
-mirror: 200 250 160
+level: Arena
+basket: 640
+steps: 7
+corner_height: 240
+corner_width: 220
+mirror: 480 240 150
+mirror: 265 390 180
+center: 170 280
 
-level: Double Stack
-basket: 650
-mirror: 350 140 200
-
-level: Diamond
+level: Skyway
 basket: 700
-center: 200 180
-mirror: 400 120 150
+steps: 15
+corner_height: 450
+corner_width: 260
+mirror: 400 320 140
+center: 450 200
 
-level: Zigzag
-basket: 630
-mirror: 550 100 140
-mirror: 350 200 140
+level: Islands
+basket: 650
+steps: 0
+mirror: 480 140 100
+mirror: 280 260 100
+center: 400 100
 
-level: Fortress
-basket: 610
-mirror: 500 150 160
-mirror: 280 150 120
-center: 300 120
+level: Terraces
+basket: 660
+steps: 0
+mirror: 520 100 180
+mirror: 380 200 160
+mirror: 240 300 140
+
+level: Catwalk
+basket: 620
+steps: 0
+center: 200 600
+mirror: 200 200 120
+
+level: Bunker
+basket: 520
+steps: 8
+corner_height: 240
+corner_width: 200
+mirror: 350 90 200
+center: 90 280
+
+level: Pit
+basket: 580
+steps: 0
+mirror: 520 140 160
+mirror: 340 100 140
+center: 50 400
