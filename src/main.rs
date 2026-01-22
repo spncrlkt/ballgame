@@ -11,6 +11,8 @@ const BALL_COLOR: Color = Color::srgb(0.9, 0.5, 0.1); // Orange basketball-ish
 // Size constants
 const PLAYER_SIZE: Vec2 = Vec2::new(32.0, 64.0);
 const BALL_SIZE: Vec2 = Vec2::new(24.0, 24.0);
+const CHARGE_GAUGE_WIDTH: f32 = 8.0;
+const CHARGE_GAUGE_HEIGHT: f32 = PLAYER_SIZE.y; // Same height as player
 
 // Physics constants
 const GRAVITY_RISE: f32 = 980.0; // Gravity while rising
@@ -78,7 +80,7 @@ fn main() {
         .init_resource::<StealContest>()
         .init_resource::<Score>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text, animate_pickable_ball, update_facing_arrow))
+        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text, animate_pickable_ball, update_facing_arrow, update_charge_gauge))
         .add_systems(
             FixedUpdate,
             (
@@ -219,6 +221,12 @@ struct DebugText;
 #[derive(Component)]
 struct FacingArrow;
 
+#[derive(Component)]
+struct ChargeGaugeBackground;
+
+#[derive(Component)]
+struct ChargeGaugeFill;
+
 // Systems
 
 fn setup(
@@ -272,6 +280,30 @@ fn setup(
         ))
         .id();
     commands.entity(player_entity).add_child(arrow_entity);
+
+    // Charge gauge - position will be updated dynamically (opposite side of ball)
+    // Start on left side (default facing is right, so ball is right, gauge is left)
+    let gauge_x = -(PLAYER_SIZE.x / 2.0 + CHARGE_GAUGE_WIDTH / 2.0 + 2.0);
+
+    // Background (black bar, always visible, centered vertically on player)
+    let gauge_bg = commands
+        .spawn((
+            Sprite::from_color(Color::BLACK, Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT)),
+            Transform::from_xyz(gauge_x, 0.0, 0.5),
+            ChargeGaugeBackground,
+        ))
+        .id();
+    commands.entity(player_entity).add_child(gauge_bg);
+
+    // Fill (green->red, scales with charge) - starts invisible
+    let gauge_fill = commands
+        .spawn((
+            Sprite::from_color(Color::srgb(0.0, 0.8, 0.0), Vec2::new(CHARGE_GAUGE_WIDTH - 2.0, CHARGE_GAUGE_HEIGHT - 2.0)),
+            Transform::from_xyz(gauge_x, 0.0, 0.6).with_scale(Vec3::new(1.0, 0.0, 1.0)),
+            ChargeGaugeFill,
+        ))
+        .id();
+    commands.entity(player_entity).add_child(gauge_fill);
 
     // Ball
     commands.spawn((
@@ -434,9 +466,12 @@ fn capture_input(
         input.jump_buffer_timer = (input.jump_buffer_timer - time.delta_secs()).max(0.0);
     }
 
-    // Pickup (West button / E key)
-    input.pickup_pressed = keyboard.just_pressed(KeyCode::KeyE)
-        || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::West));
+    // Pickup (West button / E key) - accumulate until consumed
+    if keyboard.just_pressed(KeyCode::KeyE)
+        || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::West))
+    {
+        input.pickup_pressed = true;
+    }
 
     // Throw (R shoulder / F key)
     let throw_held_now = keyboard.pressed(KeyCode::KeyF)
@@ -788,7 +823,7 @@ fn ball_follow_holder(
 }
 
 fn pickup_ball(
-    input: Res<PlayerInput>,
+    mut input: ResMut<PlayerInput>,
     mut commands: Commands,
     mut steal_contest: ResMut<StealContest>,
     non_holding_players: Query<(Entity, &Transform), (With<Player>, Without<HoldingBall>)>,
@@ -801,6 +836,7 @@ fn pickup_ball(
             // For now, attribute press to attacker (single player)
             // In multiplayer, check which player pressed
             steal_contest.attacker_presses += 1;
+            input.pickup_pressed = false; // Consume input
         }
         return; // Don't allow pickup during contest
     }
@@ -808,6 +844,9 @@ fn pickup_ball(
     if !input.pickup_pressed {
         return;
     }
+
+    // Consume the input immediately
+    input.pickup_pressed = false;
 
     // Check each non-holding player
     for (player_entity, player_transform) in &non_holding_players {
@@ -1100,6 +1139,55 @@ fn update_facing_arrow(
             if let Ok(mut arrow_transform) = arrow_query.get_mut(child) {
                 // Flip the arrow by scaling X negative when facing left
                 arrow_transform.scale.x = facing.0;
+            }
+        }
+    }
+}
+
+fn update_charge_gauge(
+    player_query: Query<(&ChargingShot, &Facing, &Children, Option<&HoldingBall>), With<Player>>,
+    mut bg_query: Query<&mut Transform, (With<ChargeGaugeBackground>, Without<ChargeGaugeFill>)>,
+    mut fill_query: Query<(&mut Sprite, &mut Transform), With<ChargeGaugeFill>>,
+) {
+    // Gauge X position (opposite side of ball/facing)
+    let gauge_offset = PLAYER_SIZE.x / 2.0 + CHARGE_GAUGE_WIDTH / 2.0 + 2.0;
+    let fill_height = CHARGE_GAUGE_HEIGHT - 2.0;
+
+    for (charging, facing, children, holding) in &player_query {
+        // Gauge is on opposite side of facing (ball is on facing side)
+        let gauge_x = -facing.0 * gauge_offset;
+
+        for child in children.iter() {
+            // Update background position
+            if let Ok(mut bg_transform) = bg_query.get_mut(child) {
+                bg_transform.translation.x = gauge_x;
+            }
+
+            // Update fill position, scale, and color
+            if let Ok((mut sprite, mut transform)) = fill_query.get_mut(child) {
+                transform.translation.x = gauge_x;
+
+                let charge_pct = (charging.charge_time / SHOT_CHARGE_TIME).min(1.0);
+
+                // Only show fill when holding ball and charging
+                if holding.is_none() || charging.charge_time < 0.001 {
+                    // Not charging - hide the fill (scale to 0)
+                    transform.scale.y = 0.0;
+                } else {
+                    // Charging - show fill scaled by percentage
+                    transform.scale.y = charge_pct;
+
+                    // Offset Y so bar grows from bottom
+                    // At 0%: bar is at bottom (y = -height/2 + 0)
+                    // At 100%: bar is centered (y = 0)
+                    let y_offset = -fill_height / 2.0 * (1.0 - charge_pct);
+                    transform.translation.y = y_offset;
+
+                    // Color transition: green (0%) -> red (100%)
+                    let r = charge_pct * 0.9;
+                    let g = (1.0 - charge_pct) * 0.8;
+                    sprite.color = Color::srgb(r, g, 0.0);
+                }
             }
         }
     }
