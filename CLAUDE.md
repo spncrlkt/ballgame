@@ -17,41 +17,140 @@ No tests exist yet. Dynamic linking is disabled in `.cargo/config.toml` to avoid
 
 ## Architecture
 
-This is a 2D platformer game built with Bevy 0.17.3 using the Entity Component System (ECS) pattern. The entire game is in `src/main.rs`.
+This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component System (ECS) pattern. The entire game is in `src/main.rs`.
 
 ### ECS Structure
 
-**Components:**
-- `Player` - Marker for the player entity
-- `MoveState` - Tracks jumping state (`is_jumping`) and terminal velocity
-- `Velocity` - 2D velocity vector for physics
-- `Collider` - Marker for collidable entities
-- `Floor` - Platform marker (requires `Collider`)
-- `DebugText` - UI text display
-
 **Resources:**
-- `DebugInfo` - Debug state (elapsed time, collision info)
+- `PlayerInput` - Buffered input state (movement, jump, pickup, throw)
+- `StealContest` - Active steal contest state
+- `Score` - Left/right team scores
+- `DebugSettings` - Debug UI visibility
 
-**Systems (execution order):**
-1. `setup` (Startup) - Spawns camera, player, floor, platforms, debug UI
-2. `apply_velocity` (FixedUpdate) - Applies velocity and gravity
-3. `move_player` (FixedUpdate) - Handles gamepad input for movement/jumping
-4. `check_for_collisions` (FixedUpdate) - AABB collision detection and response
-5. `gamepad_log_system` (Update) - Logs gamepad button presses
-6. `debug_update_system` (Update) - Updates debug text display
+**Player Components:**
+- `Player` - Marker for player entities
+- `Velocity` - 2D velocity vector
+- `Grounded` - Whether player is on ground
+- `CoyoteTimer` - Time remaining for coyote jump
+- `JumpState` - Tracks if currently in a jump
+- `Facing` - Direction player faces (-1.0 left, 1.0 right)
+- `HoldingBall` - Reference to held ball entity
+- `ChargingShot` - Charge time accumulator
 
-Systems 2-4 are chained in FixedUpdate for deterministic physics.
+**Ball Components:**
+- `Ball` - Marker for ball entity
+- `BallState` - Free, Held(Entity), or InFlight { shooter, power }
+- `BallPlayerContact` - Tracks overlap for collision effects
+- `BallPulse` - Animation timer for pickup indicator
 
-### Physics Constants
+**World Components:**
+- `Platform` - Collidable platform (requires `Collider`)
+- `Collider` - Marker for collidable entities
+- `Basket` - Scoring zone (Left or Right)
 
-- Gravity: 200.0 units/sec² downward
-- Jump velocity: 200.0 units
-- Player speed: 500.0 units/sec horizontal
-- Player size: 32x64 pixels
-- Collision uses Bevy's `Aabb2d` for AABB intersection tests
+**UI Components:**
+- `DebugText` - Debug info display
+- `FacingArrow` - Direction indicator inside player
+- `ChargeGaugeBackground` / `ChargeGaugeFill` - Shot charge indicator
+
+### System Execution Order
+
+**Update schedule:** `capture_input` → `respawn_player` → `toggle_debug` → `update_debug_text` → `animate_pickable_ball` → `update_facing_arrow` → `update_charge_gauge`
+
+**FixedUpdate schedule (chained):** `apply_input` → `apply_gravity` → `ball_gravity` → `apply_velocity` → `check_collisions` → `ball_collisions` → `ball_state_update` → `ball_player_collision` → `ball_follow_holder` → `pickup_ball` → `steal_contest_update` → `update_shot_charge` → `throw_ball` → `check_scoring`
 
 ### Input
 
-Gamepad only (no keyboard support):
-- Left stick X: Horizontal movement
-- South button (A/X): Jump
+Keyboard + Gamepad supported:
+- A/D or Left Stick: Horizontal movement
+- Space/W or South button: Jump
+- E or West button: Pickup ball / Steal
+- F or Right Trigger: Charge and throw (hold to charge, release to throw)
+- R or Start: Respawn
+- Tab: Toggle debug UI
+
+---
+
+## Development Patterns
+
+**IMPORTANT: Follow these patterns for all new code.**
+
+### 1. Input Buffering (MANDATORY)
+
+Any "press" input captured in Update and consumed in FixedUpdate MUST be buffered. This prevents missed inputs due to frame timing differences.
+
+**Pattern:**
+```rust
+// In PlayerInput resource:
+new_action_pressed: bool,
+
+// In capture_input (Update) - ACCUMULATE, don't overwrite:
+if keyboard.just_pressed(KeyCode::X) || gamepad.just_pressed(Button) {
+    input.new_action_pressed = true;  // Set to true, never set to false here
+}
+
+// In consuming system (FixedUpdate) - CONSUME after reading:
+if input.new_action_pressed {
+    input.new_action_pressed = false;  // Consume immediately
+    // ... do action
+}
+```
+
+**Why:** `just_pressed` only returns true for one Update frame. If FixedUpdate doesn't run that exact frame, the input is lost. Buffering ensures the input persists until consumed.
+
+**Input types that DON'T need buffering:**
+- Continuous inputs (movement axis) - overwrite each frame is correct
+- Held state (`pressed()` not `just_pressed()`) - checked every frame
+
+### 2. Update vs FixedUpdate
+
+- **Update:** Input capture, UI updates, visual effects (animations, debug text)
+- **FixedUpdate:** Physics, movement, collisions, game logic
+
+Systems in FixedUpdate are chained for deterministic order. Never read raw input (`just_pressed`) in FixedUpdate - always use buffered `PlayerInput` resource.
+
+### 3. Child Entities for Player Attachments
+
+Visual elements attached to the player (arrow, charge gauge) should be spawned as child entities:
+```rust
+let child = commands.spawn((/* components */)).id();
+commands.entity(player_entity).add_child(child);
+```
+
+Update their transforms relative to player in Update systems.
+
+### 4. Constants at Top of File
+
+All tunable values go in constants at the top of `main.rs`, grouped by category:
+- Visual constants (colors, sizes)
+- Physics constants (gravity, speeds)
+- Game feel constants (timers, thresholds)
+- Arena constants (dimensions, positions)
+
+### 5. Component Queries
+
+Use specific queries with `With<T>` and `Without<T>` filters to avoid ambiguity and improve performance. When querying related entities (player and children), use separate queries.
+
+---
+
+## Maintenance Checklist
+
+**Remind the user to audit every ~10 changes if they haven't recently.**
+
+When asked to "audit", "review", or "check the repo", perform these checks:
+
+1. **CLAUDE.md accuracy** - Verify architecture section matches actual code (components, resources, systems)
+2. **Input buffering** - All `just_pressed` inputs consumed in FixedUpdate must be buffered
+3. **Constants** - No magic numbers in code; all tunable values in constants section
+4. **System order** - Verify FixedUpdate chain matches documented order
+5. **Unused code** - Look for dead code, unused imports, commented-out blocks
+6. **Pattern violations** - Check for raw input reads in FixedUpdate, unbuffered press inputs
+7. **Compilation** - Run `cargo check` and `cargo clippy`
+
+---
+
+## Future Plans
+
+- 4-player multiplayer support
+- Equipment system (clubs, rackets, mallets)
+- Consider splitting into modules when file exceeds ~2000 lines
