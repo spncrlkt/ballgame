@@ -4,6 +4,86 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Audit: 2026-01-21 (Session 3)
+
+### Session Summary
+
+Complete trajectory system overhaul with optimal angle calculation and ceiling awareness.
+
+### Changes Made
+
+**Dynamic Trajectory System:**
+- Replaced fixed arc with `calculate_shot_trajectory()` function
+- Calculates optimal angle using `θ = 45° + arctan(dy/dx)/2`
+- Respects ceiling constraints with binary search for max arc
+- Returns power, arc, and variance penalties
+- New `ShotTrajectory` struct holds calculation results
+
+**New Shot Constants:**
+- `SHOT_MAX_SPEED = 800` - Caps total velocity magnitude (prevents rocket shots)
+- `SHOT_MIN_ARC = 0.5` - Minimum arc ratio (~27° flat shot)
+- `SHOT_MAX_ARC = 3.0` - Maximum arc ratio (~72° lob shot)
+- `SHOT_CEILING_MARGIN = 60` - Stay this far below ceiling
+- `SHOT_DISTANCE_VARIANCE_FACTOR = 0.0003` - +30% variance at 1000 units
+- `SHOT_ARC_VARIANCE_FACTOR = 0.15` - Variance per unit arc deviation
+
+**Removed Constants:**
+- `SHOT_MIN_POWER` - No longer used (trajectory calculates exact power needed)
+- `SHOT_BASE_ARC` - Replaced by dynamic optimal arc calculation
+- `SHOT_AIR_POWER_PENALTY` - Removed, using variance-only difficulty
+
+**Auto-Aim for All Shots:**
+- Both grounded and airborne shots use auto-aim trajectory
+- Difficulty comes from variance penalties, not power reduction
+
+**Variance System:**
+- Base: 50% at zero charge → 2% at full charge
+- Air penalty: +10%
+- Movement penalty: +10% at full speed
+- Distance penalty: proportional to shot distance
+- Arc penalty: when forced away from optimal angle
+
+**Speed Cap:**
+- Total ball speed capped at `SHOT_MAX_SPEED`
+- Prevents extreme velocities for near-vertical shots
+- Scales vx and vy proportionally to preserve direction
+
+### Audit Findings
+
+**Compilation:** Clean `cargo check`, no errors
+
+**Clippy:** 24 warnings (all style suggestions):
+- 1x `derivable_impls` - LevelDatabase::Default can use derive
+- 8x `collapsible_if` - nested if statements
+- 2x `trim_split_whitespace` - unnecessary trim
+- 7x `type_complexity` - complex Query types (standard for Bevy)
+- 2x `too_many_arguments` - functions with 9 args
+- 1x `collapsible_else_if`
+- 1x `manual_range_patterns`
+
+**No Dead Code:** Previous `save_to_file` was removed
+
+**Input Buffering:** Correct - all `just_pressed` in Update systems
+
+**Frame-Rate Independence:** Correct
+- Gravity: `* time.delta_secs()`
+- Friction: `.powf(time.delta_secs())`
+- Acceleration: `* time.delta_secs()`
+- Timers: `- time.delta_secs()`
+
+**Collision Epsilon:** Correct - used in all ground contact positioning
+
+**System Order:** Matches CLAUDE.md documentation
+
+**CLAUDE.md:** Accurate - architecture section matches code
+
+### Files Modified
+
+- `src/main.rs` - Trajectory system overhaul
+- `audit_record.md` - This entry
+
+---
+
 ## Audit: 2026-01-21 (Session 2)
 
 ### Session Summary
