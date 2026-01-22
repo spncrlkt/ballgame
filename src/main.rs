@@ -1,3 +1,4 @@
+use ballgame::calculate_shot_trajectory;
 use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use rand::Rng;
 use std::fs;
@@ -51,7 +52,6 @@ const SHOT_MAX_VARIANCE: f32 = 0.50; // Variance at zero charge (50%)
 const SHOT_MIN_VARIANCE: f32 = 0.02; // Variance at full charge (2%)
 const SHOT_AIR_VARIANCE_PENALTY: f32 = 0.10; // Additional variance when airborne (10%)
 const SHOT_MOVE_VARIANCE_PENALTY: f32 = 0.10; // Additional variance at full horizontal speed (10%)
-const SHOT_DISTANCE_VARIANCE: f32 = 0.00025; // Variance per unit of distance (25% at 1000 units)
 const SHOT_QUICK_THRESHOLD: f32 = 0.4; // Charge below this (400ms) = half power shot
 const SHOT_DEFAULT_ANGLE: f32 = 60.0; // Default shot angle in degrees
 const SHOT_GRACE_PERIOD: f32 = 0.1; // Post-shot grace period (no friction/player drag)
@@ -77,6 +77,7 @@ const BASKET_COLOR: Color = Color::srgb(0.8, 0.2, 0.2); // Red
 const BASKET_SIZE: Vec2 = Vec2::new(60.0, 80.0);
 const LEFT_BASKET_X: f32 = -ARENA_WIDTH / 2.0 + 140.0;
 const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - 140.0;
+const RIM_THICKNESS: f32 = 10.0;
 
 // Corner steps
 const CORNER_STEP_TOTAL_HEIGHT: f32 = 320.0;
@@ -753,8 +754,7 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
         .map(|l| ARENA_FLOOR_Y + l.basket_height)
         .unwrap_or(ARENA_FLOOR_Y + 400.0);
 
-    // Rim dimensions
-    const RIM_THICKNESS: f32 = 10.0;
+    // Rim dimensions (RIM_THICKNESS is now a top-level constant)
     let rim_outer_height = BASKET_SIZE.y * 0.5; // 50% - wall side
     let rim_inner_height = BASKET_SIZE.y * 0.1; // 10% - center side
     let rim_outer_y = -BASKET_SIZE.y / 2.0 + rim_outer_height / 2.0; // Positioned at bottom
@@ -1707,95 +1707,6 @@ fn update_target_marker(
     }
 }
 
-/// Shot trajectory result containing angle, required speed, and distance variance
-struct ShotTrajectory {
-    angle: f32,             // Absolute angle in radians (0=right, π/2=up, π=left)
-    required_speed: f32,    // Exact speed needed to hit target at this angle
-    distance_variance: f32, // Variance penalty from distance
-}
-
-/// Calculate shot trajectory to hit target.
-/// Returns the angle and exact speed needed to hit the target.
-/// Uses a fixed elevation angle (60°) and calculates the required speed.
-fn calculate_shot_trajectory(
-    shooter_pos: Vec2,
-    target_pos: Vec2,
-    gravity: f32,
-    _base_speed: f32, // No longer used as constraint
-) -> Option<ShotTrajectory> {
-    let delta = target_pos - shooter_pos;
-    let tx = delta.x; // Positive = target is right, negative = left
-    let ty = delta.y; // Positive = target is above, negative = below
-    let dx = tx.abs(); // Horizontal distance (always positive)
-    let distance = delta.length();
-
-    // Variance penalty based on distance (longer shots are less accurate)
-    let distance_variance = distance * SHOT_DISTANCE_VARIANCE;
-
-    // Directly under/over target
-    if dx < 1.0 {
-        let required_speed = if ty > 0.0 {
-            // Need enough speed to reach height ty against gravity
-            // v² = 2*g*h → v = sqrt(2*g*h)
-            (2.0 * gravity * ty).sqrt()
-        } else {
-            SHOT_MAX_SPEED * 0.3 // Minimal speed for dropping down
-        };
-        return Some(ShotTrajectory {
-            angle: if ty > 0.0 {
-                std::f32::consts::FRAC_PI_2
-            } else {
-                -std::f32::consts::FRAC_PI_2
-            },
-            required_speed,
-            distance_variance,
-        });
-    }
-
-    // Choose a preferred elevation angle (60° gives nice arc)
-    let elevation = 60.0_f32.to_radians();
-
-    // Calculate required speed: v² = g*dx² / (2*cos²(θ)*(dx*tan(θ) - dy))
-    let cos_e = elevation.cos();
-    let tan_e = elevation.tan();
-    let denominator = 2.0 * cos_e * cos_e * (dx * tan_e - ty);
-
-    // If denominator <= 0, angle is too low to reach target height
-    // Try a higher angle
-    let (final_elevation, required_speed) = if denominator <= 0.0 {
-        // Need steeper angle - try 75°
-        let steep = 75.0_f32.to_radians();
-        let cos_s = steep.cos();
-        let tan_s = steep.tan();
-        let denom2 = 2.0 * cos_s * cos_s * (dx * tan_s - ty);
-        if denom2 <= 0.0 {
-            // Even 75° can't reach - use near-vertical
-            let very_steep = 85.0_f32.to_radians();
-            let cos_vs = very_steep.cos();
-            let tan_vs = very_steep.tan();
-            let denom3 = 2.0 * cos_vs * cos_vs * (dx * tan_vs - ty);
-            (very_steep, (gravity * dx * dx / denom3).sqrt())
-        } else {
-            (steep, (gravity * dx * dx / denom2).sqrt())
-        }
-    } else {
-        (elevation, (gravity * dx * dx / denominator).sqrt())
-    };
-
-    // Convert elevation to absolute angle based on target direction
-    let angle = if tx >= 0.0 {
-        final_elevation
-    } else {
-        std::f32::consts::PI - final_elevation
-    };
-
-    Some(ShotTrajectory {
-        angle,
-        required_speed,
-        distance_variance,
-    })
-}
-
 fn throw_ball(
     mut input: ResMut<PlayerInput>,
     tweaks: Res<PhysicsTweaks>,
@@ -1879,7 +1790,7 @@ fn throw_ball(
 
     // Calculate optimal trajectory to basket
     let trajectory = if let Some(basket_pos) = target_basket_pos {
-        calculate_shot_trajectory(player_pos, basket_pos, BALL_GRAVITY, SHOT_MAX_SPEED)
+        calculate_shot_trajectory(player_pos.x, player_pos.y, basket_pos.x, basket_pos.y, BALL_GRAVITY)
     } else {
         None
     };

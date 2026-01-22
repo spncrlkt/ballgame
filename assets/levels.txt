@@ -13,13 +13,11 @@
 #
 # Blank lines and # comments are ignored
 
-level: Bounce Test
+level: Open Floor
 basket: 600
-center: 200 400
 
 level: V-Shape
 basket: 610
-mirror: 500 280 180
 mirror: 250 150 180
 
 level: Arena
@@ -27,47 +25,39 @@ basket: 580
 mirror: 550 200 150
 mirror: 300 350 180
 center: 150 250
-center: 450 150
 
 level: Three Tiers
 basket: 630
 mirror: 500 100 180
 mirror: 300 220 160
-mirror: 150 340 140
 
 level: Tower
 basket: 560
 center: 120 300
 center: 240 200
 center: 360 100
-mirror: 450 180 150
 
 level: Inverted V
 basket: 620
 mirror: 450 120 180
 mirror: 200 250 160
-center: 380 200
 
 level: Double Stack
 basket: 590
 mirror: 350 140 200
-mirror: 350 300 160
 
 level: Diamond
 basket: 640
 center: 200 180
 mirror: 400 120 150
-mirror: 400 320 150
 
 level: Zigzag
 basket: 570
 mirror: 550 100 140
 mirror: 350 200 140
-mirror: 150 300 140
 
 level: Fortress
 basket: 550
 mirror: 500 150 160
 mirror: 280 150 120
-mirror: 400 300 200
 center: 300 120

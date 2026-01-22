@@ -3,8 +3,21 @@ name = "ballgame"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "ballgame"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ballgame"
+path = "src/main.rs"
+
+[[bin]]
+name = "heatmap"
+path = "src/bin/heatmap.rs"
+
 [dependencies]
 rand = "0.8"
+image = "0.25"
 
 [dependencies.bevy]
 version = "0.17.3"
