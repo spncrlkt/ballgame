@@ -44,15 +44,18 @@ const BALL_FREE_SPEED: f32 = 200.0; // Ball becomes Free when speed drops below 
 
 // Shooting - heights: tap=2x player height (128), full=6x player height (384)
 // Using h = v_y²/(2g), v_y = sqrt(2*g*h): tap needs v_y≈452, full needs v_y≈784
-const SHOT_MIN_POWER: f32 = 380.0; // Minimum throw velocity (tap shot: 380*1.2=456 → h≈130)
-const SHOT_MAX_POWER: f32 = 660.0; // Maximum throw velocity (full charge: 660*1.2=792 → h≈392)
+const SHOT_MAX_POWER: f32 = 900.0; // Maximum horizontal velocity (fallback for extreme shots)
+const SHOT_MAX_SPEED: f32 = 800.0; // Maximum total ball speed (caps velocity magnitude)
 const SHOT_CHARGE_TIME: f32 = 1.6; // Seconds to reach full charge
-const SHOT_BASE_ARC: f32 = 1.2; // Upward component multiplier
+const SHOT_MIN_ARC: f32 = 0.5; // Minimum arc ratio (flat shot, ~27°)
+const SHOT_MAX_ARC: f32 = 3.0; // Maximum arc ratio (lob shot, ~72°)
 const SHOT_MAX_VARIANCE: f32 = 0.50; // Variance at zero charge (50%)
 const SHOT_MIN_VARIANCE: f32 = 0.02; // Variance at full charge (2%)
 const SHOT_AIR_VARIANCE_PENALTY: f32 = 0.10; // Additional variance when airborne (10%)
 const SHOT_MOVE_VARIANCE_PENALTY: f32 = 0.10; // Additional variance at full horizontal speed (10%)
-const SHOT_AIR_POWER_PENALTY: f32 = 0.7; // Power multiplier when airborne
+const SHOT_DISTANCE_VARIANCE_FACTOR: f32 = 0.0003; // Variance per unit of distance (30% at 1000 units)
+const SHOT_ARC_VARIANCE_FACTOR: f32 = 0.15; // Variance per unit of arc deviation from optimal
+const SHOT_CEILING_MARGIN: f32 = 60.0; // Stay this far below ceiling
 const SHOT_FRICTION_COMPENSATION_FACTOR: f32 = 25000.0; // Divisor for distance-based friction compensation
 const SHOT_GRACE_PERIOD: f32 = 0.1; // Post-shot grace period (no friction/player drag)
 
@@ -196,7 +199,6 @@ struct PhysicsTweaks {
     ball_bounce: f32,
     ball_air_friction: f32,
     ball_roll_friction: f32,
-    shot_min_power: f32,
     shot_max_power: f32,
     shot_charge_time: f32,
     selected_index: usize, // Which value is currently selected for adjustment
@@ -218,7 +220,6 @@ impl Default for PhysicsTweaks {
             ball_bounce: BALL_BOUNCE,
             ball_air_friction: BALL_AIR_FRICTION,
             ball_roll_friction: BALL_ROLL_FRICTION,
-            shot_min_power: SHOT_MIN_POWER,
             shot_max_power: SHOT_MAX_POWER,
             shot_charge_time: SHOT_CHARGE_TIME,
             selected_index: 0,
@@ -228,7 +229,7 @@ impl Default for PhysicsTweaks {
 }
 
 impl PhysicsTweaks {
-    const LABELS: [&'static str; 15] = [
+    const LABELS: [&'static str; 14] = [
         "Gravity Rise",
         "Gravity Fall",
         "Jump Velocity",
@@ -241,7 +242,6 @@ impl PhysicsTweaks {
         "Ball Bounce",
         "Ball Air Friction",
         "Ball Roll Friction",
-        "Shot Min Power",
         "Shot Max Power",
         "Shot Charge Time",
     ];
@@ -260,9 +260,8 @@ impl PhysicsTweaks {
             9 => self.ball_bounce,
             10 => self.ball_air_friction,
             11 => self.ball_roll_friction,
-            12 => self.shot_min_power,
-            13 => self.shot_max_power,
-            14 => self.shot_charge_time,
+            12 => self.shot_max_power,
+            13 => self.shot_charge_time,
             _ => 0.0,
         }
     }
@@ -281,9 +280,8 @@ impl PhysicsTweaks {
             9 => BALL_BOUNCE,
             10 => BALL_AIR_FRICTION,
             11 => BALL_ROLL_FRICTION,
-            12 => SHOT_MIN_POWER,
-            13 => SHOT_MAX_POWER,
-            14 => SHOT_CHARGE_TIME,
+            12 => SHOT_MAX_POWER,
+            13 => SHOT_CHARGE_TIME,
             _ => 0.0,
         }
     }
@@ -302,9 +300,8 @@ impl PhysicsTweaks {
             9 => self.ball_bounce = value,
             10 => self.ball_air_friction = value,
             11 => self.ball_roll_friction = value,
-            12 => self.shot_min_power = value,
-            13 => self.shot_max_power = value,
-            14 => self.shot_charge_time = value,
+            12 => self.shot_max_power = value,
+            13 => self.shot_charge_time = value,
             _ => {}
         }
     }
@@ -1383,34 +1380,101 @@ fn update_shot_charge(
     }
 }
 
-/// Calculate the required horizontal velocity to hit a target using projectile motion.
-/// Returns None if the target cannot be reached with the given arc (e.g., target too high).
-/// friction_random: -1.0 to 1.0, scales compensation symmetrically around 75% (50% to 100%)
-fn calculate_perfect_shot_power(
+/// Shot trajectory result containing power, arc, and variance penalties
+struct ShotTrajectory {
+    power: f32,           // Horizontal velocity (vx)
+    arc: f32,             // Arc ratio (vy = vx * arc)
+    distance_penalty: f32, // Variance penalty for distance
+    arc_penalty: f32,     // Variance penalty for non-optimal arc
+}
+
+/// Calculate optimal shot trajectory considering target position and ceiling.
+/// Returns the power, arc ratio, and variance penalties.
+fn calculate_shot_trajectory(
     shooter_pos: Vec2,
     target_pos: Vec2,
+    ceiling_y: f32,
     gravity: f32,
-    arc_ratio: f32, // vy = vx * arc_ratio
-    friction_random: f32, // -1.0 = 50% compensation (undershoot), +1.0 = 100% compensation (overshoot)
-) -> Option<f32> {
+    friction_random: f32, // -1.0 to 1.0 for power variance
+) -> Option<ShotTrajectory> {
     let dx = (target_pos.x - shooter_pos.x).abs();
     let dy = target_pos.y - shooter_pos.y;
 
-    // Formula: vx² = g * dx² / (2 * (arc * dx - dy))
-    // For trajectory to be valid, denominator must be positive
-    let denominator = 2.0 * (arc_ratio * dx - dy);
-    if denominator <= 0.0 {
-        return None; // Arc too shallow to reach target
+    if dx < 1.0 {
+        return None; // Too close horizontally
     }
 
+    // Calculate optimal arc for minimum power: θ = 45° + arctan(dy/dx)/2
+    let alpha = (dy / dx).atan();
+    let theta_optimal = std::f32::consts::FRAC_PI_4 + alpha / 2.0;
+    let optimal_arc = theta_optimal.tan();
+
+    // Minimum arc needed to reach target (arc * dx must be > dy)
+    let min_arc = if dy > 0.0 {
+        (dy / dx) + 0.05 // Small margin above minimum
+    } else {
+        SHOT_MIN_ARC
+    };
+
+    // Calculate apex height for a given arc
+    // apex_height = arc² * dx² / (4 * (arc * dx - dy))
+    let calc_apex_height = |arc: f32| -> f32 {
+        let denom = arc * dx - dy;
+        if denom <= 0.0 {
+            f32::MAX
+        } else {
+            arc * arc * dx * dx / (4.0 * denom)
+        }
+    };
+
+    // Maximum allowed apex height (ceiling - margin - shooter height)
+    let max_apex = ceiling_y - SHOT_CEILING_MARGIN - shooter_pos.y;
+
+    // Find maximum arc that stays below ceiling (binary search)
+    let mut max_arc = SHOT_MAX_ARC;
+    if calc_apex_height(max_arc) > max_apex {
+        let mut low = min_arc;
+        let mut high = SHOT_MAX_ARC;
+        for _ in 0..10 {
+            let mid = (low + high) / 2.0;
+            if calc_apex_height(mid) > max_apex {
+                high = mid;
+            } else {
+                low = mid;
+            }
+        }
+        max_arc = low;
+    }
+
+    // Clamp arc between min and max
+    let final_arc = optimal_arc.clamp(min_arc.max(SHOT_MIN_ARC), max_arc);
+
+    // Check if trajectory is possible
+    let denominator = 2.0 * (final_arc * dx - dy);
+    if denominator <= 0.0 {
+        return None; // Can't reach target
+    }
+
+    // Calculate power for this arc
     let vx_squared = gravity * dx * dx / denominator;
     let vx = vx_squared.sqrt();
 
-    // Apply friction compensation: longer distances need more power
-    // Symmetric around 75%: ranges from 50% (-1.0) to 100% (+1.0)
+    // Apply friction compensation
     let compensation_scale = 0.75 + 0.25 * friction_random;
     let friction_compensation = 1.0 + (dx / SHOT_FRICTION_COMPENSATION_FACTOR) * compensation_scale;
-    Some(vx * friction_compensation)
+    let power = vx * friction_compensation;
+
+    // Calculate penalties
+    let distance_penalty = dx * SHOT_DISTANCE_VARIANCE_FACTOR;
+    let arc_deviation = (final_arc - optimal_arc).abs();
+    let arc_penalty = arc_deviation * SHOT_ARC_VARIANCE_FACTOR;
+
+    Some(ShotTrajectory {
+        power,
+        arc: final_arc,
+        distance_penalty,
+        arc_penalty,
+    })
 }
 
 fn throw_ball(
@@ -1459,28 +1523,6 @@ fn throw_ball(
     // Calculate charge percentage (0.0 to 1.0)
     let charge_pct = (charging.charge_time / tweaks.shot_charge_time).min(1.0);
 
-    // Progressive variance: 50% at 0 charge → 2% at full charge
-    // Each 100ms of charge progressively improves accuracy
-    let mut variance = SHOT_MAX_VARIANCE - (SHOT_MAX_VARIANCE - SHOT_MIN_VARIANCE) * charge_pct;
-
-    // Air shot penalty: +10% variance when airborne
-    if !grounded.0 {
-        variance += SHOT_AIR_VARIANCE_PENALTY;
-    }
-
-    // Horizontal movement penalty: 0-10% variance based on horizontal speed
-    let move_penalty = (player_velocity.0.x.abs() / MOVE_SPEED).min(1.0) * SHOT_MOVE_VARIANCE_PENALTY;
-    variance += move_penalty;
-
-    let mut rng = rand::thread_rng();
-
-    // Apply variance to angle
-    let angle_variance = rng.gen_range(-variance..variance);
-    let arc = SHOT_BASE_ARC + angle_variance;
-
-    // Apply variance to power (multiplier centered on 1.0)
-    let power_variance = 1.0 + rng.gen_range(-variance..variance);
-
     // Find target basket based on facing direction
     let target_basket_type = if facing.0 > 0.0 {
         Basket::Right
@@ -1493,31 +1535,62 @@ fn throw_ball(
         .find(|(_, basket)| **basket == target_basket_type)
         .map(|(transform, _)| transform.translation.truncate());
 
-    // Calculate final power - use auto-aim when grounded, charge-based otherwise
-    let base_power = if grounded.0 {
-        // Grounded = auto-aim to basket with friction compensation
-        if let Some(basket_pos) = target_basket_pos {
-            let player_pos = player_transform.translation.truncate();
-            // Symmetric friction compensation: -1.0 to +1.0, centered at 75% (range 50%-100%)
-            let friction_random = rng.gen_range(-1.0..=1.0);
-            calculate_perfect_shot_power(player_pos, basket_pos, BALL_GRAVITY, arc, friction_random)
-                .unwrap_or(tweaks.shot_max_power) // Fallback if trajectory impossible
-        } else {
-            tweaks.shot_max_power
-        }
+    let mut rng = rand::thread_rng();
+    let player_pos = player_transform.translation.truncate();
+    let ceiling_y = ARENA_HEIGHT / 2.0;
+
+    // Calculate optimal trajectory to basket
+    let trajectory = if let Some(basket_pos) = target_basket_pos {
+        let friction_random = rng.gen_range(-1.0..=1.0);
+        calculate_shot_trajectory(player_pos, basket_pos, ceiling_y, BALL_GRAVITY, friction_random)
     } else {
-        // Airborne = charge-based power with air penalty
-        let charge_power =
-            tweaks.shot_min_power + (tweaks.shot_max_power - tweaks.shot_min_power) * charge_pct;
-        charge_power * SHOT_AIR_POWER_PENALTY
+        None
     };
 
-    // Apply power variance to base power
-    let final_power = base_power * power_variance;
+    // Base variance from charge level: 50% at 0 charge → 2% at full charge
+    let mut variance = SHOT_MAX_VARIANCE - (SHOT_MAX_VARIANCE - SHOT_MIN_VARIANCE) * charge_pct;
 
-    // Set ball velocity in arc
-    ball_velocity.0.x = facing.0 * final_power;
-    ball_velocity.0.y = final_power * arc;
+    // Air shot penalty: +10% variance when airborne
+    if !grounded.0 {
+        variance += SHOT_AIR_VARIANCE_PENALTY;
+    }
+
+    // Horizontal movement penalty: 0-10% variance based on horizontal speed
+    let move_penalty = (player_velocity.0.x.abs() / MOVE_SPEED).min(1.0) * SHOT_MOVE_VARIANCE_PENALTY;
+    variance += move_penalty;
+
+    // Get base power and arc from trajectory calculation, add distance/arc penalties
+    let (base_power, base_arc) = if let Some(traj) = &trajectory {
+        variance += traj.distance_penalty;
+        variance += traj.arc_penalty;
+        (traj.power, traj.arc)
+    } else {
+        // Fallback for impossible trajectories
+        (SHOT_MAX_POWER, SHOT_MIN_ARC)
+    };
+
+    // Apply variance to arc and power
+    let arc_variance = rng.gen_range(-variance..variance);
+    let final_arc = (base_arc + arc_variance).clamp(SHOT_MIN_ARC, SHOT_MAX_ARC);
+
+    let power_variance = 1.0 + rng.gen_range(-variance..variance);
+    let final_power = (base_power * power_variance).min(SHOT_MAX_POWER);
+
+    // Calculate velocity components
+    let mut vx = facing.0 * final_power;
+    let mut vy = final_power * final_arc;
+
+    // Cap total speed while preserving direction (prevents rocket shots under basket)
+    let speed = (vx * vx + vy * vy).sqrt();
+    if speed > SHOT_MAX_SPEED {
+        let scale = SHOT_MAX_SPEED / speed;
+        vx *= scale;
+        vy *= scale;
+    }
+
+    // Set ball velocity
+    ball_velocity.0.x = vx;
+    ball_velocity.0.y = vy;
 
     *ball_state = BallState::InFlight {
         shooter: player_entity,
