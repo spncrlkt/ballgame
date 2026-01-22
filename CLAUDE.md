@@ -36,9 +36,10 @@ This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component 
 - `Grounded` - Whether player is on ground
 - `CoyoteTimer` - Time remaining for coyote jump
 - `JumpState` - Tracks if currently in a jump
-- `Facing` - Direction player faces (-1.0 left, 1.0 right)
+- `Facing` - Direction player faces (-1.0 left, 1.0 right) - used for ball/gauge position only
 - `HoldingBall` - Reference to held ball entity
 - `ChargingShot` - Charge time accumulator
+- `TargetBasket` - Which basket (Left/Right) player is aiming at
 
 **Ball Components:**
 - `Ball` - Marker for ball entity
@@ -53,18 +54,20 @@ This is a 2v2 ball sport game built with Bevy 0.17.3 using the Entity Component 
 - `Collider` - Marker for collidable entities
 - `Basket` - Scoring zone (Left or Right)
 - `LevelPlatform` - Marks platforms that belong to current level (despawned on level change)
+- `LevelBasket` - Marks baskets that belong to current level (despawned on level change)
 
 **UI Components:**
 - `DebugText` - Debug info display
 - `ChargeGaugeBackground` / `ChargeGaugeFill` - Shot charge indicator (inside player)
 - `TweakPanel` / `TweakRow` - Physics tweak panel UI
 - `ScoreFlash` - Score animation (flashes basket/player on goal)
+- `TargetMarker` - White marker shown in targeted basket
 
 ### System Execution Order
 
-**Update schedule:** `capture_input` → `respawn_player` → `toggle_debug` → `update_debug_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `toggle_tweak_panel` → `update_tweak_panel`
+**Update schedule:** `capture_input` → `respawn_player` → `toggle_debug` → `update_debug_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `update_target_marker` → `toggle_tweak_panel` → `update_tweak_panel`
 
-**FixedUpdate schedule (chained):** `apply_input` → `apply_gravity` → `ball_gravity` → `apply_velocity` → `check_collisions` → `ball_collisions` → `ball_state_update` → `ball_player_collision` → `ball_follow_holder` → `pickup_ball` → `steal_contest_update` → `update_shot_charge` → `throw_ball` → `check_scoring`
+**FixedUpdate schedule (chained):** `apply_input` → `cycle_target` → `apply_gravity` → `ball_gravity` → `apply_velocity` → `check_collisions` → `ball_collisions` → `ball_state_update` → `ball_player_collision` → `ball_follow_holder` → `pickup_ball` → `steal_contest_update` → `update_shot_charge` → `throw_ball` → `check_scoring`
 
 ### Input
 
@@ -73,6 +76,7 @@ Keyboard + Gamepad supported:
 - Space/W or South button: Jump
 - E or West button: Pickup ball / Steal
 - F or Right Trigger: Charge and throw (hold to charge, release to throw)
+- Q or Left Bumper: Cycle target basket
 - R or Start: Respawn (cycles through 10 levels)
 - Tab: Toggle debug UI
 - F1: Toggle physics tweak panel

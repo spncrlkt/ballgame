@@ -112,11 +112,12 @@ fn main() {
         .init_resource::<CurrentLevel>()
         .init_resource::<PhysicsTweaks>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text, animate_pickable_ball, animate_score_flash, update_charge_gauge, toggle_tweak_panel, update_tweak_panel))
+        .add_systems(Update, (capture_input, respawn_player, toggle_debug, update_debug_text, animate_pickable_ball, animate_score_flash, update_charge_gauge, update_target_marker, toggle_tweak_panel, update_tweak_panel))
         .add_systems(
             FixedUpdate,
             (
                 apply_input,
+                cycle_target,
                 apply_gravity,
                 ball_gravity,
                 apply_velocity,
@@ -141,11 +142,12 @@ fn main() {
 #[derive(Resource, Default)]
 struct PlayerInput {
     move_x: f32,
-    jump_buffer_timer: f32, // Time remaining in jump buffer
-    jump_held: bool,        // Is jump button currently held
-    pickup_pressed: bool,   // West button - pick up ball
-    throw_held: bool,       // R shoulder - charging throw
-    throw_released: bool,   // R shoulder released - execute throw
+    jump_buffer_timer: f32,    // Time remaining in jump buffer
+    jump_held: bool,           // Is jump button currently held
+    pickup_pressed: bool,      // West button - pick up ball
+    throw_held: bool,          // R shoulder - charging throw
+    throw_released: bool,      // R shoulder released - execute throw
+    cycle_target_pressed: bool, // L shoulder - cycle target basket
 }
 
 #[derive(Resource)]
@@ -336,12 +338,19 @@ enum PlatformDef {
     Center { y: f32, width: f32 },           // Spawns at x=0
 }
 
+/// Basket definition in level data (additional baskets beyond the main two)
+#[derive(Clone, Debug)]
+enum BasketDef {
+    Mirror { x: f32, y: f32 },  // Spawns Left at -x and Right at +x
+}
+
 /// Single level definition
 #[derive(Clone, Debug)]
 struct LevelData {
     name: String,
     basket_height: f32,
     platforms: Vec<PlatformDef>,
+    baskets: Vec<BasketDef>,
 }
 
 /// Database of all loaded levels
@@ -391,6 +400,7 @@ impl LevelDatabase {
                     name: name.trim().to_string(),
                     basket_height: 400.0, // default
                     platforms: Vec::new(),
+                    baskets: Vec::new(),
                 });
             } else if let Some(height_str) = line.strip_prefix("basket:") {
                 if let Some(level) = &mut current_level {
@@ -413,13 +423,25 @@ impl LevelDatabase {
                 }
             } else if let Some(params) = line.strip_prefix("center:") {
                 if let Some(level) = &mut current_level {
-                    let parts: Vec<&str> = params.trim().split_whitespace().collect();
+                    let parts: Vec<&str> = params.split_whitespace().collect();
                     if parts.len() >= 2 {
                         if let (Ok(y), Ok(w)) = (
                             parts[0].parse::<f32>(),
                             parts[1].parse::<f32>(),
                         ) {
                             level.platforms.push(PlatformDef::Center { y, width: w });
+                        }
+                    }
+                }
+            } else if let Some(params) = line.strip_prefix("basket_mirror:") {
+                if let Some(level) = &mut current_level {
+                    let parts: Vec<&str> = params.split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let (Ok(x), Ok(y)) = (
+                            parts[0].parse::<f32>(),
+                            parts[1].parse::<f32>(),
+                        ) {
+                            level.baskets.push(BasketDef::Mirror { x, y });
                         }
                     }
                 }
@@ -448,6 +470,7 @@ impl LevelDatabase {
                     name: "Simple".to_string(),
                     basket_height: 350.0,
                     platforms: vec![PlatformDef::Mirror { x: 400.0, y: 150.0, width: 200.0 }],
+                    baskets: vec![],
                 },
                 LevelData {
                     name: "Default".to_string(),
@@ -456,6 +479,7 @@ impl LevelDatabase {
                         PlatformDef::Mirror { x: 400.0, y: 150.0, width: 180.0 },
                         PlatformDef::Center { y: 280.0, width: 200.0 },
                     ],
+                    baskets: vec![],
                 },
             ],
         }
@@ -500,6 +524,9 @@ struct Platform;
 #[derive(Component)]
 struct LevelPlatform; // Marks platforms that belong to current level (despawned on level change)
 
+#[derive(Component)]
+struct LevelBasket; // Marks baskets that belong to current level (despawned on level change)
+
 // Player state
 #[derive(Component)]
 struct Facing(f32); // -1.0 = left, 1.0 = right
@@ -517,6 +544,18 @@ struct HoldingBall(Entity); // Reference to held ball
 struct ChargingShot {
     charge_time: f32, // How long throw button has been held
 }
+
+#[derive(Component)]
+struct TargetBasket(Basket); // Which basket player is aiming at
+
+impl Default for TargetBasket {
+    fn default() -> Self {
+        Self(Basket::Right) // Default targeting right basket
+    }
+}
+
+#[derive(Component)]
+struct TargetMarker; // White marker shown in targeted basket
 
 // Ball components
 #[derive(Component)]
@@ -601,9 +640,17 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
             JumpState::default(),
             Facing::default(),
             ChargingShot::default(),
+            TargetBasket::default(),
             Collider,
         ))
         .id();
+
+    // Target marker - white indicator shown in targeted basket
+    commands.spawn((
+        Sprite::from_color(Color::WHITE, Vec2::new(20.0, 20.0)),
+        Transform::from_xyz(0.0, 0.0, 0.5), // Position updated by update_target_marker
+        TargetMarker,
+    ));
 
     // Charge gauge - inside player, opposite side of ball
     // Start on left side (default facing is right, so ball is right, gauge is left)
@@ -828,6 +875,13 @@ fn capture_input(
         input.throw_released = true;
     }
     input.throw_held = throw_held_now;
+
+    // Cycle target (L shoulder / Q key) - accumulate until consumed
+    if keyboard.just_pressed(KeyCode::KeyQ)
+        || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::LeftTrigger2))
+    {
+        input.cycle_target_pressed = true;
+    }
 }
 
 fn respawn_player(
@@ -839,7 +893,8 @@ fn respawn_player(
     mut player: Query<(Entity, &mut Transform, &mut Velocity, Option<&HoldingBall>), With<Player>>,
     mut ball: Query<(&mut Transform, &mut Velocity, &mut BallState, &mut BallRolling), (With<Ball>, Without<Player>)>,
     level_platforms: Query<Entity, With<LevelPlatform>>,
-    mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>)>,
+    level_baskets: Query<Entity, With<LevelBasket>>,
+    mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>, Without<LevelBasket>)>,
 ) {
     let respawn_pressed = keyboard.just_pressed(KeyCode::KeyR)
         || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::Start));
@@ -869,12 +924,15 @@ fn respawn_player(
         current_level.0 = (current_level.0 % num_levels as u32) + 1;
         let level_index = (current_level.0 - 1) as usize;
 
-        // Despawn old level platforms
+        // Despawn old level platforms and baskets
         for entity in &level_platforms {
             commands.entity(entity).despawn();
         }
+        for entity in &level_baskets {
+            commands.entity(entity).despawn();
+        }
 
-        // Spawn new level platforms
+        // Spawn new level platforms and baskets
         spawn_level_platforms(&mut commands, &level_db, level_index);
 
         // Update basket heights for new level
@@ -1380,6 +1438,65 @@ fn update_shot_charge(
     }
 }
 
+fn cycle_target(
+    mut input: ResMut<PlayerInput>,
+    mut player_query: Query<&mut TargetBasket, With<Player>>,
+    baskets: Query<&Basket>,
+) {
+    if !input.cycle_target_pressed {
+        return;
+    }
+    input.cycle_target_pressed = false; // Consume input
+
+    // Collect unique basket types available
+    let mut has_left = false;
+    let mut has_right = false;
+    for basket in &baskets {
+        match basket {
+            Basket::Left => has_left = true,
+            Basket::Right => has_right = true,
+        }
+    }
+
+    // Cycle to next available target
+    for mut target in &mut player_query {
+        target.0 = match target.0 {
+            Basket::Left => {
+                if has_right { Basket::Right } else { Basket::Left }
+            }
+            Basket::Right => {
+                if has_left { Basket::Left } else { Basket::Right }
+            }
+        };
+    }
+}
+
+fn update_target_marker(
+    player_query: Query<&TargetBasket, With<Player>>,
+    baskets: Query<(&Transform, &Basket), Without<TargetMarker>>,
+    mut marker_query: Query<&mut Transform, With<TargetMarker>>,
+) {
+    let Ok(target) = player_query.single() else {
+        return;
+    };
+
+    // Find a basket matching the target type
+    let target_pos = baskets
+        .iter()
+        .find(|(_, basket)| **basket == target.0)
+        .map(|(transform, _)| transform.translation);
+
+    let Some(basket_pos) = target_pos else {
+        return;
+    };
+
+    // Move marker to target basket
+    for mut marker_transform in &mut marker_query {
+        marker_transform.translation.x = basket_pos.x;
+        marker_transform.translation.y = basket_pos.y;
+    }
+}
+
 /// Shot trajectory result containing power, arc, and variance penalties
 struct ShotTrajectory {
     power: f32,           // Horizontal velocity (vx)
@@ -1482,7 +1599,7 @@ fn throw_ball(
     tweaks: Res<PhysicsTweaks>,
     mut commands: Commands,
     mut player_query: Query<
-        (Entity, &Transform, &Velocity, &Facing, &Grounded, &mut ChargingShot, Option<&HoldingBall>),
+        (Entity, &Transform, &Velocity, &TargetBasket, &Grounded, &mut ChargingShot, Option<&HoldingBall>),
         With<Player>,
     >,
     mut ball_query: Query<
@@ -1498,7 +1615,7 @@ fn throw_ball(
     // Consume the throw_released flag immediately
     input.throw_released = false;
 
-    let Ok((player_entity, player_transform, player_velocity, facing, grounded, mut charging, holding)) =
+    let Ok((player_entity, player_transform, player_velocity, target, grounded, mut charging, holding)) =
         player_query.single_mut()
     else {
         return;
@@ -1523,16 +1640,10 @@ fn throw_ball(
     // Calculate charge percentage (0.0 to 1.0)
     let charge_pct = (charging.charge_time / tweaks.shot_charge_time).min(1.0);
 
-    // Find target basket based on facing direction
-    let target_basket_type = if facing.0 > 0.0 {
-        Basket::Right
-    } else {
-        Basket::Left
-    };
-
+    // Find target basket position based on player's target selection
     let target_basket_pos = basket_query
         .iter()
-        .find(|(_, basket)| **basket == target_basket_type)
+        .find(|(_, basket)| **basket == target.0)
         .map(|(transform, _)| transform.translation.truncate());
 
     let mut rng = rand::thread_rng();
@@ -1576,8 +1687,15 @@ fn throw_ball(
     let power_variance = 1.0 + rng.gen_range(-variance..variance);
     let final_power = (base_power * power_variance).min(SHOT_MAX_POWER);
 
+    // Calculate direction to target basket
+    let dir_x = if let Some(basket_pos) = target_basket_pos {
+        (basket_pos.x - player_pos.x).signum()
+    } else {
+        1.0 // Fallback: shoot right
+    };
+
     // Calculate velocity components
-    let mut vx = facing.0 * final_power;
+    let mut vx = dir_x * final_power;
     let mut vy = final_power * final_arc;
 
     // Cap total speed while preserving direction (prevents rocket shots under basket)
@@ -1865,6 +1983,24 @@ fn spawn_center_platform(commands: &mut Commands, y: f32, width: f32) {
     ));
 }
 
+/// Helper to spawn mirrored baskets (Left at -x, Right at +x)
+fn spawn_mirrored_baskets(commands: &mut Commands, x: f32, y: f32) {
+    // Left basket
+    commands.spawn((
+        Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
+        Transform::from_xyz(-x, y, -0.1),
+        Basket::Left,
+        LevelBasket,
+    ));
+    // Right basket
+    commands.spawn((
+        Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
+        Transform::from_xyz(x, y, -0.1),
+        Basket::Right,
+        LevelBasket,
+    ));
+}
+
 fn spawn_level_platforms(commands: &mut Commands, level_db: &LevelDatabase, level_index: usize) {
     let Some(level) = level_db.get(level_index) else {
         warn!("Level {} not found, spawning empty", level_index);
@@ -1878,6 +2014,14 @@ fn spawn_level_platforms(commands: &mut Commands, level_db: &LevelDatabase, leve
             }
             PlatformDef::Center { y, width } => {
                 spawn_center_platform(commands, ARENA_FLOOR_Y + y, *width);
+            }
+        }
+    }
+
+    for basket in &level.baskets {
+        match basket {
+            BasketDef::Mirror { x, y } => {
+                spawn_mirrored_baskets(commands, *x, ARENA_FLOOR_Y + y);
             }
         }
     }
