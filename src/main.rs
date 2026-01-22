@@ -39,7 +39,7 @@ const BALL_BOUNCE: f32 = 0.7; // Coefficient of restitution (0 = no bounce, 1 = 
 const BALL_AIR_FRICTION: f32 = 0.95; // Horizontal velocity retained after 1 second in air (low drag)
 const BALL_GROUND_FRICTION: f32 = 0.6; // Horizontal velocity retained per bounce
 const BALL_ROLL_FRICTION: f32 = 0.6; // Horizontal velocity retained after 1 second while rolling
-const BALL_BOUNCE_HEIGHT_MULT: f32 = 1.7; // Ball must bounce this × its height to keep bouncing, else rolls
+const BALL_BOUNCE_HEIGHT_MULT: f32 = 1.0; // Ball must bounce this × its height to keep bouncing, else rolls
 const BALL_PICKUP_RADIUS: f32 = 50.0; // How close player must be to pick up ball
 const BALL_FREE_SPEED: f32 = 200.0; // Ball becomes Free when speed drops below this (2x pickup radius speed)
 
@@ -47,6 +47,7 @@ const BALL_FREE_SPEED: f32 = 200.0; // Ball becomes Free when speed drops below 
 // Using h = v_y²/(2g), v_y = sqrt(2*g*h): tap needs v_y≈452, full needs v_y≈784
 const SHOT_MAX_POWER: f32 = 900.0; // Maximum horizontal velocity (fallback for extreme shots)
 const SHOT_MAX_SPEED: f32 = 800.0; // Maximum total ball speed (caps velocity magnitude)
+const SHOT_HARD_CAP: f32 = 2000.0; // Absolute maximum shot speed (alerts if reached)
 const SHOT_CHARGE_TIME: f32 = 1.6; // Seconds to reach full charge
 const SHOT_MAX_VARIANCE: f32 = 0.50; // Variance at zero charge (50%)
 const SHOT_MIN_VARIANCE: f32 = 0.02; // Variance at full charge (2%)
@@ -75,15 +76,17 @@ const ARENA_FLOOR_Y: f32 = -ARENA_HEIGHT / 2.0 + 20.0; // Floor near bottom
 // Baskets
 const BASKET_COLOR: Color = Color::srgb(0.8, 0.2, 0.2); // Red
 const BASKET_SIZE: Vec2 = Vec2::new(60.0, 80.0);
-const LEFT_BASKET_X: f32 = -ARENA_WIDTH / 2.0 + 140.0;
-const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - 140.0;
+const LEFT_BASKET_X: f32 = -ARENA_WIDTH / 2.0 + 170.0;
+const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - 170.0;
 const RIM_THICKNESS: f32 = 10.0;
 
 // Corner steps
 const CORNER_STEP_TOTAL_HEIGHT: f32 = 320.0;
 const CORNER_STEP_TOTAL_WIDTH: f32 = 170.0;
-const CORNER_STEP_COUNT: usize = 12;
+const CORNER_STEP_COUNT: usize = 13;
 const CORNER_STEP_THICKNESS: f32 = 20.0;
+const STEP_BOUNCE_RETENTION: f32 = 0.92; // Steps keep more velocity than normal bounce
+const STEP_DEFLECT_ANGLE_MAX: f32 = 35.0; // Max random deflection angle in degrees
 
 // Spawn
 const PLAYER_SPAWN: Vec3 = Vec3::new(-200.0, ARENA_FLOOR_Y + 100.0, 0.0);
@@ -127,6 +130,7 @@ fn main() {
                 update_score_level_text,
                 animate_pickable_ball,
                 animate_score_flash,
+                animate_title_flash,
                 update_charge_gauge,
                 update_target_marker,
                 toggle_tweak_panel,
@@ -642,6 +646,11 @@ struct ScoreFlash {
     original_color: Color, // Color to restore after flash
 }
 
+#[derive(Component)]
+struct TitleFlash {
+    timer: f32, // Time remaining in flash
+}
+
 // Systems
 
 fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
@@ -726,7 +735,7 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
 
     // Arena floor (spans most of the arena width)
     commands.spawn((
-        Sprite::from_color(FLOOR_COLOR, Vec2::new(ARENA_WIDTH - 100.0, 40.0)),
+        Sprite::from_color(FLOOR_COLOR, Vec2::new(ARENA_WIDTH - 80.0, 40.0)),
         Transform::from_xyz(0.0, ARENA_FLOOR_Y, 0.0),
         Platform,
     ));
@@ -1307,10 +1316,12 @@ fn ball_collisions(
         With<Ball>,
     >,
     platform_query: Query<
-        (&GlobalTransform, &Sprite, Option<&BasketRim>),
+        (&GlobalTransform, &Sprite, Option<&BasketRim>, Option<&CornerRamp>),
         (With<Platform>, Without<Ball>),
     >,
 ) {
+    let mut rng = rand::thread_rng();
+
     for (mut ball_transform, mut ball_velocity, state, ball_sprite, mut rolling) in &mut ball_query
     {
         // Skip collision for held balls
@@ -1328,7 +1339,7 @@ fn ball_collisions(
         let was_rolling = rolling.0;
         let mut has_ground_contact = false;
 
-        for (platform_global, platform_sprite, maybe_rim) in &platform_query {
+        for (platform_global, platform_sprite, maybe_rim, maybe_step) in &platform_query {
             // Skip rim collisions for non-thrown balls (though held is already filtered above)
             if maybe_rim.is_some() && !is_thrown_or_free {
                 continue;
@@ -1350,6 +1361,8 @@ fn ball_collisions(
                 continue;
             }
 
+            let is_step = maybe_step.is_some();
+
             // Resolve collision with bounce
             if overlap_y < overlap_x {
                 // Vertical collision
@@ -1360,40 +1373,84 @@ fn ball_collisions(
                     ball_transform.translation.y =
                         platform_pos.y + platform_half.y + ball_half.y - COLLISION_EPSILON;
                     if ball_velocity.0.y < 0.0 {
-                        // Apply ground friction to horizontal velocity
-                        ball_velocity.0.x *= BALL_GROUND_FRICTION;
+                        if is_step {
+                            // Erratic step bounce - keep more velocity, add random deflection
+                            let speed = ball_velocity.0.length();
+                            let deflect_angle = rng.gen_range(-STEP_DEFLECT_ANGLE_MAX..STEP_DEFLECT_ANGLE_MAX);
+                            let deflect_rad = deflect_angle.to_radians();
 
-                        // Calculate post-bounce velocity
-                        let post_bounce_vel = ball_velocity.0.y.abs() * tweaks.ball_bounce;
-                        // Calculate max height: h = v² / (2g)
-                        let max_bounce_height =
-                            (post_bounce_vel * post_bounce_vel) / (2.0 * tweaks.ball_gravity);
-
-                        // Only bounce if ball will rise above threshold height
-                        if max_bounce_height > ball_size.y * BALL_BOUNCE_HEIGHT_MULT {
-                            ball_velocity.0.y = -ball_velocity.0.y * tweaks.ball_bounce;
-                            rolling.0 = false; // Ball is bouncing, not rolling
+                            // Reflect Y, then rotate by random angle
+                            let reflected = Vec2::new(ball_velocity.0.x, -ball_velocity.0.y);
+                            let cos_a = deflect_rad.cos();
+                            let sin_a = deflect_rad.sin();
+                            let rotated = Vec2::new(
+                                reflected.x * cos_a - reflected.y * sin_a,
+                                reflected.x * sin_a + reflected.y * cos_a,
+                            );
+                            ball_velocity.0 = rotated.normalize() * speed * STEP_BOUNCE_RETENTION;
+                            rolling.0 = false;
                         } else {
-                            // Bounce too small - start rolling
-                            ball_velocity.0.y = 0.0;
-                            rolling.0 = true;
+                            // Normal floor bounce
+                            ball_velocity.0.x *= BALL_GROUND_FRICTION;
+
+                            let post_bounce_vel = ball_velocity.0.y.abs() * tweaks.ball_bounce;
+                            let max_bounce_height =
+                                (post_bounce_vel * post_bounce_vel) / (2.0 * tweaks.ball_gravity);
+
+                            if max_bounce_height > ball_size.y * BALL_BOUNCE_HEIGHT_MULT {
+                                ball_velocity.0.y = -ball_velocity.0.y * tweaks.ball_bounce;
+                                rolling.0 = false;
+                            } else {
+                                ball_velocity.0.y = 0.0;
+                                rolling.0 = true;
+                            }
                         }
                     }
                 } else {
                     // Ball below platform (hit ceiling)
                     ball_transform.translation.y = platform_pos.y - platform_half.y - ball_half.y;
                     if ball_velocity.0.y > 0.0 {
-                        ball_velocity.0.y = -ball_velocity.0.y * tweaks.ball_bounce;
+                        if is_step {
+                            // Erratic step bounce from below
+                            let speed = ball_velocity.0.length();
+                            let deflect_angle = rng.gen_range(-STEP_DEFLECT_ANGLE_MAX..STEP_DEFLECT_ANGLE_MAX);
+                            let deflect_rad = deflect_angle.to_radians();
+                            let reflected = Vec2::new(ball_velocity.0.x, -ball_velocity.0.y);
+                            let cos_a = deflect_rad.cos();
+                            let sin_a = deflect_rad.sin();
+                            let rotated = Vec2::new(
+                                reflected.x * cos_a - reflected.y * sin_a,
+                                reflected.x * sin_a + reflected.y * cos_a,
+                            );
+                            ball_velocity.0 = rotated.normalize() * speed * STEP_BOUNCE_RETENTION;
+                        } else {
+                            ball_velocity.0.y = -ball_velocity.0.y * tweaks.ball_bounce;
+                        }
                     }
                 }
             } else {
-                // Horizontal collision - bounce off walls
+                // Horizontal collision - bounce off walls/step sides
                 if diff.x > 0.0 {
                     ball_transform.translation.x = platform_pos.x + platform_half.x + ball_half.x;
                 } else {
                     ball_transform.translation.x = platform_pos.x - platform_half.x - ball_half.x;
                 }
-                ball_velocity.0.x = -ball_velocity.0.x * tweaks.ball_bounce;
+                if is_step {
+                    // Erratic step side bounce
+                    let speed = ball_velocity.0.length();
+                    let deflect_angle = rng.gen_range(-STEP_DEFLECT_ANGLE_MAX..STEP_DEFLECT_ANGLE_MAX);
+                    let deflect_rad = deflect_angle.to_radians();
+                    let reflected = Vec2::new(-ball_velocity.0.x, ball_velocity.0.y);
+                    let cos_a = deflect_rad.cos();
+                    let sin_a = deflect_rad.sin();
+                    let rotated = Vec2::new(
+                        reflected.x * cos_a - reflected.y * sin_a,
+                        reflected.x * sin_a + reflected.y * cos_a,
+                    );
+                    ball_velocity.0 = rotated.normalize() * speed * STEP_BOUNCE_RETENTION;
+                } else {
+                    ball_velocity.0.x = -ball_velocity.0.x * tweaks.ball_bounce;
+                }
             }
         }
 
@@ -1734,6 +1791,7 @@ fn throw_ball(
         (With<Ball>, Without<Player>),
     >,
     basket_query: Query<(&Transform, &Basket), Without<Player>>,
+    title_query: Query<Entity, With<ScoreLevelText>>,
 ) {
     if !input.throw_released {
         return;
@@ -1846,7 +1904,17 @@ fn throw_ball(
 
     // Boost speed by 10% to compensate for undershoot, then apply ±10% randomness
     let speed_randomness = rng.gen_range(0.9..1.1);
-    let final_speed = required_speed * 1.10 * speed_randomness * power_multiplier;
+    let uncapped_speed = required_speed * 1.10 * speed_randomness * power_multiplier;
+
+    // Hard cap at SHOT_HARD_CAP - flash title red if triggered
+    let final_speed = if uncapped_speed > SHOT_HARD_CAP {
+        if let Ok(title_entity) = title_query.single() {
+            commands.entity(title_entity).insert(TitleFlash { timer: 2.0 });
+        }
+        SHOT_HARD_CAP
+    } else {
+        uncapped_speed
+    };
 
     // Convert angle + speed to velocity (simple and direct!)
     // Angle is absolute: 0=right, π/2=up, π=left
@@ -1976,6 +2044,27 @@ fn animate_score_flash(
                 orig_rgba.green + (flash_rgba.green - orig_rgba.green) * blend,
                 orig_rgba.blue + (flash_rgba.blue - orig_rgba.blue) * blend,
             );
+        }
+    }
+}
+
+fn animate_title_flash(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut TextColor, &mut TitleFlash), With<ScoreLevelText>>,
+) {
+    for (entity, mut text_color, mut flash) in &mut query {
+        flash.timer -= time.delta_secs();
+
+        if flash.timer <= 0.0 {
+            // Flash complete - restore black
+            *text_color = TextColor(Color::BLACK);
+            commands.entity(entity).remove::<TitleFlash>();
+        } else {
+            // Fast flicker between red and black
+            let t = (flash.timer * 20.0).sin();
+            let blend = (t + 1.0) / 2.0;
+            *text_color = TextColor(Color::srgb(blend, 0.0, 0.0));
         }
     }
 }
@@ -2159,9 +2248,10 @@ fn spawn_corner_ramps(commands: &mut Commands, _basket_height: f32) {
 
     // Left steps: go from wall (high) toward center (low)
     // Step 0 is highest (closest to wall), step N-1 is lowest (closest to center)
+    let floor_top = ARENA_FLOOR_Y + 20.0;
     for i in 0..CORNER_STEP_COUNT {
         let step_num = (CORNER_STEP_COUNT - 1 - i) as f32; // Reverse so 0 is lowest
-        let y = ARENA_FLOOR_Y + 20.0 + step_height * (step_num + 0.5);
+        let y = floor_top + step_height * (step_num + 0.5);
         let x = left_wall_inner + step_width * (i as f32 + 0.5);
 
         commands.spawn((
@@ -2170,12 +2260,24 @@ fn spawn_corner_ramps(commands: &mut Commands, _basket_height: f32) {
             Platform,
             CornerRamp,
         ));
+
+        // Fill under the step
+        let step_bottom = y - CORNER_STEP_THICKNESS / 2.0;
+        let fill_height = step_bottom - floor_top;
+        if fill_height > 0.0 {
+            let fill_y = floor_top + fill_height / 2.0;
+            commands.spawn((
+                Sprite::from_color(FLOOR_COLOR, Vec2::new(step_width, fill_height)),
+                Transform::from_xyz(x, fill_y, -0.1),
+                CornerRamp,
+            ));
+        }
     }
 
     // Right steps: mirror of left (go from wall toward center)
     for i in 0..CORNER_STEP_COUNT {
         let step_num = (CORNER_STEP_COUNT - 1 - i) as f32;
-        let y = ARENA_FLOOR_Y + 20.0 + step_height * (step_num + 0.5);
+        let y = floor_top + step_height * (step_num + 0.5);
         let x = right_wall_inner - step_width * (i as f32 + 0.5);
 
         commands.spawn((
@@ -2184,6 +2286,18 @@ fn spawn_corner_ramps(commands: &mut Commands, _basket_height: f32) {
             Platform,
             CornerRamp,
         ));
+
+        // Fill under the step
+        let step_bottom = y - CORNER_STEP_THICKNESS / 2.0;
+        let fill_height = step_bottom - floor_top;
+        if fill_height > 0.0 {
+            let fill_y = floor_top + fill_height / 2.0;
+            commands.spawn((
+                Sprite::from_color(FLOOR_COLOR, Vec2::new(step_width, fill_height)),
+                Transform::from_xyz(x, fill_y, -0.1),
+                CornerRamp,
+            ));
+        }
     }
 }
 
