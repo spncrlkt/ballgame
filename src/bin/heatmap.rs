@@ -1,15 +1,21 @@
 //! Heatmap generator for shot trajectories
 //!
-//! Generates a PNG showing shot angle (arrow direction) and required speed (color)
-//! for every position on the court targeting the right basket.
+//! Generates heatmaps for shot analysis:
+//! - **speed** (default): Shot angle (arrow direction) and required speed (color)
+//! - **score**: Scoring percentage via Monte Carlo simulation with rim physics
 //!
-//! Usage: cargo run --bin heatmap && open heatmap.png
+//! Usage:
+//!   cargo run --bin heatmap              # Default: speed heatmap
+//!   cargo run --bin heatmap -- speed     # Explicit: speed heatmap
+//!   cargo run --bin heatmap -- score     # Scoring percentage heatmap
 
 use ballgame::{
-    calculate_shot_trajectory, ARENA_FLOOR_Y, ARENA_HEIGHT, ARENA_WIDTH, BALL_GRAVITY,
-    RIGHT_BASKET_X,
+    calculate_shot_trajectory, ARENA_FLOOR_Y, ARENA_HEIGHT, ARENA_WIDTH, BALL_BOUNCE, BALL_GRAVITY,
+    BALL_SIZE, BASKET_SIZE_X, BASKET_SIZE_Y, RIGHT_BASKET_X, RIM_THICKNESS, SHOT_DISTANCE_VARIANCE,
+    SHOT_MIN_VARIANCE,
 };
 use image::{Rgb, RgbImage};
+use rand::Rng;
 
 // Grid settings
 const CELL_SIZE: u32 = 20; // pixels per cell
@@ -23,12 +29,210 @@ const BASKET_HEIGHT: f32 = 600.0;
 const SPEED_MIN: f32 = 300.0; // Green
 const SPEED_MAX: f32 = 1400.0; // Red
 
+// Monte Carlo settings
+const MONTE_CARLO_TRIALS: u32 = 100;
+
+// =============================================================================
+// SIMULATION TYPE
+// =============================================================================
+
+#[derive(Debug, Clone, Copy)]
+enum SimType {
+    Speed,
+    Score,
+}
+
+fn parse_args() -> SimType {
+    match std::env::args().nth(1).as_deref() {
+        Some("score") => SimType::Score,
+        _ => SimType::Speed, // default
+    }
+}
+
+// =============================================================================
+// RIM GEOMETRY
+// =============================================================================
+
+struct Rect {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+}
+
+/// Build rim geometry for collision detection
+/// The basket opening is BASKET_SIZE_X wide, with rims on sides and bottom
+fn build_rim_geometry(basket_x: f32, basket_y: f32) -> Vec<Rect> {
+    let half_opening = BASKET_SIZE_X / 2.0;
+
+    vec![
+        // Outer rim (wall side) - 50% of basket height
+        Rect {
+            x: basket_x + half_opening,
+            y: basket_y,
+            width: RIM_THICKNESS,
+            height: BASKET_SIZE_Y * 0.5,
+        },
+        // Inner rim (center side) - 10% of basket height
+        Rect {
+            x: basket_x - half_opening - RIM_THICKNESS,
+            y: basket_y,
+            width: RIM_THICKNESS,
+            height: BASKET_SIZE_Y * 0.1,
+        },
+        // Bottom rim
+        Rect {
+            x: basket_x - half_opening,
+            y: basket_y - BASKET_SIZE_Y / 2.0 - RIM_THICKNESS,
+            width: BASKET_SIZE_X,
+            height: RIM_THICKNESS,
+        },
+    ]
+}
+
+/// Check collision between circle and rectangle, return normal if colliding
+fn check_circle_rect_collision(
+    cx: f32,
+    cy: f32,
+    radius: f32,
+    rect: &Rect,
+) -> Option<(f32, f32)> {
+    // Find closest point on rectangle to circle center
+    let closest_x = cx.clamp(rect.x, rect.x + rect.width);
+    let closest_y = cy.clamp(rect.y - rect.height, rect.y);
+
+    let dx = cx - closest_x;
+    let dy = cy - closest_y;
+    let dist_sq = dx * dx + dy * dy;
+
+    if dist_sq < radius * radius && dist_sq > 0.0 {
+        let dist = dist_sq.sqrt();
+        Some((dx / dist, dy / dist)) // Normal pointing away from rect
+    } else {
+        None
+    }
+}
+
+// =============================================================================
+// BALL FLIGHT SIMULATION
+// =============================================================================
+
+/// Simulate ball flight with rim physics, returns true if ball scores
+fn simulate_ball_flight(
+    start_x: f32,
+    start_y: f32,
+    angle: f32,
+    speed: f32,
+    basket_x: f32,
+    basket_y: f32,
+) -> bool {
+    const DT: f32 = 0.001; // 1ms timestep
+    const MAX_TIME: f32 = 5.0;
+
+    let mut x = start_x;
+    let mut y = start_y;
+    let mut vx = angle.cos() * speed;
+    let mut vy = angle.sin() * speed;
+    let mut t = 0.0;
+
+    let ball_radius = BALL_SIZE / 2.0;
+    let rims = build_rim_geometry(basket_x, basket_y);
+
+    // Scoring zone (inside basket)
+    let score_left = basket_x - BASKET_SIZE_X / 2.0 + ball_radius;
+    let score_right = basket_x + BASKET_SIZE_X / 2.0 - ball_radius;
+    let score_top = basket_y;
+    let score_bottom = basket_y - BASKET_SIZE_Y / 2.0;
+
+    while t < MAX_TIME {
+        // Apply gravity
+        vy -= BALL_GRAVITY * DT;
+        x += vx * DT;
+        y += vy * DT;
+        t += DT;
+
+        // Check rim collisions
+        for rim in &rims {
+            if let Some((nx, ny)) = check_circle_rect_collision(x, y, ball_radius, rim) {
+                // Reflect velocity
+                let dot = vx * nx + vy * ny;
+                vx = (vx - 2.0 * dot * nx) * BALL_BOUNCE;
+                vy = (vy - 2.0 * dot * ny) * BALL_BOUNCE;
+                // Push out of collision
+                x += nx * 2.0;
+                y += ny * 2.0;
+            }
+        }
+
+        // Check if scored (ball center in basket bounds)
+        if x > score_left && x < score_right && y < score_top && y > score_bottom {
+            return true;
+        }
+
+        // Ball fell below floor - miss
+        if y < ARENA_FLOOR_Y - 50.0 {
+            return false;
+        }
+    }
+    false
+}
+
+// =============================================================================
+// MONTE CARLO SCORING SIMULATION
+// =============================================================================
+
+/// Simulate scoring percentage from a position using Monte Carlo
+fn simulate_scoring(shooter_x: f32, shooter_y: f32, basket_x: f32, basket_y: f32) -> f32 {
+    let mut rng = rand::thread_rng();
+
+    let Some(traj) =
+        calculate_shot_trajectory(shooter_x, shooter_y, basket_x, basket_y, BALL_GRAVITY)
+    else {
+        return 0.0;
+    };
+
+    let mut makes = 0;
+
+    for _ in 0..MONTE_CARLO_TRIALS {
+        // Apply variance: base + distance penalty
+        let distance = ((basket_x - shooter_x).powi(2) + (basket_y - shooter_y).powi(2)).sqrt();
+        let distance_variance = distance * SHOT_DISTANCE_VARIANCE;
+        let total_variance = SHOT_MIN_VARIANCE + distance_variance;
+
+        // Random angle offset within variance range
+        let angle_offset = rng.gen_range(-total_variance..total_variance) * 30f32.to_radians();
+        let final_angle = traj.angle + angle_offset;
+
+        if simulate_ball_flight(
+            shooter_x,
+            shooter_y,
+            final_angle,
+            traj.required_speed,
+            basket_x,
+            basket_y,
+        ) {
+            makes += 1;
+        }
+    }
+
+    makes as f32 / MONTE_CARLO_TRIALS as f32
+}
+
+// =============================================================================
+// MAIN
+// =============================================================================
+
 fn main() {
+    let sim_type = parse_args();
+
+    let (type_name, output_path) = match sim_type {
+        SimType::Speed => ("speed", "heatmap_speed.png"),
+        SimType::Score => ("score", "heatmap_score.png"),
+    };
+
     println!(
-        "Generating heatmap: {}x{} cells ({} pixels)",
-        GRID_WIDTH,
-        GRID_HEIGHT,
-        CELL_SIZE
+        "Generating {} heatmap: {}x{} cells ({} pixels)",
+        type_name, GRID_WIDTH, GRID_HEIGHT, CELL_SIZE
     );
 
     // Create image (multiply by cell size for actual pixels)
@@ -45,6 +249,10 @@ fn main() {
     // Basket position (right basket, level 1)
     let basket_y = ARENA_FLOOR_Y + BASKET_HEIGHT;
 
+    // Track progress for score simulation (slower)
+    let total_cells = GRID_WIDTH * GRID_HEIGHT;
+    let mut processed = 0;
+
     // Process each cell
     for cy in 0..GRID_HEIGHT {
         for cx in 0..GRID_WIDTH {
@@ -53,27 +261,59 @@ fn main() {
             let world_x = (cx as f32 + 0.5) * CELL_SIZE as f32 - ARENA_WIDTH / 2.0;
             let world_y = ARENA_HEIGHT / 2.0 - (cy as f32 + 0.5) * CELL_SIZE as f32;
 
-            // Calculate trajectory to right basket
-            if let Some(traj) =
-                calculate_shot_trajectory(world_x, world_y, RIGHT_BASKET_X, basket_y, BALL_GRAVITY)
-            {
-                // Clamp speed to range
-                let speed = traj.required_speed.clamp(SPEED_MIN, SPEED_MAX);
-                let t = (speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN);
+            match sim_type {
+                SimType::Speed => {
+                    // Calculate trajectory to right basket
+                    if let Some(traj) = calculate_shot_trajectory(
+                        world_x,
+                        world_y,
+                        RIGHT_BASKET_X,
+                        basket_y,
+                        BALL_GRAVITY,
+                    ) {
+                        // Clamp speed to range
+                        let speed = traj.required_speed.clamp(SPEED_MIN, SPEED_MAX);
+                        let t = (speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN);
 
-                // Color gradient: green (low) -> yellow -> red (high)
-                let color = speed_to_color(t);
+                        // Color gradient: green (low) -> yellow -> red (high)
+                        let color = speed_to_color(t);
 
-                // Fill cell with color
-                fill_cell(&mut img, cx, cy, color);
+                        // Fill cell with color
+                        fill_cell(&mut img, cx, cy, color);
 
-                // Draw arrow indicating angle
-                draw_arrow(&mut img, cx, cy, traj.angle, color);
-            } else {
-                // Can't reach - fill with dark gray
-                fill_cell(&mut img, cx, cy, Rgb([80, 80, 80]));
+                        // Draw arrow indicating angle
+                        draw_arrow(&mut img, cx, cy, traj.angle, color);
+                    } else {
+                        // Can't reach - fill with dark gray
+                        fill_cell(&mut img, cx, cy, Rgb([80, 80, 80]));
+                    }
+                }
+                SimType::Score => {
+                    // Monte Carlo scoring simulation
+                    let score_pct =
+                        simulate_scoring(world_x, world_y, RIGHT_BASKET_X, basket_y);
+                    let color = score_to_color(score_pct);
+                    fill_cell(&mut img, cx, cy, color);
+                }
+            }
+
+            // Progress indicator for score mode (it's slow)
+            if matches!(sim_type, SimType::Score) {
+                processed += 1;
+                if processed % 100 == 0 {
+                    print!(
+                        "\rProgress: {:.1}%",
+                        (processed as f32 / total_cells as f32) * 100.0
+                    );
+                    use std::io::Write;
+                    std::io::stdout().flush().ok();
+                }
             }
         }
+    }
+
+    if matches!(sim_type, SimType::Score) {
+        println!(); // Newline after progress
     }
 
     // Draw basket position marker
@@ -83,20 +323,40 @@ fn main() {
     draw_floor_line(&mut img);
 
     // Save image
-    let output_path = "heatmap.png";
     img.save(output_path).expect("Failed to save image");
     println!("Saved to {}", output_path);
-    println!(
-        "Speed range: {} (green) to {} (red) pixels/sec",
-        SPEED_MIN, SPEED_MAX
-    );
+
+    match sim_type {
+        SimType::Speed => {
+            println!(
+                "Speed range: {} (green) to {} (red) pixels/sec",
+                SPEED_MIN, SPEED_MAX
+            );
+        }
+        SimType::Score => {
+            println!(
+                "Score range: 0% (red) to 100% (green), {} trials per cell",
+                MONTE_CARLO_TRIALS
+            );
+        }
+    }
 }
 
 /// Convert normalized speed (0-1) to RGB color
+/// Low speed = green, high speed = red
 fn speed_to_color(t: f32) -> Rgb<u8> {
     // Green -> Yellow -> Red gradient
     let r = (t * 2.0).min(1.0);
     let g = ((1.0 - t) * 2.0).min(1.0);
+    Rgb([(r * 255.0) as u8, (g * 255.0) as u8, 50])
+}
+
+/// Convert score percentage (0-1) to RGB color
+/// Low score = red, high score = green
+fn score_to_color(pct: f32) -> Rgb<u8> {
+    // Red -> Yellow -> Green gradient (opposite of speed)
+    let r = ((1.0 - pct) * 2.0).min(1.0);
+    let g = (pct * 2.0).min(1.0);
     Rgb([(r * 255.0) as u8, (g * 255.0) as u8, 50])
 }
 
