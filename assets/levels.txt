@@ -14,7 +14,7 @@
 # Blank lines and # comments are ignored
 
 level: Bounce Test
-basket: 400
+basket: 560
 center: 200 400
 
 level: V-Shape

@@ -51,7 +51,10 @@ const SHOT_MAX_VARIANCE: f32 = 0.50; // Variance at zero charge (50%)
 const SHOT_MIN_VARIANCE: f32 = 0.02; // Variance at full charge (2%)
 const SHOT_AIR_VARIANCE_PENALTY: f32 = 0.10; // Additional variance when airborne (10%)
 const SHOT_MOVE_VARIANCE_PENALTY: f32 = 0.10; // Additional variance at full horizontal speed (10%)
-const SHOT_DISTANCE_SPEED_BONUS: f32 = 0.0005; // Speed bonus per unit of distance (50% at 1000 units)
+const SHOT_DISTANCE_SPEED_BONUS: f32 = 0.0004; // Speed bonus per unit of distance (40% at 1000 units)
+const SHOT_DISTANCE_VARIANCE: f32 = 0.00025; // Variance per unit of distance (25% at 1000 units)
+const SHOT_QUICK_THRESHOLD: f32 = 0.4; // Charge below this (400ms) = half power shot
+const SHOT_DEFAULT_ANGLE: f32 = 60.0; // Default shot angle in degrees
 const SHOT_GRACE_PERIOD: f32 = 0.1; // Post-shot grace period (no friction/player drag)
 
 // Ball-player collision
@@ -73,8 +76,8 @@ const ARENA_FLOOR_Y: f32 = -ARENA_HEIGHT / 2.0 + 20.0; // Floor near bottom
 // Baskets
 const BASKET_COLOR: Color = Color::srgb(0.8, 0.2, 0.2); // Red
 const BASKET_SIZE: Vec2 = Vec2::new(60.0, 80.0);
-const LEFT_BASKET_X: f32 = -ARENA_WIDTH / 2.0 + 120.0;
-const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - 120.0;
+const LEFT_BASKET_X: f32 = -ARENA_WIDTH / 2.0 + 140.0;
+const RIGHT_BASKET_X: f32 = ARENA_WIDTH / 2.0 - 140.0;
 
 // Spawn
 const PLAYER_SPAWN: Vec3 = Vec3::new(-200.0, ARENA_FLOOR_Y + 100.0, 0.0);
@@ -190,6 +193,7 @@ struct LastShotInfo {
     base_variance: f32,
     air_penalty: f32,
     move_penalty: f32,
+    distance_variance: f32,
     distance_speed_bonus: f32,
     total_variance: f32,
     target: Option<Basket>,
@@ -576,6 +580,9 @@ enum Basket {
 }
 
 #[derive(Component)]
+struct BasketRim; // Marks rim platforms attached to baskets
+
+#[derive(Component)]
 struct DebugText;
 
 #[derive(Component)]
@@ -702,16 +709,73 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
 
     // Baskets (goals) - height varies per level
     let basket_y = level_db.get(0).map(|l| ARENA_FLOOR_Y + l.basket_height).unwrap_or(ARENA_FLOOR_Y + 400.0);
+
+    // Rim dimensions
+    const RIM_THICKNESS: f32 = 10.0;
+    let rim_outer_height = BASKET_SIZE.y * 0.5; // 50% - wall side
+    let rim_inner_height = BASKET_SIZE.y * 0.1; // 10% - center side
+    let rim_outer_y = -BASKET_SIZE.y / 2.0 + rim_outer_height / 2.0; // Positioned at bottom
+    let rim_inner_y = -BASKET_SIZE.y / 2.0 + rim_inner_height / 2.0; // Positioned at bottom
+    let rim_bottom_width = BASKET_SIZE.x + RIM_THICKNESS * 2.0; // Spans full width including sides
+    let rim_color = Color::srgb(0.6, 0.15, 0.15); // Darker red for rim
+
+    // Left basket with rims
     commands.spawn((
         Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
         Transform::from_xyz(LEFT_BASKET_X, basket_y, -0.1), // Slightly behind
         Basket::Left,
-    ));
+    )).with_children(|parent| {
+        // Left rim (outer - wall side, 50%)
+        parent.spawn((
+            Sprite::from_color(rim_color, Vec2::new(RIM_THICKNESS, rim_outer_height)),
+            Transform::from_xyz(-BASKET_SIZE.x / 2.0 - RIM_THICKNESS / 2.0, rim_outer_y, 0.1),
+            Platform,
+            BasketRim,
+        ));
+        // Right rim (inner - center side, 10%)
+        parent.spawn((
+            Sprite::from_color(rim_color, Vec2::new(RIM_THICKNESS, rim_inner_height)),
+            Transform::from_xyz(BASKET_SIZE.x / 2.0 + RIM_THICKNESS / 2.0, rim_inner_y, 0.1),
+            Platform,
+            BasketRim,
+        ));
+        // Bottom rim
+        parent.spawn((
+            Sprite::from_color(rim_color, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
+            Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0 - RIM_THICKNESS / 2.0, 0.1),
+            Platform,
+            BasketRim,
+        ));
+    });
+
+    // Right basket with rims
     commands.spawn((
         Sprite::from_color(BASKET_COLOR, BASKET_SIZE),
         Transform::from_xyz(RIGHT_BASKET_X, basket_y, -0.1),
         Basket::Right,
-    ));
+    )).with_children(|parent| {
+        // Left rim (inner - center side, 10%)
+        parent.spawn((
+            Sprite::from_color(rim_color, Vec2::new(RIM_THICKNESS, rim_inner_height)),
+            Transform::from_xyz(-BASKET_SIZE.x / 2.0 - RIM_THICKNESS / 2.0, rim_inner_y, 0.1),
+            Platform,
+            BasketRim,
+        ));
+        // Right rim (outer - wall side, 50%)
+        parent.spawn((
+            Sprite::from_color(rim_color, Vec2::new(RIM_THICKNESS, rim_outer_height)),
+            Transform::from_xyz(BASKET_SIZE.x / 2.0 + RIM_THICKNESS / 2.0, rim_outer_y, 0.1),
+            Platform,
+            BasketRim,
+        ));
+        // Bottom rim
+        parent.spawn((
+            Sprite::from_color(rim_color, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
+            Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0 - RIM_THICKNESS / 2.0, 0.1),
+            Platform,
+            BasketRim,
+        ));
+    });
 
     // Score/Level display - top center
     commands.spawn((
@@ -720,12 +784,12 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
             font_size: 24.0,
             ..default()
         },
+        TextLayout::new_with_justify(Justify::Center),
         TextColor(Color::BLACK),
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(10.0),
             width: Val::Percent(100.0),
-            justify_content: JustifyContent::Center,
             ..default()
         },
         ScoreLevelText,
@@ -1034,7 +1098,7 @@ fn apply_velocity(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>
 
 fn check_collisions(
     mut player_query: Query<(&mut Transform, &mut Velocity, &mut Grounded, &Sprite), With<Player>>,
-    platform_query: Query<(&Transform, &Sprite), (With<Platform>, Without<Player>)>,
+    platform_query: Query<(&GlobalTransform, &Sprite), (With<Platform>, Without<Player>, Without<BasketRim>)>,
 ) {
     let Ok((mut player_transform, mut player_velocity, mut grounded, player_sprite)) =
         player_query.single_mut()
@@ -1048,12 +1112,12 @@ fn check_collisions(
     // Assume not grounded until we find a floor beneath us
     grounded.0 = false;
 
-    for (platform_transform, platform_sprite) in &platform_query {
+    for (platform_global, platform_sprite) in &platform_query {
         let platform_size = platform_sprite.custom_size.unwrap_or(Vec2::new(100.0, 20.0));
         let platform_half = platform_size / 2.0;
 
         let player_pos = player_transform.translation.truncate();
-        let platform_pos = platform_transform.translation.truncate();
+        let platform_pos = platform_global.translation().truncate();
 
         // Calculate overlap
         let diff = player_pos - platform_pos;
@@ -1137,13 +1201,16 @@ fn ball_gravity(
 fn ball_collisions(
     tweaks: Res<PhysicsTweaks>,
     mut ball_query: Query<(&mut Transform, &mut Velocity, &BallState, &Sprite, &mut BallRolling), With<Ball>>,
-    platform_query: Query<(&Transform, &Sprite), (With<Platform>, Without<Ball>)>,
+    platform_query: Query<(&GlobalTransform, &Sprite, Option<&BasketRim>), (With<Platform>, Without<Ball>)>,
 ) {
     for (mut ball_transform, mut ball_velocity, state, ball_sprite, mut rolling) in &mut ball_query {
         // Skip collision for held balls
         if matches!(state, BallState::Held(_)) {
             continue;
         }
+
+        // Check if ball is in flight (thrown) - rims only collide with thrown/free balls
+        let is_thrown_or_free = matches!(state, BallState::Free | BallState::InFlight { .. });
 
         let ball_size = ball_sprite.custom_size.unwrap_or(BALL_SIZE);
         let ball_half = ball_size / 2.0;
@@ -1152,12 +1219,17 @@ fn ball_collisions(
         let was_rolling = rolling.0;
         let mut has_ground_contact = false;
 
-        for (platform_transform, platform_sprite) in &platform_query {
+        for (platform_global, platform_sprite, maybe_rim) in &platform_query {
+            // Skip rim collisions for non-thrown balls (though held is already filtered above)
+            if maybe_rim.is_some() && !is_thrown_or_free {
+                continue;
+            }
+
             let platform_size = platform_sprite.custom_size.unwrap_or(Vec2::new(100.0, 20.0));
             let platform_half = platform_size / 2.0;
 
             let ball_pos = ball_transform.translation.truncate();
-            let platform_pos = platform_transform.translation.truncate();
+            let platform_pos = platform_global.translation().truncate();
 
             let diff = ball_pos - platform_pos;
             let overlap_x = ball_half.x + platform_half.x - diff.x.abs();
@@ -1498,10 +1570,11 @@ fn update_target_marker(
     }
 }
 
-/// Shot trajectory result containing angle and speed bonus
+/// Shot trajectory result containing angle, speed bonus, and distance variance
 struct ShotTrajectory {
-    angle: f32,            // Absolute angle in radians (0=right, π/2=up, π=left)
-    speed_bonus: f32,      // Speed multiplier bonus from distance (e.g., 0.5 = +50%)
+    angle: f32,              // Absolute angle in radians (0=right, π/2=up, π=left)
+    speed_bonus: f32,        // Speed multiplier bonus from distance (e.g., 0.5 = +50%)
+    distance_variance: f32,  // Variance penalty from distance
 }
 
 /// Calculate shot trajectory to hit target.
@@ -1522,6 +1595,9 @@ fn calculate_shot_trajectory(
     // Speed bonus based on distance (longer shots get more power)
     let speed_bonus = distance * SHOT_DISTANCE_SPEED_BONUS;
 
+    // Variance penalty based on distance (longer shots are less accurate)
+    let distance_variance = distance * SHOT_DISTANCE_VARIANCE;
+
     // Use boosted speed for trajectory calculation
     let effective_speed = base_speed * (1.0 + speed_bonus);
 
@@ -1532,12 +1608,14 @@ fn calculate_shot_trajectory(
             return Some(ShotTrajectory {
                 angle: std::f32::consts::FRAC_PI_2, // 90° straight up
                 speed_bonus,
+                distance_variance,
             });
         } else {
             // Target below - shoot straight down
             return Some(ShotTrajectory {
                 angle: -std::f32::consts::FRAC_PI_2, // -90° straight down
                 speed_bonus,
+                distance_variance,
             });
         }
     }
@@ -1566,6 +1644,7 @@ fn calculate_shot_trajectory(
     Some(ShotTrajectory {
         angle,
         speed_bonus,
+        distance_variance,
     })
 }
 
@@ -1649,30 +1728,40 @@ fn throw_ball(
     let move_penalty = (player_velocity.0.x.abs() / MOVE_SPEED).min(1.0) * SHOT_MOVE_VARIANCE_PENALTY;
     variance += move_penalty;
 
-    // Get base angle and speed bonus from trajectory
-    let (base_angle, distance_speed_bonus) = if let Some(traj) = &trajectory {
-        (traj.angle, traj.speed_bonus)
+    // Get base angle, speed bonus, and distance variance from trajectory
+    let (base_angle, distance_speed_bonus, distance_variance) = if let Some(traj) = &trajectory {
+        (traj.angle, traj.speed_bonus, traj.distance_variance)
     } else {
-        // Fallback for impossible trajectories - 45° toward target or right
+        // Fallback for impossible trajectories - 60° toward target or right
         let fallback_angle = if let Some(basket_pos) = target_basket_pos {
             if basket_pos.x >= player_pos.x {
-                std::f32::consts::FRAC_PI_4 // 45° right
+                SHOT_DEFAULT_ANGLE.to_radians() // 60° right
             } else {
-                std::f32::consts::PI - std::f32::consts::FRAC_PI_4 // 135° left
+                std::f32::consts::PI - SHOT_DEFAULT_ANGLE.to_radians() // 120° left
             }
         } else {
-            std::f32::consts::FRAC_PI_4 // Default: 45° right
+            SHOT_DEFAULT_ANGLE.to_radians() // Default: 60° right
         };
-        (fallback_angle, 0.0)
+        (fallback_angle, 0.0, 0.0)
     };
+
+    // Add distance variance to total
+    variance += distance_variance;
 
     // Apply variance to angle (max ±30° at full variance)
     let max_angle_variance = 30.0_f32.to_radians();
     let angle_variance = rng.gen_range(-variance..variance) * max_angle_variance;
     let final_angle = base_angle + angle_variance;
 
-    // Apply distance speed bonus (longer shots get more power)
-    let final_speed = SHOT_MAX_SPEED * (1.0 + distance_speed_bonus);
+    // Half power for quick shots (< 400ms charge)
+    let power_multiplier = if charging.charge_time < SHOT_QUICK_THRESHOLD { 0.5 } else { 1.0 };
+
+    // Apply ±10% randomness to distance speed bonus
+    let speed_bonus_randomness = rng.gen_range(0.9..1.1);
+    let randomized_speed_bonus = distance_speed_bonus * speed_bonus_randomness;
+
+    // Apply distance speed bonus and power multiplier
+    let final_speed = SHOT_MAX_SPEED * (1.0 + randomized_speed_bonus) * power_multiplier;
 
     // Convert angle + speed to velocity (simple and direct!)
     // Angle is absolute: 0=right, π/2=up, π=left
@@ -1695,7 +1784,8 @@ fn throw_ball(
         base_variance,
         air_penalty,
         move_penalty,
-        distance_speed_bonus,
+        distance_variance,
+        distance_speed_bonus: randomized_speed_bonus,
         total_variance: variance,
         target: Some(target.0),
     };
@@ -2019,12 +2109,13 @@ fn update_debug_text(
             None => "?",
         };
         text.0 = format!(
-            "Last Shot: {:.0}° {:.0}u/s | Variance: base {:.0}% + air {:.0}% + move {:.0}% = {:.0}% | Dist bonus: +{:.0}% speed | Target: {}{}",
+            "Last Shot: {:.0}° {:.0}u/s | Variance: base {:.0}% + air {:.0}% + move {:.0}% + dist {:.0}% = {:.0}% | Dist: +{:.0}% speed | Target: {}{}",
             shot_info.angle_degrees,
             shot_info.speed,
             shot_info.base_variance * 100.0,
             shot_info.air_penalty * 100.0,
             shot_info.move_penalty * 100.0,
+            shot_info.distance_variance * 100.0,
             shot_info.total_variance * 100.0,
             shot_info.distance_speed_bonus * 100.0,
             target_str,
