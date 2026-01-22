@@ -79,7 +79,7 @@ Keyboard + Gamepad supported:
 - Space/W or South button: Jump
 - E or West button: Pickup ball / Steal
 - F or Right Bumper: Charge and throw (hold to charge, release to throw)
-- Q or Left Trigger: Cycle target basket
+- Q or Left Bumper: Cycle target basket
 - R or Start: Respawn (cycles through 10 levels)
 - Tab: Toggle debug UI
 - F1: Toggle physics tweak panel

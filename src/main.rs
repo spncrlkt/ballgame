@@ -1041,7 +1041,7 @@ fn capture_input(
     if keyboard.just_pressed(KeyCode::KeyQ)
         || gamepads
             .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::LeftTrigger2))
+            .any(|gp| gp.just_pressed(GamepadButton::LeftTrigger))
     {
         input.cycle_target_pressed = true;
     }
