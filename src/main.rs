@@ -52,8 +52,6 @@ const SHOT_MIN_VARIANCE: f32 = 0.02; // Variance at full charge (2%)
 const SHOT_AIR_VARIANCE_PENALTY: f32 = 0.10; // Additional variance when airborne (10%)
 const SHOT_MOVE_VARIANCE_PENALTY: f32 = 0.10; // Additional variance at full horizontal speed (10%)
 const SHOT_DISTANCE_VARIANCE_FACTOR: f32 = 0.0003; // Variance per unit of distance (30% at 1000 units)
-const SHOT_ARC_VARIANCE_FACTOR: f32 = 0.15; // Variance per unit of arc deviation from optimal
-const SHOT_FRICTION_COMPENSATION_FACTOR: f32 = 25000.0; // Divisor for distance-based friction compensation
 const SHOT_GRACE_PERIOD: f32 = 0.1; // Post-shot grace period (no friction/player drag)
 
 // Ball-player collision
@@ -1503,70 +1501,74 @@ fn update_target_marker(
     }
 }
 
-/// Shot trajectory result containing power, arc, and variance penalties
+/// Shot trajectory result containing angle, speed, and variance penalties
 struct ShotTrajectory {
-    power: f32,           // Horizontal velocity (vx)
-    arc: f32,             // Arc ratio (vy = vx * arc)
+    angle: f32,           // Absolute angle in radians (0=right, π/2=up, π=left)
+    speed: f32,           // Ball speed (usually max, but can vary for special cases)
     distance_penalty: f32, // Variance penalty for distance
-    arc_penalty: f32,     // Variance penalty for non-optimal arc
 }
 
-/// Calculate optimal shot trajectory to target position.
-/// Returns the power, arc ratio, and variance penalties.
+/// Calculate shot trajectory to hit target at max speed.
+/// Returns the angle needed to hit target, always using full power.
 fn calculate_shot_trajectory(
     shooter_pos: Vec2,
     target_pos: Vec2,
     gravity: f32,
-    friction_random: f32, // -1.0 to 1.0 for power variance
+    max_speed: f32,
 ) -> Option<ShotTrajectory> {
-    let dx = (target_pos.x - shooter_pos.x).abs();
-    let dy = target_pos.y - shooter_pos.y;
+    let delta = target_pos - shooter_pos;
+    let tx = delta.x; // Positive = target is right, negative = left
+    let ty = delta.y; // Positive = target is above, negative = below
+    let dx = tx.abs(); // Horizontal distance (always positive)
 
+    // Directly under/over target - shoot straight up or down
     if dx < 1.0 {
-        return None; // Too close horizontally
+        if ty > 0.0 {
+            // Target above - shoot straight up at full speed
+            return Some(ShotTrajectory {
+                angle: std::f32::consts::FRAC_PI_2, // 90° straight up
+                speed: max_speed,
+                distance_penalty: 0.0,
+            });
+        } else {
+            // Target below - shoot straight down at half speed
+            return Some(ShotTrajectory {
+                angle: -std::f32::consts::FRAC_PI_2, // -90° straight down
+                speed: max_speed * 0.5,
+                distance_penalty: 0.0,
+            });
+        }
     }
 
-    // Calculate optimal arc for minimum power: θ = 45° + arctan(dy/dx)/2
-    let alpha = (dy / dx).atan();
-    let theta_optimal = std::f32::consts::FRAC_PI_4 + alpha / 2.0;
-    let optimal_arc = theta_optimal.tan();
+    // Calculate angle to hit target at max_speed
+    // Quadratic: k*u² - dx*u + (ty + k) = 0, where u = tan(θ), k = g*dx²/(2v²)
+    let v2 = max_speed * max_speed;
+    let k = gravity * dx * dx / (2.0 * v2);
+    let discriminant = dx * dx - 4.0 * k * (ty + k);
 
-    // Minimum arc needed to reach target (arc * dx must be > dy)
-    // For targets below player, allow very flat shots
-    let min_arc = if dy > 0.0 {
-        (dy / dx) + 0.05 // Small margin above minimum
+    if discriminant < 0.0 {
+        return None; // Target out of range at max speed
+    }
+
+    let sqrt_d = discriminant.sqrt();
+    let u_high = (dx + sqrt_d) / (2.0 * k); // High trajectory (lob)
+    let elevation = u_high.atan();
+
+    // Convert elevation to absolute angle based on target direction
+    let angle = if tx >= 0.0 {
+        elevation
     } else {
-        0.01 // Allow nearly flat shots for targets at or below
+        std::f32::consts::PI - elevation
     };
 
-    // Use optimal arc, only constrained by minimum needed to reach target
-    let final_arc = optimal_arc.max(min_arc);
-
-    // Check if trajectory is possible
-    let denominator = 2.0 * (final_arc * dx - dy);
-    if denominator <= 0.0 {
-        return None; // Can't reach target
-    }
-
-    // Calculate power for this arc
-    let vx_squared = gravity * dx * dx / denominator;
-    let vx = vx_squared.sqrt();
-
-    // Apply friction compensation
-    let compensation_scale = 0.75 + 0.25 * friction_random;
-    let friction_compensation = 1.0 + (dx / SHOT_FRICTION_COMPENSATION_FACTOR) * compensation_scale;
-    let power = vx * friction_compensation;
-
-    // Calculate penalties
-    let distance_penalty = dx * SHOT_DISTANCE_VARIANCE_FACTOR;
-    let arc_deviation = (final_arc - optimal_arc).abs();
-    let arc_penalty = arc_deviation * SHOT_ARC_VARIANCE_FACTOR;
+    // Distance penalty for variance
+    let distance = delta.length();
+    let distance_penalty = distance * SHOT_DISTANCE_VARIANCE_FACTOR;
 
     Some(ShotTrajectory {
-        power,
-        arc: final_arc,
+        angle,
+        speed: max_speed,
         distance_penalty,
-        arc_penalty,
     })
 }
 
@@ -1633,8 +1635,7 @@ fn throw_ball(
 
     // Calculate optimal trajectory to basket
     let trajectory = if let Some(basket_pos) = target_basket_pos {
-        let friction_random = rng.gen_range(-1.0..=1.0);
-        calculate_shot_trajectory(player_pos, basket_pos, BALL_GRAVITY, friction_random)
+        calculate_shot_trajectory(player_pos, basket_pos, BALL_GRAVITY, SHOT_MAX_SPEED)
     } else {
         None
     };
@@ -1651,43 +1652,32 @@ fn throw_ball(
     let move_penalty = (player_velocity.0.x.abs() / MOVE_SPEED).min(1.0) * SHOT_MOVE_VARIANCE_PENALTY;
     variance += move_penalty;
 
-    // Get base power and arc from trajectory calculation, add distance/arc penalties
-    let (base_power, base_arc, distance_penalty, arc_penalty) = if let Some(traj) = &trajectory {
+    // Get base angle and speed from trajectory, add penalties to variance
+    let (base_angle, base_speed, distance_penalty) = if let Some(traj) = &trajectory {
         variance += traj.distance_penalty;
-        variance += traj.arc_penalty;
-        (traj.power, traj.arc, traj.distance_penalty, traj.arc_penalty)
+        (traj.angle, traj.speed, traj.distance_penalty)
     } else {
-        // Fallback for impossible trajectories - moderate arc (45°)
-        (SHOT_MAX_POWER, 1.0, 0.0, 0.0)
+        // Fallback for impossible trajectories - 45° toward target or right
+        let fallback_angle = if let Some(basket_pos) = target_basket_pos {
+            if basket_pos.x >= player_pos.x {
+                std::f32::consts::FRAC_PI_4 // 45° right
+            } else {
+                std::f32::consts::PI - std::f32::consts::FRAC_PI_4 // 135° left
+            }
+        } else {
+            std::f32::consts::FRAC_PI_4 // Default: 45° right
+        };
+        (fallback_angle, SHOT_MAX_SPEED, 0.0)
     };
 
-    // Calculate direction to target basket (determines base angle orientation)
-    let dir_x = if let Some(basket_pos) = target_basket_pos {
-        (basket_pos.x - player_pos.x).signum()
-    } else {
-        1.0 // Fallback: shoot right
-    };
-
-    // Convert arc ratio to angle (radians) - this is the ideal angle from auto-aim
-    let ideal_angle = base_arc.atan();
-
-    // Auto-aim's power is horizontal velocity (vx). Convert to total magnitude.
-    // Since vx = speed * cos(θ), we need speed = vx / cos(θ) = power / cos(ideal_angle)
-    let base_speed = base_power / ideal_angle.cos();
-
-    // Apply variance to angle - can rotate shot in any direction
-    // Variance is a ratio, scale it to radians (±variance * 90° at max)
+    // Apply variance to angle only (speed comes from trajectory)
     let angle_variance = rng.gen_range(-variance..variance) * std::f32::consts::FRAC_PI_2;
-    let final_angle = ideal_angle + angle_variance;
+    let final_angle = base_angle + angle_variance;
+    let final_speed = base_speed;
 
-    // Apply variance to speed (was power)
-    let speed_variance = 1.0 + rng.gen_range(-variance..variance);
-    let final_speed_uncapped = base_speed * speed_variance;
-
-    // Cap speed and convert angle + speed to velocity components
-    // Angle is measured from horizontal: 0° = flat, 90° = straight up, negative = downward
-    let final_speed = final_speed_uncapped.min(SHOT_MAX_SPEED);
-    let vx = dir_x * final_speed * final_angle.cos();
+    // Convert angle + speed to velocity (simple and direct!)
+    // Angle is absolute: 0=right, π/2=up, π=left
+    let vx = final_speed * final_angle.cos();
     let vy = final_speed * final_angle.sin();
 
     // Set ball velocity
@@ -1700,18 +1690,17 @@ fn throw_ball(
     };
 
     // Record shot info for debug display
-    let angle_degrees = vy.atan2(vx.abs()).to_degrees();
-    let final_arc = final_angle.tan(); // For debug display
+    let angle_degrees = final_angle.to_degrees();
     *shot_info = LastShotInfo {
         power: final_speed,
-        arc: final_arc,
+        arc: final_angle.tan(), // For legacy display compatibility
         angle_degrees,
         speed: final_speed,
         base_variance,
         air_penalty,
         move_penalty,
         distance_penalty,
-        arc_penalty,
+        arc_penalty: 0.0, // No longer used
         total_variance: variance,
         target: Some(target.0),
     };
