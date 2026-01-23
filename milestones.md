@@ -44,6 +44,15 @@
 - [ ] Create system to make levels easier via collage and like/hate system
 - [ ] Back wall gutter like pinball - shoot ball on the floor, hit triangle step on way out
 
+**Gameplay Structure:**
+- [ ] Win conditions - score limit or time limit to end games
+- [ ] Game state flow - start → play → end → restart cycle
+- [ ] Passing mechanics - teammate-to-teammate ball passing
+- [ ] Ball physics tuning - bounce, weight, speed feel
+
+**Scoring Feedback:**
+- [ ] Make scoring feel impactful beyond flash animation
+
 ---
 
 ## V1 / Beyond
@@ -53,15 +62,40 @@
 - [ ] Multiplayer support
 - [ ] Deeper gameplay systems
 
+**Audio:**
+- [ ] Sound effects - jumps, shots, scores, steals, bounces
+- [ ] Music - background tracks
+- [ ] Audio settings - volume controls
+
+**Menus & UI:**
+- [ ] Start screen / main menu
+- [ ] Pause menu
+- [ ] Settings UI
+- [ ] Tutorial / onboarding for new players
+
+**Game Modes:**
+- [ ] Timed matches
+- [ ] First-to-X scoring
+- [ ] Round-based play
+
+**Controller Feel:**
+- [ ] Haptics/rumble for shots, scores, steals
+
 **Multiplayer:**
 - [ ] Add 1v1 multiplayer
 - [ ] Add 4-player multiplayer support
 - [ ] Evolution theme for multiplayer/networked games
 - [ ] Forks expected - design for branching game modes
 - [ ] Consider how ball styles could vary per "species" or game variant
+- [ ] Matchmaking - how players find games
 
 **Equipment:**
 - [ ] Equipment system (clubs, rackets, mallets)
+
+**Persistence:**
+- [ ] Save data / player profiles
+- [ ] Stats tracking
+- [ ] Unlocks system
 
 **Ball Evolution:**
 - [ ] Balls could evolve/mutate based on gameplay
