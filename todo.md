@@ -4,6 +4,9 @@
 
 ## Active Work (Prioritized)
 
+### 0. D-Pad Menu UX
+- [ ] **P0** Improve D-pad menu display - see `notes/dpad-menu-ux.md`
+
 ### 1. AI Behavior
 - [ ] **P1** Fix AI shooting - takes bad shots, misses easy ones
 - [ ] **P2** Fix AI positioning - stands in wrong places, doesn't cover basket well
@@ -19,13 +22,8 @@
 ---
 
 ## Done (recent - see todone.md for full archive)
-- [x] Simplified steal system - removed button mashing, instant steal attempts (33% base, 50% if charging)
-- [x] Added 1-second no-stealback cooldown for steal victims
-- [x] Both players have independent AI profiles (LT selects player, RT cycles profile)
-- [x] Added Observer mode to player control cycling (Left → Right → Observer → Left)
-- [x] Game Presets system - Movement/Ball/Shooting/Global presets with hot-reload
-- [x] Added extreme presets (Slippery, Precise, Pinball, Dead, Sniper, Spam, Chaos, Tactical)
-- [x] Global preset is now first/default option in D-pad menu
-- [x] D-pad menu stays visible (toggle with Tab), Up cycles backwards
-- [x] Removed smallest 3 viewport options (too small to be useful)
-- [x] Palette 26 is now the default
+- [x] Created snapshot system (src/snapshot.rs) - captures game state + screenshots on events
+- [x] Added --screenshot-and-quit CLI flag for automated screenshot capture
+- [x] Created scripts/screenshot.sh and scripts/regression.sh for visual testing
+- [x] Created regression/ directory with baseline.png for visual regression testing
+- [x] Restructured D-pad menu to 4-direction model (Up/Down/Left/Right)

@@ -4,6 +4,78 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Audit: 2026-01-23 (Session 3) - Snapshot & Regression Testing
+
+### Session Summary
+
+Added automated screenshot capture and visual regression testing infrastructure.
+
+### Changes Made
+
+**Snapshot System (`src/snapshot.rs`):**
+- Game state + screenshot capture on events (score, steal, level change)
+- F2: Toggle snapshot system on/off
+- F3: Toggle screenshot capture (JSON only when off)
+- F4: Manual snapshot trigger
+- Added `--screenshot-and-quit` CLI flag for automated testing
+- Auto-exits ~0.5s after startup screenshot when flag is set
+
+**Regression Testing Scripts:**
+- `scripts/screenshot.sh` - Capture startup screenshot (game auto-quits)
+- `scripts/regression.sh` - Capture and compare against baseline
+- `scripts/regression.sh --update` - Update baseline
+- Supports ImageMagick diff (with tolerance) or fallback file comparison
+
+**D-Pad Menu Restructure:**
+- Changed from linear cycling to 4-direction model
+- Up: Viewport
+- Down: Composite → Movement → Ball → Shooting presets
+- Left: AI (LT: player, RT: profile)
+- Right: Level → Palette → BallStyle
+- Each direction has its own options that cycle with repeated presses
+
+**Documentation Updates:**
+- Updated CLAUDE.md with regression testing section
+- Updated system execution order to match code
+- Fixed outdated BallStyleType description
+- Added snapshot resources to ECS documentation
+
+### Audit Findings
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| CLAUDE.md accuracy | UPDATED | Fixed system order, BallStyle description, added regression docs |
+| Input buffering | PASS | All patterns correct |
+| Constants | PASS | No magic numbers in new code |
+| System order | UPDATED | Documentation now matches main.rs |
+| Unused code | PASS | No dead code |
+| Pattern violations | PASS | No raw input in FixedUpdate |
+| Collision epsilon | N/A | No new collision code |
+| Frame-rate physics | PASS | No new physics code |
+| Compilation | PASS | `cargo check` clean |
+| Clippy | WARN | 53 warnings (type_complexity, collapsible_if - standard for Bevy) |
+| Visual regression | PASS | Screenshots match within tolerance |
+
+### Files Created
+
+- `src/snapshot.rs` - Snapshot system implementation
+- `scripts/screenshot.sh` - Quick screenshot script
+- `scripts/regression.sh` - Regression testing script
+- `regression/baseline.png` - Visual regression baseline
+- `notes/dpad-menu-ux.md` - D-pad menu improvement notes
+
+### Files Modified
+
+- `src/main.rs` - Added CLI arg parsing, snapshot systems, SnapshotConfig resource
+- `src/lib.rs` - Added snapshot module exports
+- `src/ui/debug.rs` - D-pad menu restructure (4-direction model)
+- `.gitignore` - Added snapshots/, regression/current.png, regression/diff.png
+- `CLAUDE.md` - Updated documentation
+- `todo.md` - Archived done items, added new completions
+- `todone.md` - Archived older done items
+
+---
+
 ## Audit: 2026-01-23 (Session 2) - Steal Simplification & Presets Complete
 
 ### Session Summary

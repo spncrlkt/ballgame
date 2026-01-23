@@ -36,10 +36,10 @@ pub struct ShootingPreset {
 #[derive(Debug, Clone)]
 pub struct CompositePreset {
     pub name: String,
-    pub level: Option<u32>,       // Level number (1-indexed)
-    pub palette: Option<usize>,   // Palette index (0-indexed)
+    pub level: Option<u32>,         // Level number (1-indexed)
+    pub palette: Option<usize>,     // Palette index (0-indexed)
     pub ball_style: Option<String>, // Ball style name
-    pub movement: String,         // Name of MovementPreset
-    pub ball: String,             // Name of BallPreset
-    pub shooting: String,         // Name of ShootingPreset
+    pub movement: String,           // Name of MovementPreset
+    pub ball: String,               // Name of BallPreset
+    pub shooting: String,           // Name of ShootingPreset
 }

@@ -7,7 +7,7 @@ use crate::ball::{Ball, BallStyle, BallTextures};
 use crate::constants::{DEFAULT_VIEWPORT_INDEX, VIEWPORT_PRESETS};
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
-use crate::player::{Player, Team};
+use crate::player::{HumanControlled, Player, Team};
 use crate::presets::{CurrentPresets, PresetDatabase, apply_composite_preset};
 use crate::scoring::CurrentLevel;
 use crate::shooting::LastShotInfo;
@@ -16,86 +16,96 @@ use crate::ui::hud::ScoreLevelText;
 use crate::world::{Basket, BasketRim, CornerRamp, LevelPlatform, Platform};
 
 // =============================================================================
-// CYCLE SYSTEM - Unified controller cycling for debug/test options
+// CYCLE SYSTEM - D-pad direction-based cycling for debug/test options
 // =============================================================================
 
-/// What category is currently selected for cycling with RT/LT
+/// Which D-pad direction is currently active for value cycling
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CycleTarget {
+pub enum CycleDirection {
     #[default]
-    CompositePreset, // Global - sets everything
-    Level,
-    AiProfile,
-    Palette,
-    BallStyle,
-    Viewport,
-    MovementPreset,
-    BallPreset,
-    ShootingPreset,
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
-impl CycleTarget {
-    /// Ordered by significance: Global first, then gameplay, visuals, testing, tuning
-    pub const ALL: [CycleTarget; 9] = [
-        CycleTarget::CompositePreset, // Global - sets all options
-        CycleTarget::Level,           // Core gameplay
-        CycleTarget::AiProfile,       // Affects gameplay
-        CycleTarget::Palette,         // Visual - colors
-        CycleTarget::BallStyle,       // Visual - ball appearance
-        CycleTarget::Viewport,        // Testing different resolutions
-        CycleTarget::MovementPreset,  // Physics tuning
-        CycleTarget::BallPreset,      // Physics tuning
-        CycleTarget::ShootingPreset,  // Physics tuning
-    ];
+/// Options available for D-pad Down (presets)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DownOption {
+    #[default]
+    Composite,
+    Movement,
+    Ball,
+    Shooting,
+}
 
-    pub fn name(&self) -> &'static str {
+impl DownOption {
+    pub fn next(&self) -> Self {
         match self {
-            CycleTarget::CompositePreset => "Global",
-            CycleTarget::Level => "Level",
-            CycleTarget::AiProfile => "AI Profile",
-            CycleTarget::Palette => "Palette",
-            CycleTarget::BallStyle => "Ball Style",
-            CycleTarget::Viewport => "Viewport",
-            CycleTarget::MovementPreset => "Movement",
-            CycleTarget::BallPreset => "Ball",
-            CycleTarget::ShootingPreset => "Shooting",
+            DownOption::Composite => DownOption::Movement,
+            DownOption::Movement => DownOption::Ball,
+            DownOption::Ball => DownOption::Shooting,
+            DownOption::Shooting => DownOption::Composite,
         }
     }
 
-    pub fn next(&self) -> Self {
-        let idx = Self::ALL.iter().position(|t| t == self).unwrap_or(0);
-        Self::ALL[(idx + 1) % Self::ALL.len()]
-    }
-
-    pub fn prev(&self) -> Self {
-        let idx = Self::ALL.iter().position(|t| t == self).unwrap_or(0);
-        Self::ALL[(idx + Self::ALL.len() - 1) % Self::ALL.len()]
+    pub fn name(&self) -> &'static str {
+        match self {
+            DownOption::Composite => "Composite",
+            DownOption::Movement => "Movement",
+            DownOption::Ball => "Ball",
+            DownOption::Shooting => "Shooting",
+        }
     }
 }
 
-/// Tracks which cycle target is selected for controller cycling
+/// Options available for D-pad Right (visual/level settings)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RightOption {
+    #[default]
+    Level,
+    Palette,
+    BallStyle,
+}
+
+impl RightOption {
+    pub fn next(&self) -> Self {
+        match self {
+            RightOption::Level => RightOption::Palette,
+            RightOption::Palette => RightOption::BallStyle,
+            RightOption::BallStyle => RightOption::Level,
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            RightOption::Level => "Level",
+            RightOption::Palette => "Palette",
+            RightOption::BallStyle => "BallStyle",
+        }
+    }
+}
+
+/// Tracks cycle state for the new D-pad direction model
 #[derive(Resource)]
 pub struct CycleSelection {
-    pub target: CycleTarget,
-    pub ai_profile_player: Team, // Which player's AI profile to edit (Left or Right)
+    pub active_direction: CycleDirection,
+    pub down_option: DownOption,
+    pub right_option: RightOption,
+    pub ai_player_index: usize, // 0=Left, 1=Right for AI profile editing
+    /// Whether the menu is enabled (disabled when player uses stick, re-enabled by D-pad)
+    pub menu_enabled: bool,
 }
 
 impl Default for CycleSelection {
     fn default() -> Self {
         Self {
-            target: CycleTarget::CompositePreset, // Global - first option
-            ai_profile_player: Team::Left,
+            active_direction: CycleDirection::Down,
+            down_option: DownOption::Composite,
+            right_option: RightOption::Level,
+            ai_player_index: 0, // Start with Left player
+            menu_enabled: false, // Start disabled until player explicitly activates
         }
-    }
-}
-
-impl CycleSelection {
-    pub fn select_next(&mut self) {
-        self.target = self.target.next();
-    }
-
-    pub fn select_prev(&mut self) {
-        self.target = self.target.prev();
     }
 }
 
@@ -147,12 +157,11 @@ impl ViewportScale {
 #[derive(Component)]
 pub struct DebugText;
 
-/// Toggle debug UI visibility (Tab only)
+/// Toggle debug UI visibility (Tab only) - CycleIndicator is always visible
 pub fn toggle_debug(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut settings: ResMut<DebugSettings>,
-    mut text_query: Query<&mut Visibility, (With<DebugText>, Without<CycleIndicator>)>,
-    mut cycle_query: Query<&mut Visibility, (With<CycleIndicator>, Without<DebugText>)>,
+    mut text_query: Query<&mut Visibility, With<DebugText>>,
 ) {
     if keyboard.just_pressed(KeyCode::Tab) {
         settings.visible = !settings.visible;
@@ -162,9 +171,6 @@ pub fn toggle_debug(
             Visibility::Hidden
         };
         if let Ok(mut visibility) = text_query.single_mut() {
-            *visibility = new_visibility;
-        }
-        if let Ok(mut visibility) = cycle_query.single_mut() {
             *visibility = new_visibility;
         }
     }
@@ -242,11 +248,15 @@ fn apply_viewport(viewport_scale: &ViewportScale, window_query: &mut Query<&mut 
     info!("Viewport: {}", label);
 }
 
-/// Marker for cycle indicator text
+/// Marker for cycle indicator text (one per line, index 0-3 for Up/Down/Left/Right)
 #[derive(Component)]
-pub struct CycleIndicator;
+pub struct CycleIndicator(pub usize);
 
-/// Unified cycle system - D-pad Down selects target, RT/LT cycle values
+/// Deadzone for detecting active stick usage (disables menu when playing)
+const STICK_ACTIVE_DEADZONE: f32 = 0.2;
+
+/// Unified cycle system - D-pad directions select/cycle options, RT/LT cycle values
+/// Disabled when player is actively using the control stick (playing the game)
 #[allow(clippy::too_many_arguments)]
 pub fn unified_cycle_system(
     gamepads: Query<&Gamepad>,
@@ -264,20 +274,81 @@ pub fn unified_cycle_system(
     mut ball_query: Query<(&mut BallStyle, &mut Sprite), With<Ball>>,
     mut ai_query: Query<(&mut AiState, &Team), With<Player>>,
 ) {
-    // D-pad Down/Up selects next/prev cycle target
-    let select_next = gamepads
-        .iter()
-        .any(|gp| gp.just_pressed(GamepadButton::DPadDown));
-    let select_prev = gamepads
+    // Check if player is actively using the control stick (playing the game)
+    // If so, disable the menu entirely until a D-pad button re-enables it
+    let stick_active = gamepads.iter().any(|gp| {
+        let left_x = gp.get(GamepadAxis::LeftStickX).unwrap_or(0.0).abs();
+        let left_y = gp.get(GamepadAxis::LeftStickY).unwrap_or(0.0).abs();
+        left_x > STICK_ACTIVE_DEADZONE || left_y > STICK_ACTIVE_DEADZONE
+    });
+
+    // Disable menu when stick is active
+    if stick_active {
+        cycle_selection.menu_enabled = false;
+    }
+
+    // Check D-pad directions
+    let dpad_up = gamepads
         .iter()
         .any(|gp| gp.just_pressed(GamepadButton::DPadUp));
+    let dpad_down = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadDown));
+    let dpad_left = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadLeft));
+    let dpad_right = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadRight));
 
-    if select_next {
-        cycle_selection.select_next();
-        info!("Cycle target: {}", cycle_selection.target.name());
-    } else if select_prev {
-        cycle_selection.select_prev();
-        info!("Cycle target: {}", cycle_selection.target.name());
+    let any_dpad = dpad_up || dpad_down || dpad_left || dpad_right;
+
+    // D-pad handling: first press selects direction, second press on same direction cycles
+    if any_dpad {
+        let pressed_direction = if dpad_up {
+            CycleDirection::Up
+        } else if dpad_down {
+            CycleDirection::Down
+        } else if dpad_left {
+            CycleDirection::Left
+        } else {
+            CycleDirection::Right
+        };
+
+        let same_direction = cycle_selection.menu_enabled
+            && cycle_selection.active_direction == pressed_direction;
+
+        if !cycle_selection.menu_enabled || !same_direction {
+            // First press or different direction - just select (no cycling)
+            cycle_selection.menu_enabled = true;
+            cycle_selection.active_direction = pressed_direction;
+            info!("Selected: {:?}", pressed_direction);
+        } else {
+            // Second press on same direction - cycle options
+            match pressed_direction {
+                CycleDirection::Up => {
+                    // Up only has Viewport, no cycling needed
+                    info!("Cycle: Up (Viewport - single option)");
+                }
+                CycleDirection::Down => {
+                    cycle_selection.down_option = cycle_selection.down_option.next();
+                    info!("Cycle: Down ({})", cycle_selection.down_option.name());
+                }
+                CycleDirection::Left => {
+                    // Left only has AI, no cycling needed
+                    info!("Cycle: Left (AI - single option)");
+                }
+                CycleDirection::Right => {
+                    cycle_selection.right_option = cycle_selection.right_option.next();
+                    info!("Cycle: Right ({})", cycle_selection.right_option.name());
+                }
+            }
+        }
+    }
+
+    // Skip LT/RT value cycling if menu is disabled
+    if !cycle_selection.menu_enabled {
+        return;
     }
 
     // RT cycles forward, LT cycles backward
@@ -292,25 +363,10 @@ pub fn unified_cycle_system(
         return;
     }
 
-    match cycle_selection.target {
-        CycleTarget::Level => {
-            let num_levels = level_db.len() as u32;
-            if cycle_next {
-                current_level.0 = if current_level.0 >= num_levels {
-                    1
-                } else {
-                    current_level.0 + 1
-                };
-            } else if cycle_prev {
-                current_level.0 = if current_level.0 <= 1 {
-                    num_levels
-                } else {
-                    current_level.0 - 1
-                };
-            }
-            info!("Level: {}", current_level.0);
-        }
-        CycleTarget::Viewport => {
+    // Handle value cycling based on active direction
+    match cycle_selection.active_direction {
+        CycleDirection::Up => {
+            // Viewport only
             if cycle_next {
                 viewport_scale.cycle_next();
             } else if cycle_prev {
@@ -318,148 +374,172 @@ pub fn unified_cycle_system(
             }
             apply_viewport(&viewport_scale, &mut window_query);
         }
-        CycleTarget::Palette => {
-            // Just change the index - apply_palette_colors system handles the visuals
-            let num_palettes = palette_db.len();
-            if cycle_next {
-                current_palette.0 = (current_palette.0 + 1) % num_palettes;
-            } else if cycle_prev {
-                current_palette.0 = (current_palette.0 + num_palettes - 1) % num_palettes;
-            }
-            info!("Palette: {}", current_palette.0);
-        }
-        CycleTarget::BallStyle => {
-            // Cycle all balls to the next/prev style
-            for (mut style, mut sprite) in &mut ball_query {
-                let new_style_name = if cycle_next {
-                    ball_textures.next_style(style.name())
-                } else {
-                    ball_textures.prev_style(style.name())
-                };
+        CycleDirection::Down => {
+            // Presets: Composite, Movement, Ball, Shooting
+            match cycle_selection.down_option {
+                DownOption::Composite => {
+                    let num = preset_db.composite_len();
+                    if cycle_next {
+                        current_presets.composite = (current_presets.composite + 1) % num;
+                    } else if cycle_prev {
+                        current_presets.composite = (current_presets.composite + num - 1) % num;
+                    }
+                    let idx = current_presets.composite;
+                    apply_composite_preset(&mut current_presets, &preset_db, idx);
 
-                style.0 = new_style_name.to_string();
-
-                // Update sprite texture
-                if let Some(textures) = ball_textures.get(style.name()) {
-                    if let Some(texture) = textures.textures.get(current_palette.0) {
-                        sprite.image = texture.clone();
+                    // Apply additional global settings from composite preset
+                    if let Some(p) = preset_db.get_composite(idx) {
+                        if let Some(level) = p.level {
+                            current_level.0 = level;
+                        }
+                        if let Some(palette) = p.palette {
+                            current_palette.0 = palette;
+                        }
+                        if let Some(ref style_name) = p.ball_style {
+                            if let Some(style_textures) = ball_textures.get(style_name) {
+                                for (mut style, mut sprite) in &mut ball_query {
+                                    *style = BallStyle::new(style_name);
+                                    if let Some(handle) =
+                                        style_textures.textures.get(current_palette.0)
+                                    {
+                                        sprite.image = handle.clone();
+                                    }
+                                }
+                            }
+                        }
+                        info!("Composite: {}", p.name);
+                    }
+                }
+                DownOption::Movement => {
+                    let num = preset_db.movement_len();
+                    if cycle_next {
+                        current_presets.movement = (current_presets.movement + 1) % num;
+                    } else if cycle_prev {
+                        current_presets.movement = (current_presets.movement + num - 1) % num;
+                    }
+                    current_presets.mark_apply();
+                    if let Some(p) = preset_db.get_movement(current_presets.movement) {
+                        info!("Movement: {}", p.name);
+                    }
+                }
+                DownOption::Ball => {
+                    let num = preset_db.ball_len();
+                    if cycle_next {
+                        current_presets.ball = (current_presets.ball + 1) % num;
+                    } else if cycle_prev {
+                        current_presets.ball = (current_presets.ball + num - 1) % num;
+                    }
+                    current_presets.mark_apply();
+                    if let Some(p) = preset_db.get_ball(current_presets.ball) {
+                        info!("Ball Preset: {}", p.name);
+                    }
+                }
+                DownOption::Shooting => {
+                    let num = preset_db.shooting_len();
+                    if cycle_next {
+                        current_presets.shooting = (current_presets.shooting + 1) % num;
+                    } else if cycle_prev {
+                        current_presets.shooting = (current_presets.shooting + num - 1) % num;
+                    }
+                    current_presets.mark_apply();
+                    if let Some(p) = preset_db.get_shooting(current_presets.shooting) {
+                        info!("Shooting: {}", p.name);
                     }
                 }
             }
-
-            // Log the new style (use first ball's style)
-            if let Some((style, _)) = ball_query.iter().next() {
-                info!("Ball Style: {}", style.name());
-            }
         }
-        CycleTarget::AiProfile => {
-            // LT toggles which player to edit, RT cycles their profile
+        CycleDirection::Left => {
+            // AI: LT cycles player selection, RT cycles profile
             if cycle_prev {
                 // Toggle selected player
-                cycle_selection.ai_profile_player = match cycle_selection.ai_profile_player {
-                    Team::Left => Team::Right,
-                    Team::Right => Team::Left,
+                cycle_selection.ai_player_index = (cycle_selection.ai_player_index + 1) % 2;
+                let player_name = if cycle_selection.ai_player_index == 0 {
+                    "Left"
+                } else {
+                    "Right"
                 };
-                info!(
-                    "AI Profile: editing {} player",
-                    match cycle_selection.ai_profile_player {
-                        Team::Left => "Left",
-                        Team::Right => "Right",
-                    }
-                );
+                info!("AI: editing {} player", player_name);
             } else if cycle_next {
                 // Cycle profile for selected player
+                let target_team = if cycle_selection.ai_player_index == 0 {
+                    Team::Left
+                } else {
+                    Team::Right
+                };
                 let num_profiles = profile_db.len();
                 for (mut ai_state, team) in &mut ai_query {
-                    if *team == cycle_selection.ai_profile_player {
+                    if *team == target_team {
                         ai_state.profile_index = (ai_state.profile_index + 1) % num_profiles;
                         let profile = profile_db.get(ai_state.profile_index);
                         info!(
-                            "{} AI Profile: {}",
-                            match team {
-                                Team::Left => "Left",
-                                Team::Right => "Right",
-                            },
+                            "AI {}: {}",
+                            if *team == Team::Left { "L" } else { "R" },
                             profile.name
                         );
                     }
                 }
             }
         }
-        CycleTarget::MovementPreset => {
-            let num = preset_db.movement_len();
-            if cycle_next {
-                current_presets.movement = (current_presets.movement + 1) % num;
-            } else if cycle_prev {
-                current_presets.movement = (current_presets.movement + num - 1) % num;
-            }
-            current_presets.mark_apply();
-            if let Some(p) = preset_db.get_movement(current_presets.movement) {
-                info!("Movement Preset: {}", p.name);
-            }
-        }
-        CycleTarget::BallPreset => {
-            let num = preset_db.ball_len();
-            if cycle_next {
-                current_presets.ball = (current_presets.ball + 1) % num;
-            } else if cycle_prev {
-                current_presets.ball = (current_presets.ball + num - 1) % num;
-            }
-            current_presets.mark_apply();
-            if let Some(p) = preset_db.get_ball(current_presets.ball) {
-                info!("Ball Preset: {}", p.name);
-            }
-        }
-        CycleTarget::ShootingPreset => {
-            let num = preset_db.shooting_len();
-            if cycle_next {
-                current_presets.shooting = (current_presets.shooting + 1) % num;
-            } else if cycle_prev {
-                current_presets.shooting = (current_presets.shooting + num - 1) % num;
-            }
-            current_presets.mark_apply();
-            if let Some(p) = preset_db.get_shooting(current_presets.shooting) {
-                info!("Shooting Preset: {}", p.name);
-            }
-        }
-        CycleTarget::CompositePreset => {
-            let num = preset_db.composite_len();
-            if cycle_next {
-                current_presets.composite = (current_presets.composite + 1) % num;
-            } else if cycle_prev {
-                current_presets.composite = (current_presets.composite + num - 1) % num;
-            }
-            let idx = current_presets.composite;
-            apply_composite_preset(&mut current_presets, &preset_db, idx);
+        CycleDirection::Right => {
+            // Level, Palette, BallStyle
+            match cycle_selection.right_option {
+                RightOption::Level => {
+                    let num_levels = level_db.len() as u32;
+                    if cycle_next {
+                        current_level.0 = if current_level.0 >= num_levels {
+                            1
+                        } else {
+                            current_level.0 + 1
+                        };
+                    } else if cycle_prev {
+                        current_level.0 = if current_level.0 <= 1 {
+                            num_levels
+                        } else {
+                            current_level.0 - 1
+                        };
+                    }
+                    info!("Level: {}", current_level.0);
+                }
+                RightOption::Palette => {
+                    let num_palettes = palette_db.len();
+                    if cycle_next {
+                        current_palette.0 = (current_palette.0 + 1) % num_palettes;
+                    } else if cycle_prev {
+                        current_palette.0 = (current_palette.0 + num_palettes - 1) % num_palettes;
+                    }
+                    info!("Palette: {}", current_palette.0);
+                }
+                RightOption::BallStyle => {
+                    for (mut style, mut sprite) in &mut ball_query {
+                        let new_style_name = if cycle_next {
+                            ball_textures.next_style(style.name())
+                        } else {
+                            ball_textures.prev_style(style.name())
+                        };
 
-            // Apply additional global settings from composite preset
-            if let Some(p) = preset_db.get_composite(idx) {
-                // Apply level if specified
-                if let Some(level) = p.level {
-                    current_level.0 = level;
-                }
-                // Apply palette if specified
-                if let Some(palette) = p.palette {
-                    current_palette.0 = palette;
-                }
-                // Apply ball style if specified
-                if let Some(ref style_name) = p.ball_style {
-                    if let Some(style_textures) = ball_textures.get(style_name) {
-                        for (mut style, mut sprite) in &mut ball_query {
-                            *style = BallStyle::new(style_name);
-                            if let Some(handle) = style_textures.textures.get(current_palette.0) {
-                                sprite.image = handle.clone();
+                        style.0 = new_style_name.to_string();
+
+                        if let Some(textures) = ball_textures.get(style.name()) {
+                            if let Some(texture) = textures.textures.get(current_palette.0) {
+                                sprite.image = texture.clone();
                             }
                         }
                     }
+
+                    if let Some((style, _)) = ball_query.iter().next() {
+                        info!("BallStyle: {}", style.name());
+                    }
                 }
-                info!("Global Preset: {}", p.name);
             }
         }
     }
 }
 
-/// Update cycle indicator display
+/// Font sizes for cycle indicator
+const CYCLE_FONT_SIZE_NORMAL: f32 = 14.0;
+const CYCLE_FONT_SIZE_SELECTED: f32 = 18.0;
+
+/// Update cycle indicator display - 4 separate lines with different sizes when selected
 #[allow(clippy::too_many_arguments)]
 pub fn update_cycle_indicator(
     cycle_selection: Res<CycleSelection>,
@@ -468,69 +548,116 @@ pub fn update_cycle_indicator(
     viewport_scale: Res<ViewportScale>,
     current_presets: Res<CurrentPresets>,
     level_db: Res<LevelDatabase>,
-    palette_db: Res<PaletteDatabase>,
     profile_db: Res<AiProfileDatabase>,
     preset_db: Res<PresetDatabase>,
     ball_query: Query<&BallStyle, With<Ball>>,
-    ai_query: Query<(&AiState, &Team), With<Player>>,
-    mut query: Query<(&mut Text2d, &mut Visibility), With<CycleIndicator>>,
+    ai_query: Query<(&AiState, &Team, Option<&HumanControlled>), With<Player>>,
+    mut query: Query<(&CycleIndicator, &mut Text2d, &mut TextFont)>,
 ) {
-    let Ok((mut text, _visibility)) = query.single_mut() else {
-        return;
-    };
+    let enabled = cycle_selection.menu_enabled;
 
-    // Show current target and its value
-    let value_str = match cycle_selection.target {
-        CycleTarget::Level => format!("{}/{}", current_level.0, level_db.len()),
-        CycleTarget::Viewport => {
-            let (_, _, label) = viewport_scale.current();
-            label.to_string()
-        }
-        CycleTarget::Palette => format!("{}/{}", current_palette.0 + 1, palette_db.len()),
-        CycleTarget::BallStyle => {
-            // Get style from first ball
-            ball_query
-                .iter()
-                .next()
-                .map(|s| s.name().to_string())
-                .unwrap_or_else(|| "None".to_string())
-        }
-        CycleTarget::AiProfile => {
-            // Show both players' profiles, highlight selected with brackets
-            let mut left_profile = "?".to_string();
-            let mut right_profile = "?".to_string();
-            for (ai_state, team) in &ai_query {
-                let profile_name = profile_db.get(ai_state.profile_index).name.clone();
-                match team {
-                    Team::Left => left_profile = profile_name,
-                    Team::Right => right_profile = profile_name,
-                }
-            }
-            // Highlight selected player with brackets
-            match cycle_selection.ai_profile_player {
-                Team::Left => format!("[L:{}] R:{}", left_profile, right_profile),
-                Team::Right => format!("L:{} [R:{}]", left_profile, right_profile),
-            }
-        }
-        CycleTarget::MovementPreset => preset_db
-            .get_movement(current_presets.movement)
-            .map(|p| p.name.clone())
-            .unwrap_or_else(|| "None".to_string()),
-        CycleTarget::BallPreset => preset_db
-            .get_ball(current_presets.ball)
-            .map(|p| p.name.clone())
-            .unwrap_or_else(|| "None".to_string()),
-        CycleTarget::ShootingPreset => preset_db
-            .get_shooting(current_presets.shooting)
-            .map(|p| p.name.clone())
-            .unwrap_or_else(|| "None".to_string()),
-        CycleTarget::CompositePreset => preset_db
+    // Build content for each line
+    let viewport_label = viewport_scale.current().2;
+
+    let down_value = match cycle_selection.down_option {
+        DownOption::Composite => preset_db
             .get_composite(current_presets.composite)
             .map(|p| p.name.clone())
-            .unwrap_or_else(|| "None".to_string()),
+            .unwrap_or_else(|| "?".to_string()),
+        DownOption::Movement => preset_db
+            .get_movement(current_presets.movement)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "?".to_string()),
+        DownOption::Ball => preset_db
+            .get_ball(current_presets.ball)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "?".to_string()),
+        DownOption::Shooting => preset_db
+            .get_shooting(current_presets.shooting)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "?".to_string()),
     };
 
-    **text = format!("[{}] {}", cycle_selection.target.name(), value_str);
+    // AI profiles
+    let mut left_profile = "?".to_string();
+    let mut right_profile = "?".to_string();
+    let mut left_human = false;
+    let mut right_human = false;
+    for (ai_state, team, human) in &ai_query {
+        let profile_name = profile_db.get(ai_state.profile_index).name.clone();
+        match team {
+            Team::Left => {
+                left_profile = profile_name;
+                left_human = human.is_some();
+            }
+            Team::Right => {
+                right_profile = profile_name;
+                right_human = human.is_some();
+            }
+        }
+    }
+    let left_marker_human = if left_human { "*" } else { "" };
+    let right_marker_human = if right_human { "*" } else { "" };
+    let ai_str = if cycle_selection.ai_player_index == 0 {
+        format!(
+            "[L{} {}] R{} {}",
+            left_marker_human, left_profile, right_marker_human, right_profile
+        )
+    } else {
+        format!(
+            "L{} {} [R{} {}]",
+            left_marker_human, left_profile, right_marker_human, right_profile
+        )
+    };
+
+    let right_value = match cycle_selection.right_option {
+        RightOption::Level => format!("{}/{}", current_level.0, level_db.len()),
+        RightOption::Palette => format!("{}", current_palette.0),
+        RightOption::BallStyle => ball_query
+            .iter()
+            .next()
+            .map(|s| s.name().to_string())
+            .unwrap_or_else(|| "?".to_string()),
+    };
+
+    // Direction to index mapping (N/W/E/S order: Up, Left, Right, Down)
+    let active_index = match cycle_selection.active_direction {
+        CycleDirection::Up => 0,    // N
+        CycleDirection::Left => 1,  // W
+        CycleDirection::Right => 2, // E
+        CycleDirection::Down => 3,  // S
+    };
+
+    // Update each line
+    for (indicator, mut text, mut font) in &mut query {
+        let line_index = indicator.0;
+        let is_selected = enabled && line_index == active_index;
+
+        // Marker: ">" when selected, " " otherwise (no marker when disabled)
+        let marker = if is_selected {
+            ">"
+        } else {
+            " "
+        };
+
+        // Font size: larger when selected
+        font.font_size = if is_selected {
+            CYCLE_FONT_SIZE_SELECTED
+        } else {
+            CYCLE_FONT_SIZE_NORMAL
+        };
+
+        // Set text content based on line (N/W/E/S order)
+        // Build label and value for each line
+        let (label, value) = match line_index {
+            0 => ("Viewport", viewport_label.to_string()),
+            1 => ("AI", ai_str.clone()),
+            2 => (cycle_selection.right_option.name(), right_value.clone()),
+            3 => (cycle_selection.down_option.name(), down_value.clone()),
+            _ => ("", String::new()),
+        };
+        **text = format!("{}{}: {}", marker, label, value);
+    }
 }
 
 /// Apply palette colors when CurrentPalette changes

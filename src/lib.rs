@@ -6,6 +6,7 @@
 pub mod config_watcher;
 pub mod constants;
 pub mod helpers;
+pub mod snapshot;
 
 // Game logic modules
 pub mod ai;
@@ -43,11 +44,16 @@ pub use presets::{
 };
 pub use scoring::{CurrentLevel, Score};
 pub use shooting::{ChargingShot, LastShotInfo};
+pub use snapshot::{
+    BallSnapshot, GameSnapshot, PlayerSnapshot, ScoreSnapshot, ShotSnapshot, SnapshotConfig,
+    SnapshotTriggerState,
+};
 pub use steal::{StealContest, StealCooldown};
 pub use ui::{
-    ChargeGaugeBackground, ChargeGaugeFill, CycleIndicator, CycleSelection, CycleTarget,
-    DebugSettings, DebugText, PhysicsTweaks, ScoreFlash, ScoreLevelText, StealCooldownIndicator,
-    StealFailFlash, TweakPanel, TweakRow, ViewportScale, VulnerableIndicator,
+    ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleIndicator, CycleSelection,
+    DebugSettings, DebugText, DownOption, PhysicsTweaks, RightOption, ScoreFlash, ScoreLevelText,
+    StealCooldownIndicator, StealFailFlash, TweakPanel, TweakRow, ViewportScale,
+    VulnerableIndicator,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 

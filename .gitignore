@@ -3,3 +3,10 @@ Cargo.lock
 
 # Claude Code
 .claude/
+
+# Snapshots (ephemeral)
+/snapshots/
+
+# Regression test artifacts (except baseline)
+/regression/current.png
+/regression/diff.png

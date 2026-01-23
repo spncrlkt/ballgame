@@ -119,7 +119,14 @@ pub fn pickup_ball(
         (With<Player>, Without<HoldingBall>),
     >,
     mut holding_players: Query<
-        (Entity, &Transform, &HoldingBall, &ChargingShot, &mut Velocity, &mut StealCooldown),
+        (
+            Entity,
+            &Transform,
+            &HoldingBall,
+            &ChargingShot,
+            &mut Velocity,
+            &mut StealCooldown,
+        ),
         With<Player>,
     >,
     mut ball_query: Query<(Entity, &Transform, &mut BallState), With<Ball>>,
@@ -168,8 +175,14 @@ pub fn pickup_ball(
         }
 
         // If no free ball nearby, check for steal opportunity
-        for (defender_entity, defender_transform, holding, defender_charging, mut defender_velocity, mut defender_cooldown) in
-            &mut holding_players
+        for (
+            defender_entity,
+            defender_transform,
+            holding,
+            defender_charging,
+            mut defender_velocity,
+            mut defender_cooldown,
+        ) in &mut holding_players
         {
             let distance = player_pos.distance(defender_transform.translation.truncate());
 

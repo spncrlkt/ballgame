@@ -10,9 +10,10 @@ use ballgame::{
     CurrentPresets, CycleIndicator, CycleSelection, DebugSettings, DebugText, Facing, Grounded,
     HumanControlled, InputState, JumpState, LastShotInfo, LevelDatabase, PALETTES_FILE,
     PRESETS_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, PresetDatabase, Score,
-    ScoreLevelText, StealContest, StealCooldown, StyleTextures, TargetBasket, Team, TweakPanel,
-    TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball, config_watcher,
-    constants::*, helpers::*, input, levels, player, scoring, shooting, steal, ui, world,
+    ScoreLevelText, SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown,
+    StyleTextures, TargetBasket, Team, TweakPanel, TweakRow, Velocity, ViewportScale, ai,
+    apply_preset_to_tweaks, ball, config_watcher, constants::*, helpers::*, input, levels, player,
+    scoring, shooting, snapshot, steal, ui, world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
@@ -47,6 +48,10 @@ fn load_ball_style_names() -> Vec<String> {
 }
 
 fn main() {
+    // Parse command-line arguments
+    let args: Vec<String> = std::env::args().collect();
+    let screenshot_and_quit = args.iter().any(|a| a == "--screenshot-and-quit");
+
     // Load level database from file
     let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
 
@@ -98,6 +103,11 @@ fn main() {
         .init_resource::<ConfigWatcher>()
         .init_resource::<AiProfileDatabase>()
         .init_resource::<CurrentPresets>()
+        .insert_resource(SnapshotConfig {
+            exit_after_startup: screenshot_and_quit,
+            ..default()
+        })
+        .init_resource::<SnapshotTriggerState>()
         .add_systems(Startup, setup)
         // Input systems must run in order: capture -> copy -> swap -> AI
         .add_systems(
@@ -143,6 +153,16 @@ fn main() {
                 ui::update_cycle_indicator,
                 ui::apply_palette_colors,
                 apply_preset_to_tweaks,
+            ),
+        )
+        // Snapshot system - captures game state on events
+        .add_systems(
+            Update,
+            (
+                snapshot::snapshot_trigger_system,
+                snapshot::toggle_snapshot_system,
+                snapshot::toggle_screenshot_capture,
+                snapshot::manual_snapshot,
             ),
         )
         .add_systems(
@@ -574,20 +594,26 @@ fn setup(
         DebugText,
     ));
 
-    // Cycle indicator - shows current cycle target when using controller (D-pad Down + RT/LT)
-    // Starts visible (like other debug UI), toggled with Tab
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size: 18.0,
-            ..default()
-        },
-        TextLayout::new_with_justify(Justify::Center),
-        TextColor(TEXT_ACCENT),
-        Transform::from_xyz(0.0, ARENA_HEIGHT / 2.0 - 60.0, 1.0),
-        Visibility::Inherited,
-        CycleIndicator,
-    ));
+    // Cycle indicator - 4 separate lines for individual styling
+    // Each line can have different font size when selected
+    // Position: well inside visible area (camera uses FixedVertical, so horizontal extent varies)
+    let cycle_base_x = -ARENA_WIDTH / 2.0 + WALL_THICKNESS + 120.0;
+    let cycle_base_y = ARENA_HEIGHT / 2.0 - 30.0;
+    let cycle_line_spacing = 22.0;
+
+    for i in 0..4 {
+        commands.spawn((
+            Text2d::new(""),
+            TextFont {
+                font_size: 14.0,
+                ..default()
+            },
+            TextLayout::new_with_justify(Justify::Left),
+            TextColor(TEXT_ACCENT),
+            Transform::from_xyz(cycle_base_x, cycle_base_y - (i as f32 * cycle_line_spacing), 1.0),
+            CycleIndicator(i),
+        ));
+    }
 
     // Physics Tweak Panel (hidden by default, toggle with F1)
     commands

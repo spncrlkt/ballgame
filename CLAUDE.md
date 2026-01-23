@@ -83,6 +83,7 @@ src/
 ├── ball/            # Ball components, physics, interaction systems
 ├── shooting/        # Charge, throw, targeting systems
 ├── scoring/         # Score resource, check_scoring system
+├── snapshot.rs      # Game state + screenshot capture on events (F2/F3/F4)
 ├── steal.rs         # StealContest resource + steal cooldown system
 ├── levels/          # LevelDatabase, spawning, hot reload
 ├── presets/         # Game tuning presets (movement, ball, shooting, composite)
@@ -104,11 +105,13 @@ src/
 - `LastShotInfo` - Debug info about the most recent shot (angle, power, variance breakdown)
 - `BallTextures` - Handles to ball textures (dynamic styles × palettes)
 - `ViewportScale` - Current viewport preset for testing different screen sizes
-- `CycleSelection` - Which option category is selected for controller cycling (9 targets: Global → Level → AI Profile → Palette → Ball Style → Viewport → Movement → Ball → Shooting)
+- `CycleSelection` - D-pad direction-based cycle state (active_direction, down_option, right_option, ai_player_index)
 - `AiProfileDatabase` - Loaded AI personality profiles from assets/ai_profiles.txt
 - `ConfigWatcher` - Tracks config file modification times for auto-reload (every 10s)
 - `PresetDatabase` - Game tuning presets from assets/game_presets.txt
 - `CurrentPresets` - Currently active preset indices (movement, ball, shooting, composite)
+- `SnapshotConfig` - Controls automatic game state capture (on_score, on_steal, on_level_change, save_screenshots)
+- `SnapshotTriggerState` - Tracks previous frame state for detecting changes
 
 **Player Components:**
 - `Player` - Marker for player entities
@@ -127,7 +130,7 @@ src/
 **Ball Components:**
 - `Ball` - Marker for ball entity
 - `BallState` - Free, Held(Entity), or InFlight { shooter, power }
-- `BallStyleType` - Visual style (Stripe, Wedges, Dot, Half, Ring, Solid)
+- `BallStyle` - Visual style name (loaded from assets/ball_options.txt: wedges, half, spiral, etc.)
 - `BallPlayerContact` - Tracks overlap for collision effects
 - `BallPulse` - Animation timer for pickup indicator
 - `BallRolling` - Whether ball is rolling on ground (vs bouncing/flying)
@@ -148,13 +151,13 @@ src/
 - `ChargeGaugeBackground` / `ChargeGaugeFill` - Shot charge indicator (inside player)
 - `TweakPanel` / `TweakRow` - Physics tweak panel UI
 - `ScoreFlash` - Score animation (flashes basket/player on goal)
-- `CycleIndicator` - Brief display showing current cycle target when using controller
+- `CycleIndicator` - Always-visible 4-line display in top-left showing all D-pad directions and options
 
 ### System Execution Order
 
-**Update schedule:** `capture_input` → `copy_human_input` → `swap_control` → `ai_decision_update` → `respawn_player` → `toggle_debug` → `update_debug_text` → `update_score_level_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `toggle_tweak_panel` → `update_tweak_panel` → `update_style_key_visibility` → `cycle_viewport` → `unified_cycle_system` → `update_cycle_indicator`
+**Update schedule:** `capture_input` → `copy_human_input` → `swap_control` → `ai_decision_update` → `respawn_player` → `steal_cooldown_update` → `toggle_debug` → `check_config_changes` → `update_debug_text` → `update_score_level_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `update_steal_indicators` → `toggle_tweak_panel` → `update_tweak_panel` → `cycle_viewport` → `unified_cycle_system` → `update_cycle_indicator` → `apply_palette_colors` → `apply_preset_to_tweaks` → `snapshot_trigger_system` → `toggle_snapshot_system` → `toggle_screenshot_capture` → `manual_snapshot`
 
-**FixedUpdate schedule (chained):** `apply_input` → `apply_gravity` → `ball_gravity` → `ball_spin` → `apply_velocity` → `check_collisions` → `ball_collisions` → `ball_state_update` → `ball_player_collision` → `ball_follow_holder` → `pickup_ball` → `steal_contest_update` → `update_shot_charge` → `throw_ball` → `check_scoring`
+**FixedUpdate schedule (chained):** `apply_input` → `apply_gravity` → `ball_gravity` → `ball_spin` → `apply_velocity` → `check_collisions` → `ball_collisions` → `ball_state_update` → `ball_player_collision` → `ball_follow_holder` → `pickup_ball` → `steal_cooldown_update` → `update_shot_charge` → `throw_ball` → `check_scoring`
 
 ### Input
 
@@ -168,14 +171,30 @@ Keyboard + Gamepad supported:
 - ] key: Next level (keyboard only)
 - [ key: Previous level (keyboard only)
 - V key: Cycle viewport size (keyboard only)
-- Tab or D-pad Up: Toggle debug UI
+- Tab: Toggle debug UI (shot info text)
 - F1: Toggle physics tweak panel (keyboard only)
+- F2: Toggle snapshot system on/off (keyboard only)
+- F3: Toggle screenshot capture - JSON only when off (keyboard only)
+- F4: Manual snapshot - captures game state + screenshot immediately (keyboard only)
 
-**Controller Unified Cycle System:**
-- D-pad Up/Down: Select cycle target (Global → Level → AI Profile → Palette → Ball Style → Viewport → Movement → Ball → Shooting)
-- RT (Right Trigger): Cycle selected option forward
-- LT (Left Trigger): Cycle selected option backward (for AI Profile: LT selects player, RT cycles profile)
-- Tab: Toggle cycle indicator visibility (along with debug UI)
+**Controller D-pad Cycle System:**
+Each D-pad direction controls different options. Press a direction to select it (and cycle its options if multiple), then use LT/RT to cycle values.
+
+| Direction | Options (D-pad cycles) | Values (LT/RT cycles) |
+|-----------|------------------------|----------------------|
+| **Up** | Viewport (single) | Viewport sizes |
+| **Down** | Composite → Movement → Ball → Shooting | Preset values |
+| **Left** | AI (single) | LT: player, RT: profile |
+| **Right** | Level → Palette → BallStyle | Values |
+
+Display (top-left, always visible):
+```
+  Viewport: 1080p
+> Composite: Default
+  AI: [L* Aggressive] R Passive
+  Level: 3/10
+```
+`>` marks active direction, `*` marks human-controlled player
 
 **Bevy GamepadButton naming (counterintuitive):**
 - `LeftTrigger` / `RightTrigger` = Bumpers (LB/RB, digital shoulder buttons)
@@ -304,6 +323,8 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 7. **Collision epsilon** - All entities resting on platforms must use `- COLLISION_EPSILON` positioning to ensure overlap is detected next frame (prevents floating/falling through)
 8. **Frame-rate independent physics** - All continuous physics (gravity, friction, drag) must use `* time.delta_secs()` or `.powf(time.delta_secs())`. Per-frame multipliers like `velocity *= 0.98` are bugs.
 9. **Compilation** - Run `cargo check` and `cargo clippy`
+10. **Visual regression** - Run `./scripts/regression.sh` to capture and compare against baseline
+11. **Visual verification** - Review the regression screenshot to verify UI elements are visible and correctly positioned
 
 **After auditing:**
 - Run the code review prompt from `code_review_prompt.md` and log results to `code_review_audits.md`
@@ -311,4 +332,45 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 - Write the audit findings and changes since last audit to `audit_record.md`
 - Update `todo.md` - move completed items to Done section, add any new tasks discovered
 - Archive old done records: keep only the last 5 done items in `todo.md`, move older ones to `todone.md` with a dated section header (e.g., `## Archived 2026-01-23`)
+
+### UI/UX Changes
+
+**Always verify UI changes visually using screenshots.**
+
+When making changes to UI elements (text positioning, HUD layout, debug displays, indicators):
+
+1. Run the game and trigger a snapshot with F4 (or let events trigger automatically)
+2. Read the screenshot from `snapshots/` directory to verify the change looks correct
+3. Check for: text clipping, overlapping elements, correct positioning, readability
+
+The snapshot system captures both JSON (game state) and PNG (screenshot) to `snapshots/` directory. Use this to verify visual changes without manually inspecting the running game.
+
+**Snapshot triggers:**
+- Automatic: score changes, steal attempts, level changes
+- Manual: F4 key
+
+**Output location:** `snapshots/YYYYMMDD_HHMMSS_trigger.json` and `.png`
+
+### Visual Regression Testing
+
+**Scripts:**
+- `./scripts/screenshot.sh` - Capture a single screenshot (game auto-quits after startup)
+- `./scripts/regression.sh` - Capture and compare against baseline
+- `./scripts/regression.sh --update` - Update baseline with current screenshot
+
+**Workflow:**
+1. Run `./scripts/regression.sh` to capture current state and compare to baseline
+2. Review output: PASS (match), REVIEW (small diff), or FAIL (significant diff)
+3. If changes are intentional, update baseline with `./scripts/regression.sh --update`
+4. Read screenshots directly with Read tool to verify visual changes
+
+**Files:**
+- `regression/baseline.png` - Known-good reference screenshot
+- `regression/current.png` - Most recent captured screenshot
+- `regression/diff.png` - Visual diff (if ImageMagick is installed)
+
+**Notes:**
+- Small differences are normal due to timing/compression variations
+- Debug level (1/11) shows all ball styles for visual testing
+- The game uses `--screenshot-and-quit` flag to auto-exit after startup screenshot
 

@@ -1,5 +1,12 @@
 # Ballgame Done Archive
 
+## Archived 2026-01-23 (Session 3)
+- [x] Simplified steal system - removed button mashing, instant steal attempts (33% base, 50% if charging)
+- [x] Added 1-second no-stealback cooldown for steal victims
+- [x] Both players have independent AI profiles (LT selects player, RT cycles profile)
+- [x] Added Observer mode to player control cycling (Left → Right → Observer → Left)
+- [x] Game Presets system - Movement/Ball/Shooting/Global presets with hot-reload
+
 ## Archived 2026-01-23 (Session 2)
 - [x] Steal Phase 1: Pushback on successful steal (STEAL_PUSHBACK_STRENGTH)
 - [x] Steal Phase 1: Randomness in contests (STEAL_RANDOM_BONUS)
