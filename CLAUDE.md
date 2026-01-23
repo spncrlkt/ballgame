@@ -83,8 +83,9 @@ src/
 ├── ball/            # Ball components, physics, interaction systems
 ├── shooting/        # Charge, throw, targeting systems
 ├── scoring/         # Score resource, check_scoring system
-├── steal.rs         # StealContest resource + system
+├── steal.rs         # StealContest resource + steal cooldown system
 ├── levels/          # LevelDatabase, spawning, hot reload
+├── presets/         # Game tuning presets (movement, ball, shooting, composite)
 ├── world/           # Platform, Collider, Basket, BasketRim components
 └── ui/              # Debug, HUD, animations, charge gauge, tweak panel
 ```
@@ -93,19 +94,21 @@ src/
 
 **Resources:**
 - `PlayerInput` - Buffered input state (movement, jump, pickup, throw)
-- `StealContest` - Active steal contest state
+- `StealContest` - Steal feedback (fail flash timer for visual feedback)
 - `Score` - Left/right team scores
 - `DebugSettings` - Debug UI visibility
 - `CurrentLevel` - Current level number (1-10)
-- `CurrentPalette` - Current color palette index (0-9), cycles on reset
+- `CurrentPalette` - Current color palette index (default: 26)
 - `PhysicsTweaks` - Runtime-adjustable physics values with panel UI
 - `LevelDatabase` - Loaded level definitions from assets/levels.txt
 - `LastShotInfo` - Debug info about the most recent shot (angle, power, variance breakdown)
-- `BallTextures` - Handles to all 60 ball textures (6 styles × 10 palettes)
+- `BallTextures` - Handles to ball textures (dynamic styles × palettes)
 - `ViewportScale` - Current viewport preset for testing different screen sizes
-- `CycleSelection` - Which option category is selected for controller cycling (Level/Viewport/Palette/BallStyle/AiProfile)
+- `CycleSelection` - Which option category is selected for controller cycling (9 targets: Global → Level → AI Profile → Palette → Ball Style → Viewport → Movement → Ball → Shooting)
 - `AiProfileDatabase` - Loaded AI personality profiles from assets/ai_profiles.txt
 - `ConfigWatcher` - Tracks config file modification times for auto-reload (every 10s)
+- `PresetDatabase` - Game tuning presets from assets/game_presets.txt
+- `CurrentPresets` - Currently active preset indices (movement, ball, shooting, composite)
 
 **Player Components:**
 - `Player` - Marker for player entities
@@ -119,6 +122,7 @@ src/
 - `TargetBasket` - Which basket (Left/Right) player is aiming at
 - `InputState` - Per-player input buffer (human input copied here, AI writes directly)
 - `AiState` - AI goal state machine + profile_index for AI personality
+- `StealCooldown` - Per-player cooldown timer between steal attempts
 
 **Ball Components:**
 - `Ball` - Marker for ball entity
@@ -159,7 +163,7 @@ Keyboard + Gamepad supported:
 - Space/W or South button: Jump
 - E or West button: Pickup ball / Steal
 - F or Right Bumper: Charge and throw (hold to charge, release to throw)
-- Q or Left Bumper: Swap player control (human ↔ AI)
+- Q or Left Bumper: Cycle player control (Left → Right → Observer → Left)
 - R or Start: Reset current level (randomizes AI profile)
 - ] key: Next level (keyboard only)
 - [ key: Previous level (keyboard only)
@@ -168,9 +172,10 @@ Keyboard + Gamepad supported:
 - F1: Toggle physics tweak panel (keyboard only)
 
 **Controller Unified Cycle System:**
-- D-pad Down: Select cycle target (Level → Viewport → Palette → Ball Style → AI Profile)
+- D-pad Up/Down: Select cycle target (Global → Level → AI Profile → Palette → Ball Style → Viewport → Movement → Ball → Shooting)
 - RT (Right Trigger): Cycle selected option forward
-- LT (Left Trigger): Cycle selected option backward
+- LT (Left Trigger): Cycle selected option backward (for AI Profile: LT selects player, RT cycles profile)
+- Tab: Toggle cycle indicator visibility (along with debug UI)
 
 **Bevy GamepadButton naming (counterintuitive):**
 - `LeftTrigger` / `RightTrigger` = Bumpers (LB/RB, digital shoulder buttons)

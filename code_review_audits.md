@@ -4,6 +4,53 @@ Results from code reviews performed during audits.
 
 ---
 
+## 2026-01-23 (Session 2)
+
+### 1. Duplication (2 issues)
+
+| Location | Problem | Suggested Fix |
+|----------|---------|---------------|
+| `main.rs:318-373` + `player/physics.rs:359-427` | Ball spawning logic still duplicated | Extract to `ball/spawning.rs` |
+| `helpers.rs` | `apply_bounce_deflection` created but not used everywhere | Replace all inline bounce calculations |
+
+### 2. Complexity (1 issue)
+
+| Location | Problem | Suggested Fix |
+|----------|---------|---------------|
+| `player/physics.rs:198-356` | `respawn_player` still 150+ lines | Split into `reset_game()` and `change_level()` |
+
+### 3. Naming (1 issue)
+
+| Location | Problem | Suggested Fix |
+|----------|---------|---------------|
+| `presets/types.rs` | `CompositePreset` used internally but displayed as "Global" | Consider renaming to `GlobalPreset` |
+
+### 4. Structure (2 issues)
+
+| Location | Problem | Suggested Fix |
+|----------|---------|---------------|
+| `ui/debug.rs` | 540+ lines with cycling, debug, viewport, presets all mixed | Split into `ui/cycle.rs` and keep debug.rs focused |
+| `ball/components.rs:86` | `CurrentPalette` still in ball module | Move to `palettes/mod.rs` |
+
+### 5. Pattern Violations (0 issues)
+
+No new pattern violations found. All input buffering, frame-rate independence, and collision epsilon patterns are correctly followed.
+
+### Summary
+
+| Category | Count |
+|----------|-------|
+| Duplication | 2 |
+| Complexity | 1 |
+| Naming | 1 |
+| Structure | 2 |
+| Pattern Violations | 0 |
+| **Total** | **6** |
+
+**Note:** This session focused on steal simplification and preset system completion. The issues identified are pre-existing technical debt, not new problems.
+
+---
+
 ## 2026-01-23
 
 ### 1. Duplication (5 issues)

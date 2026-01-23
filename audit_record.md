@@ -4,6 +4,92 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Audit: 2026-01-23 (Session 2) - Steal Simplification & Presets Complete
+
+### Session Summary
+
+Major system overhaul: simplified steal mechanics, completed game presets system, added observer mode.
+
+### Changes Made
+
+**Steal System Simplification:**
+- Removed button-mashing contest (14 constants deleted)
+- Implemented instant steal attempts with 33% base success chance
+- +17% bonus if defender is charging (50% total)
+- 0.3s cooldown between attempts, 1s victim no-stealback cooldown
+- Simplified `StealContest` resource to just feedback (fail flash)
+- Removed mashing logic from AI decision system
+- Visual feedback: cooldown indicator + fail flash
+
+**Game Presets System:**
+- Created `src/presets/` module (types.rs, database.rs, apply.rs)
+- Hierarchical presets: Movement, Ball, Shooting, Global (composite)
+- Global presets can set all options including level, palette, ball_style
+- 6 Movement presets: Default, Floaty, Responsive, Heavy, Slippery, Precise
+- 6 Ball presets: Default, Bouncy, Heavy, Floaty, Pinball, Dead
+- 6 Shooting presets: Default, Quick, Power, Wild, Sniper, Spam
+- 6 Global presets: Default, Arcade, Realistic, Floaty, Chaos, Tactical
+- Hot-reload support via ConfigWatcher
+
+**Cycle System Updates:**
+- Global preset is now first/default option
+- Reordered: Global → Level → AI Profile → Palette → Ball Style → Viewport → Movement → Ball → Shooting
+- D-pad Up cycles backwards through list
+- AI Profile: LT selects player (Left/Right), RT cycles profile
+- Tab toggles both debug UI and cycle indicator visibility
+
+**Observer Mode:**
+- Added to swap_control: Left → Right → Observer → Left
+- Observer mode: both players controlled by AI, human spectates
+
+**Other Changes:**
+- Removed 3 smallest viewport presets (800x450, 1024x576, 1280x720)
+- Palette 26 is now default
+- Both players have independent AI profiles
+
+### Audit Findings
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| CLAUDE.md accuracy | UPDATED | Added presets module, StealCooldown, updated descriptions |
+| Input buffering | PASS | All patterns correct |
+| Constants | PASS | All steal constants consolidated, no magic numbers |
+| System order | PASS | FixedUpdate chain matches main.rs |
+| Unused code | PASS | Removed old steal mashing code |
+| Pattern violations | PASS | No raw input in FixedUpdate |
+| Collision epsilon | N/A | No new collision code |
+| Frame-rate physics | PASS | New timers use delta_secs() |
+| Compilation | PASS | `cargo check` clean |
+| Clippy | WARN | ~10 warnings (type_complexity, collapsible_if - standard) |
+
+### Files Created
+
+- `src/presets/mod.rs` - Presets module root
+- `src/presets/types.rs` - Preset type definitions
+- `src/presets/database.rs` - PresetDatabase with file parsing
+- `src/presets/apply.rs` - Preset application logic
+- `src/ui/steal_indicators.rs` - Simplified steal UI
+
+### Files Modified
+
+- `src/steal.rs` - Simplified to cooldown + feedback only
+- `src/ball/interaction.rs` - Instant steal logic in pickup_ball
+- `src/ai/mod.rs` - Observer mode, removed mashing fields
+- `src/ai/decision.rs` - Removed steal mashing logic
+- `src/shooting/throw.rs` - Removed contest blocking
+- `src/ui/debug.rs` - Cycle system updates, Global first
+- `src/constants.rs` - New steal constants, removed old ones
+- `src/main.rs` - Added preset resources and systems
+- `src/lib.rs` - Added preset exports
+- `assets/game_presets.txt` - Full preset definitions
+- `CLAUDE.md` - Updated architecture documentation
+- `todo.md` - Updated with completed items
+- `milestones.md` - Marked stealing mechanics complete
+- `code_review_audits.md` - Added session 2 findings
+- `audit_record.md` - This entry
+
+---
+
 ## Audit: 2026-01-23 (Session 1) - AI Enhancement Plan Complete
 
 ### Session Summary

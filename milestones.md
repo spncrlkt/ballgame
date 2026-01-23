@@ -8,11 +8,12 @@
 - [ ] Single player can play against AI and have a good time
 
 **Stealing Mechanics:**
-- [ ] Add randomness to steal contests (not just button mashing)
-- [ ] Steal pushback - knockback on successful steal to prevent immediate steal-back
-- [ ] Make stealing easier if ball holder is charging a shot
+- [x] Simplified steal system - instant attempts, no button mashing (33% base chance)
+- [x] Steal pushback - knockback on successful steal
+- [x] 1-second no-stealback cooldown for victims
+- [x] Make stealing easier if ball holder is charging a shot (+17% = 50% total)
+- [x] Steal cooldown (0.3s) to prevent spam
 - [ ] Consider other vulnerability states (jumping, recovering from collision)
-- [ ] Steal cooldown or fatigue to prevent spam
 
 **AI Behavior:**
 - [ ] AI plays competently and is fun to play against

@@ -1,6 +1,16 @@
 # Ballgame Done Archive
 
-## Archived 2026-01-23
+## Archived 2026-01-23 (Session 2)
+- [x] Steal Phase 1: Pushback on successful steal (STEAL_PUSHBACK_STRENGTH)
+- [x] Steal Phase 1: Randomness in contests (STEAL_RANDOM_BONUS)
+- [x] Steal Phase 1: Charging penalty (STEAL_CHARGING_PENALTY)
+- [x] Steal Phase 1: Cooldown to prevent spam (STEAL_COOLDOWN + StealCooldown component)
+- [x] AI enhancement Phase 1: Renamed `AiInput` → `InputState` (unified input buffer)
+- [x] AI enhancement Phase 2: Auto-reload config files every 10s (replaced F2 hotkey)
+- [x] AI enhancement Phase 3: Created `assets/ai_profiles.txt` with 10 AI personas
+- [x] AI enhancement Phase 4: AI profile cycling (D-pad) + random profile on reset (R key)
+
+## Archived 2026-01-23 (Session 1)
 - [x] Split main.rs into modules (2624 lines → 18 focused files, no module >500 lines)
 - [x] Fix viewport and arena wall size (1600×900 window, 1:1 camera, 20px walls, world-space UI)
 - [x] Remove possession ball texture swapping, add 10 color palettes that cycle on reset (affects ball, players, baskets)
