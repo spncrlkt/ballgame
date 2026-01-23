@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::ball::{Ball, BallState, Velocity};
 use crate::constants::*;
-use crate::player::{HoldingBall, Player};
+use crate::player::{HoldingBall, Player, Team};
 use crate::ui::ScoreFlash;
 use crate::world::Basket;
 
@@ -31,7 +31,7 @@ pub fn check_scoring(
     mut score: ResMut<Score>,
     mut ball_query: Query<(&mut Transform, &mut Velocity, &mut BallState, &Sprite), With<Ball>>,
     basket_query: Query<(Entity, &Transform, &Basket, &Sprite), Without<Ball>>,
-    player_query: Query<(Entity, &Sprite), With<Player>>,
+    player_query: Query<(Entity, &Sprite, &Team), With<Player>>,
 ) {
     for (mut ball_transform, mut ball_velocity, mut ball_state, _ball_sprite) in &mut ball_query {
         let ball_pos = ball_transform.translation.truncate();
@@ -57,6 +57,12 @@ pub fn check_scoring(
                     Basket::Right => score.right += points,
                 }
 
+                // Basket color based on its side (defensive coloring)
+                let basket_original_color = match basket {
+                    Basket::Left => TEAM_LEFT_PRIMARY,
+                    Basket::Right => TEAM_RIGHT_PRIMARY,
+                };
+
                 // Flash the basket (gold/yellow for carry-in, white for throw)
                 let flash_color = if is_held {
                     Color::srgb(1.0, 0.85, 0.0) // Gold for 2-point carry
@@ -66,16 +72,21 @@ pub fn check_scoring(
                 commands.entity(basket_entity).insert(ScoreFlash {
                     timer: 0.6,
                     flash_color,
-                    original_color: BASKET_COLOR,
+                    original_color: basket_original_color,
                 });
 
                 // If held, also flash the player who scored
                 if let BallState::Held(holder) = *ball_state {
-                    if let Ok((player_entity, _player_sprite)) = player_query.get(holder) {
+                    if let Ok((player_entity, _player_sprite, team)) = player_query.get(holder) {
+                        // Player color based on team
+                        let player_original_color = match team {
+                            Team::Left => TEAM_LEFT_PRIMARY,
+                            Team::Right => TEAM_RIGHT_PRIMARY,
+                        };
                         commands.entity(player_entity).insert(ScoreFlash {
                             timer: 0.6,
                             flash_color,
-                            original_color: PLAYER_COLOR,
+                            original_color: player_original_color,
                         });
                         // Remove HoldingBall from the player
                         commands.entity(player_entity).remove::<HoldingBall>();

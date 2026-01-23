@@ -6,6 +6,75 @@ use bevy::prelude::*;
 #[derive(Component)]
 pub struct Ball;
 
+/// Visual style of a ball (each has 3 possession textures)
+#[derive(Component, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
+pub enum BallStyleType {
+    Stripe,
+    Wedges,
+    #[default]
+    Dot,
+    Half,
+    Ring,
+    Solid,
+}
+
+impl BallStyleType {
+    /// All ball styles in order (matches debug level left-to-right)
+    pub const ALL: [BallStyleType; 6] = [
+        BallStyleType::Stripe,
+        BallStyleType::Wedges,
+        BallStyleType::Dot,
+        BallStyleType::Half,
+        BallStyleType::Ring,
+        BallStyleType::Solid,
+    ];
+
+    /// Name for display
+    pub fn name(&self) -> &'static str {
+        match self {
+            BallStyleType::Stripe => "stripe",
+            BallStyleType::Wedges => "wedges",
+            BallStyleType::Dot => "dot",
+            BallStyleType::Half => "half",
+            BallStyleType::Ring => "ring",
+            BallStyleType::Solid => "solid",
+        }
+    }
+}
+
+/// Textures for a single ball style (neutral, left, right)
+#[derive(Clone)]
+pub struct StyleTextures {
+    pub neutral: Handle<Image>,
+    pub left: Handle<Image>,
+    pub right: Handle<Image>,
+}
+
+/// Holds handles to all ball textures for dynamic swapping based on possession
+#[derive(Resource, Clone)]
+pub struct BallTextures {
+    pub stripe: StyleTextures,
+    pub wedges: StyleTextures,
+    pub dot: StyleTextures,
+    pub half: StyleTextures,
+    pub ring: StyleTextures,
+    pub solid: StyleTextures,
+}
+
+impl BallTextures {
+    /// Get textures for a specific style
+    pub fn get(&self, style: BallStyleType) -> &StyleTextures {
+        match style {
+            BallStyleType::Stripe => &self.stripe,
+            BallStyleType::Wedges => &self.wedges,
+            BallStyleType::Dot => &self.dot,
+            BallStyleType::Half => &self.half,
+            BallStyleType::Ring => &self.ring,
+            BallStyleType::Solid => &self.solid,
+        }
+    }
+}
+
 /// Ball state - Free, Held, or InFlight
 #[derive(Component, Default, Debug, Clone, Copy, PartialEq)]
 pub enum BallState {
@@ -37,3 +106,7 @@ pub struct BallRolling(pub bool);
 /// Timer for post-shot grace period (no friction/player drag)
 #[derive(Component, Default)]
 pub struct BallShotGrace(pub f32);
+
+/// Tracks ball's angular velocity (radians per second)
+#[derive(Component, Default)]
+pub struct BallSpin(pub f32);

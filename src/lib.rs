@@ -7,6 +7,7 @@ pub mod constants;
 pub mod helpers;
 
 // Game logic modules
+pub mod ai;
 pub mod ball;
 pub mod input;
 pub mod levels;
@@ -18,19 +19,24 @@ pub mod ui;
 pub mod world;
 
 // Re-export commonly used types for convenience
-pub use ball::{Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallState};
+pub use ai::{AiGoal, AiInput, AiState};
+pub use ball::{
+    Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
+    BallStyleType, BallTextures, StyleTextures,
+};
 pub use constants::*;
 pub use helpers::*;
 pub use input::PlayerInput;
 pub use levels::{LevelData, LevelDatabase, PlatformDef};
 pub use player::{
-    CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, Velocity,
+    CoyoteTimer, Facing, Grounded, HoldingBall, HumanControlled, JumpState, Player, TargetBasket,
+    Team, Velocity,
 };
 pub use scoring::{CurrentLevel, Score};
-pub use shooting::{ChargingShot, LastShotInfo, TargetBasket, TargetMarker};
+pub use shooting::{ChargingShot, LastShotInfo};
 pub use steal::StealContest;
 pub use ui::{
-    ChargeGaugeBackground, ChargeGaugeFill, DebugSettings, DebugText, PhysicsTweaks,
+    ChargeGaugeBackground, ChargeGaugeFill, DebugSettings, DebugStyleKey, DebugText, PhysicsTweaks,
     ScoreFlash, ScoreLevelText, TweakPanel, TweakRow,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};

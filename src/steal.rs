@@ -2,8 +2,9 @@
 
 use bevy::prelude::*;
 
+use crate::ai::AiInput;
 use crate::ball::{Ball, BallState};
-use crate::player::HoldingBall;
+use crate::player::{HoldingBall, Player};
 
 /// Steal contest resource tracking active steal attempts
 #[derive(Resource, Default)]
@@ -16,13 +17,15 @@ pub struct StealContest {
     pub timer: f32,
 }
 
-/// Update steal contest state
+/// Update steal contest state.
+/// All players read from their AiInput component.
 pub fn steal_contest_update(
     mut commands: Commands,
     mut steal_contest: ResMut<StealContest>,
     time: Res<Time>,
     mut ball_query: Query<&mut BallState, With<Ball>>,
     holding_query: Query<&HoldingBall>,
+    mut players: Query<&mut AiInput, With<Player>>,
 ) {
     if !steal_contest.active {
         return;
@@ -30,10 +33,24 @@ pub fn steal_contest_update(
 
     steal_contest.timer -= time.delta_secs();
 
-    // TODO: In multiplayer, check defender's button presses here
-    // For now, defender gets occasional "presses" to simulate resistance
-    if steal_contest.timer > 0.0 && steal_contest.timer % 0.1 < time.delta_secs() {
-        steal_contest.defender_presses += 1;
+    // Count defender presses
+    if let Some(defender_entity) = steal_contest.defender {
+        if let Ok(mut input) = players.get_mut(defender_entity) {
+            if input.pickup_pressed {
+                steal_contest.defender_presses += 1;
+                input.pickup_pressed = false;
+            }
+        }
+    }
+
+    // Count attacker presses
+    if let Some(attacker_entity) = steal_contest.attacker {
+        if let Ok(mut input) = players.get_mut(attacker_entity) {
+            if input.pickup_pressed {
+                steal_contest.attacker_presses += 1;
+                input.pickup_pressed = false;
+            }
+        }
     }
 
     if steal_contest.timer <= 0.0 {

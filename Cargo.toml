@@ -16,6 +16,10 @@ path = "src/main.rs"
 name = "heatmap"
 path = "src/bin/heatmap.rs"
 
+[[bin]]
+name = "generate_ball"
+path = "src/bin/generate_ball.rs"
+
 [dependencies]
 rand = "0.8"
 image = "0.25"

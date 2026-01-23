@@ -2,6 +2,8 @@
 
 use bevy::prelude::*;
 
+use crate::levels::LevelDatabase;
+use crate::scoring::CurrentLevel;
 use crate::shooting::LastShotInfo;
 use crate::steal::StealContest;
 use crate::world::Basket;
@@ -21,6 +23,10 @@ impl Default for DebugSettings {
 /// Debug text component
 #[derive(Component)]
 pub struct DebugText;
+
+/// Marker for the debug level style key UI
+#[derive(Component)]
+pub struct DebugStyleKey;
 
 /// Toggle debug UI visibility
 pub fn toggle_debug(
@@ -86,5 +92,29 @@ pub fn update_debug_text(
         );
     } else {
         **text = format!("No shots yet{}", steal_str);
+    }
+}
+
+/// Show/hide the style key based on whether we're on the Debug level
+pub fn update_style_key_visibility(
+    current_level: Res<CurrentLevel>,
+    level_db: Res<LevelDatabase>,
+    mut query: Query<&mut Visibility, With<DebugStyleKey>>,
+) {
+    if !current_level.is_changed() {
+        return;
+    }
+
+    let is_debug = level_db
+        .get(current_level.0.saturating_sub(1) as usize)
+        .map(|l| l.name == "Debug")
+        .unwrap_or(false);
+
+    for mut visibility in &mut query {
+        *visibility = if is_debug {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
     }
 }

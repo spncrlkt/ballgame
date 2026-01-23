@@ -17,6 +17,12 @@
 #
 # Blank lines and # comments are ignored
 
+level: Debug
+basket_height: 300
+basket_push_in: 200
+steps: 0
+# Clean floor for testing ball textures and UI
+
 level: Open Floor
 basket_height: 660
 steps: 0

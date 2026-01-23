@@ -1,8 +1,6 @@
 # Ballgame TODO
 
 ## Immediate Fixes
-- [ ] Test all gameplay after modularization (movement, jumping, ball pickup, shooting, scoring, level switching)
-- [ ] Fix viewport and arena wall size
 - [ ] Make rim bouncier like steps
 
 ## Level Design
@@ -14,6 +12,17 @@
 - [ ] Add 1v1 multiplayer
 - [ ] Add 4-player multiplayer support
 
+## Long-term: Network Game Design
+- [ ] Evolution theme for multiplayer/networked games
+- [ ] Forks expected - design for branching game modes
+- [ ] Consider how ball styles could vary per "species" or game variant
+
+## Ball Evolution Thoughts
+- [ ] Balls could evolve/mutate based on gameplay
+- [ ] Different ball styles could have different physics properties
+- [ ] Unlockable ball skins through achievements
+- [ ] Ball "lineage" tracking across games
+
 ## AI
 - [ ] Add NPC AI scripting via Lua decision doc
 
@@ -24,3 +33,4 @@
 
 ## Done
 - [x] Split main.rs into modules (2624 lines → 18 focused files, no module >500 lines)
+- [x] Fix viewport and arena wall size (1600×900 window, 1:1 camera, 20px walls, world-space UI)

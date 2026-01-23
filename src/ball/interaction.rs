@@ -2,10 +2,10 @@
 
 use bevy::prelude::*;
 
+use crate::ai::AiInput;
 use crate::ball::components::*;
 use crate::constants::*;
-use crate::input::PlayerInput;
-use crate::player::{Facing, HoldingBall, Player, Velocity};
+use crate::player::{Facing, HoldingBall, Player, Team, Velocity};
 use crate::shooting::ChargingShot;
 use crate::steal::StealContest;
 
@@ -102,41 +102,56 @@ pub fn ball_follow_holder(
     }
 }
 
-/// Handle ball pickup
+/// Handle ball pickup.
+/// All players read from their AiInput component.
 pub fn pickup_ball(
-    mut input: ResMut<PlayerInput>,
     mut commands: Commands,
     mut steal_contest: ResMut<StealContest>,
     mut non_holding_players: Query<
-        (Entity, &Transform, &mut ChargingShot),
+        (Entity, &Transform, &mut ChargingShot, &mut AiInput),
         (With<Player>, Without<HoldingBall>),
     >,
-    holding_players: Query<(Entity, &Transform, &HoldingBall), With<Player>>,
+    mut holding_players: Query<(Entity, &Transform, &HoldingBall, &mut AiInput), With<Player>>,
     mut ball_query: Query<(Entity, &Transform, &mut BallState), With<Ball>>,
 ) {
-    // If steal contest is active, count presses
+    // If steal contest is active, count presses from both players
     if steal_contest.active {
-        if input.pickup_pressed {
-            // For now, attribute press to attacker (single player)
-            // In multiplayer, check which player pressed
-            steal_contest.attacker_presses += 1;
-            input.pickup_pressed = false; // Consume input
+        // Count presses for attacker
+        for (entity, _, _, mut input) in &mut non_holding_players {
+            if input.pickup_pressed {
+                input.pickup_pressed = false;
+                if steal_contest.attacker == Some(entity) {
+                    steal_contest.attacker_presses += 1;
+                }
+            }
         }
+
+        // Count presses for defender
+        for (entity, _, _, mut input) in &mut holding_players {
+            if input.pickup_pressed {
+                input.pickup_pressed = false;
+                if steal_contest.defender == Some(entity) {
+                    steal_contest.defender_presses += 1;
+                }
+            }
+        }
+
         return; // Don't allow pickup during contest
     }
 
-    if !input.pickup_pressed {
-        return;
-    }
+    // Check each non-holding player for pickup/steal attempts
+    for (player_entity, player_transform, mut charging, mut input) in &mut non_holding_players {
+        if !input.pickup_pressed {
+            continue;
+        }
 
-    // Consume the input immediately
-    input.pickup_pressed = false;
+        // Consume the input
+        input.pickup_pressed = false;
 
-    // Check each non-holding player
-    for (player_entity, player_transform, mut charging) in &mut non_holding_players {
         let player_pos = player_transform.translation.truncate();
 
         // First, try to pick up a free ball
+        let mut picked_up = false;
         for (ball_entity, ball_transform, mut ball_state) in &mut ball_query {
             if *ball_state != BallState::Free {
                 continue;
@@ -151,12 +166,17 @@ pub fn pickup_ball(
                     .insert(HoldingBall(ball_entity));
                 // Reset charge so it starts fresh (even if throw button is held)
                 charging.charge_time = 0.0;
-                return; // Done - picked up ball
+                picked_up = true;
+                break;
             }
         }
 
+        if picked_up {
+            return; // Done - picked up ball
+        }
+
         // If no free ball nearby, check for steal opportunity
-        for (defender_entity, defender_transform, _holding) in &holding_players {
+        for (defender_entity, defender_transform, _holding, _) in &holding_players {
             let distance = player_pos.distance(defender_transform.translation.truncate());
 
             if distance < STEAL_RANGE {
@@ -170,5 +190,36 @@ pub fn pickup_ball(
                 return;
             }
         }
+    }
+}
+
+/// Swap ball texture based on possession state and ball style
+pub fn ball_texture_swap(
+    textures: Res<BallTextures>,
+    player_query: Query<&Team, With<Player>>,
+    mut ball_query: Query<
+        (&BallState, &mut Sprite, &BallStyleType),
+        (With<Ball>, Changed<BallState>),
+    >,
+) {
+    for (state, mut sprite, style) in &mut ball_query {
+        let style_textures = textures.get(*style);
+        let new_texture = match state {
+            BallState::Free => style_textures.neutral.clone(),
+            BallState::Held(holder)
+            | BallState::InFlight {
+                shooter: holder, ..
+            } => {
+                if let Ok(team) = player_query.get(*holder) {
+                    match team {
+                        Team::Left => style_textures.left.clone(),
+                        Team::Right => style_textures.right.clone(),
+                    }
+                } else {
+                    style_textures.neutral.clone()
+                }
+            }
+        };
+        sprite.image = new_texture;
     }
 }

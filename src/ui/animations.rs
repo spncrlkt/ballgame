@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use crate::ball::{Ball, BallPulse, BallState};
-use crate::constants::*;
+use crate::constants::{BALL_PICKUP_RADIUS, BALL_SIZE};
 use crate::player::{HoldingBall, Player};
 
 /// Score flash animation component
@@ -46,6 +46,7 @@ pub fn animate_score_flash(
 }
 
 /// Animate pickable ball (pulse when near player)
+/// With texture, sprite.color tints the texture (white = normal, other colors = tinted)
 pub fn animate_pickable_ball(
     time: Res<Time>,
     players: Query<(&Transform, Option<&HoldingBall>), With<Player>>,
@@ -54,9 +55,9 @@ pub fn animate_pickable_ball(
     for (ball_transform, ball_state, mut sprite, mut pulse) in &mut ball_query {
         // Only pulse if ball is Free
         if *ball_state != BallState::Free {
-            // Reset to normal when not free
+            // Reset to normal when not free (white = no tint)
             sprite.custom_size = Some(BALL_SIZE);
-            sprite.color = BALL_COLOR;
+            sprite.color = Color::WHITE;
             pulse.timer = 0.0;
             continue;
         }
@@ -78,41 +79,25 @@ pub fn animate_pickable_ball(
 
         if can_pickup {
             // Animate pulse - 5 cycles per second
-            // Pattern: dark -> regular -> light -> regular
             pulse.timer += time.delta_secs();
             let t = pulse.timer * 5.0 * std::f32::consts::TAU;
-            let pulse_factor = -(t.cos()); // -1 (dark) -> 0 (regular) -> 1 (light) -> 0 (regular)
+            let pulse_factor = (t.cos() + 1.0) / 2.0; // 0 to 1
 
-            // Size: pulse between 97% and 103% (subtle)
-            let scale_factor = 1.0 + 0.03 * pulse_factor;
-            sprite.custom_size = Some(BALL_SIZE * scale_factor);
+            // Size pulse: 100% to 103%
+            let scale = 1.0 + 0.03 * pulse_factor;
+            sprite.custom_size = Some(BALL_SIZE * scale);
 
-            // Color interpolation: dark orange <-> regular orange <-> light orange-cyan mix
-            // Regular orange: (0.9, 0.5, 0.1)
-            // Dark orange: (0.5, 0.25, 0.05)
-            // Light (orange + cyan-white): (0.95, 0.75, 0.55)
-            let (r, g, b) = if pulse_factor < 0.0 {
-                // Dark to regular (pulse_factor: -1 to 0)
-                let blend = pulse_factor + 1.0; // 0 to 1
-                (
-                    0.5 + 0.4 * blend,   // 0.5 -> 0.9
-                    0.25 + 0.25 * blend, // 0.25 -> 0.5
-                    0.05 + 0.05 * blend, // 0.05 -> 0.1
-                )
-            } else {
-                // Regular to light (pulse_factor: 0 to 1)
-                let blend = pulse_factor; // 0 to 1
-                (
-                    0.9 + 0.05 * blend, // 0.9 -> 0.95
-                    0.5 + 0.25 * blend, // 0.5 -> 0.75
-                    0.1 + 0.45 * blend, // 0.1 -> 0.55
-                )
-            };
-            sprite.color = Color::srgb(r, g, b);
+            // Gold tint pulse (white → gold → white)
+            // Gold tint reduces green and blue to create warm golden glow
+            sprite.color = Color::srgb(
+                1.0,
+                1.0 - 0.15 * pulse_factor, // slightly reduce green
+                1.0 - 0.4 * pulse_factor,  // reduce blue more → gold tint
+            );
         } else {
-            // Reset to normal
+            // Reset to normal (white = no tint)
             sprite.custom_size = Some(BALL_SIZE);
-            sprite.color = BALL_COLOR;
+            sprite.color = Color::WHITE;
             pulse.timer = 0.0;
         }
     }

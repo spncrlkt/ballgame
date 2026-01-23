@@ -2,6 +2,8 @@
 
 use bevy::prelude::*;
 
+use crate::world::Basket;
+
 /// Marker for player entities
 #[derive(Component)]
 pub struct Player;
@@ -38,3 +40,25 @@ impl Default for Facing {
 /// Reference to held ball entity
 #[derive(Component)]
 pub struct HoldingBall(pub Entity);
+
+/// Which team a player belongs to
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Team {
+    Left,
+    Right,
+}
+
+/// Marker for the player currently controlled by the human.
+/// Only ONE player has this at a time - AI controls the other.
+#[derive(Component)]
+pub struct HumanControlled;
+
+/// Which basket a player is aiming at (set once based on Team at spawn)
+#[derive(Component)]
+pub struct TargetBasket(pub Basket);
+
+impl Default for TargetBasket {
+    fn default() -> Self {
+        Self(Basket::Right) // Default targeting right basket
+    }
+}

@@ -58,6 +58,12 @@ pub fn reload_levels(
             };
         }
 
-        spawn_corner_ramps(&mut commands, level.step_count, level.corner_height, level.corner_width, level.step_push_in);
+        spawn_corner_ramps(
+            &mut commands,
+            level.step_count,
+            level.corner_height,
+            level.corner_width,
+            level.step_push_in,
+        );
     }
 }

@@ -5,21 +5,39 @@
 use bevy::prelude::*;
 
 // =============================================================================
-// VISUAL CONSTANTS
+// ARENA COLORS - Ancient stone theme
 // =============================================================================
 
-pub const BACKGROUND_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
-pub const FLOOR_COLOR: Color = Color::srgb(0.2, 0.2, 0.2);
-pub const PLATFORM_COLOR: Color = Color::srgb(0.5, 0.3, 0.3);
-pub const PLAYER_COLOR: Color = Color::srgb(0.3, 0.3, 0.7);
-pub const BALL_COLOR: Color = Color::srgb(0.9, 0.5, 0.1); // Orange basketball-ish
+pub const BACKGROUND_COLOR: Color = Color::srgb(0.35, 0.32, 0.28); // Weathered stone (lighter)
+pub const FLOOR_COLOR: Color = Color::srgb(0.15, 0.13, 0.12); // Dark warm stone (darker)
+pub const PLATFORM_COLOR: Color = Color::srgb(0.2, 0.18, 0.16); // Dark stone platforms
+
+// =============================================================================
+// TEAM COLORS - Turquoise vs Terracotta (Mesoamerican theme)
+// =============================================================================
+
+// Left team - Turquoise (sky/water/jade)
+pub const TEAM_LEFT_PRIMARY: Color = Color::srgb(0.25, 0.75, 0.8); // Bright turquoise
+pub const TEAM_LEFT_DARK: Color = Color::srgb(0.1, 0.4, 0.45); // Deep teal
+
+// Right team - Terracotta (earth/clay/fire)
+pub const TEAM_RIGHT_PRIMARY: Color = Color::srgb(0.8, 0.45, 0.3); // Warm terracotta
+pub const TEAM_RIGHT_DARK: Color = Color::srgb(0.5, 0.25, 0.15); // Burnt clay
+
+// =============================================================================
+// TEXT/UI COLORS
+// =============================================================================
+
+pub const TEXT_PRIMARY: Color = Color::srgb(0.95, 0.9, 0.8); // Bone white/cream
+pub const TEXT_SECONDARY: Color = Color::srgb(0.7, 0.65, 0.55); // Aged parchment
+pub const TEXT_ACCENT: Color = Color::srgb(0.9, 0.75, 0.4); // Gold/amber
 
 // =============================================================================
 // SIZE CONSTANTS
 // =============================================================================
 
 pub const PLAYER_SIZE: Vec2 = Vec2::new(32.0, 64.0);
-pub const BALL_SIZE: Vec2 = Vec2::new(24.0, 24.0);
+pub const BALL_SIZE: Vec2 = Vec2::new(26.0, 26.0); // 10% larger than original 24x24
 pub const CHARGE_GAUGE_WIDTH: f32 = 8.0;
 pub const CHARGE_GAUGE_HEIGHT: f32 = PLAYER_SIZE.y; // Same height as player
 
@@ -58,6 +76,13 @@ pub const BALL_ROLL_FRICTION: f32 = 0.6; // Horizontal velocity retained after 1
 pub const BALL_BOUNCE_HEIGHT_MULT: f32 = 1.0; // Ball must bounce this × its height to keep bouncing, else rolls
 pub const BALL_PICKUP_RADIUS: f32 = 50.0; // How close player must be to pick up ball
 pub const BALL_FREE_SPEED: f32 = 200.0; // Ball becomes Free when speed drops below this (2x pickup radius speed)
+
+// =============================================================================
+// BALL SPIN/ROTATION
+// =============================================================================
+
+pub const BALL_SPIN_FACTOR: f32 = 0.01; // Spin rate per unit velocity (airborne)
+pub const BALL_SPIN_DECAY: f32 = 0.5; // Spin retained per second (airborne)
 
 // =============================================================================
 // SHOOTING
@@ -106,7 +131,6 @@ pub const ARENA_FLOOR_Y: f32 = -ARENA_HEIGHT / 2.0; // Floor at bottom edge
 // BASKETS
 // =============================================================================
 
-pub const BASKET_COLOR: Color = Color::srgb(0.8, 0.2, 0.2); // Red
 pub const BASKET_SIZE: Vec2 = Vec2::new(60.0, 80.0);
 pub const RIM_THICKNESS: f32 = 10.0;
 pub const WALL_THICKNESS: f32 = 20.0; // Walls are 20 wide
@@ -129,7 +153,19 @@ pub const STEP_DEFLECT_ANGLE_MAX: f32 = 35.0; // Max random deflection angle in 
 // =============================================================================
 
 pub const PLAYER_SPAWN: Vec3 = Vec3::new(-200.0, ARENA_FLOOR_Y + 100.0, 0.0);
+pub const PLAYER_SPAWN_LEFT: Vec3 = Vec3::new(-300.0, ARENA_FLOOR_Y + 100.0, 0.0);
+pub const PLAYER_SPAWN_RIGHT: Vec3 = Vec3::new(300.0, ARENA_FLOOR_Y + 100.0, 0.0);
 pub const BALL_SPAWN: Vec3 = Vec3::new(0.0, ARENA_FLOOR_Y + 50.0, 2.0); // Center, z=2 to render in front
+
+// =============================================================================
+// AI TUNING
+// =============================================================================
+
+pub const AI_POSITION_TOLERANCE: f32 = 30.0; // How close AI needs to be to target position
+pub const AI_SHOOT_RANGE: f32 = 400.0; // Distance from basket to start shooting
+pub const AI_CHARGE_TIME_MIN: f32 = 0.5; // Minimum charge time for shots
+pub const AI_CHARGE_TIME_MAX: f32 = 1.2; // Maximum charge time for shots
+pub const AI_STEAL_RANGE: f32 = 80.0; // Distance to attempt steal
 
 // =============================================================================
 // LEVEL FILE

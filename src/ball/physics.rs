@@ -67,7 +67,12 @@ pub fn ball_collisions(
         With<Ball>,
     >,
     platform_query: Query<
-        (&GlobalTransform, &Sprite, Option<&BasketRim>, Option<&CornerRamp>),
+        (
+            &GlobalTransform,
+            &Sprite,
+            Option<&BasketRim>,
+            Option<&CornerRamp>,
+        ),
         (With<Platform>, Without<Ball>),
     >,
 ) {
@@ -127,7 +132,8 @@ pub fn ball_collisions(
                         if is_step {
                             // Erratic step bounce - keep more velocity, add random deflection
                             let speed = ball_velocity.0.length();
-                            let deflect_angle = rng.gen_range(-STEP_DEFLECT_ANGLE_MAX..STEP_DEFLECT_ANGLE_MAX);
+                            let deflect_angle =
+                                rng.gen_range(-STEP_DEFLECT_ANGLE_MAX..STEP_DEFLECT_ANGLE_MAX);
                             let deflect_rad = deflect_angle.to_radians();
 
                             // Reflect Y, then rotate by random angle
@@ -164,7 +170,8 @@ pub fn ball_collisions(
                         if is_step {
                             // Erratic step bounce from below
                             let speed = ball_velocity.0.length();
-                            let deflect_angle = rng.gen_range(-STEP_DEFLECT_ANGLE_MAX..STEP_DEFLECT_ANGLE_MAX);
+                            let deflect_angle =
+                                rng.gen_range(-STEP_DEFLECT_ANGLE_MAX..STEP_DEFLECT_ANGLE_MAX);
                             let deflect_rad = deflect_angle.to_radians();
                             let reflected = Vec2::new(ball_velocity.0.x, -ball_velocity.0.y);
                             let cos_a = deflect_rad.cos();
@@ -189,7 +196,8 @@ pub fn ball_collisions(
                 if is_step {
                     // Erratic step side bounce
                     let speed = ball_velocity.0.length();
-                    let deflect_angle = rng.gen_range(-STEP_DEFLECT_ANGLE_MAX..STEP_DEFLECT_ANGLE_MAX);
+                    let deflect_angle =
+                        rng.gen_range(-STEP_DEFLECT_ANGLE_MAX..STEP_DEFLECT_ANGLE_MAX);
                     let deflect_rad = deflect_angle.to_radians();
                     let reflected = Vec2::new(-ball_velocity.0.x, ball_velocity.0.y);
                     let cos_a = deflect_rad.cos();
@@ -222,5 +230,44 @@ pub fn ball_state_update(mut ball_query: Query<(&Velocity, &mut BallState), With
                 *state = BallState::Free;
             }
         }
+    }
+}
+
+/// Update ball spin/rotation based on velocity
+pub fn ball_spin(
+    time: Res<Time>,
+    mut query: Query<
+        (
+            &mut Transform,
+            &mut BallSpin,
+            &Velocity,
+            &BallState,
+            &BallRolling,
+        ),
+        With<Ball>,
+    >,
+) {
+    for (mut transform, mut spin, velocity, state, rolling) in &mut query {
+        // When ball is held, reset rotation to upright
+        if matches!(state, BallState::Held(_)) {
+            transform.rotation = Quat::IDENTITY;
+            spin.0 = 0.0;
+            continue;
+        }
+
+        // Update spin based on horizontal velocity
+        // Negative because positive vx = clockwise rotation (rolling right)
+        if rolling.0 {
+            // Rolling: spin matches ground velocity exactly (no slip)
+            // v = ωr → ω = v/r
+            spin.0 = -velocity.0.x / (BALL_SIZE.x / 2.0);
+        } else {
+            // In flight: spin based on velocity with decay
+            spin.0 = -velocity.0.x * BALL_SPIN_FACTOR;
+            spin.0 *= BALL_SPIN_DECAY.powf(time.delta_secs());
+        }
+
+        // Apply rotation
+        transform.rotate_z(spin.0 * time.delta_secs());
     }
 }

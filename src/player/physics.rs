@@ -2,96 +2,100 @@
 
 use bevy::prelude::*;
 
+use crate::ai::AiInput;
 use crate::ball::{Ball, BallRolling, BallState};
 use crate::constants::*;
 use crate::helpers::*;
-use crate::input::PlayerInput;
 use crate::levels::LevelDatabase;
-use crate::player::components::*;
-use crate::ui::PhysicsTweaks;
-use crate::world::{BasketRim, Basket, CornerRamp, LevelPlatform, Platform};
 use crate::levels::{spawn_corner_ramps, spawn_level_platforms};
+use crate::player::components::*;
 use crate::scoring::CurrentLevel;
+use crate::ui::PhysicsTweaks;
+use crate::world::{Basket, BasketRim, CornerRamp, LevelPlatform, Platform};
 
-/// Runs in FixedUpdate to apply captured input to physics
+/// Runs in FixedUpdate to apply captured input to physics.
+/// All players read from their AiInput component (human input is copied there).
 pub fn apply_input(
-    mut input: ResMut<PlayerInput>,
     tweaks: Res<PhysicsTweaks>,
-    mut player: Query<
+    mut players: Query<
         (
             &mut Velocity,
             &mut CoyoteTimer,
             &mut JumpState,
             &mut Facing,
             &Grounded,
+            &mut AiInput,
         ),
         With<Player>,
     >,
     time: Res<Time>,
 ) {
-    let Ok((mut velocity, mut coyote, mut jump_state, mut facing, grounded)) = player.single_mut()
-    else {
-        return;
-    };
+    for (mut velocity, mut coyote, mut jump_state, mut facing, grounded, mut input) in &mut players
+    {
+        let move_x = input.move_x;
+        let jump_buffer_timer = input.jump_buffer_timer;
+        let jump_held = input.jump_held;
 
-    // Acceleration-based horizontal movement
-    let target_speed = input.move_x * tweaks.move_speed;
-    let current_speed = velocity.0.x;
+        // Acceleration-based horizontal movement
+        let target_speed = move_x * tweaks.move_speed;
+        let current_speed = velocity.0.x;
 
-    // Determine if accelerating (toward input) or decelerating (stopping/reversing)
-    let has_input = input.move_x.abs() > STICK_DEADZONE;
-    let same_direction =
-        target_speed.signum() == current_speed.signum() || current_speed.abs() < 1.0;
-    let is_accelerating = has_input && same_direction;
+        // Determine if accelerating (toward input) or decelerating (stopping/reversing)
+        let has_input = move_x.abs() > STICK_DEADZONE;
+        let same_direction =
+            target_speed.signum() == current_speed.signum() || current_speed.abs() < 1.0;
+        let is_accelerating = has_input && same_direction;
 
-    // Select appropriate acceleration rate based on ground state and direction
-    let rate = if grounded.0 {
-        if is_accelerating {
-            tweaks.ground_accel
+        // Select appropriate acceleration rate based on ground state and direction
+        let rate = if grounded.0 {
+            if is_accelerating {
+                tweaks.ground_accel
+            } else {
+                tweaks.ground_decel
+            }
         } else {
-            tweaks.ground_decel
+            if is_accelerating {
+                tweaks.air_accel
+            } else {
+                tweaks.air_decel
+            }
+        };
+
+        velocity.0.x = move_toward(current_speed, target_speed, rate * time.delta_secs());
+
+        // Update facing direction based on input (not velocity, so turning feels responsive)
+        if move_x > STICK_DEADZONE {
+            facing.0 = 1.0;
+        } else if move_x < -STICK_DEADZONE {
+            facing.0 = -1.0;
         }
-    } else {
-        if is_accelerating {
-            tweaks.air_accel
+
+        // Update coyote timer
+        if grounded.0 {
+            coyote.0 = COYOTE_TIME;
+            jump_state.is_jumping = false; // Reset jump state when grounded
         } else {
-            tweaks.air_decel
+            coyote.0 = (coyote.0 - time.delta_secs()).max(0.0);
         }
-    };
 
-    velocity.0.x = move_toward(current_speed, target_speed, rate * time.delta_secs());
+        // Can jump if grounded OR within coyote time
+        let can_jump = grounded.0 || coyote.0 > 0.0;
 
-    // Update facing direction based on input (not velocity, so turning feels responsive)
-    if input.move_x > STICK_DEADZONE {
-        facing.0 = 1.0;
-    } else if input.move_x < -STICK_DEADZONE {
-        facing.0 = -1.0;
-    }
+        // Jump if we have buffered input and can jump
+        if jump_buffer_timer > 0.0 && can_jump {
+            velocity.0.y = tweaks.jump_velocity;
+            // Consume the buffered jump
+            input.jump_buffer_timer = 0.0;
+            coyote.0 = 0.0; // Consume coyote time so we can't double jump
+            jump_state.is_jumping = true; // Mark that we're in a jump
+        }
 
-    // Update coyote timer
-    if grounded.0 {
-        coyote.0 = COYOTE_TIME;
-        jump_state.is_jumping = false; // Reset jump state when grounded
-    } else {
-        coyote.0 = (coyote.0 - time.delta_secs()).max(0.0);
-    }
-
-    // Can jump if grounded OR within coyote time
-    let can_jump = grounded.0 || coyote.0 > 0.0;
-
-    // Jump if we have buffered input and can jump
-    if input.jump_buffer_timer > 0.0 && can_jump {
-        velocity.0.y = tweaks.jump_velocity;
-        input.jump_buffer_timer = 0.0; // Consume the buffered jump
-        coyote.0 = 0.0; // Consume coyote time so we can't double jump
-        jump_state.is_jumping = true; // Mark that we're in a jump
-    }
-
-    // Variable jump height: cut velocity if button released while rising
-    // Check: in a jump + rising + button NOT held = cut velocity
-    if jump_state.is_jumping && velocity.0.y > 0.0 && !input.jump_held {
-        velocity.0.y *= JUMP_CUT_MULTIPLIER;
-        jump_state.is_jumping = false; // Only cut once per jump
+        // Variable jump height: cut velocity if button released while rising
+        // Check: in a jump + rising + button NOT held = cut velocity
+        if jump_state.is_jumping && velocity.0.y > 0.0 && !jump_held {
+            velocity.0.y *= JUMP_CUT_MULTIPLIER;
+            jump_state.is_jumping = false; // Only cut once per jump
+        }
     }
 }
 
@@ -122,67 +126,65 @@ pub fn check_collisions(
         (With<Platform>, Without<Player>, Without<BasketRim>),
     >,
 ) {
-    let Ok((mut player_transform, mut player_velocity, mut grounded, player_sprite)) =
-        player_query.single_mut()
-    else {
-        return;
-    };
+    for (mut player_transform, mut player_velocity, mut grounded, player_sprite) in
+        &mut player_query
+    {
+        let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
+        let player_half = player_size / 2.0;
 
-    let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
-    let player_half = player_size / 2.0;
+        // Assume not grounded until we find a floor beneath us
+        grounded.0 = false;
 
-    // Assume not grounded until we find a floor beneath us
-    grounded.0 = false;
+        for (platform_global, platform_sprite) in &platform_query {
+            let platform_size = platform_sprite
+                .custom_size
+                .unwrap_or(Vec2::new(100.0, 20.0));
+            let platform_half = platform_size / 2.0;
 
-    for (platform_global, platform_sprite) in &platform_query {
-        let platform_size = platform_sprite
-            .custom_size
-            .unwrap_or(Vec2::new(100.0, 20.0));
-        let platform_half = platform_size / 2.0;
+            let player_pos = player_transform.translation.truncate();
+            let platform_pos = platform_global.translation().truncate();
 
-        let player_pos = player_transform.translation.truncate();
-        let platform_pos = platform_global.translation().truncate();
+            // Calculate overlap
+            let diff = player_pos - platform_pos;
+            let overlap_x = player_half.x + platform_half.x - diff.x.abs();
+            let overlap_y = player_half.y + platform_half.y - diff.y.abs();
 
-        // Calculate overlap
-        let diff = player_pos - platform_pos;
-        let overlap_x = player_half.x + platform_half.x - diff.x.abs();
-        let overlap_y = player_half.y + platform_half.y - diff.y.abs();
+            // No collision
+            if overlap_x <= 0.0 || overlap_y <= 0.0 {
+                continue;
+            }
 
-        // No collision
-        if overlap_x <= 0.0 || overlap_y <= 0.0 {
-            continue;
-        }
-
-        // Resolve collision along the smallest overlap axis
-        if overlap_y < overlap_x {
-            // Vertical collision
-            if diff.y > 0.0 {
-                // Player is above - land on platform
-                // Position slightly inside (EPSILON) so next frame still detects collision
-                player_transform.translation.y =
-                    platform_pos.y + platform_half.y + player_half.y - COLLISION_EPSILON;
-                if player_velocity.0.y <= 0.0 {
-                    player_velocity.0.y = 0.0;
-                    grounded.0 = true;
+            // Resolve collision along the smallest overlap axis
+            if overlap_y < overlap_x {
+                // Vertical collision
+                if diff.y > 0.0 {
+                    // Player is above - land on platform
+                    // Position slightly inside (EPSILON) so next frame still detects collision
+                    player_transform.translation.y =
+                        platform_pos.y + platform_half.y + player_half.y - COLLISION_EPSILON;
+                    if player_velocity.0.y <= 0.0 {
+                        player_velocity.0.y = 0.0;
+                        grounded.0 = true;
+                    }
+                } else {
+                    // Player hit ceiling
+                    player_transform.translation.y =
+                        platform_pos.y - platform_half.y - player_half.y + COLLISION_EPSILON;
+                    if player_velocity.0.y > 0.0 {
+                        player_velocity.0.y = 0.0;
+                    }
                 }
             } else {
-                // Player hit ceiling
-                player_transform.translation.y =
-                    platform_pos.y - platform_half.y - player_half.y + COLLISION_EPSILON;
-                if player_velocity.0.y > 0.0 {
-                    player_velocity.0.y = 0.0;
+                // Horizontal collision - push player out
+                if diff.x > 0.0 {
+                    player_transform.translation.x =
+                        platform_pos.x + platform_half.x + player_half.x - COLLISION_EPSILON;
+                } else {
+                    player_transform.translation.x =
+                        platform_pos.x - platform_half.x - player_half.x + COLLISION_EPSILON;
                 }
+                // Don't zero horizontal velocity - let player slide along walls
             }
-        } else {
-            // Horizontal collision - push player out
-            if diff.x > 0.0 {
-                player_transform.translation.x =
-                    platform_pos.x + platform_half.x + player_half.x - COLLISION_EPSILON;
-            } else {
-                player_transform.translation.x =
-                    platform_pos.x - platform_half.x - player_half.x + COLLISION_EPSILON;
-            }
-            // Don't zero horizontal velocity - let player slide along walls
         }
     }
 }
@@ -194,7 +196,16 @@ pub fn respawn_player(
     mut commands: Commands,
     level_db: Res<LevelDatabase>,
     mut current_level: ResMut<CurrentLevel>,
-    mut player: Query<(Entity, &mut Transform, &mut Velocity, Option<&HoldingBall>), With<Player>>,
+    mut players: Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut Velocity,
+            &Team,
+            Option<&HoldingBall>,
+        ),
+        With<Player>,
+    >,
     mut ball: Query<
         (
             &mut Transform,
@@ -242,11 +253,14 @@ pub fn respawn_player(
         level_changed = true;
     }
 
-    // Reset player and ball on any of: reset, next level, prev level
+    // Reset players and ball on any of: reset, next level, prev level
     if reset_pressed || level_changed {
-        // Reset player
-        if let Ok((player_entity, mut p_transform, mut p_velocity, holding)) = player.single_mut() {
-            p_transform.translation = PLAYER_SPAWN;
+        // Reset all players to their spawn positions based on team
+        for (player_entity, mut p_transform, mut p_velocity, team, holding) in &mut players {
+            p_transform.translation = match team {
+                Team::Left => PLAYER_SPAWN_LEFT,
+                Team::Right => PLAYER_SPAWN_RIGHT,
+            };
             p_velocity.0 = Vec2::ZERO;
 
             // Drop ball if holding
@@ -293,7 +307,13 @@ pub fn respawn_player(
             for entity in &corner_ramps {
                 commands.entity(entity).despawn();
             }
-            spawn_corner_ramps(&mut commands, level.step_count, level.corner_height, level.corner_width, level.step_push_in);
+            spawn_corner_ramps(
+                &mut commands,
+                level.step_count,
+                level.corner_height,
+                level.corner_width,
+                level.step_push_in,
+            );
         }
     }
 }

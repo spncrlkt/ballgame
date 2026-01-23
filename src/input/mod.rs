@@ -5,16 +5,16 @@ use bevy::prelude::*;
 use crate::constants::*;
 use crate::ui::PhysicsTweaks;
 
-/// Buffered input state for a player
+/// Buffered input state for the human-controlled player
 #[derive(Resource, Default)]
 pub struct PlayerInput {
     pub move_x: f32,
-    pub jump_buffer_timer: f32,     // Time remaining in jump buffer
-    pub jump_held: bool,            // Is jump button currently held
-    pub pickup_pressed: bool,       // West button - pick up ball
-    pub throw_held: bool,           // R shoulder - charging throw
-    pub throw_released: bool,       // R shoulder released - execute throw
-    pub cycle_target_pressed: bool, // L shoulder - cycle target basket
+    pub jump_buffer_timer: f32, // Time remaining in jump buffer
+    pub jump_held: bool,        // Is jump button currently held
+    pub pickup_pressed: bool,   // West button - pick up ball
+    pub throw_held: bool,       // R shoulder - charging throw
+    pub throw_released: bool,   // R shoulder released - execute throw
+    pub swap_pressed: bool,     // L shoulder / Q key - swap which player you control
 }
 
 /// Runs in Update to capture input state before it's cleared
@@ -90,12 +90,12 @@ pub fn capture_input(
     }
     input.throw_held = throw_held_now;
 
-    // Cycle target (L shoulder / Q key) - accumulate until consumed
+    // Swap control (L shoulder / Q key) - accumulate until consumed
     if keyboard.just_pressed(KeyCode::KeyQ)
         || gamepads
             .iter()
             .any(|gp| gp.just_pressed(GamepadButton::LeftTrigger))
     {
-        input.cycle_target_pressed = true;
+        input.swap_pressed = true;
     }
 }

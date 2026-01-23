@@ -10,8 +10,9 @@
 //!   cargo run --bin heatmap -- score     # Scoring percentage heatmap
 
 use ballgame::{
-    calculate_shot_trajectory, ARENA_FLOOR_Y, ARENA_HEIGHT, ARENA_WIDTH, BALL_BOUNCE, BALL_GRAVITY,
-    RIM_THICKNESS, SHOT_DISTANCE_VARIANCE, SHOT_MIN_VARIANCE, WALL_THICKNESS, BASKET_PUSH_IN,
+    ARENA_FLOOR_Y, ARENA_HEIGHT, ARENA_WIDTH, BALL_BOUNCE, BALL_GRAVITY, BASKET_PUSH_IN,
+    RIM_THICKNESS, SHOT_DISTANCE_VARIANCE, SHOT_MIN_VARIANCE, WALL_THICKNESS,
+    calculate_shot_trajectory,
 };
 
 // Basket dimensions (matching ballgame constants)
@@ -98,12 +99,7 @@ fn build_rim_geometry(basket_x: f32, basket_y: f32) -> Vec<Rect> {
 }
 
 /// Check collision between circle and rectangle, return normal if colliding
-fn check_circle_rect_collision(
-    cx: f32,
-    cy: f32,
-    radius: f32,
-    rect: &Rect,
-) -> Option<(f32, f32)> {
+fn check_circle_rect_collision(cx: f32, cy: f32, radius: f32, rect: &Rect) -> Option<(f32, f32)> {
     // Find closest point on rectangle to circle center
     let closest_x = cx.clamp(rect.x, rect.x + rect.width);
     let closest_y = cy.clamp(rect.y - rect.height, rect.y);
@@ -297,8 +293,7 @@ fn main() {
                 }
                 SimType::Score => {
                     // Monte Carlo scoring simulation
-                    let score_pct =
-                        simulate_scoring(world_x, world_y, RIGHT_BASKET_X, basket_y);
+                    let score_pct = simulate_scoring(world_x, world_y, RIGHT_BASKET_X, basket_y);
                     let color = score_to_color(score_pct);
                     fill_cell(&mut img, cx, cy, color);
                 }

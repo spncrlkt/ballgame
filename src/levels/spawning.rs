@@ -37,7 +37,13 @@ pub fn spawn_center_platform(commands: &mut Commands, y: f32, width: f32) {
 /// Spawn corner steps in the bottom corners
 /// step_count of 0 means no steps
 /// step_push_in is the distance from wall where stairs start (top step extends to wall)
-pub fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_height: f32, corner_width: f32, step_push_in: f32) {
+pub fn spawn_corner_ramps(
+    commands: &mut Commands,
+    step_count: usize,
+    corner_height: f32,
+    corner_width: f32,
+    step_push_in: f32,
+) {
     if step_count == 0 {
         return;
     }
@@ -66,7 +72,10 @@ pub fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_hei
             let full_width = right_edge - left_wall_inner;
             (center, full_width)
         } else {
-            (left_wall_inner + step_push_in + step_width * (i as f32 + 0.5), step_width)
+            (
+                left_wall_inner + step_push_in + step_width * (i as f32 + 0.5),
+                step_width,
+            )
         };
 
         commands.spawn((
@@ -101,7 +110,10 @@ pub fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_hei
             let full_width = right_wall_inner - left_edge;
             (center, full_width)
         } else {
-            (right_wall_inner - step_push_in - step_width * (i as f32 + 0.5), step_width)
+            (
+                right_wall_inner - step_push_in - step_width * (i as f32 + 0.5),
+                step_width,
+            )
         };
 
         commands.spawn((
@@ -126,7 +138,11 @@ pub fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_hei
 }
 
 /// Spawn platforms for a specific level
-pub fn spawn_level_platforms(commands: &mut Commands, level_db: &LevelDatabase, level_index: usize) {
+pub fn spawn_level_platforms(
+    commands: &mut Commands,
+    level_db: &LevelDatabase,
+    level_index: usize,
+) {
     let Some(level) = level_db.get(level_index) else {
         warn!("Level {} not found, spawning empty", level_index);
         return;

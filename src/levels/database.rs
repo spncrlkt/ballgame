@@ -17,12 +17,12 @@ pub enum PlatformDef {
 pub struct LevelData {
     pub name: String,
     pub basket_height: f32,
-    pub basket_push_in: f32,  // Distance from wall inner edge to basket center
+    pub basket_push_in: f32, // Distance from wall inner edge to basket center
     pub platforms: Vec<PlatformDef>,
-    pub step_count: usize,   // 0 = no steps, otherwise number of steps per corner
-    pub corner_height: f32,  // Total height of corner ramp
-    pub corner_width: f32,   // Total width of corner ramp
-    pub step_push_in: f32,   // Distance from wall to where stairs start (top step extends to wall)
+    pub step_count: usize, // 0 = no steps, otherwise number of steps per corner
+    pub corner_height: f32, // Total height of corner ramp
+    pub corner_width: f32, // Total width of corner ramp
+    pub step_push_in: f32, // Distance from wall to where stairs start (top step extends to wall)
 }
 
 /// Database of all loaded levels
@@ -70,13 +70,13 @@ impl LevelDatabase {
                 // Start new level
                 current_level = Some(LevelData {
                     name: name.trim().to_string(),
-                    basket_height: 400.0, // default
+                    basket_height: 400.0,           // default
                     basket_push_in: BASKET_PUSH_IN, // default
                     platforms: Vec::new(),
-                    step_count: CORNER_STEP_COUNT,       // default
+                    step_count: CORNER_STEP_COUNT,           // default
                     corner_height: CORNER_STEP_TOTAL_HEIGHT, // default
                     corner_width: CORNER_STEP_TOTAL_WIDTH,   // default
-                    step_push_in: STEP_PUSH_IN,          // default
+                    step_push_in: STEP_PUSH_IN,              // default
                 });
             } else if let Some(height_str) = line.strip_prefix("basket_height:") {
                 if let Some(level) = &mut current_level {
