@@ -31,7 +31,7 @@ pub use shooting::{ChargingShot, LastShotInfo, TargetBasket, TargetMarker};
 pub use steal::StealContest;
 pub use ui::{
     ChargeGaugeBackground, ChargeGaugeFill, DebugSettings, DebugText, PhysicsTweaks,
-    ScoreFlash, ScoreLevelText, TitleFlash, TweakPanel, TweakRow,
+    ScoreFlash, ScoreLevelText, TweakPanel, TweakRow,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 

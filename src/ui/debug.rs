@@ -45,7 +45,7 @@ pub fn update_debug_text(
     debug_settings: Res<DebugSettings>,
     shot_info: Res<LastShotInfo>,
     steal_contest: Res<StealContest>,
-    mut text_query: Query<&mut Text, With<DebugText>>,
+    mut text_query: Query<&mut Text2d, With<DebugText>>,
 ) {
     if !debug_settings.visible {
         return;
@@ -71,8 +71,8 @@ pub fn update_debug_text(
             Some(Basket::Right) => "Right",
             None => "?",
         };
-        text.0 = format!(
-            "Last Shot: {:.0}° {:.0}u/s | Variance: base {:.0}% + air {:.0}% + move {:.0}% + dist {:.0}% = {:.0}% | Req speed: {:.0} | Target: {}{}",
+        **text = format!(
+            "Last Shot: {:.0}deg {:.0}u/s | Variance: base {:.0}% + air {:.0}% + move {:.0}% + dist {:.0}% = {:.0}% | Req speed: {:.0} | Target: {}{}",
             shot_info.angle_degrees,
             shot_info.speed,
             shot_info.base_variance * 100.0,
@@ -85,6 +85,6 @@ pub fn update_debug_text(
             steal_str,
         );
     } else {
-        text.0 = format!("No shots yet{}", steal_str);
+        **text = format!("No shots yet{}", steal_str);
     }
 }

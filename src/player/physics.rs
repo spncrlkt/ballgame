@@ -293,7 +293,7 @@ pub fn respawn_player(
             for entity in &corner_ramps {
                 commands.entity(entity).despawn();
             }
-            spawn_corner_ramps(&mut commands, level.step_count, level.corner_height, level.corner_width);
+            spawn_corner_ramps(&mut commands, level.step_count, level.corner_height, level.corner_width, level.step_push_in);
         }
     }
 }

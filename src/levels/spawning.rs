@@ -36,14 +36,15 @@ pub fn spawn_center_platform(commands: &mut Commands, y: f32, width: f32) {
 
 /// Spawn corner steps in the bottom corners
 /// step_count of 0 means no steps
-pub fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_height: f32, corner_width: f32) {
+/// step_push_in is the distance from wall where stairs start (top step extends to wall)
+pub fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_height: f32, corner_width: f32, step_push_in: f32) {
     if step_count == 0 {
         return;
     }
 
-    // Wall inner edges (walls are 40 wide, centered at ±(ARENA_WIDTH/2 - 20))
-    let left_wall_inner = -ARENA_WIDTH / 2.0 + 40.0;
-    let right_wall_inner = ARENA_WIDTH / 2.0 - 40.0;
+    // Wall inner edges
+    let left_wall_inner = -ARENA_WIDTH / 2.0 + WALL_THICKNESS;
+    let right_wall_inner = ARENA_WIDTH / 2.0 - WALL_THICKNESS;
 
     // Step dimensions
     let step_height = corner_height / step_count as f32;
@@ -55,10 +56,21 @@ pub fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_hei
     for i in 0..step_count {
         let step_num = (step_count - 1 - i) as f32; // Reverse so 0 is lowest
         let y = floor_top + step_height * (step_num + 0.5);
-        let x = left_wall_inner + step_width * (i as f32 + 0.5);
+
+        // Top step (i=0) extends from wall to step_push_in + step_width
+        // Other steps start at step_push_in offset
+        let (x, width) = if i == 0 {
+            // Top step extends from wall to end of first step position
+            let right_edge = left_wall_inner + step_push_in + step_width;
+            let center = (left_wall_inner + right_edge) / 2.0;
+            let full_width = right_edge - left_wall_inner;
+            (center, full_width)
+        } else {
+            (left_wall_inner + step_push_in + step_width * (i as f32 + 0.5), step_width)
+        };
 
         commands.spawn((
-            Sprite::from_color(FLOOR_COLOR, Vec2::new(step_width, CORNER_STEP_THICKNESS)),
+            Sprite::from_color(FLOOR_COLOR, Vec2::new(width, CORNER_STEP_THICKNESS)),
             Transform::from_xyz(x, y, 0.0),
             Platform,
             CornerRamp,
@@ -70,7 +82,7 @@ pub fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_hei
         if fill_height > 0.0 {
             let fill_y = floor_top + fill_height / 2.0;
             commands.spawn((
-                Sprite::from_color(FLOOR_COLOR, Vec2::new(step_width, fill_height)),
+                Sprite::from_color(FLOOR_COLOR, Vec2::new(width, fill_height)),
                 Transform::from_xyz(x, fill_y, -0.1),
                 CornerRamp,
             ));
@@ -81,10 +93,19 @@ pub fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_hei
     for i in 0..step_count {
         let step_num = (step_count - 1 - i) as f32;
         let y = floor_top + step_height * (step_num + 0.5);
-        let x = right_wall_inner - step_width * (i as f32 + 0.5);
+
+        // Top step (i=0) extends from wall to step_push_in + step_width
+        let (x, width) = if i == 0 {
+            let left_edge = right_wall_inner - step_push_in - step_width;
+            let center = (right_wall_inner + left_edge) / 2.0;
+            let full_width = right_wall_inner - left_edge;
+            (center, full_width)
+        } else {
+            (right_wall_inner - step_push_in - step_width * (i as f32 + 0.5), step_width)
+        };
 
         commands.spawn((
-            Sprite::from_color(FLOOR_COLOR, Vec2::new(step_width, CORNER_STEP_THICKNESS)),
+            Sprite::from_color(FLOOR_COLOR, Vec2::new(width, CORNER_STEP_THICKNESS)),
             Transform::from_xyz(x, y, 0.0),
             Platform,
             CornerRamp,
@@ -96,7 +117,7 @@ pub fn spawn_corner_ramps(commands: &mut Commands, step_count: usize, corner_hei
         if fill_height > 0.0 {
             let fill_y = floor_top + fill_height / 2.0;
             commands.spawn((
-                Sprite::from_color(FLOOR_COLOR, Vec2::new(step_width, fill_height)),
+                Sprite::from_color(FLOOR_COLOR, Vec2::new(width, fill_height)),
                 Transform::from_xyz(x, fill_y, -0.1),
                 CornerRamp,
             ));

@@ -14,7 +14,7 @@ pub fn update_score_level_text(
     score: Res<Score>,
     current_level: Res<CurrentLevel>,
     level_db: Res<LevelDatabase>,
-    mut text_query: Query<&mut Text, With<ScoreLevelText>>,
+    mut text_query: Query<&mut Text2d, With<ScoreLevelText>>,
 ) {
     let Ok(mut text) = text_query.single_mut() else {
         return;
@@ -27,7 +27,7 @@ pub fn update_score_level_text(
         .unwrap_or("???");
     let num_levels = level_db.len();
 
-    text.0 = format!(
+    **text = format!(
         "Lv {}/{}: {}  |  {} - {}",
         current_level.0, num_levels, level_name, score.left, score.right,
     );

@@ -100,7 +100,7 @@ pub const STEAL_DEFENDER_ADVANTAGE: u32 = 2; // Defender starts with this many "
 
 pub const ARENA_WIDTH: f32 = 1600.0;
 pub const ARENA_HEIGHT: f32 = 900.0;
-pub const ARENA_FLOOR_Y: f32 = -ARENA_HEIGHT / 2.0 + 20.0; // Floor near bottom
+pub const ARENA_FLOOR_Y: f32 = -ARENA_HEIGHT / 2.0; // Floor at bottom edge
 
 // =============================================================================
 // BASKETS
@@ -109,7 +109,7 @@ pub const ARENA_FLOOR_Y: f32 = -ARENA_HEIGHT / 2.0 + 20.0; // Floor near bottom
 pub const BASKET_COLOR: Color = Color::srgb(0.8, 0.2, 0.2); // Red
 pub const BASKET_SIZE: Vec2 = Vec2::new(60.0, 80.0);
 pub const RIM_THICKNESS: f32 = 10.0;
-pub const WALL_THICKNESS: f32 = 40.0; // Walls are 40 wide
+pub const WALL_THICKNESS: f32 = 20.0; // Walls are 20 wide
 pub const BASKET_PUSH_IN: f32 = 156.0; // Default distance from wall inner edge to basket center
 
 // =============================================================================
@@ -120,6 +120,7 @@ pub const CORNER_STEP_TOTAL_HEIGHT: f32 = 320.0;
 pub const CORNER_STEP_TOTAL_WIDTH: f32 = 200.0;
 pub const CORNER_STEP_COUNT: usize = 13;
 pub const CORNER_STEP_THICKNESS: f32 = 20.0;
+pub const STEP_PUSH_IN: f32 = 0.0; // Distance from wall to where stairs start (top step extends to wall)
 pub const STEP_BOUNCE_RETENTION: f32 = 0.92; // Steps keep more velocity than normal bounce
 pub const STEP_DEFLECT_ANGLE_MAX: f32 = 35.0; // Max random deflection angle in degrees
 

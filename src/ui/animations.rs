@@ -1,11 +1,10 @@
-//! Animation systems for score flash, title flash, and ball pulse
+//! Animation systems for score flash and ball pulse
 
 use bevy::prelude::*;
 
 use crate::ball::{Ball, BallPulse, BallState};
 use crate::constants::*;
 use crate::player::{HoldingBall, Player};
-use crate::ui::ScoreLevelText;
 
 /// Score flash animation component
 #[derive(Component)]
@@ -13,12 +12,6 @@ pub struct ScoreFlash {
     pub timer: f32,            // Time remaining in flash
     pub flash_color: Color,    // Color to flash to
     pub original_color: Color, // Color to restore after flash
-}
-
-/// Title flash animation component
-#[derive(Component)]
-pub struct TitleFlash {
-    pub timer: f32, // Time remaining in flash
 }
 
 /// Animate score flash on baskets/players
@@ -48,28 +41,6 @@ pub fn animate_score_flash(
                 orig_rgba.green + (flash_rgba.green - orig_rgba.green) * blend,
                 orig_rgba.blue + (flash_rgba.blue - orig_rgba.blue) * blend,
             );
-        }
-    }
-}
-
-/// Animate title flash (red warning)
-pub fn animate_title_flash(
-    mut commands: Commands,
-    time: Res<Time>,
-    mut query: Query<(Entity, &mut TextColor, &mut TitleFlash), With<ScoreLevelText>>,
-) {
-    for (entity, mut text_color, mut flash) in &mut query {
-        flash.timer -= time.delta_secs();
-
-        if flash.timer <= 0.0 {
-            // Flash complete - restore black
-            *text_color = TextColor(Color::BLACK);
-            commands.entity(entity).remove::<TitleFlash>();
-        } else {
-            // Fast flicker between red and black
-            let t = (flash.timer * 20.0).sin();
-            let blend = (t + 1.0) / 2.0;
-            *text_color = TextColor(Color::srgb(blend, 0.0, 0.0));
         }
     }
 }

@@ -22,6 +22,7 @@ pub struct LevelData {
     pub step_count: usize,   // 0 = no steps, otherwise number of steps per corner
     pub corner_height: f32,  // Total height of corner ramp
     pub corner_width: f32,   // Total width of corner ramp
+    pub step_push_in: f32,   // Distance from wall to where stairs start (top step extends to wall)
 }
 
 /// Database of all loaded levels
@@ -75,6 +76,7 @@ impl LevelDatabase {
                     step_count: CORNER_STEP_COUNT,       // default
                     corner_height: CORNER_STEP_TOTAL_HEIGHT, // default
                     corner_width: CORNER_STEP_TOTAL_WIDTH,   // default
+                    step_push_in: STEP_PUSH_IN,          // default
                 });
             } else if let Some(height_str) = line.strip_prefix("basket_height:") {
                 if let Some(level) = &mut current_level {
@@ -128,6 +130,12 @@ impl LevelDatabase {
                         level.basket_push_in = offset;
                     }
                 }
+            } else if let Some(offset_str) = line.strip_prefix("step_push_in:") {
+                if let Some(level) = &mut current_level {
+                    if let Ok(offset) = offset_str.trim().parse::<f32>() {
+                        level.step_push_in = offset;
+                    }
+                }
             }
         }
 
@@ -161,6 +169,7 @@ impl LevelDatabase {
                     step_count: CORNER_STEP_COUNT,
                     corner_height: CORNER_STEP_TOTAL_HEIGHT,
                     corner_width: CORNER_STEP_TOTAL_WIDTH,
+                    step_push_in: STEP_PUSH_IN,
                 },
                 LevelData {
                     name: "Default".to_string(),
@@ -180,6 +189,7 @@ impl LevelDatabase {
                     step_count: CORNER_STEP_COUNT,
                     corner_height: CORNER_STEP_TOTAL_HEIGHT,
                     corner_width: CORNER_STEP_TOTAL_WIDTH,
+                    step_push_in: STEP_PUSH_IN,
                 },
             ],
         }

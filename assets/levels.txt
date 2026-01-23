@@ -33,6 +33,7 @@ center: 140 100
 level: Slopes
 basket_height: 670
 steps: 8
+step_push_in: 100
 mirror: 235 200 180
 
 level: Tower
@@ -47,6 +48,7 @@ center: 360 120
 level: Arena
 basket_height: 640
 steps: 7
+step_push_in: 100
 corner_height: 240
 corner_width: 220
 mirror: 480 240 150
@@ -56,6 +58,7 @@ center: 170 280
 level: Skyway
 basket_height: 700
 steps: 15
+step_push_in: 100
 corner_height: 450
 corner_width: 260
 mirror: 400 320 140

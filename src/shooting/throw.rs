@@ -9,7 +9,7 @@ use crate::constants::*;
 use crate::input::PlayerInput;
 use crate::player::{Grounded, HoldingBall, Player};
 use crate::shooting::{ChargingShot, LastShotInfo};
-use crate::ui::{PhysicsTweaks, ScoreLevelText, TitleFlash};
+use crate::ui::PhysicsTweaks;
 use crate::world::Basket;
 
 /// Execute throw when button is released
@@ -40,7 +40,6 @@ pub fn throw_ball(
         (With<Ball>, Without<Player>),
     >,
     basket_query: Query<(&Transform, &Basket), Without<Player>>,
-    title_query: Query<Entity, With<ScoreLevelText>>,
 ) {
     if !input.throw_released {
         return;
@@ -155,15 +154,8 @@ pub fn throw_ball(
     let speed_randomness = rng.gen_range(0.9..1.1);
     let uncapped_speed = required_speed * 1.10 * speed_randomness * power_multiplier;
 
-    // Hard cap at SHOT_HARD_CAP - flash title red if triggered
-    let final_speed = if uncapped_speed > SHOT_HARD_CAP {
-        if let Ok(title_entity) = title_query.single() {
-            commands.entity(title_entity).insert(TitleFlash { timer: 2.0 });
-        }
-        SHOT_HARD_CAP
-    } else {
-        uncapped_speed
-    };
+    // Hard cap at SHOT_HARD_CAP
+    let final_speed = uncapped_speed.min(SHOT_HARD_CAP);
 
     // Convert angle + speed to velocity (simple and direct!)
     // Angle is absolute: 0=right, π/2=up, π=left

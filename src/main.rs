@@ -18,7 +18,18 @@ fn main() {
     let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
 
     App::new()
-        .add_plugins((DefaultPlugins, FrameTimeDiagnosticsPlugin::default()))
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: (ARENA_WIDTH as u32, ARENA_HEIGHT as u32).into(),
+                    title: "Ballgame".into(),
+                    resizable: false,
+                    ..default()
+                }),
+                ..default()
+            }),
+            FrameTimeDiagnosticsPlugin::default(),
+        ))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(level_db)
         .init_resource::<PlayerInput>()
@@ -40,7 +51,6 @@ fn main() {
                 ui::update_score_level_text,
                 ui::animate_pickable_ball,
                 ui::animate_score_flash,
-                ui::animate_title_flash,
                 ui::update_charge_gauge,
                 shooting::update_target_marker,
                 ui::toggle_tweak_panel,
@@ -80,7 +90,7 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
         Camera2d,
         Transform::from_xyz(0.0, 0.0, 0.0),
         Projection::Orthographic(OrthographicProjection {
-            scale: 1.5, // Zoom out to show more of the arena
+            scale: 1.0, // 1:1 mapping: 1 world unit = 1 pixel
             ..OrthographicProjection::default_2d()
         }),
     ));
@@ -152,24 +162,24 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
         BallShotGrace::default(),
     ));
 
-    // Arena floor (spans most of the arena width)
+    // Arena floor (spans between walls)
     commands.spawn((
-        Sprite::from_color(FLOOR_COLOR, Vec2::new(ARENA_WIDTH - 80.0, 40.0)),
+        Sprite::from_color(FLOOR_COLOR, Vec2::new(ARENA_WIDTH - WALL_THICKNESS * 2.0, 40.0)),
         Transform::from_xyz(0.0, ARENA_FLOOR_Y, 0.0),
         Platform,
     ));
 
-    // Left wall (extends high above viewport)
+    // Left wall (flush with arena edge)
     commands.spawn((
-        Sprite::from_color(FLOOR_COLOR, Vec2::new(40.0, 5000.0)),
-        Transform::from_xyz(-ARENA_WIDTH / 2.0 + 20.0, 2000.0, 0.0),
+        Sprite::from_color(FLOOR_COLOR, Vec2::new(WALL_THICKNESS, 5000.0)),
+        Transform::from_xyz(-ARENA_WIDTH / 2.0 + WALL_THICKNESS / 2.0, 2000.0, 0.0),
         Platform,
     ));
 
-    // Right wall (extends high above viewport)
+    // Right wall (flush with arena edge)
     commands.spawn((
-        Sprite::from_color(FLOOR_COLOR, Vec2::new(40.0, 5000.0)),
-        Transform::from_xyz(ARENA_WIDTH / 2.0 - 20.0, 2000.0, 0.0),
+        Sprite::from_color(FLOOR_COLOR, Vec2::new(WALL_THICKNESS, 5000.0)),
+        Transform::from_xyz(ARENA_WIDTH / 2.0 - WALL_THICKNESS / 2.0, 2000.0, 0.0),
         Platform,
     ));
 
@@ -261,41 +271,31 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>) {
     let initial_step_count = initial_level.map(|l| l.step_count).unwrap_or(CORNER_STEP_COUNT);
     let initial_corner_height = initial_level.map(|l| l.corner_height).unwrap_or(CORNER_STEP_TOTAL_HEIGHT);
     let initial_corner_width = initial_level.map(|l| l.corner_width).unwrap_or(CORNER_STEP_TOTAL_WIDTH);
-    levels::spawn_corner_ramps(&mut commands, initial_step_count, initial_corner_height, initial_corner_width);
+    let initial_step_push_in = initial_level.map(|l| l.step_push_in).unwrap_or(STEP_PUSH_IN);
+    levels::spawn_corner_ramps(&mut commands, initial_step_count, initial_corner_height, initial_corner_width, initial_step_push_in);
 
-    // Score/Level display - top center
+    // Score/Level display - world space, above arena
     commands.spawn((
-        Text::new("Score"),
+        Text2d::new("Score"),
         TextFont {
             font_size: 24.0,
             ..default()
         },
         TextLayout::new_with_justify(Justify::Center),
         TextColor(Color::BLACK),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(10.0),
-            width: Val::Percent(100.0),
-            ..default()
-        },
+        Transform::from_xyz(0.0, ARENA_HEIGHT / 2.0 - 30.0, 1.0),
         ScoreLevelText,
     ));
 
-    // Debug UI - bottom center (shot info)
+    // Debug UI - world space, centered on floor
     commands.spawn((
-        Text::new(""),
+        Text2d::new(""),
         TextFont {
             font_size: 14.0,
             ..default()
         },
-        TextColor(Color::BLACK),
-        Node {
-            position_type: PositionType::Absolute,
-            bottom: Val::Px(10.0),
-            width: Val::Percent(100.0),
-            justify_content: JustifyContent::Center,
-            ..default()
-        },
+        TextColor(Color::WHITE),
+        Transform::from_xyz(0.0, ARENA_FLOOR_Y + 10.0, 1.0),
         DebugText,
     ));
 
