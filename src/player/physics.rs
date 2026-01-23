@@ -2,11 +2,12 @@
 
 use bevy::prelude::*;
 
-use crate::ai::AiInput;
+use crate::ai::{AiGoal, AiInput, AiState};
 use crate::ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
-    BallStyleType, BallTextures, CurrentPalette, NUM_PALETTES,
+    BallStyleType, BallTextures, CurrentPalette,
 };
+use crate::palettes::{PaletteDatabase, NUM_PALETTES};
 use crate::constants::*;
 use crate::helpers::*;
 use crate::levels::LevelDatabase;
@@ -198,8 +199,10 @@ pub fn respawn_player(
     gamepads: Query<&Gamepad>,
     mut commands: Commands,
     level_db: Res<LevelDatabase>,
+    palette_db: Res<PaletteDatabase>,
     mut current_level: ResMut<CurrentLevel>,
     mut current_palette: ResMut<CurrentPalette>,
+    mut clear_color: ResMut<ClearColor>,
     ball_textures: Res<BallTextures>,
     mut players: Query<
         (
@@ -212,6 +215,7 @@ pub fn respawn_player(
         ),
         With<Player>,
     >,
+    mut ai_players: Query<&mut AiState, (With<Player>, Without<HumanControlled>)>,
     ball_query: Query<Entity, With<Ball>>,
     level_platforms: Query<Entity, With<LevelPlatform>>,
     corner_ramps: Query<Entity, With<CornerRamp>>,
@@ -256,7 +260,12 @@ pub fn respawn_player(
     if reset_pressed || level_changed {
         // Cycle palette on reset
         current_palette.0 = (current_palette.0 + 1) % NUM_PALETTES;
-        let palette = &PALETTES[current_palette.0];
+        let palette = palette_db
+            .get(current_palette.0)
+            .expect("Palette index out of bounds");
+
+        // Update background color
+        clear_color.0 = palette.background;
 
         // Reset all players to their spawn positions based on team
         for (player_entity, mut p_transform, mut p_velocity, mut p_sprite, team, holding) in &mut players {
@@ -354,43 +363,54 @@ pub fn respawn_player(
                 }
             }
         }
-    }
 
-    // Update level geometry if level changed
-    if level_changed {
-        let level_index = (current_level.0 - 1) as usize;
+        // Update level geometry if level changed
+        if level_changed {
+            let level_index = (current_level.0 - 1) as usize;
 
-        // Despawn old level platforms
-        for entity in &level_platforms {
-            commands.entity(entity).despawn();
-        }
-
-        // Spawn new level platforms
-        spawn_level_platforms(&mut commands, &level_db, level_index);
-
-        // Update basket positions and corner ramps for new level
-        if let Some(level) = level_db.get(level_index) {
-            let basket_y = ARENA_FLOOR_Y + level.basket_height;
-            let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
-            for (mut basket_transform, _, basket, _) in &mut baskets {
-                basket_transform.translation.y = basket_y;
-                basket_transform.translation.x = match basket {
-                    Basket::Left => left_x,
-                    Basket::Right => right_x,
-                };
-            }
-
-            // Despawn old corner ramps and spawn new ones for new level
-            for entity in &corner_ramps {
+            // Despawn old level platforms
+            for entity in &level_platforms {
                 commands.entity(entity).despawn();
             }
-            spawn_corner_ramps(
-                &mut commands,
-                level.step_count,
-                level.corner_height,
-                level.corner_width,
-                level.step_push_in,
-            );
+
+            // Spawn new level platforms
+            spawn_level_platforms(&mut commands, &level_db, level_index, palette.platform);
+
+            // Update basket positions and corner ramps for new level
+            if let Some(level) = level_db.get(level_index) {
+                let basket_y = ARENA_FLOOR_Y + level.basket_height;
+                let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
+                for (mut basket_transform, _, basket, _) in &mut baskets {
+                    basket_transform.translation.y = basket_y;
+                    basket_transform.translation.x = match basket {
+                        Basket::Left => left_x,
+                        Basket::Right => right_x,
+                    };
+                }
+
+                // Despawn old corner ramps and spawn new ones for new level
+                for entity in &corner_ramps {
+                    commands.entity(entity).despawn();
+                }
+                spawn_corner_ramps(
+                    &mut commands,
+                    level.step_count,
+                    level.corner_height,
+                    level.corner_width,
+                    level.step_push_in,
+                    palette.floor,
+                );
+
+                // Update AI goals based on debug status
+                let new_goal = if level.debug {
+                    AiGoal::Idle
+                } else {
+                    AiGoal::default()
+                };
+                for mut ai_state in &mut ai_players {
+                    ai_state.current_goal = new_goal;
+                }
+            }
         }
     }
 }

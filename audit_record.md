@@ -4,6 +4,93 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Audit: 2026-01-22 (Session 3)
+
+### Session Summary
+
+Major refactoring: palette system expansion, multiple bug fixes, and module restructuring.
+
+### Changes Made
+
+**Jump System Fix:**
+- Added `.chain()` to Update input systems to guarantee execution order
+- Order: `capture_input` → `copy_human_input` → `swap_control` → `ai_decision_update`
+- Without chaining, `copy_human_input` could run before `capture_input`, losing jump input
+
+**Jump Buffer Fix:**
+- Removed faulty consumption-sync logic in `copy_human_input`
+- Old logic incorrectly zeroed jump buffer on the first press frame
+- Now simply copies `PlayerInput.jump_buffer_timer` to `AiInput.jump_buffer_timer`
+
+**Ball Spawning Fix:**
+- Fixed ball duplication when switching from debug to non-debug levels
+- Now despawns ALL balls and respawns correct count for new level
+- Debug levels: 6 balls with different styles
+- Normal levels: 1 ball with default style
+
+**Goal Flash Fix:**
+- Updated `check_scoring` to use `PaletteDatabase` instead of hardcoded `TEAM_LEFT_PRIMARY`/`TEAM_RIGHT_PRIMARY`
+- Flash now returns to correct palette color
+
+**Palette System Expansion:**
+- Created new `src/palettes/` module (mod.rs, database.rs)
+- Extended `Palette` struct with `background`, `floor`, `platform` colors
+- Expanded from 10 to 20 palettes
+- Palettes loaded from `assets/palettes.txt` (creates default file if missing)
+- Background (`ClearColor`) now changes with palette
+- Floor/wall/platform colors change with palette
+- Updated `spawn_level_platforms` and `spawn_corner_ramps` to accept color parameters
+
+**AI Goal Fix:**
+- Added logic to reset AI goals when switching levels
+- Debug levels: AI set to `AiGoal::Idle`
+- Normal levels: AI set to `AiGoal::ChaseBall` (default)
+
+**Ball Textures:**
+- Updated `generate_ball.rs` to 20 palettes
+- Generated 120 textures (6 styles × 20 palettes)
+
+### Audit Findings
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| CLAUDE.md accuracy | NEEDS UPDATE | Add palettes module, update NUM_PALETTES |
+| Input buffering | PASS | All `just_pressed` in Update, properly buffered |
+| Constants | PASS | No magic numbers in new code |
+| System order | PASS | Update systems chained where needed |
+| Unused code | PASS | Clean compilation |
+| Pattern violations | PASS | No raw input in FixedUpdate |
+| Collision epsilon | N/A | No new collision code |
+| Frame-rate physics | PASS | No new physics code |
+| Compilation | PASS | Builds successfully |
+| Clippy | WARN | 44 warnings (type_complexity, standard Bevy patterns) |
+
+### Files Modified
+
+- `src/main.rs` - Palette loading, system chaining, initial colors
+- `src/lib.rs` - Added palettes module export
+- `src/constants.rs` - Removed old PALETTES array, kept DEFAULT_ colors
+- `src/palettes/mod.rs` - New module
+- `src/palettes/database.rs` - PaletteDatabase implementation (20 palettes)
+- `src/ball/components.rs` - Uses NUM_PALETTES from palettes module
+- `src/player/physics.rs` - Ball respawning, AI goal updates, palette colors
+- `src/scoring/mod.rs` - Uses PaletteDatabase for flash colors
+- `src/levels/mod.rs` - Uses palette colors for reload
+- `src/levels/spawning.rs` - Added color parameters to spawn functions
+- `src/ai/mod.rs` - Removed faulty jump buffer sync logic
+- `src/bin/generate_ball.rs` - Updated to 20 palettes
+- `todo.md` - Added completed items
+- `audit_record.md` - This entry
+
+### Files Created
+
+- `src/palettes/mod.rs`
+- `src/palettes/database.rs`
+- `assets/palettes.txt` (on first run)
+- 60 new ball texture PNGs (palettes 10-19)
+
+---
+
 ## Audit: 2026-01-22 (Session 2)
 
 ### Session Summary

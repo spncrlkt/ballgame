@@ -2,12 +2,11 @@
 
 use bevy::prelude::*;
 
+use crate::palettes::NUM_PALETTES;
+
 /// Marker for ball entities
 #[derive(Component)]
 pub struct Ball;
-
-/// Number of color palettes available
-pub const NUM_PALETTES: usize = 10;
 
 /// Visual style of a ball (each has textures for all palettes)
 #[derive(Component, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
@@ -76,7 +75,7 @@ impl BallTextures {
     }
 }
 
-/// Current color palette index (0-9)
+/// Current color palette index (0 to NUM_PALETTES-1)
 #[derive(Resource, Default)]
 pub struct CurrentPalette(pub usize);
 

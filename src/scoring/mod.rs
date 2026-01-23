@@ -2,8 +2,9 @@
 
 use bevy::prelude::*;
 
-use crate::ball::{Ball, BallState, Velocity};
+use crate::ball::{Ball, BallState, CurrentPalette, Velocity};
 use crate::constants::*;
+use crate::palettes::PaletteDatabase;
 use crate::player::{HoldingBall, Player, Team};
 use crate::ui::ScoreFlash;
 use crate::world::Basket;
@@ -29,10 +30,15 @@ impl Default for CurrentLevel {
 pub fn check_scoring(
     mut commands: Commands,
     mut score: ResMut<Score>,
+    current_palette: Res<CurrentPalette>,
+    palette_db: Res<PaletteDatabase>,
     mut ball_query: Query<(&mut Transform, &mut Velocity, &mut BallState, &Sprite), With<Ball>>,
     basket_query: Query<(Entity, &Transform, &Basket, &Sprite), Without<Ball>>,
     player_query: Query<(Entity, &Sprite, &Team), With<Player>>,
 ) {
+    let palette = palette_db
+        .get(current_palette.0)
+        .expect("Palette index out of bounds");
     for (mut ball_transform, mut ball_velocity, mut ball_state, _ball_sprite) in &mut ball_query {
         let ball_pos = ball_transform.translation.truncate();
         let is_held = matches!(*ball_state, BallState::Held(_));
@@ -57,10 +63,10 @@ pub fn check_scoring(
                     Basket::Right => score.right += points,
                 }
 
-                // Basket color based on its side (defensive coloring)
+                // Basket color based on its side (from current palette)
                 let basket_original_color = match basket {
-                    Basket::Left => TEAM_LEFT_PRIMARY,
-                    Basket::Right => TEAM_RIGHT_PRIMARY,
+                    Basket::Left => palette.left,
+                    Basket::Right => palette.right,
                 };
 
                 // Flash the basket (gold/yellow for carry-in, white for throw)
@@ -78,10 +84,10 @@ pub fn check_scoring(
                 // If held, also flash the player who scored
                 if let BallState::Held(holder) = *ball_state {
                     if let Ok((player_entity, _player_sprite, team)) = player_query.get(holder) {
-                        // Player color based on team
+                        // Player color based on team (from current palette)
                         let player_original_color = match team {
-                            Team::Left => TEAM_LEFT_PRIMARY,
-                            Team::Right => TEAM_RIGHT_PRIMARY,
+                            Team::Left => palette.left,
+                            Team::Right => palette.right,
                         };
                         commands.entity(player_entity).insert(ScoreFlash {
                             timer: 0.6,

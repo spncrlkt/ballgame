@@ -7,9 +7,9 @@ use ballgame::{
     BallSpin, BallState, BallStyleType, BallTextures, ChargeGaugeBackground, ChargeGaugeFill,
     ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette, DebugSettings, DebugStyleKey,
     DebugText, Facing, Grounded, HumanControlled, JumpState, LastShotInfo, LevelDatabase,
-    PhysicsTweaks, Player, PlayerInput, Score, ScoreLevelText, StealContest, StyleTextures,
-    TargetBasket, Team, TweakPanel, TweakRow, Velocity, ai, ball, constants::*, helpers::*, input,
-    levels, player, scoring, shooting, steal, ui, world,
+    PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, ScoreLevelText, StealContest,
+    StyleTextures, TargetBasket, Team, TweakPanel, TweakRow, Velocity, ai, ball, constants::*,
+    helpers::*, input, levels, player, scoring, shooting, steal, ui, world, PALETTES_FILE,
 };
 use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use world::{Basket, BasketRim, Collider, Platform};
@@ -17,6 +17,15 @@ use world::{Basket, BasketRim, Collider, Platform};
 fn main() {
     // Load level database from file
     let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
+
+    // Load palette database (creates default file if missing)
+    let palette_db = PaletteDatabase::load_or_create(PALETTES_FILE);
+
+    // Get initial background color from first palette
+    let initial_bg = palette_db
+        .get(0)
+        .map(|p| p.background)
+        .unwrap_or(DEFAULT_BACKGROUND_COLOR);
 
     App::new()
         .add_plugins((
@@ -31,7 +40,8 @@ fn main() {
             }),
             FrameTimeDiagnosticsPlugin::default(),
         ))
-        .insert_resource(ClearColor(BACKGROUND_COLOR))
+        .insert_resource(ClearColor(initial_bg))
+        .insert_resource(palette_db)
         .insert_resource(level_db)
         .init_resource::<PlayerInput>()
         .init_resource::<DebugSettings>()
@@ -92,7 +102,12 @@ fn main() {
 }
 
 /// Setup the game world
-fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res<AssetServer>) {
+fn setup(
+    mut commands: Commands,
+    level_db: Res<LevelDatabase>,
+    palette_db: Res<PaletteDatabase>,
+    asset_server: Res<AssetServer>,
+) {
     // Camera - orthographic, shows entire arena
     // Using scale to zoom out and show full arena (default is 1.0 = 1 pixel per unit)
     // With 1600x900 arena, we need to scale so it fits in typical window sizes
@@ -106,7 +121,7 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
     ));
 
     // Get initial palette colors
-    let initial_palette = &PALETTES[0];
+    let initial_palette = palette_db.get(0).expect("No palettes loaded");
 
     // Left team player - spawns on left side, starts human-controlled
     let left_player = commands
@@ -263,7 +278,7 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
     // Arena floor (spans between walls)
     commands.spawn((
         Sprite::from_color(
-            FLOOR_COLOR,
+            initial_palette.floor,
             Vec2::new(ARENA_WIDTH - WALL_THICKNESS * 2.0, 40.0),
         ),
         Transform::from_xyz(0.0, ARENA_FLOOR_Y, 0.0),
@@ -272,20 +287,20 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
 
     // Left wall (flush with arena edge)
     commands.spawn((
-        Sprite::from_color(FLOOR_COLOR, Vec2::new(WALL_THICKNESS, 5000.0)),
+        Sprite::from_color(initial_palette.floor, Vec2::new(WALL_THICKNESS, 5000.0)),
         Transform::from_xyz(-ARENA_WIDTH / 2.0 + WALL_THICKNESS / 2.0, 2000.0, 0.0),
         Platform,
     ));
 
     // Right wall (flush with arena edge)
     commands.spawn((
-        Sprite::from_color(FLOOR_COLOR, Vec2::new(WALL_THICKNESS, 5000.0)),
+        Sprite::from_color(initial_palette.floor, Vec2::new(WALL_THICKNESS, 5000.0)),
         Transform::from_xyz(ARENA_WIDTH / 2.0 - WALL_THICKNESS / 2.0, 2000.0, 0.0),
         Platform,
     ));
 
     // Spawn level 1 platforms
-    levels::spawn_level_platforms(&mut commands, &level_db, 0);
+    levels::spawn_level_platforms(&mut commands, &level_db, 0, initial_palette.platform);
 
     // Baskets (goals) - height and X position vary per level
     let initial_level = level_db.get(0);
@@ -386,6 +401,7 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
         initial_corner_height,
         initial_corner_width,
         initial_step_push_in,
+        initial_palette.floor,
     );
 
     // Score/Level display - world space, above arena

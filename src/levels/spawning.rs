@@ -7,17 +7,17 @@ use crate::levels::database::{LevelDatabase, PlatformDef};
 use crate::world::{CornerRamp, LevelPlatform, Platform};
 
 /// Helper to spawn a platform mirrored on both sides (symmetric)
-pub fn spawn_mirrored_platform(commands: &mut Commands, x: f32, y: f32, width: f32) {
+pub fn spawn_mirrored_platform(commands: &mut Commands, x: f32, y: f32, width: f32, color: Color) {
     // Left side
     commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::new(width, 20.0)),
+        Sprite::from_color(color, Vec2::new(width, 20.0)),
         Transform::from_xyz(-x, y, 0.0),
         Platform,
         LevelPlatform,
     ));
     // Right side (mirrored)
     commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::new(width, 20.0)),
+        Sprite::from_color(color, Vec2::new(width, 20.0)),
         Transform::from_xyz(x, y, 0.0),
         Platform,
         LevelPlatform,
@@ -25,9 +25,9 @@ pub fn spawn_mirrored_platform(commands: &mut Commands, x: f32, y: f32, width: f
 }
 
 /// Helper to spawn a centered platform
-pub fn spawn_center_platform(commands: &mut Commands, y: f32, width: f32) {
+pub fn spawn_center_platform(commands: &mut Commands, y: f32, width: f32, color: Color) {
     commands.spawn((
-        Sprite::from_color(PLATFORM_COLOR, Vec2::new(width, 20.0)),
+        Sprite::from_color(color, Vec2::new(width, 20.0)),
         Transform::from_xyz(0.0, y, 0.0),
         Platform,
         LevelPlatform,
@@ -43,6 +43,7 @@ pub fn spawn_corner_ramps(
     corner_height: f32,
     corner_width: f32,
     step_push_in: f32,
+    floor_color: Color,
 ) {
     if step_count == 0 {
         return;
@@ -79,7 +80,7 @@ pub fn spawn_corner_ramps(
         };
 
         commands.spawn((
-            Sprite::from_color(FLOOR_COLOR, Vec2::new(width, CORNER_STEP_THICKNESS)),
+            Sprite::from_color(floor_color, Vec2::new(width, CORNER_STEP_THICKNESS)),
             Transform::from_xyz(x, y, 0.0),
             Platform,
             CornerRamp,
@@ -91,7 +92,7 @@ pub fn spawn_corner_ramps(
         if fill_height > 0.0 {
             let fill_y = floor_top + fill_height / 2.0;
             commands.spawn((
-                Sprite::from_color(FLOOR_COLOR, Vec2::new(width, fill_height)),
+                Sprite::from_color(floor_color, Vec2::new(width, fill_height)),
                 Transform::from_xyz(x, fill_y, -0.1),
                 CornerRamp,
             ));
@@ -117,7 +118,7 @@ pub fn spawn_corner_ramps(
         };
 
         commands.spawn((
-            Sprite::from_color(FLOOR_COLOR, Vec2::new(width, CORNER_STEP_THICKNESS)),
+            Sprite::from_color(floor_color, Vec2::new(width, CORNER_STEP_THICKNESS)),
             Transform::from_xyz(x, y, 0.0),
             Platform,
             CornerRamp,
@@ -129,7 +130,7 @@ pub fn spawn_corner_ramps(
         if fill_height > 0.0 {
             let fill_y = floor_top + fill_height / 2.0;
             commands.spawn((
-                Sprite::from_color(FLOOR_COLOR, Vec2::new(width, fill_height)),
+                Sprite::from_color(floor_color, Vec2::new(width, fill_height)),
                 Transform::from_xyz(x, fill_y, -0.1),
                 CornerRamp,
             ));
@@ -142,6 +143,7 @@ pub fn spawn_level_platforms(
     commands: &mut Commands,
     level_db: &LevelDatabase,
     level_index: usize,
+    platform_color: Color,
 ) {
     let Some(level) = level_db.get(level_index) else {
         warn!("Level {} not found, spawning empty", level_index);
@@ -151,10 +153,10 @@ pub fn spawn_level_platforms(
     for platform in &level.platforms {
         match platform {
             PlatformDef::Mirror { x, y, width } => {
-                spawn_mirrored_platform(commands, *x, ARENA_FLOOR_Y + y, *width);
+                spawn_mirrored_platform(commands, *x, ARENA_FLOOR_Y + y, *width, platform_color);
             }
             PlatformDef::Center { y, width } => {
-                spawn_center_platform(commands, ARENA_FLOOR_Y + y, *width);
+                spawn_center_platform(commands, ARENA_FLOOR_Y + y, *width, platform_color);
             }
         }
     }

@@ -11,6 +11,7 @@ pub mod ai;
 pub mod ball;
 pub mod input;
 pub mod levels;
+pub mod palettes;
 pub mod player;
 pub mod scoring;
 pub mod shooting;
@@ -22,8 +23,9 @@ pub mod world;
 pub use ai::{AiGoal, AiInput, AiState};
 pub use ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
-    BallStyleType, BallTextures, CurrentPalette, StyleTextures, NUM_PALETTES,
+    BallStyleType, BallTextures, CurrentPalette, StyleTextures,
 };
+pub use palettes::{Palette, PaletteDatabase, NUM_PALETTES, PALETTES_FILE};
 pub use constants::*;
 pub use helpers::*;
 pub use input::PlayerInput;

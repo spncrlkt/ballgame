@@ -1,6 +1,6 @@
 //! Ball texture generator
 //!
-//! Generates 6 ball styles × 10 color palettes = 60 PNG textures.
+//! Generates 6 ball styles × 20 color palettes = 120 PNG textures.
 //!
 //! Styles:
 //! - stripe: White ball with horizontal stripe
@@ -28,57 +28,107 @@ struct Palette {
     right: [u8; 4],
 }
 
-/// 10 named color palettes
-const PALETTES: [Palette; 10] = [
-    // 0: "Ocean Fire" - Blue vs Orange
+/// 20 named color palettes (must match palettes/database.rs)
+const PALETTES: [Palette; 20] = [
+    // 0: Ocean Fire - Blue vs Orange
     Palette {
         left: [30, 144, 255, 255],
         right: [255, 107, 53, 255],
     },
-    // 1: "Forest Crimson" - Green vs Red
+    // 1: Forest Crimson - Green vs Red
     Palette {
         left: [34, 139, 34, 255],
         right: [220, 20, 60, 255],
     },
-    // 2: "Electric Neon" - Cyan vs Pink
+    // 2: Electric Neon - Cyan vs Pink
     Palette {
         left: [0, 255, 200, 255],
         right: [255, 50, 150, 255],
     },
-    // 3: "Royal Gold" - Blue vs Gold
+    // 3: Royal Gold - Blue vs Gold
     Palette {
         left: [65, 105, 225, 255],
         right: [255, 215, 0, 255],
     },
-    // 4: "Sunset" - Violet vs Orange
+    // 4: Sunset - Violet vs Orange
     Palette {
         left: [238, 130, 238, 255],
         right: [255, 165, 0, 255],
     },
-    // 5: "Arctic Ember" - Sky vs Tomato
+    // 5: Arctic Ember - Sky vs Tomato
     Palette {
         left: [135, 206, 250, 255],
         right: [232, 76, 61, 255],
     },
-    // 6: "Toxic Slime" - Lime vs Purple
+    // 6: Toxic Slime - Lime vs Purple
     Palette {
         left: [0, 255, 0, 255],
         right: [148, 0, 211, 255],
     },
-    // 7: "Bubblegum" - Teal vs Pink
+    // 7: Bubblegum - Teal vs Pink
     Palette {
         left: [0, 192, 192, 255],
         right: [255, 105, 180, 255],
     },
-    // 8: "Desert Storm" - Tan vs Brown
+    // 8: Desert Storm - Tan vs Brown
     Palette {
         left: [210, 180, 140, 255],
         right: [139, 69, 19, 255],
     },
-    // 9: "Neon Noir" - Cyan vs Magenta
+    // 9: Neon Noir - Cyan vs Magenta
     Palette {
         left: [0, 250, 250, 255],
         right: [250, 0, 120, 255],
+    },
+    // 10: Ice and Fire - White-blue vs Deep red
+    Palette {
+        left: [179, 217, 255, 255],
+        right: [204, 26, 26, 255],
+    },
+    // 11: Jungle Fever - Bright green vs Hot pink
+    Palette {
+        left: [51, 230, 77, 255],
+        right: [255, 51, 128, 255],
+    },
+    // 12: Copper Patina - Teal vs Copper
+    Palette {
+        left: [51, 153, 140, 255],
+        right: [217, 115, 51, 255],
+    },
+    // 13: Midnight Sun - Gold vs Deep blue
+    Palette {
+        left: [255, 204, 51, 255],
+        right: [26, 51, 153, 255],
+    },
+    // 14: Cherry Blossom - Pink vs Mint
+    Palette {
+        left: [255, 153, 179, 255],
+        right: [102, 204, 153, 255],
+    },
+    // 15: Volcanic - Orange vs Black
+    Palette {
+        left: [255, 128, 0, 255],
+        right: [51, 51, 64, 255],
+    },
+    // 16: Deep Sea - Aqua vs Coral
+    Palette {
+        left: [0, 204, 230, 255],
+        right: [255, 128, 115, 255],
+    },
+    // 17: Autumn Harvest - Orange vs Purple
+    Palette {
+        left: [242, 153, 51, 255],
+        right: [128, 51, 153, 255],
+    },
+    // 18: Synthwave - Hot pink vs Electric blue
+    Palette {
+        left: [255, 51, 153, 255],
+        right: [51, 153, 255, 255],
+    },
+    // 19: Monochrome - White vs Gray
+    Palette {
+        left: [242, 242, 242, 255],
+        right: [128, 128, 128, 255],
     },
 ];
 

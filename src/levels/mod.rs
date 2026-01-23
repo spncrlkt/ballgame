@@ -8,8 +8,10 @@ pub use spawning::*;
 
 use bevy::prelude::*;
 
+use crate::ball::CurrentPalette;
 use crate::constants::LEVELS_FILE;
 use crate::helpers::basket_x_from_offset;
+use crate::palettes::PaletteDatabase;
 use crate::scoring::CurrentLevel;
 use crate::world::{Basket, CornerRamp, LevelPlatform};
 
@@ -18,7 +20,9 @@ pub fn reload_levels(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     mut level_db: ResMut<LevelDatabase>,
+    palette_db: Res<PaletteDatabase>,
     current_level: Res<CurrentLevel>,
+    current_palette: Res<CurrentPalette>,
     level_platforms: Query<Entity, With<LevelPlatform>>,
     corner_ramps: Query<Entity, With<CornerRamp>>,
     mut baskets: Query<(&mut Transform, &Basket)>,
@@ -32,6 +36,9 @@ pub fn reload_levels(
     info!("Reloaded levels from {}", LEVELS_FILE);
 
     let level_index = (current_level.0 - 1) as usize;
+    let palette = palette_db
+        .get(current_palette.0)
+        .expect("Palette index out of bounds");
 
     // Despawn old level platforms
     for entity in &level_platforms {
@@ -44,7 +51,7 @@ pub fn reload_levels(
     }
 
     // Spawn new level geometry
-    spawn_level_platforms(&mut commands, &level_db, level_index);
+    spawn_level_platforms(&mut commands, &level_db, level_index, palette.platform);
 
     // Update basket positions and spawn corner ramps
     if let Some(level) = level_db.get(level_index) {
@@ -64,6 +71,7 @@ pub fn reload_levels(
             level.corner_height,
             level.corner_width,
             level.step_push_in,
+            palette.floor,
         );
     }
 }
