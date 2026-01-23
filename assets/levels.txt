@@ -8,8 +8,10 @@
 #   steps: <count>          Corner steps count (0 = no steps, default = 13)
 #   corner_height: <h>      Total corner ramp height (default = 320)
 #   corner_width: <w>       Total corner ramp width (default = 200)
+#   step_push_in: <dist>    Distance from wall to where stairs start (default = 0)
 #   mirror: <x> <y> <w>     Platform at (-x, y) and (+x, y) with width w
 #   center: <y> <w>         Centered platform at (0, y) with width w
+#   debug: true             Debug mode: spawns all ball styles, AI idle (default = false)
 #
 # Heights are relative to ARENA_FLOOR_Y
 # Player max jump ≈ 215 units above platform
@@ -21,7 +23,7 @@ level: Debug
 basket_height: 300
 basket_push_in: 200
 steps: 0
-# Clean floor for testing ball textures and UI
+debug: true
 
 level: Open Floor
 basket_height: 660

@@ -121,8 +121,8 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
         ))
         .id();
 
-    // Check if this is the Debug level early (for AI goal)
-    let is_debug_level_for_ai = level_db.get(0).map(|l| l.name == "Debug").unwrap_or(false);
+    // Check if this is a debug level early (for AI goal)
+    let is_debug_level_for_ai = level_db.get(0).map(|l| l.debug).unwrap_or(false);
 
     // Right team player (orange) - spawns on right side, starts AI-controlled
     let _right_player = commands
@@ -200,8 +200,8 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
     };
     commands.insert_resource(ball_textures.clone());
 
-    // Check if this is the Debug level (first level, name = "Debug")
-    let is_debug_level = level_db.get(0).map(|l| l.name == "Debug").unwrap_or(false);
+    // Check if this is a debug level (spawns all ball styles, AI idle)
+    let is_debug_level = level_db.get(0).map(|l| l.debug).unwrap_or(false);
 
     if is_debug_level {
         // Debug level: spawn 6 balls with different styles

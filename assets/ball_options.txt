@@ -1,0 +1,39 @@
+# Ball Generation Options
+# =======================
+#
+# Format:
+#   size: <pixels>          Texture size in pixels (default = 128)
+#   border: <pixels>        Black circumference border thickness (default = 4)
+#
+#   style: <name>           Start a new style definition
+#   pattern: <type>         Pattern type: stripe, wedges, dot, half, ring, solid
+#   param: <name> <value>   Style-specific parameter
+#
+# Colors (turquoise, terracotta, white, black) are defined in constants.rs
+# Generator will FAIL if this file is missing or malformed.
+
+size: 128
+border: 10
+
+style: stripe
+pattern: stripe
+param: height 0.20
+
+style: wedges
+pattern: wedges
+param: sections 4
+
+style: dot
+pattern: dot
+param: radius 0.45
+
+style: half
+pattern: half
+
+style: ring
+pattern: ring
+param: inner 0.45
+param: outer 0.70
+
+style: solid
+pattern: solid

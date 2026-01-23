@@ -9,9 +9,9 @@ pub struct Ball;
 /// Visual style of a ball (each has 3 possession textures)
 #[derive(Component, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 pub enum BallStyleType {
+    #[default]
     Stripe,
     Wedges,
-    #[default]
     Dot,
     Half,
     Ring,

@@ -107,7 +107,7 @@ pub fn update_style_key_visibility(
 
     let is_debug = level_db
         .get(current_level.0.saturating_sub(1) as usize)
-        .map(|l| l.name == "Debug")
+        .map(|l| l.debug)
         .unwrap_or(false);
 
     for mut visibility in &mut query {
