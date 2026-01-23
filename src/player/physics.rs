@@ -3,7 +3,10 @@
 use bevy::prelude::*;
 
 use crate::ai::AiInput;
-use crate::ball::{Ball, BallRolling, BallState, BallStyleType, BallTextures, CurrentPalette, NUM_PALETTES};
+use crate::ball::{
+    Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
+    BallStyleType, BallTextures, CurrentPalette, NUM_PALETTES,
+};
 use crate::constants::*;
 use crate::helpers::*;
 use crate::levels::LevelDatabase;
@@ -209,17 +212,7 @@ pub fn respawn_player(
         ),
         With<Player>,
     >,
-    mut ball: Query<
-        (
-            &mut Transform,
-            &mut Velocity,
-            &mut BallState,
-            &mut BallRolling,
-            &mut Sprite,
-            &BallStyleType,
-        ),
-        (With<Ball>, Without<Player>),
-    >,
+    ball_query: Query<Entity, With<Ball>>,
     level_platforms: Query<Entity, With<LevelPlatform>>,
     corner_ramps: Query<Entity, With<CornerRamp>>,
     mut baskets: Query<(&mut Transform, &mut Sprite, &Basket, Option<&Children>), (Without<Player>, Without<Ball>)>,
@@ -285,16 +278,61 @@ pub fn respawn_player(
             }
         }
 
-        // Reset ball and update texture
-        for (mut b_transform, mut b_velocity, mut b_state, mut b_rolling, mut b_sprite, style) in &mut ball {
-            b_transform.translation = BALL_SPAWN;
-            b_velocity.0 = Vec2::ZERO;
-            *b_state = BallState::Free;
-            b_rolling.0 = false;
+        // Despawn all existing balls
+        for ball_entity in &ball_query {
+            commands.entity(ball_entity).despawn();
+        }
 
-            // Update ball texture to new palette
-            let style_textures = ball_textures.get(*style);
-            b_sprite.image = style_textures.textures[current_palette.0].clone();
+        // Spawn correct number of balls for the new level
+        let new_level_index = (current_level.0 - 1) as usize;
+        let is_debug = level_db
+            .get(new_level_index)
+            .map(|l| l.debug)
+            .unwrap_or(false);
+
+        if is_debug {
+            // Debug level: spawn 6 balls with different styles
+            let x_positions = [-600.0, -360.0, -120.0, 120.0, 360.0, 600.0];
+            for (style, x) in BallStyleType::ALL.iter().zip(x_positions.iter()) {
+                let textures = ball_textures.get(*style);
+                commands.spawn((
+                    Sprite {
+                        image: textures.textures[current_palette.0].clone(),
+                        custom_size: Some(BALL_SIZE),
+                        ..default()
+                    },
+                    Transform::from_xyz(*x, ARENA_FLOOR_Y + BALL_SIZE.y / 2.0 + 20.0, 2.0),
+                    Ball,
+                    BallState::default(),
+                    Velocity::default(),
+                    BallPlayerContact::default(),
+                    BallPulse::default(),
+                    BallRolling::default(),
+                    BallShotGrace::default(),
+                    BallSpin::default(),
+                    *style,
+                ));
+            }
+        } else {
+            // Normal level: spawn single ball with default style
+            let default_textures = ball_textures.get(BallStyleType::default());
+            commands.spawn((
+                Sprite {
+                    image: default_textures.textures[current_palette.0].clone(),
+                    custom_size: Some(BALL_SIZE),
+                    ..default()
+                },
+                Transform::from_translation(BALL_SPAWN),
+                Ball,
+                BallState::default(),
+                Velocity::default(),
+                BallPlayerContact::default(),
+                BallPulse::default(),
+                BallRolling::default(),
+                BallShotGrace::default(),
+                BallSpin::default(),
+                BallStyleType::default(),
+            ));
         }
 
         // Update basket colors
