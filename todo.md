@@ -2,6 +2,9 @@
 
 ## Immediate Fixes
 - [ ] UI fix flash on score color
+- [ ] Viewport: Test FixedVertical scaling at all resolutions (especially 4K/Ultrawide)
+- [ ] Viewport: Verify arena is fully visible and not cropped at edges
+- [ ] Viewport: Check text/UI positioning at different resolutions
 
 ## Level Design
 - [ ] Create system to make levels easier via collage and like/hate system
@@ -24,6 +27,8 @@
 - [ ] Ball "lineage" tracking across games
 
 ## AI
+- [ ] Run AI enhancement plan: `~/.claude/plans/eager-floating-scone.md` (rename AiInput→InputState, add AI profiles system with cycling)
+- [ ] Clean up plan file when done
 - [ ] Add NPC AI scripting via Lua decision doc
 
 ## Equipment
