@@ -3,13 +3,14 @@
 use bevy::prelude::*;
 
 use crate::ball::{Ball, BallStyle, BallTextures};
-use crate::constants::VIEWPORT_PRESETS;
+use crate::constants::{DEFAULT_VIEWPORT_INDEX, VIEWPORT_PRESETS};
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
 use crate::player::{Player, Team};
 use crate::scoring::CurrentLevel;
 use crate::shooting::LastShotInfo;
 use crate::steal::StealContest;
+use crate::ui::hud::ScoreLevelText;
 use crate::world::{Basket, BasketRim, CornerRamp, LevelPlatform, Platform};
 
 // =============================================================================
@@ -91,9 +92,17 @@ impl Default for DebugSettings {
 }
 
 /// Current viewport scale preset index
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct ViewportScale {
     pub preset_index: usize,
+}
+
+impl Default for ViewportScale {
+    fn default() -> Self {
+        Self {
+            preset_index: DEFAULT_VIEWPORT_INDEX,
+        }
+    }
 }
 
 impl ViewportScale {
@@ -195,38 +204,25 @@ pub fn cycle_viewport(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut viewport_scale: ResMut<ViewportScale>,
     mut window_query: Query<&mut Window>,
-    mut camera_query: Query<&mut Projection, With<Camera2d>>,
 ) {
     if keyboard.just_pressed(KeyCode::KeyV) {
         viewport_scale.cycle_next();
-        apply_viewport(&viewport_scale, &mut window_query, &mut camera_query);
+        apply_viewport(&viewport_scale, &mut window_query);
     }
 }
 
-/// Apply current viewport scale to window and camera
-fn apply_viewport(
-    viewport_scale: &ViewportScale,
-    window_query: &mut Query<&mut Window>,
-    camera_query: &mut Query<&mut Projection, With<Camera2d>>,
-) {
+/// Apply current viewport scale to window (camera uses FixedVertical scaling mode)
+fn apply_viewport(viewport_scale: &ViewportScale, window_query: &mut Query<&mut Window>) {
     let (width, height, label) = viewport_scale.current();
 
     // Change window size - use scale_factor_override 1.0 for consistent HiDPI behavior
+    // Camera uses FixedVertical scaling mode so it automatically shows full arena height
     if let Ok(mut window) = window_query.single_mut() {
         window.resolution = bevy::window::WindowResolution::new(width as u32, height as u32)
             .with_scale_factor_override(1.0);
     }
 
-    // Adjust camera scale to keep full arena visible
-    // Native is 1600x900, so scale = 1600/width to show same world area
-    let camera_scale = crate::constants::ARENA_WIDTH / width;
-    if let Ok(mut projection) = camera_query.single_mut() {
-        if let Projection::Orthographic(ref mut ortho) = *projection {
-            ortho.scale = camera_scale;
-        }
-    }
-
-    info!("Viewport: {} (camera scale {:.2}x)", label, camera_scale);
+    info!("Viewport: {}", label);
 }
 
 /// Marker for cycle indicator text
@@ -245,7 +241,6 @@ pub fn unified_cycle_system(
     ball_textures: Res<BallTextures>,
     time: Res<Time>,
     mut window_query: Query<&mut Window>,
-    mut camera_query: Query<&mut Projection, With<Camera2d>>,
     mut ball_query: Query<(&mut BallStyle, &mut Sprite), With<Ball>>,
 ) {
     // Decay display timer
@@ -301,7 +296,7 @@ pub fn unified_cycle_system(
             } else if cycle_prev {
                 viewport_scale.cycle_prev();
             }
-            apply_viewport(&viewport_scale, &mut window_query, &mut camera_query);
+            apply_viewport(&viewport_scale, &mut window_query);
         }
         CycleTarget::Palette => {
             // Just change the index - apply_palette_colors system handles the visuals
@@ -385,6 +380,7 @@ pub fn update_cycle_indicator(
 
 /// Apply palette colors when CurrentPalette changes
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 pub fn apply_palette_colors(
     current_palette: Res<crate::ball::CurrentPalette>,
     palette_db: Res<PaletteDatabase>,
@@ -434,6 +430,8 @@ pub fn apply_palette_colors(
         ),
     >,
     mut ball_query: Query<(&BallStyle, &mut Sprite), With<Ball>>,
+    mut score_text_query: Query<&mut TextColor, (With<ScoreLevelText>, Without<CycleIndicator>)>,
+    mut cycle_text_query: Query<&mut TextColor, (With<CycleIndicator>, Without<ScoreLevelText>)>,
 ) {
     // Only run when palette actually changes
     if !current_palette.is_changed() {
@@ -497,5 +495,15 @@ pub fn apply_palette_colors(
                 sprite.image = texture.clone();
             }
         }
+    }
+
+    // Text colors (score/level text)
+    for mut text_color in &mut score_text_query {
+        text_color.0 = palette.text;
+    }
+
+    // Text colors (cycle indicator)
+    for mut text_color in &mut cycle_text_query {
+        text_color.0 = palette.text_accent;
     }
 }

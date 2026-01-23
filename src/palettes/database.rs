@@ -14,6 +14,8 @@ pub struct Palette {
     pub right_rim: Color,
     pub background: Color,
     pub platforms: Color,
+    pub text: Color,
+    pub text_accent: Color,
 }
 
 impl Palette {
@@ -26,6 +28,8 @@ impl Palette {
         right_rim: (f32, f32, f32),
         background: (f32, f32, f32),
         platforms: (f32, f32, f32),
+        text: (f32, f32, f32),
+        text_accent: (f32, f32, f32),
     ) -> Self {
         Self {
             name: name.to_string(),
@@ -35,6 +39,8 @@ impl Palette {
             right_rim: Color::srgb(right_rim.0, right_rim.1, right_rim.2),
             background: Color::srgb(background.0, background.1, background.2),
             platforms: Color::srgb(platforms.0, platforms.1, platforms.2),
+            text: Color::srgb(text.0, text.1, text.2),
+            text_accent: Color::srgb(text_accent.0, text_accent.1, text_accent.2),
         }
     }
 }
@@ -99,8 +105,10 @@ impl PaletteDatabase {
         content.push_str("#   right_rim: <r> <g> <b>       Right basket rim color\n");
         content.push_str("#   background: <r> <g> <b>      Arena background color\n");
         content.push_str("#   platforms: <r> <g> <b>       Floor, walls, steps, and floating platforms\n");
+        content.push_str("#   text: <r> <g> <b>            Primary UI text color\n");
+        content.push_str("#   text_accent: <r> <g> <b>     Accent UI text color (cycle indicator)\n");
         content.push_str("#\n");
-        content.push_str("# Exactly 20 palettes are required (for ball texture system).\n");
+        content.push_str("# 30 palettes total (ball textures generated for each palette).\n");
         content.push_str("#\n");
         content.push_str("# Blank lines and # comments are ignored.\n");
         content.push_str("\n");
@@ -142,6 +150,18 @@ impl PaletteDatabase {
                 Self::color_r(&palette.platforms),
                 Self::color_g(&palette.platforms),
                 Self::color_b(&palette.platforms)
+            ));
+            content.push_str(&format!(
+                "text: {:.3} {:.3} {:.3}\n",
+                Self::color_r(&palette.text),
+                Self::color_g(&palette.text),
+                Self::color_b(&palette.text)
+            ));
+            content.push_str(&format!(
+                "text_accent: {:.3} {:.3} {:.3}\n",
+                Self::color_r(&palette.text_accent),
+                Self::color_g(&palette.text_accent),
+                Self::color_b(&palette.text_accent)
             ));
             content.push_str("\n");
         }
@@ -211,6 +231,10 @@ impl PaletteDatabase {
                 } else if let Some(rgb) = line.strip_prefix("floor:") {
                     // Legacy support: treat 'floor:' as 'platforms:'
                     builder.platforms = Self::parse_rgb(rgb);
+                } else if let Some(rgb) = line.strip_prefix("text_accent:") {
+                    builder.text_accent = Self::parse_rgb(rgb);
+                } else if let Some(rgb) = line.strip_prefix("text:") {
+                    builder.text = Self::parse_rgb(rgb);
                 }
             }
         }
@@ -262,9 +286,9 @@ impl PaletteDatabase {
         Self {
             palettes: vec![
                 // Just 3 essential fallbacks - the real palettes are in assets/palettes.txt
-                Palette::new("Neon", (0.0, 1.0, 0.8), (0.0, 0.75, 0.6), (1.0, 0.2, 0.6), (0.75, 0.15, 0.45), (0.06, 0.06, 0.1), (0.18, 0.18, 0.25)),
-                Palette::new("Classic", (0.1, 0.5, 1.0), (0.05, 0.25, 0.5), (1.0, 0.4, 0.2), (0.5, 0.2, 0.1), (0.35, 0.32, 0.28), (0.15, 0.13, 0.12)),
-                Palette::new("Mono", (0.95, 0.95, 0.95), (0.7, 0.7, 0.7), (0.5, 0.5, 0.5), (0.38, 0.38, 0.38), (0.15, 0.15, 0.15), (0.35, 0.35, 0.35)),
+                Palette::new("Neon", (0.0, 1.0, 0.8), (0.0, 0.75, 0.6), (1.0, 0.2, 0.6), (0.75, 0.15, 0.45), (0.06, 0.06, 0.1), (0.18, 0.18, 0.25), (0.95, 0.9, 0.8), (0.9, 0.75, 0.4)),
+                Palette::new("Classic", (0.1, 0.5, 1.0), (0.05, 0.25, 0.5), (1.0, 0.4, 0.2), (0.5, 0.2, 0.1), (0.35, 0.32, 0.28), (0.15, 0.13, 0.12), (0.95, 0.9, 0.8), (0.9, 0.75, 0.4)),
+                Palette::new("Mono", (0.95, 0.95, 0.95), (0.7, 0.7, 0.7), (0.5, 0.5, 0.5), (0.38, 0.38, 0.38), (0.15, 0.15, 0.15), (0.35, 0.35, 0.35), (0.95, 0.9, 0.8), (0.9, 0.75, 0.4)),
             ],
         }
     }
@@ -279,6 +303,8 @@ struct PaletteBuilder {
     right_rim: Option<(f32, f32, f32)>,
     background: Option<(f32, f32, f32)>,
     platforms: Option<(f32, f32, f32)>,
+    text: Option<(f32, f32, f32)>,
+    text_accent: Option<(f32, f32, f32)>,
 }
 
 impl PaletteBuilder {
@@ -291,18 +317,23 @@ impl PaletteBuilder {
             right_rim: None,
             background: None,
             platforms: None,
+            text: None,
+            text_accent: None,
         }
     }
 
     fn build(self) -> Option<Palette> {
-        // All fields required
+        // All fields required except text (defaults to white) and text_accent (defaults to gold)
         let left = self.left?;
         let left_rim = self.left_rim?;
         let right = self.right?;
         let right_rim = self.right_rim?;
         let background = self.background?;
         let platforms = self.platforms?;
+        // Default text colors for backwards compatibility
+        let text = self.text.unwrap_or((0.95, 0.9, 0.8));
+        let text_accent = self.text_accent.unwrap_or((0.9, 0.75, 0.4));
 
-        Some(Palette::new(&self.name, left, left_rim, right, right_rim, background, platforms))
+        Some(Palette::new(&self.name, left, left_rim, right, right_rim, background, platforms, text, text_accent))
     }
 }

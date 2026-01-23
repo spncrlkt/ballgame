@@ -168,12 +168,17 @@ pub const LEVELS_FILE: &str = "assets/levels.txt";
 // =============================================================================
 
 /// Viewport scale presets: (width, height, label)
-/// Includes larger sizes for HiDPI displays and smaller sizes for testing
+/// Ordered small to large - RT cycles up, LT cycles down
 pub const VIEWPORT_PRESETS: &[(f32, f32, &str)] = &[
-    (1920.0, 1080.0, "1920x1080 (1080p)"),
-    (1600.0, 900.0, "1600x900 (native)"),
-    (1280.0, 720.0, "1280x720 (720p)"),
-    (1024.0, 576.0, "1024x576"),
     (800.0, 450.0, "800x450 (half)"),
-    (640.0, 360.0, "640x360 (360p)"),
+    (1024.0, 576.0, "1024x576"),
+    (1280.0, 720.0, "1280x720 (720p)"),
+    (1600.0, 900.0, "1600x900 (native)"),
+    (1920.0, 1080.0, "1920x1080 (1080p)"),
+    (2560.0, 1440.0, "2560x1440 (1440p)"),
+    (3440.0, 1440.0, "3440x1440 (Ultrawide)"),
+    (3840.0, 2160.0, "3840x2160 (4K)"),
 ];
+
+/// Default viewport preset index (1440p)
+pub const DEFAULT_VIEWPORT_INDEX: usize = 5;

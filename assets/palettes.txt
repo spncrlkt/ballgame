@@ -9,6 +9,8 @@
 #   right_rim: <r> <g> <b>       Right basket rim color
 #   background: <r> <g> <b>      Arena background color
 #   platforms: <r> <g> <b>       Floor, walls, steps, and floating platforms
+#   text: <r> <g> <b>            Primary UI text color (score/level)
+#   text_accent: <r> <g> <b>     Accent UI text color (cycle indicator)
 #
 # 30 palettes total (ball textures generated for each palette).
 #
@@ -26,6 +28,8 @@ right: 1.000 0.196 0.588
 right_rim: 0.750 0.150 0.440
 background: 0.060 0.060 0.100
 platforms: 0.180 0.180 0.250
+text: 0.950 0.900 0.850
+text_accent: 0.900 0.750 0.400
 
 # 2. (was #1) Classic complementary - warm orange vs cool blue
 palette: Ocean Fire
@@ -35,6 +39,8 @@ right: 1.000 0.420 0.208
 right_rim: 0.450 0.190 0.090
 background: 0.350 0.320 0.280
 platforms: 0.150 0.130 0.120
+text: 0.950 0.920 0.880
+text_accent: 1.000 0.850 0.500
 
 # 3. (was #7) Radioactive green vs deep violet - split complementary
 palette: Toxic Slime
@@ -44,6 +50,8 @@ right: 0.580 0.000 0.827
 right_rim: 0.440 0.000 0.620
 background: 0.060 0.100 0.040
 platforms: 0.180 0.280 0.140
+text: 0.900 0.950 0.850
+text_accent: 0.700 1.000 0.400
 
 # 4. (was #10) Cyberpunk cyan vs magenta on true noir - high contrast neon
 palette: Neon Noir
@@ -53,6 +61,8 @@ right: 0.980 0.000 0.471
 right_rim: 0.740 0.000 0.350
 background: 0.050 0.050 0.070
 platforms: 0.180 0.180 0.220
+text: 0.950 0.950 0.950
+text_accent: 0.000 0.900 0.900
 
 # 5. (was #12) Vibrant jungle green vs tropical pink
 palette: Jungle Fever
@@ -62,6 +72,8 @@ right: 1.000 0.200 0.500
 right_rim: 0.750 0.150 0.380
 background: 0.080 0.120 0.060
 platforms: 0.220 0.300 0.180
+text: 0.900 0.950 0.850
+text_accent: 0.650 1.000 0.400
 
 # 6. (was #16) Molten orange vs obsidian - primal contrast
 palette: Volcanic
@@ -71,6 +83,8 @@ right: 0.200 0.200 0.250
 right_rim: 0.150 0.150 0.190
 background: 0.150 0.080 0.050
 platforms: 0.350 0.220 0.180
+text: 0.950 0.900 0.800
+text_accent: 1.000 0.650 0.200
 
 # 7. (was #17) Bioluminescent cyan vs warm coral - aquatic warmth
 palette: Deep Sea
@@ -80,6 +94,8 @@ right: 1.000 0.500 0.450
 right_rim: 0.750 0.380 0.340
 background: 0.050 0.100 0.150
 platforms: 0.180 0.250 0.320
+text: 0.850 0.950 0.950
+text_accent: 0.400 0.900 0.900
 
 # 8. (was #19) Retrowave magenta vs electric blue - 80s nostalgia
 palette: Synthwave
@@ -89,6 +105,8 @@ right: 0.200 0.600 1.000
 right_rim: 0.150 0.450 0.750
 background: 0.100 0.050 0.150
 platforms: 0.280 0.200 0.350
+text: 0.950 0.850 0.950
+text_accent: 1.000 0.400 0.700
 
 # 9. (was #20) Pure value contrast - timeless readability
 palette: Monochrome
@@ -98,19 +116,23 @@ right: 0.500 0.500 0.500
 right_rim: 0.380 0.380 0.380
 background: 0.150 0.150 0.150
 platforms: 0.350 0.350 0.350
+text: 0.950 0.950 0.950
+text_accent: 0.800 0.800 0.800
 
 # =============================================================================
 # NEW PALETTES (10-20) - Variations and inspirations
 # =============================================================================
 
-# 10. Electric Neon's warmer sibling - orange vs blue with deeper saturation
+# 10. Electric Neon's warmer sibling - bright orange vs deep navy
 palette: Cyber Sunset
-left: 1.000 0.400 0.000
-left_rim: 0.750 0.300 0.000
-right: 0.000 0.450 1.000
-right_rim: 0.000 0.340 0.750
+left: 1.000 0.550 0.000
+left_rim: 0.750 0.410 0.000
+right: 0.050 0.150 0.500
+right_rim: 0.040 0.110 0.380
 background: 0.080 0.060 0.120
 platforms: 0.220 0.180 0.280
+text: 0.950 0.900 0.850
+text_accent: 1.000 0.700 0.300
 
 # 11. Softer synthwave - pastel neon, Miami Vice vibes
 palette: Vaporwave
@@ -120,6 +142,8 @@ right: 0.250 0.900 0.850
 right_rim: 0.190 0.680 0.640
 background: 0.120 0.080 0.180
 platforms: 0.300 0.220 0.380
+text: 0.950 0.850 0.950
+text_accent: 1.000 0.500 0.800
 
 # 12. Toxic Slime evolved - yellow-green vs violet, more alien
 palette: Radioactive
@@ -129,6 +153,8 @@ right: 0.450 0.100 0.800
 right_rim: 0.340 0.080 0.600
 background: 0.040 0.060 0.030
 platforms: 0.140 0.180 0.100
+text: 0.850 0.950 0.800
+text_accent: 0.900 1.000 0.300
 
 # 13. Volcanic refined - ember glow vs cold steel
 palette: Obsidian
@@ -138,24 +164,30 @@ right: 0.650 0.680 0.720
 right_rim: 0.490 0.510 0.540
 background: 0.080 0.060 0.060
 platforms: 0.200 0.180 0.180
+text: 0.950 0.900 0.850
+text_accent: 1.000 0.500 0.200
 
-# 14. Deep Sea's tropical cousin - warm coral vs cool teal
+# 14. Deep Sea's tropical cousin - bright coral vs dark teal
 palette: Coral Reef
-left: 1.000 0.480 0.420
-left_rim: 0.750 0.360 0.320
-right: 0.200 0.720 0.650
-right_rim: 0.150 0.540 0.490
-background: 0.050 0.120 0.160
-platforms: 0.160 0.260 0.300
+left: 1.000 0.400 0.300
+left_rim: 0.750 0.300 0.230
+right: 0.080 0.400 0.380
+right_rim: 0.060 0.300 0.290
+background: 0.040 0.100 0.130
+platforms: 0.150 0.240 0.280
+text: 0.850 0.950 0.950
+text_accent: 0.500 0.900 0.850
 
-# 15. Monochrome with warmth - gold vs platinum elegance
+# 15. Bright gold vs dark charcoal - maximum value contrast
 palette: Gold Rush
-left: 1.000 0.850 0.350
-left_rim: 0.750 0.640 0.260
-right: 0.780 0.800 0.840
-right_rim: 0.590 0.600 0.630
-background: 0.100 0.095 0.110
-platforms: 0.250 0.240 0.280
+left: 1.000 0.800 0.000
+left_rim: 0.750 0.600 0.000
+right: 0.200 0.200 0.250
+right_rim: 0.150 0.150 0.190
+background: 0.080 0.075 0.100
+platforms: 0.230 0.220 0.260
+text: 0.950 0.900 0.800
+text_accent: 1.000 0.850 0.300
 
 # 16. Deep crimson vs pale ice - dramatic, horror-tinged
 palette: Blood Moon
@@ -165,6 +197,8 @@ right: 0.750 0.850 1.000
 right_rim: 0.560 0.640 0.750
 background: 0.050 0.040 0.070
 platforms: 0.150 0.130 0.180
+text: 0.900 0.850 0.900
+text_accent: 0.850 0.300 0.350
 
 # 17. Northern lights - ethereal green vs violet-pink
 palette: Aurora
@@ -174,15 +208,19 @@ right: 0.850 0.300 0.700
 right_rim: 0.640 0.230 0.530
 background: 0.030 0.060 0.100
 platforms: 0.100 0.140 0.220
+text: 0.850 0.950 0.900
+text_accent: 0.500 1.000 0.700
 
-# 18. Aged metals - rust orange vs verdigris teal
+# 18. Bright rust vs dark patina - industrial contrast
 palette: Rust
-left: 0.800 0.380 0.150
-left_rim: 0.600 0.290 0.110
-right: 0.320 0.650 0.600
-right_rim: 0.240 0.490 0.450
-background: 0.160 0.140 0.110
-platforms: 0.320 0.300 0.260
+left: 0.950 0.450 0.100
+left_rim: 0.710 0.340 0.080
+right: 0.120 0.380 0.350
+right_rim: 0.090 0.290 0.260
+background: 0.140 0.120 0.090
+platforms: 0.300 0.280 0.240
+text: 0.950 0.900 0.800
+text_accent: 1.000 0.600 0.250
 
 # 19. High energy - deep purple vs electric yellow
 palette: Ultraviolet
@@ -192,15 +230,19 @@ right: 1.000 0.950 0.200
 right_rim: 0.750 0.710 0.150
 background: 0.060 0.040 0.100
 platforms: 0.180 0.140 0.260
+text: 0.900 0.850 0.950
+text_accent: 0.700 0.400 1.000
 
-# 20. Warm amber vs cool lavender - softer dusk contrast
+# 20. Bright amber vs deep violet - dramatic dusk
 palette: Twilight
-left: 1.000 0.700 0.300
-left_rim: 0.750 0.530 0.230
-right: 0.650 0.600 0.900
-right_rim: 0.490 0.450 0.680
-background: 0.120 0.100 0.150
-platforms: 0.280 0.250 0.340
+left: 1.000 0.650 0.100
+left_rim: 0.750 0.490 0.080
+right: 0.350 0.250 0.600
+right_rim: 0.260 0.190 0.450
+background: 0.100 0.080 0.140
+platforms: 0.260 0.230 0.320
+text: 0.950 0.900 0.850
+text_accent: 1.000 0.750 0.300
 
 # =============================================================================
 # WILD PALETTES (21-30) - Push the boundaries
@@ -214,6 +256,8 @@ right: 1.000 0.000 1.000
 right_rim: 0.750 0.000 0.750
 background: 0.020 0.020 0.030
 platforms: 0.100 0.080 0.120
+text: 0.950 0.950 0.950
+text_accent: 0.000 1.000 1.000
 
 # 22. Alien planet - impossible purple atmosphere, bioluminescent life
 palette: Xenomorph
@@ -223,6 +267,8 @@ right: 1.000 0.300 0.000
 right_rim: 0.750 0.230 0.000
 background: 0.180 0.080 0.220
 platforms: 0.350 0.200 0.400
+text: 0.900 0.950 0.850
+text_accent: 0.600 1.000 0.400
 
 # 23. UV blacklight party - fluorescent on void black
 palette: Blacklight
@@ -232,6 +278,8 @@ right: 1.000 1.000 0.000
 right_rim: 0.750 0.750 0.000
 background: 0.015 0.010 0.025
 platforms: 0.080 0.060 0.120
+text: 0.900 0.850 0.950
+text_accent: 0.400 0.200 1.000
 
 # 24. Psychedelic lava lamp - molten blobs
 palette: Lava Lamp
@@ -241,6 +289,8 @@ right: 0.400 0.000 0.800
 right_rim: 0.300 0.000 0.600
 background: 0.200 0.050 0.100
 platforms: 0.380 0.150 0.220
+text: 0.950 0.850 0.900
+text_accent: 1.000 0.400 0.550
 
 # 25. Dangerous levels of brightness - saturated pastels that shouldn't work
 palette: Sugar Rush
@@ -250,6 +300,8 @@ right: 0.500 1.000 0.600
 right_rim: 0.380 0.750 0.450
 background: 0.950 0.900 0.850
 platforms: 0.750 0.700 0.650
+text: 0.150 0.120 0.100
+text_accent: 0.350 0.200 0.500
 
 # 26. Hazmat warning - industrial danger
 palette: Hazmat
@@ -259,6 +311,8 @@ right: 0.100 0.100 0.100
 right_rim: 0.200 0.200 0.200
 background: 0.900 0.500 0.000
 platforms: 0.150 0.080 0.000
+text: 0.100 0.050 0.000
+text_accent: 0.250 0.150 0.000
 
 # 27. Sickly combination - uncomfortable but readable
 palette: Bruise
@@ -268,6 +322,8 @@ right: 0.500 0.750 0.200
 right_rim: 0.380 0.560 0.150
 background: 0.150 0.120 0.100
 platforms: 0.300 0.280 0.250
+text: 0.900 0.850 0.800
+text_accent: 0.750 0.400 0.850
 
 # 28. Maximum chaos - hot pink vs acid green on void
 palette: Fever Dream
@@ -277,6 +333,8 @@ right: 0.500 1.000 0.000
 right_rim: 0.380 0.750 0.000
 background: 0.000 0.000 0.000
 platforms: 0.120 0.100 0.080
+text: 0.950 0.950 0.950
+text_accent: 1.000 0.300 0.600
 
 # 29. RGB channels separated - pure primary madness
 palette: Static
@@ -286,6 +344,8 @@ right: 0.000 0.000 1.000
 right_rim: 0.000 0.000 0.750
 background: 0.030 0.030 0.030
 platforms: 0.150 0.150 0.150
+text: 0.950 0.950 0.950
+text_accent: 1.000 0.400 0.400
 
 # 30. Minimalist void - barely visible but striking silhouettes
 palette: Void
@@ -295,4 +355,5 @@ right: 0.900 0.900 0.850
 right_rim: 0.680 0.680 0.640
 background: 0.000 0.000 0.000
 platforms: 0.060 0.060 0.070
-
+text: 0.850 0.850 0.850
+text_accent: 0.600 0.600 0.600

@@ -12,7 +12,7 @@ use ballgame::{
     ai, ball, constants::*, helpers::*, input, levels, player, scoring, shooting, steal, ui, world,
     PALETTES_FILE,
 };
-use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
+use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
 use std::fs;
 use world::{Basket, BasketRim, Collider, Platform};
@@ -61,11 +61,11 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    // Use first viewport preset for initial size
+                    // Use default viewport preset (1440p) for initial size
                     // Set scale_factor_override to 1.0 for consistent behavior on HiDPI displays
                     resolution: bevy::window::WindowResolution::new(
-                        VIEWPORT_PRESETS[0].0 as u32,
-                        VIEWPORT_PRESETS[0].1 as u32,
+                        VIEWPORT_PRESETS[DEFAULT_VIEWPORT_INDEX].0 as u32,
+                        VIEWPORT_PRESETS[DEFAULT_VIEWPORT_INDEX].1 as u32,
                     )
                     .with_scale_factor_override(1.0),
                     title: "Ballgame".into(),
@@ -162,13 +162,14 @@ fn setup(
     asset_server: Res<AssetServer>,
 ) {
     // Camera - orthographic, shows entire arena
-    // Scale adjusts based on window size to always show full arena
-    let initial_camera_scale = ARENA_WIDTH / VIEWPORT_PRESETS[0].0;
+    // FixedVertical ensures the full arena height is always visible regardless of window size
     commands.spawn((
         Camera2d,
         Transform::from_xyz(0.0, 0.0, 0.0),
         Projection::Orthographic(OrthographicProjection {
-            scale: initial_camera_scale,
+            scaling_mode: ScalingMode::FixedVertical {
+                viewport_height: ARENA_HEIGHT,
+            },
             ..OrthographicProjection::default_2d()
         }),
     ));
