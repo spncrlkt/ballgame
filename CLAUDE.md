@@ -15,6 +15,49 @@ cargo clippy          # Lint code
 
 No tests exist yet. Dynamic linking is disabled in `.cargo/config.toml` to avoid macOS dyld issues.
 
+## Session Checklists
+
+### Get Started
+
+Run at the beginning of each working session:
+
+- [ ] **Read `todo.md`** - Check current sprint tasks and priorities
+- [ ] **Read `open_questions.md`** - Review pending questions/decisions
+- [ ] **Check git status** - Note any uncommitted work from previous session
+- [ ] **Run `cargo check`** - Verify codebase compiles
+- [ ] **Run `./scripts/regression.sh`** - Verify visual baseline still matches
+- [ ] **Identify scope** - Decide which task(s) to work on this session
+
+### Close Down
+
+Run at the end of each working session (or after ~10 changes):
+
+- [ ] **Run `cargo check`** - Verify compilation
+- [ ] **Run `cargo clippy`** - Check for new warnings
+- [ ] **Run `./scripts/regression.sh`** - Visual regression test
+- [ ] **Update baseline if needed** - `./scripts/regression.sh --update` (if UI changed intentionally)
+- [ ] **Review screenshot** - Read `regression/current.png` to verify UI looks correct
+- [ ] **Update `todo.md`** - Mark completed items, add new items discovered
+- [ ] **Archive done items** - Keep only last 5 in todo.md, move older to `todone.md`
+- [ ] **Update `open_questions.md`** - Add any new questions or decisions needed
+- [ ] **Update `audit_record.md`** - Document changes and findings
+- [ ] **Verify CLAUDE.md accuracy** - Update if architecture changed
+- [ ] **Commit changes** - With descriptive message
+
+### Before Starting a Feature
+
+- [ ] **Understand the goal** - What problem are we solving?
+- [ ] **Check existing code** - Read related files before modifying
+- [ ] **Identify affected systems** - Which modules/components will change?
+- [ ] **Consider patterns** - Follow patterns documented in Development Patterns section
+
+### After Completing a Feature
+
+- [ ] **Test manually** - Run the game and verify the feature works
+- [ ] **Check for regressions** - Did anything else break?
+- [ ] **Update constants** - Move magic numbers to `src/constants.rs`
+- [ ] **Update documentation** - Add new components/resources to CLAUDE.md if needed
+
 ## Todo Management
 
 **Project planning uses three files:**
