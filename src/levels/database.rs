@@ -212,4 +212,9 @@ impl LevelDatabase {
     pub fn len(&self) -> usize {
         self.levels.len()
     }
+
+    /// Check if database is empty
+    pub fn is_empty(&self) -> bool {
+        self.levels.is_empty()
+    }
 }

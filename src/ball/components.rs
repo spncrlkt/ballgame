@@ -58,6 +58,11 @@ impl BallTextures {
         self.style_order.len()
     }
 
+    /// Check if there are no styles
+    pub fn is_empty(&self) -> bool {
+        self.style_order.is_empty()
+    }
+
     /// Get index of a style by name
     pub fn index_of(&self, style: &str) -> Option<usize> {
         self.style_order.iter().position(|s| s == style)

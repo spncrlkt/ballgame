@@ -9,9 +9,8 @@ use std::time::SystemTime;
 
 use crate::ai::{AiProfileDatabase, AI_PROFILES_FILE};
 use crate::ball::CurrentPalette;
-use crate::constants::{ARENA_FLOOR_Y, LEVELS_FILE};
-use crate::helpers::basket_x_from_offset;
-use crate::levels::{spawn_corner_ramps, spawn_level_platforms, LevelDatabase};
+use crate::constants::LEVELS_FILE;
+use crate::levels::{reload_level_geometry, LevelDatabase};
 use crate::palettes::{PaletteDatabase, PALETTES_FILE};
 use crate::scoring::CurrentLevel;
 use crate::world::{Basket, CornerRamp, LevelPlatform};
@@ -117,23 +116,16 @@ pub fn check_config_changes(
             .get(current_palette.0)
             .expect("Palette index out of bounds");
 
-        // Despawn old level platforms
-        for entity in &level_platforms {
-            commands.entity(entity).despawn();
-        }
-
-        // Despawn old corner ramps
-        for entity in &corner_ramps {
-            commands.entity(entity).despawn();
-        }
-
-        // Spawn new level geometry
-        spawn_level_platforms(&mut commands, &level_db, level_index, palette.platforms);
-
-        // Update basket positions and spawn corner ramps
-        if let Some(level) = level_db.get(level_index) {
-            let basket_y = ARENA_FLOOR_Y + level.basket_height;
-            let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
+        // Reload level geometry (platforms + corner ramps)
+        if let Some((left_x, right_x, basket_y)) = reload_level_geometry(
+            &mut commands,
+            &level_db,
+            level_index,
+            palette.platforms,
+            level_platforms.iter(),
+            corner_ramps.iter(),
+        ) {
+            // Update basket positions
             for (mut basket_transform, basket) in &mut baskets {
                 basket_transform.translation.y = basket_y;
                 basket_transform.translation.x = match basket {
@@ -141,15 +133,6 @@ pub fn check_config_changes(
                     Basket::Right => right_x,
                 };
             }
-
-            spawn_corner_ramps(
-                &mut commands,
-                level.step_count,
-                level.corner_height,
-                level.corner_width,
-                level.step_push_in,
-                palette.platforms,
-            );
         }
     }
 

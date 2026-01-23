@@ -11,8 +11,7 @@ use crate::ball::{
 use crate::palettes::PaletteDatabase;
 use crate::constants::*;
 use crate::helpers::*;
-use crate::levels::LevelDatabase;
-use crate::levels::{spawn_corner_ramps, spawn_level_platforms};
+use crate::levels::{reload_level_geometry, LevelDatabase};
 use crate::player::components::*;
 use crate::scoring::CurrentLevel;
 use crate::ui::PhysicsTweaks;
@@ -332,17 +331,16 @@ pub fn respawn_player(
             is_debug,
         );
 
-        // Despawn old level platforms and spawn new ones
-        for entity in &level_platforms {
-            commands.entity(entity).despawn();
-        }
-        spawn_level_platforms(&mut commands, &level_db, level_index, palette.platforms);
-
-        // Update basket positions for new level
-        if let Some(level) = level_db.get(level_index) {
-            let basket_y = ARENA_FLOOR_Y + level.basket_height;
-            let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
-
+        // Reload level geometry (platforms + corner ramps)
+        if let Some((left_x, right_x, basket_y)) = reload_level_geometry(
+            &mut commands,
+            &level_db,
+            level_index,
+            palette.platforms,
+            level_platforms.iter(),
+            corner_ramps.iter(),
+        ) {
+            // Update basket positions
             for mut basket_transform in &mut baskets {
                 // Determine which basket by X position
                 if basket_transform.translation.x < 0.0 {
@@ -353,21 +351,12 @@ pub fn respawn_player(
                 basket_transform.translation.y = basket_y;
             }
 
-            // Despawn old corner ramps and spawn new ones
-            for entity in &corner_ramps {
-                commands.entity(entity).despawn();
-            }
-            spawn_corner_ramps(
-                &mut commands,
-                level.step_count,
-                level.corner_height,
-                level.corner_width,
-                level.step_push_in,
-                palette.platforms,
-            );
-
             // Update AI goals based on debug status
-            let new_goal = if level.debug {
+            let is_debug = level_db
+                .get(level_index)
+                .map(|l| l.debug)
+                .unwrap_or(false);
+            let new_goal = if is_debug {
                 AiGoal::Idle
             } else {
                 AiGoal::default()

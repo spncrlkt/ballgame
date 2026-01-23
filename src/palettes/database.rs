@@ -280,6 +280,11 @@ impl PaletteDatabase {
         self.palettes.len()
     }
 
+    /// Check if database is empty
+    pub fn is_empty(&self) -> bool {
+        self.palettes.is_empty()
+    }
+
     /// Minimal fallback palettes - used only if assets/palettes.txt fails to load
     /// The real palettes should be defined in assets/palettes.txt (single source of truth)
     pub fn default_palettes() -> Self {

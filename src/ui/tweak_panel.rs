@@ -228,10 +228,15 @@ pub fn update_tweak_panel(
         let label = PhysicsTweaks::LABELS[row.0];
         let is_modified = tweaks.is_modified(row.0);
 
-        // Format based on value type (friction shows 2 decimals, others show 0-1)
+        // Format based on value type:
+        // - Indices 5, 7, 9: decel/bounce values (0-1 range) → 2 decimals
+        // - Indices 10, 11: friction values (small decimals) → 4 decimals
+        // - Index 13: charge time → 1 decimal with "s" suffix
+        // - Others: velocities/accelerations → 0 decimals
         let value_str = match row.0 {
-            5 | 6 | 7 => format!("{:.2}", value), // Bounce/friction
-            10 => format!("{:.1}s", value),       // Charge time
+            5 | 7 | 9 => format!("{:.2}", value),  // Decel/bounce (0-1)
+            10 | 11 => format!("{:.4}", value),   // Friction (small)
+            13 => format!("{:.1}s", value),       // Charge time
             _ => format!("{:.0}", value),         // Velocities
         };
 

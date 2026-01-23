@@ -257,7 +257,9 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 9. **Compilation** - Run `cargo check` and `cargo clippy`
 
 **After auditing:**
+- Run the code review prompt from `code_review_prompt.md` and log results to `code_review_audits.md`
 - Compact the conversation context and get a fresh read of the codebase
 - Write the audit findings and changes since last audit to `audit_record.md`
 - Update `todo.md` - move completed items to Done section, add any new tasks discovered
+- Archive old done records: keep only the last 5 done items in `todo.md`, move older ones to `todone.md` with a dated section header (e.g., `## Archived 2026-01-23`)
 

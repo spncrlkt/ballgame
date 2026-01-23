@@ -3,6 +3,7 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
+use crate::helpers::basket_x_from_offset;
 use crate::levels::database::{LevelDatabase, PlatformDef};
 use crate::world::{CornerRamp, LevelPlatform, Platform};
 
@@ -160,4 +161,46 @@ pub fn spawn_level_platforms(
             }
         }
     }
+}
+
+/// Reload all level geometry (platforms and corner ramps).
+/// Despawns existing geometry and spawns new geometry for the specified level.
+/// Returns the (left_basket_x, right_basket_x, basket_y) positions if level exists.
+pub fn reload_level_geometry(
+    commands: &mut Commands,
+    level_db: &LevelDatabase,
+    level_index: usize,
+    platform_color: Color,
+    platforms_to_despawn: impl IntoIterator<Item = Entity>,
+    ramps_to_despawn: impl IntoIterator<Item = Entity>,
+) -> Option<(f32, f32, f32)> {
+    // Despawn old level platforms
+    for entity in platforms_to_despawn {
+        commands.entity(entity).despawn();
+    }
+
+    // Despawn old corner ramps
+    for entity in ramps_to_despawn {
+        commands.entity(entity).despawn();
+    }
+
+    // Spawn new level platforms
+    spawn_level_platforms(commands, level_db, level_index, platform_color);
+
+    // Spawn corner ramps and return basket positions
+    let level = level_db.get(level_index)?;
+
+    spawn_corner_ramps(
+        commands,
+        level.step_count,
+        level.corner_height,
+        level.corner_width,
+        level.step_push_in,
+        platform_color,
+    );
+
+    let basket_y = ARENA_FLOOR_Y + level.basket_height;
+    let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
+
+    Some((left_x, right_x, basket_y))
 }
