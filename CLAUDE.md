@@ -17,10 +17,54 @@ No tests exist yet. Dynamic linking is disabled in `.cargo/config.toml` to avoid
 
 ## Todo Management
 
-**Check `todo.md` at the start of each session.** When completing work:
-- Move completed items to the "Done" section at the bottom
-- Add new tasks discovered during development
-- Keep categories organized (Immediate Fixes, Level Design, Multiplayer, AI, Equipment)
+**Project planning uses three files:**
+- `milestones.md` - Master plan with MVP → V0 → V1/Beyond stages and all tasks
+- `todo.md` - Current sprint (active work items pulled from milestones)
+- `todone.md` - Archive of completed work
+
+**At the start of each session:** Check `todo.md` for current sprint tasks.
+
+**When completing work:**
+- Mark items done in `todo.md`, move to Done section
+- Keep only last 5 done items in todo.md; archive older ones to `todone.md` with dated header
+- Update `milestones.md` if completing a milestone goal
+
+**When adding new tasks:**
+- Quick/urgent items → add to `todo.md` Active Work
+- Planned features → add to appropriate milestone in `milestones.md`
+
+### Prioritization Process
+
+Use this interactive process when the todo list needs reorganization or a new sprint needs planning:
+
+**Step 1: Clean up**
+- Archive all done items to `todone.md` with dated header (e.g., `## Archived 2026-01-23`)
+- Keep only last 5 done items in `todo.md`
+
+**Step 2: Separate concerns**
+- Move decision docs and architectural questions to their own section
+- Group related tasks with their decision docs (e.g., netcode doc + multiplayer tasks)
+
+**Step 3: Define milestones (if not already done)**
+- Ask: "What's MVP?" → minimum playable game
+- Ask: "What's V0?" → first real release
+- V1/Beyond = everything else
+
+**Step 4: Categorize tasks into milestones**
+- Ask: "What's broken or missing for core loop?" → MVP tasks
+- Polish, viewport, extra levels → V0 tasks
+- New systems, multiplayer, speculative features → V1/Beyond
+
+**Step 5: Build current sprint**
+- Pull active tasks from current milestone (usually MVP) into `todo.md`
+- Group by area (e.g., Stealing, AI, Movement)
+
+**Step 6: Prioritize within sprint**
+- Ask: "Which area first?" → order the groups
+- For each group, ask: "Which task is most impactful?" → order within group
+- Assign linear priority numbers (P1, P2, P3...) across all tasks
+
+**Result:** `todo.md` becomes a prioritized, numbered list ready for execution.
 
 ## Architecture
 
