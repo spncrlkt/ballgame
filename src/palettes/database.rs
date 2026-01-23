@@ -9,33 +9,32 @@ use std::path::Path;
 pub struct Palette {
     pub name: String,
     pub left: Color,
-    pub left_dark: Color,
+    pub left_rim: Color,
     pub right: Color,
-    pub right_dark: Color,
+    pub right_rim: Color,
     pub background: Color,
-    pub floor: Color,
-    pub platform: Color,
+    pub platforms: Color,
 }
 
 impl Palette {
-    /// Create a palette with auto-darkened team variants
+    /// Create a palette with explicit colors
     pub fn new(
         name: &str,
         left: (f32, f32, f32),
+        left_rim: (f32, f32, f32),
         right: (f32, f32, f32),
+        right_rim: (f32, f32, f32),
         background: (f32, f32, f32),
-        floor: (f32, f32, f32),
-        platform: (f32, f32, f32),
+        platforms: (f32, f32, f32),
     ) -> Self {
         Self {
             name: name.to_string(),
             left: Color::srgb(left.0, left.1, left.2),
-            left_dark: Color::srgb(left.0 * 0.5, left.1 * 0.5, left.2 * 0.5),
+            left_rim: Color::srgb(left_rim.0, left_rim.1, left_rim.2),
             right: Color::srgb(right.0, right.1, right.2),
-            right_dark: Color::srgb(right.0 * 0.5, right.1 * 0.5, right.2 * 0.5),
+            right_rim: Color::srgb(right_rim.0, right_rim.1, right_rim.2),
             background: Color::srgb(background.0, background.1, background.2),
-            floor: Color::srgb(floor.0, floor.1, floor.2),
-            platform: Color::srgb(platform.0, platform.1, platform.2),
+            platforms: Color::srgb(platforms.0, platforms.1, platforms.2),
         }
     }
 }
@@ -101,13 +100,13 @@ impl PaletteDatabase {
         content.push_str("# Format:\n");
         content.push_str("#   palette: <name>              Start a new palette\n");
         content.push_str("#   left: <r> <g> <b>            Left team color (0.0-1.0)\n");
-        content.push_str("#   right: <r> <g> <b>           Right team color (0.0-1.0)\n");
+        content.push_str("#   left_rim: <r> <g> <b>        Left basket rim color\n");
+        content.push_str("#   right: <r> <g> <b>           Right team color\n");
+        content.push_str("#   right_rim: <r> <g> <b>       Right basket rim color\n");
         content.push_str("#   background: <r> <g> <b>      Arena background color\n");
-        content.push_str("#   floor: <r> <g> <b>           Floor and wall color\n");
-        content.push_str("#   platform: <r> <g> <b>        Platform color\n");
+        content.push_str("#   platforms: <r> <g> <b>       Floor, walls, steps, and floating platforms\n");
         content.push_str("#\n");
-        content.push_str("# Dark variants (left_dark, right_dark) are auto-generated at 50% brightness.\n");
-        content.push_str("# Exactly 10 palettes are required (for ball texture system).\n");
+        content.push_str("# Exactly 20 palettes are required (for ball texture system).\n");
         content.push_str("#\n");
         content.push_str("# Blank lines and # comments are ignored.\n");
         content.push_str("\n");
@@ -121,10 +120,22 @@ impl PaletteDatabase {
                 Self::color_b(&palette.left)
             ));
             content.push_str(&format!(
+                "left_rim: {:.3} {:.3} {:.3}\n",
+                Self::color_r(&palette.left_rim),
+                Self::color_g(&palette.left_rim),
+                Self::color_b(&palette.left_rim)
+            ));
+            content.push_str(&format!(
                 "right: {:.3} {:.3} {:.3}\n",
                 Self::color_r(&palette.right),
                 Self::color_g(&palette.right),
                 Self::color_b(&palette.right)
+            ));
+            content.push_str(&format!(
+                "right_rim: {:.3} {:.3} {:.3}\n",
+                Self::color_r(&palette.right_rim),
+                Self::color_g(&palette.right_rim),
+                Self::color_b(&palette.right_rim)
             ));
             content.push_str(&format!(
                 "background: {:.3} {:.3} {:.3}\n",
@@ -133,16 +144,10 @@ impl PaletteDatabase {
                 Self::color_b(&palette.background)
             ));
             content.push_str(&format!(
-                "floor: {:.3} {:.3} {:.3}\n",
-                Self::color_r(&palette.floor),
-                Self::color_g(&palette.floor),
-                Self::color_b(&palette.floor)
-            ));
-            content.push_str(&format!(
-                "platform: {:.3} {:.3} {:.3}\n",
-                Self::color_r(&palette.platform),
-                Self::color_g(&palette.platform),
-                Self::color_b(&palette.platform)
+                "platforms: {:.3} {:.3} {:.3}\n",
+                Self::color_r(&palette.platforms),
+                Self::color_g(&palette.platforms),
+                Self::color_b(&palette.platforms)
             ));
             content.push_str("\n");
         }
@@ -197,16 +202,21 @@ impl PaletteDatabase {
                 // Start new palette
                 current = Some(PaletteBuilder::new(name.trim()));
             } else if let Some(builder) = &mut current {
-                if let Some(rgb) = line.strip_prefix("left:") {
+                if let Some(rgb) = line.strip_prefix("left_rim:") {
+                    builder.left_rim = Self::parse_rgb(rgb);
+                } else if let Some(rgb) = line.strip_prefix("left:") {
                     builder.left = Self::parse_rgb(rgb);
+                } else if let Some(rgb) = line.strip_prefix("right_rim:") {
+                    builder.right_rim = Self::parse_rgb(rgb);
                 } else if let Some(rgb) = line.strip_prefix("right:") {
                     builder.right = Self::parse_rgb(rgb);
                 } else if let Some(rgb) = line.strip_prefix("background:") {
                     builder.background = Self::parse_rgb(rgb);
+                } else if let Some(rgb) = line.strip_prefix("platforms:") {
+                    builder.platforms = Self::parse_rgb(rgb);
                 } else if let Some(rgb) = line.strip_prefix("floor:") {
-                    builder.floor = Self::parse_rgb(rgb);
-                } else if let Some(rgb) = line.strip_prefix("platform:") {
-                    builder.platform = Self::parse_rgb(rgb);
+                    // Legacy support: treat 'floor:' as 'platforms:'
+                    builder.platforms = Self::parse_rgb(rgb);
                 }
             }
         }
@@ -253,189 +263,30 @@ impl PaletteDatabase {
     }
 
     /// Default palettes - 20 unique color schemes with good contrast
+    /// Format: name, left, left_rim, right, right_rim, background, platforms
     pub fn default_palettes() -> Self {
         Self {
             palettes: vec![
-                // 0: Ocean Fire - Blue vs Orange on warm stone
-                Palette::new(
-                    "Ocean Fire",
-                    (0.118, 0.565, 1.0),
-                    (1.0, 0.42, 0.208),
-                    (0.35, 0.32, 0.28),
-                    (0.15, 0.13, 0.12),
-                    (0.22, 0.2, 0.17),
-                ),
-                // 1: Forest Crimson - Green vs Red on dark earth
-                Palette::new(
-                    "Forest Crimson",
-                    (0.133, 0.545, 0.133),
-                    (0.863, 0.078, 0.235),
-                    (0.18, 0.15, 0.12),
-                    (0.08, 0.07, 0.05),
-                    (0.12, 0.1, 0.08),
-                ),
-                // 2: Electric Neon - Cyan vs Pink on deep black
-                Palette::new(
-                    "Electric Neon",
-                    (0.0, 1.0, 0.784),
-                    (1.0, 0.196, 0.588),
-                    (0.06, 0.06, 0.1),
-                    (0.02, 0.02, 0.04),
-                    (0.08, 0.08, 0.14),
-                ),
-                // 3: Royal Gold - Blue vs Gold on deep purple
-                Palette::new(
-                    "Royal Gold",
-                    (0.255, 0.412, 0.882),
-                    (1.0, 0.843, 0.0),
-                    (0.12, 0.08, 0.18),
-                    (0.05, 0.03, 0.08),
-                    (0.1, 0.06, 0.14),
-                ),
-                // 4: Sunset - Violet vs Orange on dusky rose
-                Palette::new(
-                    "Sunset",
-                    (0.933, 0.51, 0.933),
-                    (1.0, 0.647, 0.0),
-                    (0.22, 0.14, 0.18),
-                    (0.1, 0.06, 0.08),
-                    (0.16, 0.1, 0.13),
-                ),
-                // 5: Arctic Ember - Sky vs Tomato on cool slate
-                Palette::new(
-                    "Arctic Ember",
-                    (0.529, 0.808, 0.98),
-                    (0.91, 0.298, 0.239),
-                    (0.18, 0.22, 0.28),
-                    (0.08, 0.1, 0.14),
-                    (0.13, 0.16, 0.2),
-                ),
-                // 6: Toxic Slime - Lime vs Purple on murky swamp
-                Palette::new(
-                    "Toxic Slime",
-                    (0.0, 1.0, 0.0),
-                    (0.58, 0.0, 0.827),
-                    (0.06, 0.1, 0.04),
-                    (0.02, 0.05, 0.01),
-                    (0.05, 0.1, 0.03),
-                ),
-                // 7: Bubblegum - Teal vs Pink on soft lavender
-                Palette::new(
-                    "Bubblegum",
-                    (0.0, 0.753, 0.753),
-                    (1.0, 0.412, 0.706),
-                    (0.2, 0.16, 0.24),
-                    (0.08, 0.06, 0.1),
-                    (0.14, 0.11, 0.18),
-                ),
-                // 8: Desert Storm - Tan vs Brown on sandy dunes
-                Palette::new(
-                    "Desert Storm",
-                    (0.824, 0.706, 0.549),
-                    (0.545, 0.271, 0.075),
-                    (0.38, 0.32, 0.24),
-                    (0.18, 0.14, 0.1),
-                    (0.26, 0.22, 0.16),
-                ),
-                // 9: Neon Noir - Cyan vs Magenta on near-black
-                Palette::new(
-                    "Neon Noir",
-                    (0.0, 0.98, 0.98),
-                    (0.98, 0.0, 0.471),
-                    (0.05, 0.05, 0.07),
-                    (0.02, 0.02, 0.03),
-                    (0.07, 0.07, 0.1),
-                ),
-                // 10: Ice & Fire - White-blue vs Deep red on glacier
-                Palette::new(
-                    "Ice and Fire",
-                    (0.7, 0.85, 1.0),
-                    (0.8, 0.1, 0.1),
-                    (0.15, 0.2, 0.28),
-                    (0.06, 0.08, 0.12),
-                    (0.1, 0.14, 0.2),
-                ),
-                // 11: Jungle Fever - Bright green vs Hot pink on dark jungle
-                Palette::new(
-                    "Jungle Fever",
-                    (0.2, 0.9, 0.3),
-                    (1.0, 0.2, 0.5),
-                    (0.08, 0.12, 0.06),
-                    (0.03, 0.06, 0.02),
-                    (0.06, 0.1, 0.04),
-                ),
-                // 12: Copper Patina - Teal vs Copper on aged metal
-                Palette::new(
-                    "Copper Patina",
-                    (0.2, 0.6, 0.55),
-                    (0.85, 0.45, 0.2),
-                    (0.2, 0.22, 0.2),
-                    (0.08, 0.1, 0.08),
-                    (0.14, 0.16, 0.14),
-                ),
-                // 13: Midnight Sun - Gold vs Deep blue on twilight
-                Palette::new(
-                    "Midnight Sun",
-                    (1.0, 0.8, 0.2),
-                    (0.1, 0.2, 0.6),
-                    (0.12, 0.1, 0.2),
-                    (0.05, 0.04, 0.1),
-                    (0.08, 0.07, 0.16),
-                ),
-                // 14: Cherry Blossom - Pink vs Mint on soft cream
-                Palette::new(
-                    "Cherry Blossom",
-                    (1.0, 0.6, 0.7),
-                    (0.4, 0.8, 0.6),
-                    (0.28, 0.25, 0.22),
-                    (0.12, 0.1, 0.09),
-                    (0.2, 0.18, 0.15),
-                ),
-                // 15: Volcanic - Orange vs Black on molten rock
-                Palette::new(
-                    "Volcanic",
-                    (1.0, 0.5, 0.0),
-                    (0.2, 0.2, 0.25),
-                    (0.15, 0.08, 0.05),
-                    (0.06, 0.03, 0.02),
-                    (0.12, 0.06, 0.04),
-                ),
-                // 16: Deep Sea - Aqua vs Coral on ocean depths
-                Palette::new(
-                    "Deep Sea",
-                    (0.0, 0.8, 0.9),
-                    (1.0, 0.5, 0.45),
-                    (0.05, 0.1, 0.15),
-                    (0.02, 0.04, 0.07),
-                    (0.04, 0.08, 0.12),
-                ),
-                // 17: Autumn Harvest - Orange vs Purple on warm brown
-                Palette::new(
-                    "Autumn Harvest",
-                    (0.95, 0.6, 0.2),
-                    (0.5, 0.2, 0.6),
-                    (0.25, 0.18, 0.12),
-                    (0.12, 0.08, 0.05),
-                    (0.18, 0.13, 0.08),
-                ),
-                // 18: Synthwave - Hot pink vs Electric blue on deep purple
-                Palette::new(
-                    "Synthwave",
-                    (1.0, 0.2, 0.6),
-                    (0.2, 0.6, 1.0),
-                    (0.1, 0.05, 0.15),
-                    (0.04, 0.02, 0.07),
-                    (0.08, 0.04, 0.12),
-                ),
-                // 19: Monochrome - White vs Gray on charcoal
-                Palette::new(
-                    "Monochrome",
-                    (0.95, 0.95, 0.95),
-                    (0.5, 0.5, 0.5),
-                    (0.15, 0.15, 0.15),
-                    (0.06, 0.06, 0.06),
-                    (0.1, 0.1, 0.1),
-                ),
+                Palette::new("Ocean Fire", (0.118, 0.565, 1.0), (0.05, 0.25, 0.45), (1.0, 0.42, 0.208), (0.45, 0.19, 0.09), (0.35, 0.32, 0.28), (0.15, 0.13, 0.12)),
+                Palette::new("Forest Crimson", (0.133, 0.545, 0.133), (0.10, 0.41, 0.10), (0.863, 0.078, 0.235), (0.65, 0.06, 0.18), (0.18, 0.15, 0.12), (0.35, 0.30, 0.25)),
+                Palette::new("Electric Neon", (0.0, 1.0, 0.784), (0.0, 0.75, 0.59), (1.0, 0.196, 0.588), (0.75, 0.15, 0.44), (0.06, 0.06, 0.1), (0.18, 0.18, 0.25)),
+                Palette::new("Royal Gold", (0.255, 0.412, 0.882), (0.19, 0.31, 0.66), (1.0, 0.843, 0.0), (0.75, 0.63, 0.0), (0.12, 0.08, 0.18), (0.28, 0.22, 0.35)),
+                Palette::new("Sunset", (0.933, 0.51, 0.933), (0.42, 0.23, 0.42), (1.0, 0.647, 0.0), (0.45, 0.29, 0.0), (0.22, 0.14, 0.18), (0.42, 0.32, 0.38)),
+                Palette::new("Arctic Ember", (0.529, 0.808, 0.98), (0.24, 0.36, 0.44), (0.91, 0.298, 0.239), (0.41, 0.13, 0.11), (0.18, 0.22, 0.28), (0.38, 0.42, 0.50)),
+                Palette::new("Toxic Slime", (0.0, 1.0, 0.0), (0.0, 0.75, 0.0), (0.58, 0.0, 0.827), (0.44, 0.0, 0.62), (0.06, 0.1, 0.04), (0.18, 0.28, 0.14)),
+                Palette::new("Bubblegum", (0.0, 0.753, 0.753), (0.0, 0.34, 0.34), (1.0, 0.412, 0.706), (0.45, 0.19, 0.32), (0.2, 0.16, 0.24), (0.40, 0.35, 0.45)),
+                Palette::new("Desert Storm", (0.824, 0.706, 0.549), (0.37, 0.32, 0.25), (0.545, 0.271, 0.075), (0.25, 0.12, 0.03), (0.38, 0.32, 0.24), (0.18, 0.14, 0.10)),
+                Palette::new("Neon Noir", (0.0, 0.98, 0.98), (0.0, 0.74, 0.74), (0.98, 0.0, 0.471), (0.74, 0.0, 0.35), (0.05, 0.05, 0.07), (0.18, 0.18, 0.22)),
+                Palette::new("Ice and Fire", (0.7, 0.85, 1.0), (0.32, 0.38, 0.45), (0.8, 0.1, 0.1), (0.36, 0.05, 0.05), (0.15, 0.2, 0.28), (0.35, 0.40, 0.50)),
+                Palette::new("Jungle Fever", (0.2, 0.9, 0.3), (0.15, 0.68, 0.23), (1.0, 0.2, 0.5), (0.75, 0.15, 0.38), (0.08, 0.12, 0.06), (0.22, 0.30, 0.18)),
+                Palette::new("Copper Patina", (0.2, 0.6, 0.55), (0.09, 0.27, 0.25), (0.85, 0.45, 0.2), (0.38, 0.20, 0.09), (0.2, 0.22, 0.2), (0.40, 0.42, 0.40)),
+                Palette::new("Midnight Sun", (1.0, 0.8, 0.2), (0.75, 0.60, 0.15), (0.1, 0.2, 0.6), (0.08, 0.15, 0.45), (0.12, 0.1, 0.2), (0.30, 0.28, 0.40)),
+                Palette::new("Cherry Blossom", (1.0, 0.6, 0.7), (0.45, 0.27, 0.32), (0.4, 0.8, 0.6), (0.18, 0.36, 0.27), (0.28, 0.25, 0.22), (0.48, 0.45, 0.42)),
+                Palette::new("Volcanic", (1.0, 0.5, 0.0), (0.75, 0.38, 0.0), (0.2, 0.2, 0.25), (0.15, 0.15, 0.19), (0.15, 0.08, 0.05), (0.35, 0.22, 0.18)),
+                Palette::new("Deep Sea", (0.0, 0.8, 0.9), (0.0, 0.60, 0.68), (1.0, 0.5, 0.45), (0.75, 0.38, 0.34), (0.05, 0.1, 0.15), (0.18, 0.25, 0.32)),
+                Palette::new("Autumn Harvest", (0.95, 0.6, 0.2), (0.43, 0.27, 0.09), (0.5, 0.2, 0.6), (0.23, 0.09, 0.27), (0.25, 0.18, 0.12), (0.45, 0.38, 0.30)),
+                Palette::new("Synthwave", (1.0, 0.2, 0.6), (0.75, 0.15, 0.45), (0.2, 0.6, 1.0), (0.15, 0.45, 0.75), (0.1, 0.05, 0.15), (0.28, 0.20, 0.35)),
+                Palette::new("Monochrome", (0.95, 0.95, 0.95), (0.71, 0.71, 0.71), (0.5, 0.5, 0.5), (0.38, 0.38, 0.38), (0.15, 0.15, 0.15), (0.35, 0.35, 0.35)),
             ],
         }
     }
@@ -445,10 +296,11 @@ impl PaletteDatabase {
 struct PaletteBuilder {
     name: String,
     left: Option<(f32, f32, f32)>,
+    left_rim: Option<(f32, f32, f32)>,
     right: Option<(f32, f32, f32)>,
+    right_rim: Option<(f32, f32, f32)>,
     background: Option<(f32, f32, f32)>,
-    floor: Option<(f32, f32, f32)>,
-    platform: Option<(f32, f32, f32)>,
+    platforms: Option<(f32, f32, f32)>,
 }
 
 impl PaletteBuilder {
@@ -456,21 +308,23 @@ impl PaletteBuilder {
         Self {
             name: name.to_string(),
             left: None,
+            left_rim: None,
             right: None,
+            right_rim: None,
             background: None,
-            floor: None,
-            platform: None,
+            platforms: None,
         }
     }
 
     fn build(self) -> Option<Palette> {
         // All fields required
         let left = self.left?;
+        let left_rim = self.left_rim?;
         let right = self.right?;
+        let right_rim = self.right_rim?;
         let background = self.background?;
-        let floor = self.floor?;
-        let platform = self.platform?;
+        let platforms = self.platforms?;
 
-        Some(Palette::new(&self.name, left, right, background, floor, platform))
+        Some(Palette::new(&self.name, left, left_rim, right, right_rim, background, platforms))
     }
 }

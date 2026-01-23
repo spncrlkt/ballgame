@@ -7,7 +7,7 @@ use crate::ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
     BallStyleType, BallTextures, CurrentPalette,
 };
-use crate::palettes::{PaletteDatabase, NUM_PALETTES};
+use crate::palettes::PaletteDatabase;
 use crate::constants::*;
 use crate::helpers::*;
 use crate::levels::LevelDatabase;
@@ -201,85 +201,61 @@ pub fn respawn_player(
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
     mut current_level: ResMut<CurrentLevel>,
-    mut current_palette: ResMut<CurrentPalette>,
-    mut clear_color: ResMut<ClearColor>,
+    current_palette: Res<CurrentPalette>,
+    mut score: ResMut<crate::scoring::Score>,
     ball_textures: Res<BallTextures>,
     mut players: Query<
-        (
-            Entity,
-            &mut Transform,
-            &mut Velocity,
-            &mut Sprite,
-            &Team,
-            Option<&HoldingBall>,
-        ),
+        (Entity, &mut Transform, &mut Velocity, Option<&HoldingBall>, &Team),
         With<Player>,
     >,
     mut ai_players: Query<&mut AiState, (With<Player>, Without<HumanControlled>)>,
     ball_query: Query<Entity, With<Ball>>,
     level_platforms: Query<Entity, With<LevelPlatform>>,
     corner_ramps: Query<Entity, With<CornerRamp>>,
-    mut baskets: Query<(&mut Transform, &mut Sprite, &Basket, Option<&Children>), (Without<Player>, Without<Ball>)>,
-    mut basket_rims: Query<&mut Sprite, (With<BasketRim>, Without<Basket>, Without<Player>, Without<Ball>)>,
+    mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>)>,
 ) {
-    // Reset current level (R / Start)
+    // Reset current level (R / Start) - resets positions and score only
     let reset_pressed = keyboard.just_pressed(KeyCode::KeyR)
         || gamepads
             .iter()
             .any(|gp| gp.just_pressed(GamepadButton::Start));
 
-    // Cycle to next level (] / Right Trigger)
-    let next_level_pressed = keyboard.just_pressed(KeyCode::BracketRight)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::RightTrigger2));
+    // Cycle to next level (] key only - controller uses unified cycle system)
+    let next_level_pressed = keyboard.just_pressed(KeyCode::BracketRight);
 
-    // Cycle to previous level ([ / Left Trigger)
-    let prev_level_pressed = keyboard.just_pressed(KeyCode::BracketLeft)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::LeftTrigger2));
+    // Cycle to previous level ([ key only - controller uses unified cycle system)
+    let prev_level_pressed = keyboard.just_pressed(KeyCode::BracketLeft);
 
-    // Determine if we need to change level
+    // Detect if level was changed externally (by unified cycle system)
     let num_levels = level_db.len() as u32;
-    let mut level_changed = false;
+    let level_changed_externally = current_level.is_changed() && !reset_pressed;
 
     if next_level_pressed {
         current_level.0 = (current_level.0 % num_levels) + 1;
-        level_changed = true;
     } else if prev_level_pressed {
         current_level.0 = if current_level.0 <= 1 {
             num_levels
         } else {
             current_level.0 - 1
         };
-        level_changed = true;
     }
 
-    // Reset players and ball on any of: reset, next level, prev level
-    if reset_pressed || level_changed {
-        // Cycle palette on reset
-        current_palette.0 = (current_palette.0 + 1) % NUM_PALETTES;
-        let palette = palette_db
-            .get(current_palette.0)
-            .expect("Palette index out of bounds");
+    let level_changed = next_level_pressed || prev_level_pressed || level_changed_externally;
 
-        // Update background color
-        clear_color.0 = palette.background;
+    // Reset: just reset positions and score, keep current palette/level
+    if reset_pressed {
+        // Reset score
+        score.left = 0;
+        score.right = 0;
 
-        // Reset all players to their spawn positions based on team
-        for (player_entity, mut p_transform, mut p_velocity, mut p_sprite, team, holding) in &mut players {
+        // Reset player positions
+        for (player_entity, mut p_transform, mut p_velocity, holding, team) in &mut players {
+            // Use Team component to determine spawn position
             p_transform.translation = match team {
                 Team::Left => PLAYER_SPAWN_LEFT,
                 Team::Right => PLAYER_SPAWN_RIGHT,
             };
             p_velocity.0 = Vec2::ZERO;
-
-            // Update player color based on new palette
-            p_sprite.color = match team {
-                Team::Left => palette.left,
-                Team::Right => palette.right,
-            };
 
             // Drop ball if holding
             if holding.is_some() {
@@ -287,51 +263,130 @@ pub fn respawn_player(
             }
         }
 
-        // Despawn all existing balls
+        // Reset ball positions (despawn and respawn at starting positions)
         for ball_entity in &ball_query {
             commands.entity(ball_entity).despawn();
         }
 
-        // Spawn correct number of balls for the new level
-        let new_level_index = (current_level.0 - 1) as usize;
+        let level_index = (current_level.0 - 1) as usize;
         let is_debug = level_db
-            .get(new_level_index)
+            .get(level_index)
             .map(|l| l.debug)
             .unwrap_or(false);
 
-        if is_debug {
-            // Debug level: spawn 6 balls with different styles
-            let x_positions = [-600.0, -360.0, -120.0, 120.0, 360.0, 600.0];
-            for (style, x) in BallStyleType::ALL.iter().zip(x_positions.iter()) {
-                let textures = ball_textures.get(*style);
-                commands.spawn((
-                    Sprite {
-                        image: textures.textures[current_palette.0].clone(),
-                        custom_size: Some(BALL_SIZE),
-                        ..default()
-                    },
-                    Transform::from_xyz(*x, ARENA_FLOOR_Y + BALL_SIZE.y / 2.0 + 20.0, 2.0),
-                    Ball,
-                    BallState::default(),
-                    Velocity::default(),
-                    BallPlayerContact::default(),
-                    BallPulse::default(),
-                    BallRolling::default(),
-                    BallShotGrace::default(),
-                    BallSpin::default(),
-                    *style,
-                ));
+        spawn_balls(
+            &mut commands,
+            &ball_textures,
+            current_palette.0,
+            is_debug,
+        );
+    }
+
+    // Level change: update geometry and reset positions
+    if level_changed {
+        let level_index = (current_level.0 - 1) as usize;
+
+        // Get palette for new geometry colors
+        let palette = palette_db
+            .get(current_palette.0)
+            .expect("Palette index out of bounds");
+
+        // Reset player positions
+        for (player_entity, mut p_transform, mut p_velocity, holding, team) in &mut players {
+            p_transform.translation = match team {
+                Team::Left => PLAYER_SPAWN_LEFT,
+                Team::Right => PLAYER_SPAWN_RIGHT,
+            };
+            p_velocity.0 = Vec2::ZERO;
+
+            if holding.is_some() {
+                commands.entity(player_entity).remove::<HoldingBall>();
             }
-        } else {
-            // Normal level: spawn single ball with default style
-            let default_textures = ball_textures.get(BallStyleType::default());
+        }
+
+        // Respawn balls for new level
+        for ball_entity in &ball_query {
+            commands.entity(ball_entity).despawn();
+        }
+
+        let is_debug = level_db
+            .get(level_index)
+            .map(|l| l.debug)
+            .unwrap_or(false);
+
+        spawn_balls(
+            &mut commands,
+            &ball_textures,
+            current_palette.0,
+            is_debug,
+        );
+
+        // Despawn old level platforms and spawn new ones
+        for entity in &level_platforms {
+            commands.entity(entity).despawn();
+        }
+        spawn_level_platforms(&mut commands, &level_db, level_index, palette.platforms);
+
+        // Update basket positions for new level
+        if let Some(level) = level_db.get(level_index) {
+            let basket_y = ARENA_FLOOR_Y + level.basket_height;
+            let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
+
+            for mut basket_transform in &mut baskets {
+                // Determine which basket by X position
+                if basket_transform.translation.x < 0.0 {
+                    basket_transform.translation.x = left_x;
+                } else {
+                    basket_transform.translation.x = right_x;
+                }
+                basket_transform.translation.y = basket_y;
+            }
+
+            // Despawn old corner ramps and spawn new ones
+            for entity in &corner_ramps {
+                commands.entity(entity).despawn();
+            }
+            spawn_corner_ramps(
+                &mut commands,
+                level.step_count,
+                level.corner_height,
+                level.corner_width,
+                level.step_push_in,
+                palette.platforms,
+            );
+
+            // Update AI goals based on debug status
+            let new_goal = if level.debug {
+                AiGoal::Idle
+            } else {
+                AiGoal::default()
+            };
+            for mut ai_state in &mut ai_players {
+                ai_state.current_goal = new_goal;
+            }
+        }
+    }
+}
+
+/// Helper to spawn balls at starting positions
+fn spawn_balls(
+    commands: &mut Commands,
+    ball_textures: &BallTextures,
+    palette_index: usize,
+    is_debug: bool,
+) {
+    if is_debug {
+        // Debug level: spawn 6 balls with different styles
+        let x_positions = [-600.0, -360.0, -120.0, 120.0, 360.0, 600.0];
+        for (style, x) in BallStyleType::ALL.iter().zip(x_positions.iter()) {
+            let textures = ball_textures.get(*style);
             commands.spawn((
                 Sprite {
-                    image: default_textures.textures[current_palette.0].clone(),
+                    image: textures.textures[palette_index].clone(),
                     custom_size: Some(BALL_SIZE),
                     ..default()
                 },
-                Transform::from_translation(BALL_SPAWN),
+                Transform::from_xyz(*x, ARENA_FLOOR_Y + BALL_SIZE.y / 2.0 + 20.0, 2.0),
                 Ball,
                 BallState::default(),
                 Velocity::default(),
@@ -340,77 +395,28 @@ pub fn respawn_player(
                 BallRolling::default(),
                 BallShotGrace::default(),
                 BallSpin::default(),
-                BallStyleType::default(),
+                *style,
             ));
         }
-
-        // Update basket colors
-        for (_, mut basket_sprite, basket, children) in &mut baskets {
-            match basket {
-                Basket::Left => basket_sprite.color = palette.left,
-                Basket::Right => basket_sprite.color = palette.right,
-            }
-
-            // Update rim colors (children of basket)
-            if let Some(children) = children {
-                for child in children.iter() {
-                    if let Ok(mut rim_sprite) = basket_rims.get_mut(child) {
-                        rim_sprite.color = match basket {
-                            Basket::Left => palette.right_dark,
-                            Basket::Right => palette.left_dark,
-                        };
-                    }
-                }
-            }
-        }
-
-        // Update level geometry if level changed
-        if level_changed {
-            let level_index = (current_level.0 - 1) as usize;
-
-            // Despawn old level platforms
-            for entity in &level_platforms {
-                commands.entity(entity).despawn();
-            }
-
-            // Spawn new level platforms
-            spawn_level_platforms(&mut commands, &level_db, level_index, palette.platform);
-
-            // Update basket positions and corner ramps for new level
-            if let Some(level) = level_db.get(level_index) {
-                let basket_y = ARENA_FLOOR_Y + level.basket_height;
-                let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
-                for (mut basket_transform, _, basket, _) in &mut baskets {
-                    basket_transform.translation.y = basket_y;
-                    basket_transform.translation.x = match basket {
-                        Basket::Left => left_x,
-                        Basket::Right => right_x,
-                    };
-                }
-
-                // Despawn old corner ramps and spawn new ones for new level
-                for entity in &corner_ramps {
-                    commands.entity(entity).despawn();
-                }
-                spawn_corner_ramps(
-                    &mut commands,
-                    level.step_count,
-                    level.corner_height,
-                    level.corner_width,
-                    level.step_push_in,
-                    palette.floor,
-                );
-
-                // Update AI goals based on debug status
-                let new_goal = if level.debug {
-                    AiGoal::Idle
-                } else {
-                    AiGoal::default()
-                };
-                for mut ai_state in &mut ai_players {
-                    ai_state.current_goal = new_goal;
-                }
-            }
-        }
+    } else {
+        // Normal level: spawn single ball with default style
+        let default_textures = ball_textures.get(BallStyleType::default());
+        commands.spawn((
+            Sprite {
+                image: default_textures.textures[palette_index].clone(),
+                custom_size: Some(BALL_SIZE),
+                ..default()
+            },
+            Transform::from_translation(BALL_SPAWN),
+            Ball,
+            BallState::default(),
+            Velocity::default(),
+            BallPlayerContact::default(),
+            BallPulse::default(),
+            BallRolling::default(),
+            BallShotGrace::default(),
+            BallSpin::default(),
+            BallStyleType::default(),
+        ));
     }
 }

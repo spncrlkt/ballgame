@@ -51,7 +51,7 @@ pub fn reload_levels(
     }
 
     // Spawn new level geometry
-    spawn_level_platforms(&mut commands, &level_db, level_index, palette.platform);
+    spawn_level_platforms(&mut commands, &level_db, level_index, palette.platforms);
 
     // Update basket positions and spawn corner ramps
     if let Some(level) = level_db.get(level_index) {
@@ -71,7 +71,7 @@ pub fn reload_levels(
             level.corner_height,
             level.corner_width,
             level.step_push_in,
-            palette.floor,
+            palette.platforms,
         );
     }
 }

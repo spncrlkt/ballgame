@@ -5,11 +5,12 @@
 use ballgame::{
     AiGoal, AiInput, AiState, Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace,
     BallSpin, BallState, BallStyleType, BallTextures, ChargeGaugeBackground, ChargeGaugeFill,
-    ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette, DebugSettings, DebugStyleKey,
-    DebugText, Facing, Grounded, HumanControlled, JumpState, LastShotInfo, LevelDatabase,
-    PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, ScoreLevelText, StealContest,
-    StyleTextures, TargetBasket, Team, TweakPanel, TweakRow, Velocity, ai, ball, constants::*,
-    helpers::*, input, levels, player, scoring, shooting, steal, ui, world, PALETTES_FILE,
+    ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette, CycleIndicator, CycleSelection,
+    DebugSettings, DebugText, Facing, Grounded, HumanControlled, JumpState, LastShotInfo,
+    LevelDatabase, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, ScoreLevelText,
+    StealContest, StyleTextures, TargetBasket, Team, TweakPanel, TweakRow, Velocity, ViewportScale,
+    ai, ball, constants::*, helpers::*, input, levels, player, scoring, shooting, steal, ui, world,
+    PALETTES_FILE,
 };
 use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use world::{Basket, BasketRim, Collider, Platform};
@@ -31,7 +32,13 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    resolution: (ARENA_WIDTH as u32, ARENA_HEIGHT as u32).into(),
+                    // Use first viewport preset for initial size
+                    // Set scale_factor_override to 1.0 for consistent behavior on HiDPI displays
+                    resolution: bevy::window::WindowResolution::new(
+                        VIEWPORT_PRESETS[0].0 as u32,
+                        VIEWPORT_PRESETS[0].1 as u32,
+                    )
+                    .with_scale_factor_override(1.0),
                     title: "Ballgame".into(),
                     resizable: false,
                     ..default()
@@ -51,19 +58,24 @@ fn main() {
         .init_resource::<CurrentPalette>()
         .init_resource::<PhysicsTweaks>()
         .init_resource::<LastShotInfo>()
+        .init_resource::<ViewportScale>()
+        .init_resource::<CycleSelection>()
         .add_systems(Startup, setup)
+        // Input systems must run in order: capture -> copy -> swap -> AI
         .add_systems(
             Update,
             (
-                // Input systems must run in order: capture -> copy -> swap -> AI
-                (
-                    input::capture_input,
-                    ai::copy_human_input,
-                    ai::swap_control,
-                    ai::ai_decision_update,
-                )
-                    .chain(),
-                // Other Update systems can run in any order
+                input::capture_input,
+                ai::copy_human_input,
+                ai::swap_control,
+                ai::ai_decision_update,
+            )
+                .chain(),
+        )
+        // Core Update systems
+        .add_systems(
+            Update,
+            (
                 player::respawn_player,
                 ui::toggle_debug,
                 levels::reload_levels,
@@ -72,10 +84,22 @@ fn main() {
                 ui::animate_pickable_ball,
                 ui::animate_score_flash,
                 ui::update_charge_gauge,
+            ),
+        )
+        // UI panel and cycle systems
+        .add_systems(
+            Update,
+            (
                 ui::toggle_tweak_panel,
                 ui::update_tweak_panel,
-                ui::update_style_key_visibility,
+                ui::cycle_viewport,
+                ui::unified_cycle_system,
             ),
+        )
+        // Cycle indicator and palette application
+        .add_systems(
+            Update,
+            (ui::update_cycle_indicator, ui::apply_palette_colors),
         )
         .add_systems(
             FixedUpdate,
@@ -109,13 +133,13 @@ fn setup(
     asset_server: Res<AssetServer>,
 ) {
     // Camera - orthographic, shows entire arena
-    // Using scale to zoom out and show full arena (default is 1.0 = 1 pixel per unit)
-    // With 1600x900 arena, we need to scale so it fits in typical window sizes
+    // Scale adjusts based on window size to always show full arena
+    let initial_camera_scale = ARENA_WIDTH / VIEWPORT_PRESETS[0].0;
     commands.spawn((
         Camera2d,
         Transform::from_xyz(0.0, 0.0, 0.0),
         Projection::Orthographic(OrthographicProjection {
-            scale: 1.0, // 1:1 mapping: 1 world unit = 1 pixel
+            scale: initial_camera_scale,
             ..OrthographicProjection::default_2d()
         }),
     ));
@@ -148,7 +172,7 @@ fn setup(
     let is_debug_level_for_ai = level_db.get(0).map(|l| l.debug).unwrap_or(false);
 
     // Right team player - spawns on right side, starts AI-controlled
-    let _right_player = commands
+    let right_player = commands
         .spawn((
             Sprite::from_color(initial_palette.right, PLAYER_SIZE),
             Transform::from_translation(PLAYER_SPAWN_RIGHT),
@@ -204,6 +228,33 @@ fn setup(
         ))
         .id();
     commands.entity(left_player).add_child(gauge_fill);
+
+    // Charge gauge for right player (faces left, so gauge is on right side)
+    let right_gauge_x = PLAYER_SIZE.x / 4.0;
+
+    let right_gauge_bg = commands
+        .spawn((
+            Sprite::from_color(
+                Color::BLACK,
+                Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT),
+            ),
+            Transform::from_xyz(right_gauge_x, 0.0, 0.5),
+            ChargeGaugeBackground,
+        ))
+        .id();
+    commands.entity(right_player).add_child(right_gauge_bg);
+
+    let right_gauge_fill = commands
+        .spawn((
+            Sprite::from_color(
+                Color::srgb(0.0, 0.8, 0.0),
+                Vec2::new(CHARGE_GAUGE_WIDTH - 2.0, CHARGE_GAUGE_HEIGHT - 2.0),
+            ),
+            Transform::from_xyz(right_gauge_x, 0.0, 0.6).with_scale(Vec3::new(1.0, 0.0, 1.0)),
+            ChargeGaugeFill,
+        ))
+        .id();
+    commands.entity(right_player).add_child(right_gauge_fill);
 
     // Load ball textures for all styles (6 styles × 10 palettes = 60 textures)
     let load_style = |style: &str| -> StyleTextures {
@@ -278,7 +329,7 @@ fn setup(
     // Arena floor (spans between walls)
     commands.spawn((
         Sprite::from_color(
-            initial_palette.floor,
+            initial_palette.platforms,
             Vec2::new(ARENA_WIDTH - WALL_THICKNESS * 2.0, 40.0),
         ),
         Transform::from_xyz(0.0, ARENA_FLOOR_Y, 0.0),
@@ -287,20 +338,20 @@ fn setup(
 
     // Left wall (flush with arena edge)
     commands.spawn((
-        Sprite::from_color(initial_palette.floor, Vec2::new(WALL_THICKNESS, 5000.0)),
+        Sprite::from_color(initial_palette.platforms, Vec2::new(WALL_THICKNESS, 5000.0)),
         Transform::from_xyz(-ARENA_WIDTH / 2.0 + WALL_THICKNESS / 2.0, 2000.0, 0.0),
         Platform,
     ));
 
     // Right wall (flush with arena edge)
     commands.spawn((
-        Sprite::from_color(initial_palette.floor, Vec2::new(WALL_THICKNESS, 5000.0)),
+        Sprite::from_color(initial_palette.platforms, Vec2::new(WALL_THICKNESS, 5000.0)),
         Transform::from_xyz(ARENA_WIDTH / 2.0 - WALL_THICKNESS / 2.0, 2000.0, 0.0),
         Platform,
     ));
 
     // Spawn level 1 platforms
-    levels::spawn_level_platforms(&mut commands, &level_db, 0, initial_palette.platform);
+    levels::spawn_level_platforms(&mut commands, &level_db, 0, initial_palette.platforms);
 
     // Baskets (goals) - height and X position vary per level
     let initial_level = level_db.get(0);
@@ -329,21 +380,21 @@ fn setup(
         .with_children(|parent| {
             // Left rim (outer - wall side, 50%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(initial_palette.right_dark, Vec2::new(RIM_THICKNESS, rim_outer_height)),
+                Sprite::from_color(initial_palette.right_rim, Vec2::new(RIM_THICKNESS, rim_outer_height)),
                 Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Right rim (inner - center side, 10%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(initial_palette.right_dark, Vec2::new(RIM_THICKNESS, rim_inner_height)),
+                Sprite::from_color(initial_palette.right_rim, Vec2::new(RIM_THICKNESS, rim_inner_height)),
                 Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Bottom rim - center at basket bottom edge
             parent.spawn((
-                Sprite::from_color(initial_palette.right_dark, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
+                Sprite::from_color(initial_palette.right_rim, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
                 Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
                 Platform,
                 BasketRim,
@@ -360,21 +411,21 @@ fn setup(
         .with_children(|parent| {
             // Left rim (inner - center side, 10%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(initial_palette.left_dark, Vec2::new(RIM_THICKNESS, rim_inner_height)),
+                Sprite::from_color(initial_palette.left_rim, Vec2::new(RIM_THICKNESS, rim_inner_height)),
                 Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Right rim (outer - wall side, 50%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(initial_palette.left_dark, Vec2::new(RIM_THICKNESS, rim_outer_height)),
+                Sprite::from_color(initial_palette.left_rim, Vec2::new(RIM_THICKNESS, rim_outer_height)),
                 Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Bottom rim - center at basket bottom edge
             parent.spawn((
-                Sprite::from_color(initial_palette.left_dark, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
+                Sprite::from_color(initial_palette.left_rim, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
                 Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
                 Platform,
                 BasketRim,
@@ -401,7 +452,7 @@ fn setup(
         initial_corner_height,
         initial_corner_width,
         initial_step_push_in,
-        initial_palette.floor,
+        initial_palette.platforms,
     );
 
     // Score/Level display - world space, above arena
@@ -427,6 +478,20 @@ fn setup(
         TextColor(TEXT_PRIMARY),
         Transform::from_xyz(0.0, ARENA_FLOOR_Y + 10.0, 1.0),
         DebugText,
+    ));
+
+    // Cycle indicator - shows current cycle target when using controller (D-pad Down + RT/LT)
+    commands.spawn((
+        Text2d::new(""),
+        TextFont {
+            font_size: 18.0,
+            ..default()
+        },
+        TextLayout::new_with_justify(Justify::Center),
+        TextColor(TEXT_ACCENT),
+        Transform::from_xyz(0.0, ARENA_HEIGHT / 2.0 - 60.0, 1.0),
+        Visibility::Hidden,
+        CycleIndicator,
     ));
 
     // Physics Tweak Panel (hidden by default, toggle with F1)
@@ -482,51 +547,6 @@ fn setup(
                     },
                     TextColor(TEXT_PRIMARY),
                     TweakRow(i),
-                ));
-            }
-        });
-
-    // Debug Style Key (visible only on Debug level)
-    // Shows numbered list of ball styles on left side of screen
-    let style_key_visible = if is_debug_level {
-        Visibility::Inherited
-    } else {
-        Visibility::Hidden
-    };
-
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(10.0),
-                top: Val::Px(10.0),
-                flex_direction: FlexDirection::Column,
-                padding: UiRect::all(Val::Px(10.0)),
-                row_gap: Val::Px(2.0),
-                ..default()
-            },
-            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.85)),
-            style_key_visible,
-            DebugStyleKey,
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                Text::new("Ball Styles"),
-                TextFont {
-                    font_size: 14.0,
-                    ..default()
-                },
-                TextColor(TEXT_PRIMARY),
-            ));
-            // List each style with number (1-6 = left to right on floor)
-            for (i, style) in BallStyleType::ALL.iter().enumerate() {
-                parent.spawn((
-                    Text::new(format!("{}. {}", i + 1, style.name())),
-                    TextFont {
-                        font_size: 13.0,
-                        ..default()
-                    },
-                    TextColor(TEXT_SECONDARY),
                 ));
             }
         });

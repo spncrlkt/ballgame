@@ -38,8 +38,9 @@ pub use scoring::{CurrentLevel, Score};
 pub use shooting::{ChargingShot, LastShotInfo};
 pub use steal::StealContest;
 pub use ui::{
-    ChargeGaugeBackground, ChargeGaugeFill, DebugSettings, DebugStyleKey, DebugText, PhysicsTweaks,
-    ScoreFlash, ScoreLevelText, TweakPanel, TweakRow,
+    ChargeGaugeBackground, ChargeGaugeFill, CycleIndicator, CycleSelection, CycleTarget,
+    DebugSettings, DebugText, PhysicsTweaks, ScoreFlash, ScoreLevelText, TweakPanel, TweakRow,
+    ViewportScale,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 

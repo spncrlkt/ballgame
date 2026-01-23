@@ -1,0 +1,176 @@
+# Ballgame Color Palettes
+# =======================
+#
+# Format:
+#   palette: <name>              Start a new palette
+#   left: <r> <g> <b>            Left team color (0.0-1.0)
+#   left_rim: <r> <g> <b>        Left basket rim color
+#   right: <r> <g> <b>           Right team color
+#   right_rim: <r> <g> <b>       Right basket rim color
+#   background: <r> <g> <b>      Arena background color
+#   platforms: <r> <g> <b>       Floor, walls, steps, and floating platforms
+#
+# Exactly 20 palettes are required (for ball texture system).
+#
+# Blank lines and # comments are ignored.
+
+palette: Ocean Fire
+left: 0.118 0.565 1.000
+left_rim: 0.050 0.250 0.450
+right: 1.000 0.420 0.208
+right_rim: 0.450 0.190 0.090
+background: 0.350 0.320 0.280
+platforms: 0.150 0.130 0.120
+
+palette: Forest Crimson
+left: 0.133 0.545 0.133
+left_rim: 0.100 0.410 0.100
+right: 0.863 0.078 0.235
+right_rim: 0.650 0.060 0.180
+background: 0.180 0.150 0.120
+platforms: 0.350 0.300 0.250
+
+palette: Electric Neon
+left: 0.000 1.000 0.784
+left_rim: 0.000 0.750 0.590
+right: 1.000 0.196 0.588
+right_rim: 0.750 0.150 0.440
+background: 0.060 0.060 0.100
+platforms: 0.180 0.180 0.250
+
+palette: Royal Gold
+left: 0.255 0.412 0.882
+left_rim: 0.190 0.310 0.660
+right: 1.000 0.843 0.000
+right_rim: 0.750 0.630 0.000
+background: 0.120 0.080 0.180
+platforms: 0.280 0.220 0.350
+
+palette: Sunset
+left: 0.933 0.510 0.933
+left_rim: 0.420 0.230 0.420
+right: 1.000 0.647 0.000
+right_rim: 0.450 0.290 0.000
+background: 0.220 0.140 0.180
+platforms: 0.420 0.320 0.380
+
+palette: Arctic Ember
+left: 0.529 0.808 0.980
+left_rim: 0.240 0.360 0.440
+right: 0.910 0.298 0.239
+right_rim: 0.410 0.130 0.110
+background: 0.180 0.220 0.280
+platforms: 0.380 0.420 0.500
+
+palette: Toxic Slime
+left: 0.000 1.000 0.000
+left_rim: 0.000 0.750 0.000
+right: 0.580 0.000 0.827
+right_rim: 0.440 0.000 0.620
+background: 0.060 0.100 0.040
+platforms: 0.180 0.280 0.140
+
+palette: Bubblegum
+left: 0.000 0.753 0.753
+left_rim: 0.000 0.340 0.340
+right: 1.000 0.412 0.706
+right_rim: 0.450 0.190 0.320
+background: 0.200 0.160 0.240
+platforms: 0.400 0.350 0.450
+
+palette: Desert Storm
+left: 0.824 0.706 0.549
+left_rim: 0.370 0.320 0.250
+right: 0.545 0.271 0.075
+right_rim: 0.250 0.120 0.030
+background: 0.380 0.320 0.240
+platforms: 0.180 0.140 0.100
+
+palette: Neon Noir
+left: 0.000 0.980 0.980
+left_rim: 0.000 0.740 0.740
+right: 0.980 0.000 0.471
+right_rim: 0.740 0.000 0.350
+background: 0.050 0.050 0.070
+platforms: 0.180 0.180 0.220
+
+palette: Ice and Fire
+left: 0.700 0.850 1.000
+left_rim: 0.320 0.380 0.450
+right: 0.800 0.100 0.100
+right_rim: 0.360 0.050 0.050
+background: 0.150 0.200 0.280
+platforms: 0.350 0.400 0.500
+
+palette: Jungle Fever
+left: 0.200 0.900 0.300
+left_rim: 0.150 0.680 0.230
+right: 1.000 0.200 0.500
+right_rim: 0.750 0.150 0.380
+background: 0.080 0.120 0.060
+platforms: 0.220 0.300 0.180
+
+palette: Copper Patina
+left: 0.200 0.600 0.550
+left_rim: 0.090 0.270 0.250
+right: 0.850 0.450 0.200
+right_rim: 0.380 0.200 0.090
+background: 0.200 0.220 0.200
+platforms: 0.400 0.420 0.400
+
+palette: Midnight Sun
+left: 1.000 0.800 0.200
+left_rim: 0.750 0.600 0.150
+right: 0.100 0.200 0.600
+right_rim: 0.080 0.150 0.450
+background: 0.120 0.100 0.200
+platforms: 0.300 0.280 0.400
+
+palette: Cherry Blossom
+left: 1.000 0.600 0.700
+left_rim: 0.450 0.270 0.320
+right: 0.400 0.800 0.600
+right_rim: 0.180 0.360 0.270
+background: 0.280 0.250 0.220
+platforms: 0.480 0.450 0.420
+
+palette: Volcanic
+left: 1.000 0.500 0.000
+left_rim: 0.750 0.380 0.000
+right: 0.200 0.200 0.250
+right_rim: 0.150 0.150 0.190
+background: 0.150 0.080 0.050
+platforms: 0.350 0.220 0.180
+
+palette: Deep Sea
+left: 0.000 0.800 0.900
+left_rim: 0.000 0.600 0.680
+right: 1.000 0.500 0.450
+right_rim: 0.750 0.380 0.340
+background: 0.050 0.100 0.150
+platforms: 0.180 0.250 0.320
+
+palette: Autumn Harvest
+left: 0.950 0.600 0.200
+left_rim: 0.430 0.270 0.090
+right: 0.500 0.200 0.600
+right_rim: 0.230 0.090 0.270
+background: 0.250 0.180 0.120
+platforms: 0.450 0.380 0.300
+
+palette: Synthwave
+left: 1.000 0.200 0.600
+left_rim: 0.750 0.150 0.450
+right: 0.200 0.600 1.000
+right_rim: 0.150 0.450 0.750
+background: 0.100 0.050 0.150
+platforms: 0.280 0.200 0.350
+
+palette: Monochrome
+left: 0.950 0.950 0.950
+left_rim: 0.710 0.710 0.710
+right: 0.500 0.500 0.500
+right_rim: 0.380 0.380 0.380
+background: 0.150 0.150 0.150
+platforms: 0.350 0.350 0.350
+

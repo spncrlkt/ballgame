@@ -58,6 +58,8 @@ src/
 - `LevelDatabase` - Loaded level definitions from assets/levels.txt
 - `LastShotInfo` - Debug info about the most recent shot (angle, power, variance breakdown)
 - `BallTextures` - Handles to all 60 ball textures (6 styles × 10 palettes)
+- `ViewportScale` - Current viewport preset for testing different screen sizes
+- `CycleSelection` - Which option category is selected for controller cycling (Level/Viewport/Palette/BallStyle)
 
 **Player Components:**
 - `Player` - Marker for player entities
@@ -94,13 +96,13 @@ src/
 - `ChargeGaugeBackground` / `ChargeGaugeFill` - Shot charge indicator (inside player)
 - `TweakPanel` / `TweakRow` - Physics tweak panel UI
 - `ScoreFlash` - Score animation (flashes basket/player on goal)
-- `TargetMarker` - White marker shown in targeted basket
+- `CycleIndicator` - Brief display showing current cycle target when using controller
 
 ### System Execution Order
 
-**Update schedule:** `capture_input` → `respawn_player` → `toggle_debug` → `update_debug_text` → `update_score_level_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `update_target_marker` → `toggle_tweak_panel` → `update_tweak_panel`
+**Update schedule:** `capture_input` → `copy_human_input` → `swap_control` → `ai_decision_update` → `respawn_player` → `toggle_debug` → `update_debug_text` → `update_score_level_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `toggle_tweak_panel` → `update_tweak_panel` → `update_style_key_visibility` → `cycle_viewport` → `unified_cycle_system` → `update_cycle_indicator`
 
-**FixedUpdate schedule (chained):** `apply_input` → `cycle_target` → `apply_gravity` → `ball_gravity` → `apply_velocity` → `check_collisions` → `ball_collisions` → `ball_state_update` → `ball_player_collision` → `ball_follow_holder` → `pickup_ball` → `steal_contest_update` → `update_shot_charge` → `throw_ball` → `check_scoring`
+**FixedUpdate schedule (chained):** `apply_input` → `apply_gravity` → `ball_gravity` → `ball_spin` → `apply_velocity` → `check_collisions` → `ball_collisions` → `ball_state_update` → `ball_player_collision` → `ball_follow_holder` → `pickup_ball` → `steal_contest_update` → `update_shot_charge` → `throw_ball` → `check_scoring`
 
 ### Input
 
@@ -109,12 +111,18 @@ Keyboard + Gamepad supported:
 - Space/W or South button: Jump
 - E or West button: Pickup ball / Steal
 - F or Right Bumper: Charge and throw (hold to charge, release to throw)
-- Q or Left Bumper: Cycle target basket
-- R or Start: Reset current level
-- ] or Right Trigger: Next level
-- [ or Left Trigger: Previous level
-- Tab: Toggle debug UI
-- F1: Toggle physics tweak panel
+- Q or Left Bumper: Swap player control (human ↔ AI)
+- R or Start: Reset current level (cycles palette)
+- ] key: Next level (keyboard only)
+- [ key: Previous level (keyboard only)
+- V key: Cycle viewport size (keyboard only)
+- Tab or D-pad Up: Toggle debug UI
+- F1: Toggle physics tweak panel (keyboard only)
+
+**Controller Unified Cycle System:**
+- D-pad Down: Select cycle target (Level → Viewport → Palette → Ball Style)
+- RT (Right Trigger): Cycle selected option forward
+- LT (Left Trigger): Cycle selected option backward
 
 **Bevy GamepadButton naming (counterintuitive):**
 - `LeftTrigger` / `RightTrigger` = Bumpers (LB/RB, digital shoulder buttons)
