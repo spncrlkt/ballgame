@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use crate::ai::AiInput;
-use crate::ball::{Ball, BallRolling, BallState};
+use crate::ball::{Ball, BallRolling, BallState, BallStyleType, BallTextures, CurrentPalette, NUM_PALETTES};
 use crate::constants::*;
 use crate::helpers::*;
 use crate::levels::LevelDatabase;
@@ -196,11 +196,14 @@ pub fn respawn_player(
     mut commands: Commands,
     level_db: Res<LevelDatabase>,
     mut current_level: ResMut<CurrentLevel>,
+    mut current_palette: ResMut<CurrentPalette>,
+    ball_textures: Res<BallTextures>,
     mut players: Query<
         (
             Entity,
             &mut Transform,
             &mut Velocity,
+            &mut Sprite,
             &Team,
             Option<&HoldingBall>,
         ),
@@ -212,12 +215,15 @@ pub fn respawn_player(
             &mut Velocity,
             &mut BallState,
             &mut BallRolling,
+            &mut Sprite,
+            &BallStyleType,
         ),
         (With<Ball>, Without<Player>),
     >,
     level_platforms: Query<Entity, With<LevelPlatform>>,
     corner_ramps: Query<Entity, With<CornerRamp>>,
-    mut baskets: Query<(&mut Transform, &Basket), (Without<Player>, Without<Ball>)>,
+    mut baskets: Query<(&mut Transform, &mut Sprite, &Basket, Option<&Children>), (Without<Player>, Without<Ball>)>,
+    mut basket_rims: Query<&mut Sprite, (With<BasketRim>, Without<Basket>, Without<Player>, Without<Ball>)>,
 ) {
     // Reset current level (R / Start)
     let reset_pressed = keyboard.just_pressed(KeyCode::KeyR)
@@ -255,13 +261,23 @@ pub fn respawn_player(
 
     // Reset players and ball on any of: reset, next level, prev level
     if reset_pressed || level_changed {
+        // Cycle palette on reset
+        current_palette.0 = (current_palette.0 + 1) % NUM_PALETTES;
+        let palette = &PALETTES[current_palette.0];
+
         // Reset all players to their spawn positions based on team
-        for (player_entity, mut p_transform, mut p_velocity, team, holding) in &mut players {
+        for (player_entity, mut p_transform, mut p_velocity, mut p_sprite, team, holding) in &mut players {
             p_transform.translation = match team {
                 Team::Left => PLAYER_SPAWN_LEFT,
                 Team::Right => PLAYER_SPAWN_RIGHT,
             };
             p_velocity.0 = Vec2::ZERO;
+
+            // Update player color based on new palette
+            p_sprite.color = match team {
+                Team::Left => palette.left,
+                Team::Right => palette.right,
+            };
 
             // Drop ball if holding
             if holding.is_some() {
@@ -269,13 +285,36 @@ pub fn respawn_player(
             }
         }
 
-        // Reset ball
-        if let Ok((mut b_transform, mut b_velocity, mut b_state, mut b_rolling)) = ball.single_mut()
-        {
+        // Reset ball and update texture
+        for (mut b_transform, mut b_velocity, mut b_state, mut b_rolling, mut b_sprite, style) in &mut ball {
             b_transform.translation = BALL_SPAWN;
             b_velocity.0 = Vec2::ZERO;
             *b_state = BallState::Free;
             b_rolling.0 = false;
+
+            // Update ball texture to new palette
+            let style_textures = ball_textures.get(*style);
+            b_sprite.image = style_textures.textures[current_palette.0].clone();
+        }
+
+        // Update basket colors
+        for (_, mut basket_sprite, basket, children) in &mut baskets {
+            match basket {
+                Basket::Left => basket_sprite.color = palette.left,
+                Basket::Right => basket_sprite.color = palette.right,
+            }
+
+            // Update rim colors (children of basket)
+            if let Some(children) = children {
+                for child in children.iter() {
+                    if let Ok(mut rim_sprite) = basket_rims.get_mut(child) {
+                        rim_sprite.color = match basket {
+                            Basket::Left => palette.right_dark,
+                            Basket::Right => palette.left_dark,
+                        };
+                    }
+                }
+            }
         }
     }
 
@@ -295,7 +334,7 @@ pub fn respawn_player(
         if let Some(level) = level_db.get(level_index) {
             let basket_y = ARENA_FLOOR_Y + level.basket_height;
             let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
-            for (mut basket_transform, basket) in &mut baskets {
+            for (mut basket_transform, _, basket, _) in &mut baskets {
                 basket_transform.translation.y = basket_y;
                 basket_transform.translation.x = match basket {
                     Basket::Left => left_x,

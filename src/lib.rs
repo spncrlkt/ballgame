@@ -22,7 +22,7 @@ pub mod world;
 pub use ai::{AiGoal, AiInput, AiState};
 pub use ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
-    BallStyleType, BallTextures, StyleTextures,
+    BallStyleType, BallTextures, CurrentPalette, StyleTextures, NUM_PALETTES,
 };
 pub use constants::*;
 pub use helpers::*;

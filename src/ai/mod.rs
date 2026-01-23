@@ -64,12 +64,10 @@ pub fn copy_human_input(
     ai_input.jump_held = human_input.jump_held;
     ai_input.throw_held = human_input.throw_held;
 
-    // Jump buffer timer: copy from PlayerInput, but track consumption
-    // If AiInput timer was consumed (set to 0), sync that back to PlayerInput
-    if ai_input.jump_buffer_timer == 0.0 && human_input.jump_buffer_timer > 0.0 {
-        // Timer was consumed in FixedUpdate, don't restore it
-        human_input.jump_buffer_timer = 0.0;
-    }
+    // Jump buffer timer: copy from PlayerInput to AiInput
+    // The timer decrements in capture_input (Update) and gets consumed in apply_input (FixedUpdate)
+    // We always copy the latest value - if FixedUpdate consumed it, ai_input.timer will be 0
+    // and won't trigger another jump until a new press sets human_input.timer again
     ai_input.jump_buffer_timer = human_input.jump_buffer_timer;
 
     // Consumable flags (move to AiInput, clear from PlayerInput)

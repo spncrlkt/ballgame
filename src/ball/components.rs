@@ -6,7 +6,10 @@ use bevy::prelude::*;
 #[derive(Component)]
 pub struct Ball;
 
-/// Visual style of a ball (each has 3 possession textures)
+/// Number of color palettes available
+pub const NUM_PALETTES: usize = 10;
+
+/// Visual style of a ball (each has textures for all palettes)
 #[derive(Component, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 pub enum BallStyleType {
     #[default]
@@ -42,15 +45,13 @@ impl BallStyleType {
     }
 }
 
-/// Textures for a single ball style (neutral, left, right)
+/// Textures for a single ball style (one per palette)
 #[derive(Clone)]
 pub struct StyleTextures {
-    pub neutral: Handle<Image>,
-    pub left: Handle<Image>,
-    pub right: Handle<Image>,
+    pub textures: [Handle<Image>; NUM_PALETTES],
 }
 
-/// Holds handles to all ball textures for dynamic swapping based on possession
+/// Holds handles to all ball textures for all styles and palettes
 #[derive(Resource, Clone)]
 pub struct BallTextures {
     pub stripe: StyleTextures,
@@ -74,6 +75,10 @@ impl BallTextures {
         }
     }
 }
+
+/// Current color palette index (0-9)
+#[derive(Resource, Default)]
+pub struct CurrentPalette(pub usize);
 
 /// Ball state - Free, Held, or InFlight
 #[derive(Component, Default, Debug, Clone, Copy, PartialEq)]

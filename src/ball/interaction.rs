@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::ai::AiInput;
 use crate::ball::components::*;
 use crate::constants::*;
-use crate::player::{Facing, HoldingBall, Player, Team, Velocity};
+use crate::player::{Facing, HoldingBall, Player, Velocity};
 use crate::shooting::ChargingShot;
 use crate::steal::StealContest;
 
@@ -193,33 +193,3 @@ pub fn pickup_ball(
     }
 }
 
-/// Swap ball texture based on possession state and ball style
-pub fn ball_texture_swap(
-    textures: Res<BallTextures>,
-    player_query: Query<&Team, With<Player>>,
-    mut ball_query: Query<
-        (&BallState, &mut Sprite, &BallStyleType),
-        (With<Ball>, Changed<BallState>),
-    >,
-) {
-    for (state, mut sprite, style) in &mut ball_query {
-        let style_textures = textures.get(*style);
-        let new_texture = match state {
-            BallState::Free => style_textures.neutral.clone(),
-            BallState::Held(holder)
-            | BallState::InFlight {
-                shooter: holder, ..
-            } => {
-                if let Ok(team) = player_query.get(*holder) {
-                    match team {
-                        Team::Left => style_textures.left.clone(),
-                        Team::Right => style_textures.right.clone(),
-                    }
-                } else {
-                    style_textures.neutral.clone()
-                }
-            }
-        };
-        sprite.image = new_texture;
-    }
-}

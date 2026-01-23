@@ -5,11 +5,11 @@
 use ballgame::{
     AiGoal, AiInput, AiState, Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace,
     BallSpin, BallState, BallStyleType, BallTextures, ChargeGaugeBackground, ChargeGaugeFill,
-    ChargingShot, CoyoteTimer, CurrentLevel, DebugSettings, DebugStyleKey, DebugText, Facing,
-    Grounded, HumanControlled, JumpState, LastShotInfo, LevelDatabase, PhysicsTweaks, Player,
-    PlayerInput, Score, ScoreLevelText, StealContest, StyleTextures, TargetBasket, Team,
-    TweakPanel, TweakRow, Velocity, ai, ball, constants::*, helpers::*, input, levels, player,
-    scoring, shooting, steal, ui, world,
+    ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette, DebugSettings, DebugStyleKey,
+    DebugText, Facing, Grounded, HumanControlled, JumpState, LastShotInfo, LevelDatabase,
+    PhysicsTweaks, Player, PlayerInput, Score, ScoreLevelText, StealContest, StyleTextures,
+    TargetBasket, Team, TweakPanel, TweakRow, Velocity, ai, ball, constants::*, helpers::*, input,
+    levels, player, scoring, shooting, steal, ui, world,
 };
 use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use world::{Basket, BasketRim, Collider, Platform};
@@ -38,16 +38,22 @@ fn main() {
         .init_resource::<StealContest>()
         .init_resource::<Score>()
         .init_resource::<CurrentLevel>()
+        .init_resource::<CurrentPalette>()
         .init_resource::<PhysicsTweaks>()
         .init_resource::<LastShotInfo>()
         .add_systems(Startup, setup)
         .add_systems(
             Update,
             (
-                input::capture_input,
-                ai::copy_human_input,
-                ai::swap_control,
-                ai::ai_decision_update,
+                // Input systems must run in order: capture -> copy -> swap -> AI
+                (
+                    input::capture_input,
+                    ai::copy_human_input,
+                    ai::swap_control,
+                    ai::ai_decision_update,
+                )
+                    .chain(),
+                // Other Update systems can run in any order
                 player::respawn_player,
                 ui::toggle_debug,
                 levels::reload_levels,
@@ -59,7 +65,6 @@ fn main() {
                 ui::toggle_tweak_panel,
                 ui::update_tweak_panel,
                 ui::update_style_key_visibility,
-                ball::ball_texture_swap,
             ),
         )
         .add_systems(
@@ -100,10 +105,13 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
         }),
     ));
 
-    // Left team player (blue) - spawns on left side, starts human-controlled
+    // Get initial palette colors
+    let initial_palette = &PALETTES[0];
+
+    // Left team player - spawns on left side, starts human-controlled
     let left_player = commands
         .spawn((
-            Sprite::from_color(TEAM_LEFT_PRIMARY, PLAYER_SIZE),
+            Sprite::from_color(initial_palette.left, PLAYER_SIZE),
             Transform::from_translation(PLAYER_SPAWN_LEFT),
             Player,
             Velocity::default(),
@@ -124,10 +132,10 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
     // Check if this is a debug level early (for AI goal)
     let is_debug_level_for_ai = level_db.get(0).map(|l| l.debug).unwrap_or(false);
 
-    // Right team player (orange) - spawns on right side, starts AI-controlled
+    // Right team player - spawns on right side, starts AI-controlled
     let _right_player = commands
         .spawn((
-            Sprite::from_color(TEAM_RIGHT_PRIMARY, PLAYER_SIZE),
+            Sprite::from_color(initial_palette.right, PLAYER_SIZE),
             Transform::from_translation(PLAYER_SPAWN_RIGHT),
             Player,
             Velocity::default(),
@@ -182,12 +190,12 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
         .id();
     commands.entity(left_player).add_child(gauge_fill);
 
-    // Load ball textures for all styles (6 styles × 3 states = 18 textures)
+    // Load ball textures for all styles (6 styles × 10 palettes = 60 textures)
     let load_style = |style: &str| -> StyleTextures {
         StyleTextures {
-            neutral: asset_server.load(format!("ball_{}_neutral.png", style)),
-            left: asset_server.load(format!("ball_{}_left.png", style)),
-            right: asset_server.load(format!("ball_{}_right.png", style)),
+            textures: std::array::from_fn(|i| {
+                asset_server.load(format!("ball_{}_{}.png", style, i))
+            }),
         }
     };
     let ball_textures = BallTextures {
@@ -203,6 +211,9 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
     // Check if this is a debug level (spawns all ball styles, AI idle)
     let is_debug_level = level_db.get(0).map(|l| l.debug).unwrap_or(false);
 
+    // Initial palette index is 0
+    let initial_palette_idx = 0;
+
     if is_debug_level {
         // Debug level: spawn 6 balls with different styles
         let x_positions = [-600.0, -360.0, -120.0, 120.0, 360.0, 600.0];
@@ -211,7 +222,7 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
             let textures = ball_textures.get(*style);
             commands.spawn((
                 Sprite {
-                    image: textures.neutral.clone(),
+                    image: textures.textures[initial_palette_idx].clone(),
                     custom_size: Some(BALL_SIZE),
                     ..default()
                 },
@@ -232,7 +243,7 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
         let default_textures = ball_textures.get(BallStyleType::default());
         commands.spawn((
             Sprite {
-                image: default_textures.neutral.clone(),
+                image: default_textures.textures[initial_palette_idx].clone(),
                 custom_size: Some(BALL_SIZE),
                 ..default()
             },
@@ -293,62 +304,62 @@ fn setup(mut commands: Commands, level_db: Res<LevelDatabase>, asset_server: Res
     let rim_inner_y = -BASKET_SIZE.y / 2.0 + rim_inner_height / 2.0; // Positioned at bottom
     let rim_bottom_width = BASKET_SIZE.x + RIM_THICKNESS; // Basket width + one rim thickness (side rims half-in)
 
-    // Left basket (turquoise - left team's home) with contrasting rims (burnt clay)
+    // Left basket (left team's home) with contrasting rims (right team dark)
     commands
         .spawn((
-            Sprite::from_color(TEAM_LEFT_PRIMARY, BASKET_SIZE),
+            Sprite::from_color(initial_palette.left, BASKET_SIZE),
             Transform::from_xyz(left_basket_x, basket_y, -0.1), // Slightly behind
             Basket::Left,
         ))
         .with_children(|parent| {
             // Left rim (outer - wall side, 50%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(TEAM_RIGHT_DARK, Vec2::new(RIM_THICKNESS, rim_outer_height)),
+                Sprite::from_color(initial_palette.right_dark, Vec2::new(RIM_THICKNESS, rim_outer_height)),
                 Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Right rim (inner - center side, 10%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(TEAM_RIGHT_DARK, Vec2::new(RIM_THICKNESS, rim_inner_height)),
+                Sprite::from_color(initial_palette.right_dark, Vec2::new(RIM_THICKNESS, rim_inner_height)),
                 Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Bottom rim - center at basket bottom edge
             parent.spawn((
-                Sprite::from_color(TEAM_RIGHT_DARK, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
+                Sprite::from_color(initial_palette.right_dark, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
                 Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
                 Platform,
                 BasketRim,
             ));
         });
 
-    // Right basket (terracotta - right team's home) with contrasting rims (deep teal)
+    // Right basket (right team's home) with contrasting rims (left team dark)
     commands
         .spawn((
-            Sprite::from_color(TEAM_RIGHT_PRIMARY, BASKET_SIZE),
+            Sprite::from_color(initial_palette.right, BASKET_SIZE),
             Transform::from_xyz(right_basket_x, basket_y, -0.1),
             Basket::Right,
         ))
         .with_children(|parent| {
             // Left rim (inner - center side, 10%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(TEAM_LEFT_DARK, Vec2::new(RIM_THICKNESS, rim_inner_height)),
+                Sprite::from_color(initial_palette.left_dark, Vec2::new(RIM_THICKNESS, rim_inner_height)),
                 Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Right rim (outer - wall side, 50%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(TEAM_LEFT_DARK, Vec2::new(RIM_THICKNESS, rim_outer_height)),
+                Sprite::from_color(initial_palette.left_dark, Vec2::new(RIM_THICKNESS, rim_outer_height)),
                 Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Bottom rim - center at basket bottom edge
             parent.spawn((
-                Sprite::from_color(TEAM_LEFT_DARK, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
+                Sprite::from_color(initial_palette.left_dark, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
                 Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
                 Platform,
                 BasketRim,

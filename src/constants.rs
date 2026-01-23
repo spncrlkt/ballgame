@@ -13,16 +13,62 @@ pub const FLOOR_COLOR: Color = Color::srgb(0.15, 0.13, 0.12); // Dark warm stone
 pub const PLATFORM_COLOR: Color = Color::srgb(0.2, 0.18, 0.16); // Dark stone platforms
 
 // =============================================================================
-// TEAM COLORS - Turquoise vs Terracotta (Mesoamerican theme)
+// COLOR PALETTES - 10 named color schemes for teams
 // =============================================================================
 
-// Left team - Turquoise (sky/water/jade)
-pub const TEAM_LEFT_PRIMARY: Color = Color::srgb(0.25, 0.75, 0.8); // Bright turquoise
-pub const TEAM_LEFT_DARK: Color = Color::srgb(0.1, 0.4, 0.45); // Deep teal
+/// Color palette with left and right team colors
+pub struct Palette {
+    pub name: &'static str,
+    pub left: Color,
+    pub left_dark: Color,
+    pub right: Color,
+    pub right_dark: Color,
+}
 
-// Right team - Terracotta (earth/clay/fire)
-pub const TEAM_RIGHT_PRIMARY: Color = Color::srgb(0.8, 0.45, 0.3); // Warm terracotta
-pub const TEAM_RIGHT_DARK: Color = Color::srgb(0.5, 0.25, 0.15); // Burnt clay
+/// Helper to create a palette with auto-darkened variants
+const fn palette(name: &'static str, left: (f32, f32, f32), right: (f32, f32, f32)) -> Palette {
+    Palette {
+        name,
+        left: Color::srgb(left.0, left.1, left.2),
+        left_dark: Color::srgb(left.0 * 0.5, left.1 * 0.5, left.2 * 0.5),
+        right: Color::srgb(right.0, right.1, right.2),
+        right_dark: Color::srgb(right.0 * 0.5, right.1 * 0.5, right.2 * 0.5),
+    }
+}
+
+/// 10 named color palettes (matches generate_ball.rs)
+pub const PALETTES: [Palette; 10] = [
+    // 0: Ocean Fire - Blue vs Orange
+    palette("Ocean Fire", (0.118, 0.565, 1.0), (1.0, 0.42, 0.208)),
+    // 1: Forest Crimson - Green vs Red
+    palette("Forest Crimson", (0.133, 0.545, 0.133), (0.863, 0.078, 0.235)),
+    // 2: Electric Neon - Cyan vs Pink
+    palette("Electric Neon", (0.0, 1.0, 0.784), (1.0, 0.196, 0.588)),
+    // 3: Royal Gold - Blue vs Gold
+    palette("Royal Gold", (0.255, 0.412, 0.882), (1.0, 0.843, 0.0)),
+    // 4: Sunset - Violet vs Orange
+    palette("Sunset", (0.933, 0.51, 0.933), (1.0, 0.647, 0.0)),
+    // 5: Arctic Ember - Sky vs Tomato
+    palette("Arctic Ember", (0.529, 0.808, 0.98), (0.91, 0.298, 0.239)),
+    // 6: Toxic Slime - Lime vs Purple
+    palette("Toxic Slime", (0.0, 1.0, 0.0), (0.58, 0.0, 0.827)),
+    // 7: Bubblegum - Teal vs Pink
+    palette("Bubblegum", (0.0, 0.753, 0.753), (1.0, 0.412, 0.706)),
+    // 8: Desert Storm - Tan vs Brown
+    palette("Desert Storm", (0.824, 0.706, 0.549), (0.545, 0.271, 0.075)),
+    // 9: Neon Noir - Cyan vs Magenta
+    palette("Neon Noir", (0.0, 0.98, 0.98), (0.98, 0.0, 0.471)),
+];
+
+// =============================================================================
+// DEFAULT TEAM COLORS (for fallback/UI that doesn't track palette)
+// =============================================================================
+
+// These are palette 0 (Ocean Fire) colors
+pub const TEAM_LEFT_PRIMARY: Color = Color::srgb(0.118, 0.565, 1.0);
+pub const TEAM_LEFT_DARK: Color = Color::srgb(0.059, 0.283, 0.5);
+pub const TEAM_RIGHT_PRIMARY: Color = Color::srgb(1.0, 0.42, 0.208);
+pub const TEAM_RIGHT_DARK: Color = Color::srgb(0.5, 0.21, 0.104);
 
 // =============================================================================
 // TEXT/UI COLORS

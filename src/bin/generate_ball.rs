@@ -1,6 +1,6 @@
 //! Ball texture generator
 //!
-//! Generates 6 ball styles × 3 possession states = 18 PNG textures.
+//! Generates 6 ball styles × 10 color palettes = 60 PNG textures.
 //!
 //! Styles:
 //! - stripe: White ball with horizontal stripe
@@ -10,11 +10,6 @@
 //! - ring: White ball with colored ring
 //! - solid: Solid team color with black outline
 //!
-//! States:
-//! - neutral: Both team colors (Free ball)
-//! - left: Turquoise (held by left team)
-//! - right: Terracotta (held by right team)
-//!
 //! Configuration is read from assets/ball_options.txt.
 //! Run with: `cargo run --bin generate_ball`
 
@@ -23,11 +18,69 @@ use std::collections::HashMap;
 use std::f32::consts::PI;
 use std::fs;
 
-// Colors (matching constants.rs)
+// Colors
 const WHITE: [u8; 4] = [245, 245, 240, 255]; // Off-white (cream)
-const TURQUOISE: [u8; 4] = [64, 191, 204, 255]; // Team left (0.25, 0.75, 0.8)
-const TERRACOTTA: [u8; 4] = [204, 115, 77, 255]; // Team right (0.8, 0.45, 0.3)
 const BLACK: [u8; 4] = [20, 20, 20, 255]; // Outline
+
+/// Color palette with left and right team colors
+struct Palette {
+    left: [u8; 4],
+    right: [u8; 4],
+}
+
+/// 10 named color palettes
+const PALETTES: [Palette; 10] = [
+    // 0: "Ocean Fire" - Blue vs Orange
+    Palette {
+        left: [30, 144, 255, 255],
+        right: [255, 107, 53, 255],
+    },
+    // 1: "Forest Crimson" - Green vs Red
+    Palette {
+        left: [34, 139, 34, 255],
+        right: [220, 20, 60, 255],
+    },
+    // 2: "Electric Neon" - Cyan vs Pink
+    Palette {
+        left: [0, 255, 200, 255],
+        right: [255, 50, 150, 255],
+    },
+    // 3: "Royal Gold" - Blue vs Gold
+    Palette {
+        left: [65, 105, 225, 255],
+        right: [255, 215, 0, 255],
+    },
+    // 4: "Sunset" - Violet vs Orange
+    Palette {
+        left: [238, 130, 238, 255],
+        right: [255, 165, 0, 255],
+    },
+    // 5: "Arctic Ember" - Sky vs Tomato
+    Palette {
+        left: [135, 206, 250, 255],
+        right: [232, 76, 61, 255],
+    },
+    // 6: "Toxic Slime" - Lime vs Purple
+    Palette {
+        left: [0, 255, 0, 255],
+        right: [148, 0, 211, 255],
+    },
+    // 7: "Bubblegum" - Teal vs Pink
+    Palette {
+        left: [0, 192, 192, 255],
+        right: [255, 105, 180, 255],
+    },
+    // 8: "Desert Storm" - Tan vs Brown
+    Palette {
+        left: [210, 180, 140, 255],
+        right: [139, 69, 19, 255],
+    },
+    // 9: "Neon Noir" - Cyan vs Magenta
+    Palette {
+        left: [0, 250, 250, 255],
+        right: [250, 0, 120, 255],
+    },
+];
 
 const OPTIONS_FILE: &str = "assets/ball_options.txt";
 
@@ -46,47 +99,25 @@ struct StyleConfig {
     params: HashMap<String, f32>,
 }
 
-#[derive(Clone, Copy)]
-enum PossessionState {
-    Neutral,
-    Left,
-    Right,
-}
-
-impl PossessionState {
-    fn name(&self) -> &'static str {
-        match self {
-            PossessionState::Neutral => "neutral",
-            PossessionState::Left => "left",
-            PossessionState::Right => "right",
-        }
-    }
-}
-
 fn main() {
     let config = load_config();
-
-    let states = [
-        PossessionState::Neutral,
-        PossessionState::Left,
-        PossessionState::Right,
-    ];
 
     println!("Generating ball textures from {}...", OPTIONS_FILE);
     println!("  Size: {}px, Border: {}px", config.size, config.border);
     println!("  Styles: {}", config.styles.len());
+    println!("  Palettes: {}", PALETTES.len());
 
     for style in &config.styles {
-        for state in &states {
-            let filename = format!("assets/ball_{}_{}.png", style.name, state.name());
-            generate_texture(&filename, &config, style, *state);
+        for (palette_idx, _palette) in PALETTES.iter().enumerate() {
+            let filename = format!("assets/ball_{}_{}.png", style.name, palette_idx);
+            generate_texture(&filename, &config, style, palette_idx);
             println!("  Created: {}", filename);
         }
     }
 
     println!(
         "\nGenerated {} ball textures.",
-        config.styles.len() * states.len()
+        config.styles.len() * PALETTES.len()
     );
 }
 
@@ -263,7 +294,7 @@ fn parse_config(content: &str) -> BallConfig {
     }
 }
 
-fn generate_texture(path: &str, config: &BallConfig, style: &StyleConfig, state: PossessionState) {
+fn generate_texture(path: &str, config: &BallConfig, style: &StyleConfig, palette_idx: usize) {
     let size = config.size;
     let center = size as f32 / 2.0;
     let radius = center - config.border; // Leave room for border
@@ -283,7 +314,7 @@ fn generate_texture(path: &str, config: &BallConfig, style: &StyleConfig, state:
             let dist = (fx * fx + fy * fy).sqrt();
 
             if dist <= radius {
-                let color = get_pixel_color(fx, fy, dist, radius, style, state);
+                let color = get_pixel_color(fx, fy, dist, radius, style, palette_idx);
 
                 // Edge anti-aliasing
                 let edge_dist = radius - dist;
@@ -328,45 +359,34 @@ fn get_pixel_color(
     dist: f32,
     radius: f32,
     style: &StyleConfig,
-    state: PossessionState,
+    palette_idx: usize,
 ) -> [u8; 4] {
     let normalized_dist = dist / radius;
     let angle = fy.atan2(fx);
+    let palette = &PALETTES[palette_idx];
 
     match style.pattern.as_str() {
-        "stripe" => draw_stripe(fx, fy, radius, style, state),
-        "wedges" => draw_wedges(angle, state),
-        "dot" => draw_dot(normalized_dist, fx, style, state),
-        "half" => draw_half(fx, state),
-        "ring" => draw_ring(normalized_dist, fx, style, state),
-        "solid" => draw_solid(fx, state),
+        "stripe" => draw_stripe(fx, fy, radius, style, palette),
+        "wedges" => draw_wedges(angle, palette),
+        "dot" => draw_dot(normalized_dist, fx, style, palette),
+        "half" => draw_half(fx, palette),
+        "ring" => draw_ring(normalized_dist, fx, style, palette),
+        "solid" => draw_solid(fx, palette),
         _ => WHITE, // Fallback (shouldn't happen due to validation)
     }
 }
 
 /// Stripe: White ball with horizontal stripe through middle
-fn draw_stripe(
-    fx: f32,
-    fy: f32,
-    radius: f32,
-    style: &StyleConfig,
-    state: PossessionState,
-) -> [u8; 4] {
+fn draw_stripe(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
     let height = style.params.get("height").copied().unwrap_or(0.20);
     let stripe_half_height = radius * height;
 
     if fy.abs() < stripe_half_height {
-        // Inside stripe
-        match state {
-            PossessionState::Neutral => {
-                if fx < 0.0 {
-                    TURQUOISE
-                } else {
-                    TERRACOTTA
-                }
-            }
-            PossessionState::Left => TURQUOISE,
-            PossessionState::Right => TERRACOTTA,
+        // Inside stripe - left half uses left color, right half uses right color
+        if fx < 0.0 {
+            palette.left
+        } else {
+            palette.right
         }
     } else {
         WHITE
@@ -374,61 +394,31 @@ fn draw_stripe(
 }
 
 /// Wedges: 4 equal 90-degree sections (beach ball style)
-fn draw_wedges(angle: f32, state: PossessionState) -> [u8; 4] {
+fn draw_wedges(angle: f32, palette: &Palette) -> [u8; 4] {
     // Normalize angle to 0..2PI
     let angle = if angle < 0.0 { angle + 2.0 * PI } else { angle };
     let sector = ((angle / (PI / 2.0)) as i32) % 4;
 
-    match state {
-        PossessionState::Neutral => {
-            // Alternating: turquoise, white, terracotta, white
-            match sector {
-                0 => TURQUOISE,
-                1 => WHITE,
-                2 => TERRACOTTA,
-                3 => WHITE,
-                _ => WHITE,
-            }
-        }
-        PossessionState::Left => {
-            // Alternating: turquoise, white
-            if sector % 2 == 0 {
-                TURQUOISE
-            } else {
-                WHITE
-            }
-        }
-        PossessionState::Right => {
-            // Alternating: terracotta, white
-            if sector % 2 == 0 {
-                TERRACOTTA
-            } else {
-                WHITE
-            }
-        }
+    // Alternating: left color, white, right color, white
+    match sector {
+        0 => palette.left,
+        1 => WHITE,
+        2 => palette.right,
+        3 => WHITE,
+        _ => WHITE,
     }
 }
 
 /// Dot: White ball with large center circle
-fn draw_dot(
-    normalized_dist: f32,
-    fx: f32,
-    style: &StyleConfig,
-    state: PossessionState,
-) -> [u8; 4] {
+fn draw_dot(normalized_dist: f32, fx: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
     let dot_radius = style.params.get("radius").copied().unwrap_or(0.45);
 
     if normalized_dist < dot_radius {
-        match state {
-            PossessionState::Neutral => {
-                if fx < 0.0 {
-                    TURQUOISE
-                } else {
-                    TERRACOTTA
-                }
-            }
-            PossessionState::Left => TURQUOISE,
-            PossessionState::Right => TERRACOTTA,
+        // Inside dot - split by x position
+        if fx < 0.0 {
+            palette.left
+        } else {
+            palette.right
         }
     } else {
         WHITE
@@ -436,58 +426,36 @@ fn draw_dot(
 }
 
 /// Half: Ball split vertically down the middle
-fn draw_half(fx: f32, state: PossessionState) -> [u8; 4] {
-    match state {
-        PossessionState::Neutral => {
-            if fx < 0.0 {
-                TURQUOISE
-            } else {
-                TERRACOTTA
-            }
-        }
-        PossessionState::Left => TURQUOISE,
-        PossessionState::Right => TERRACOTTA,
+fn draw_half(fx: f32, palette: &Palette) -> [u8; 4] {
+    if fx < 0.0 {
+        palette.left
+    } else {
+        palette.right
     }
 }
 
 /// Ring: White ball with colored ring around middle
-fn draw_ring(
-    normalized_dist: f32,
-    fx: f32,
-    style: &StyleConfig,
-    state: PossessionState,
-) -> [u8; 4] {
+fn draw_ring(normalized_dist: f32, fx: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
     let ring_inner = style.params.get("inner").copied().unwrap_or(0.45);
     let ring_outer = style.params.get("outer").copied().unwrap_or(0.70);
 
     if normalized_dist > ring_inner && normalized_dist < ring_outer {
-        match state {
-            PossessionState::Neutral => {
-                if fx < 0.0 {
-                    TURQUOISE
-                } else {
-                    TERRACOTTA
-                }
-            }
-            PossessionState::Left => TURQUOISE,
-            PossessionState::Right => TERRACOTTA,
+        // Inside ring - split by x position
+        if fx < 0.0 {
+            palette.left
+        } else {
+            palette.right
         }
     } else {
         WHITE
     }
 }
 
-/// Solid: Entire ball is team color
-fn draw_solid(fx: f32, state: PossessionState) -> [u8; 4] {
-    match state {
-        PossessionState::Neutral => {
-            if fx < 0.0 {
-                TURQUOISE
-            } else {
-                TERRACOTTA
-            }
-        }
-        PossessionState::Left => TURQUOISE,
-        PossessionState::Right => TERRACOTTA,
+/// Solid: Entire ball is team color (split by x position)
+fn draw_solid(fx: f32, palette: &Palette) -> [u8; 4] {
+    if fx < 0.0 {
+        palette.left
+    } else {
+        palette.right
     }
 }

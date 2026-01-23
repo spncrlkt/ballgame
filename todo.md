@@ -34,3 +34,4 @@
 ## Done
 - [x] Split main.rs into modules (2624 lines → 18 focused files, no module >500 lines)
 - [x] Fix viewport and arena wall size (1600×900 window, 1:1 camera, 20px walls, world-space UI)
+- [x] Remove possession ball texture swapping, add 10 color palettes that cycle on reset (affects ball, players, baskets)

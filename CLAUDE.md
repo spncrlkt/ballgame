@@ -53,9 +53,11 @@ src/
 - `Score` - Left/right team scores
 - `DebugSettings` - Debug UI visibility
 - `CurrentLevel` - Current level number (1-10)
+- `CurrentPalette` - Current color palette index (0-9), cycles on reset
 - `PhysicsTweaks` - Runtime-adjustable physics values with panel UI
 - `LevelDatabase` - Loaded level definitions from assets/levels.txt
 - `LastShotInfo` - Debug info about the most recent shot (angle, power, variance breakdown)
+- `BallTextures` - Handles to all 60 ball textures (6 styles × 10 palettes)
 
 **Player Components:**
 - `Player` - Marker for player entities
@@ -71,10 +73,12 @@ src/
 **Ball Components:**
 - `Ball` - Marker for ball entity
 - `BallState` - Free, Held(Entity), or InFlight { shooter, power }
+- `BallStyleType` - Visual style (Stripe, Wedges, Dot, Half, Ring, Solid)
 - `BallPlayerContact` - Tracks overlap for collision effects
 - `BallPulse` - Animation timer for pickup indicator
 - `BallRolling` - Whether ball is rolling on ground (vs bouncing/flying)
 - `BallShotGrace` - Post-shot grace timer (100ms of no friction/player drag)
+- `BallSpin` - Angular velocity for rotation
 
 **World Components:**
 - `Platform` - Collidable platform (requires `Collider`)
