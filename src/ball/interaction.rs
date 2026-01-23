@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use crate::ai::AiInput;
+use crate::ai::InputState;
 use crate::ball::components::*;
 use crate::constants::*;
 use crate::player::{Facing, HoldingBall, Player, Velocity};
@@ -103,15 +103,15 @@ pub fn ball_follow_holder(
 }
 
 /// Handle ball pickup.
-/// All players read from their AiInput component.
+/// All players read from their InputState component.
 pub fn pickup_ball(
     mut commands: Commands,
     mut steal_contest: ResMut<StealContest>,
     mut non_holding_players: Query<
-        (Entity, &Transform, &mut ChargingShot, &mut AiInput),
+        (Entity, &Transform, &mut ChargingShot, &mut InputState),
         (With<Player>, Without<HoldingBall>),
     >,
-    mut holding_players: Query<(Entity, &Transform, &HoldingBall, &mut AiInput), With<Player>>,
+    mut holding_players: Query<(Entity, &Transform, &HoldingBall, &mut InputState), With<Player>>,
     mut ball_query: Query<(Entity, &Transform, &mut BallState), With<Ball>>,
 ) {
     // If steal contest is active, count presses from both players

@@ -4,7 +4,7 @@ use crate::calculate_shot_trajectory;
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::ai::AiInput;
+use crate::ai::InputState;
 use crate::ball::{Ball, BallRolling, BallShotGrace, BallState, Velocity};
 use crate::constants::*;
 use crate::player::{Grounded, HoldingBall, Player, TargetBasket};
@@ -13,7 +13,7 @@ use crate::ui::PhysicsTweaks;
 use crate::world::Basket;
 
 /// Execute throw when button is released.
-/// All players read from their AiInput component.
+/// All players read from their InputState component.
 pub fn throw_ball(
     tweaks: Res<PhysicsTweaks>,
     mut commands: Commands,
@@ -26,7 +26,7 @@ pub fn throw_ball(
             &TargetBasket,
             &Grounded,
             &mut ChargingShot,
-            &mut AiInput,
+            &mut InputState,
             Option<&HoldingBall>,
         ),
         With<Player>,

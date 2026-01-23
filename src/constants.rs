@@ -148,16 +148,6 @@ pub const PLAYER_SPAWN_RIGHT: Vec3 = Vec3::new(300.0, ARENA_FLOOR_Y + 100.0, 0.0
 pub const BALL_SPAWN: Vec3 = Vec3::new(0.0, ARENA_FLOOR_Y + 50.0, 2.0); // Center, z=2 to render in front
 
 // =============================================================================
-// AI TUNING
-// =============================================================================
-
-pub const AI_POSITION_TOLERANCE: f32 = 30.0; // How close AI needs to be to target position
-pub const AI_SHOOT_RANGE: f32 = 400.0; // Distance from basket to start shooting
-pub const AI_CHARGE_TIME_MIN: f32 = 0.5; // Minimum charge time for shots
-pub const AI_CHARGE_TIME_MAX: f32 = 1.2; // Maximum charge time for shots
-pub const AI_STEAL_RANGE: f32 = 80.0; // Distance to attempt steal
-
-// =============================================================================
 // LEVEL FILE
 // =============================================================================
 

@@ -10,6 +10,27 @@
 - [ ] Create system to make levels easier via collage and like/hate system
 - [ ] Back wall gutter like pinball - shoot ball on the floor, hit triangle step on way out
 
+## Simulation Engine & Automated Testing
+A robust simulation engine enables both design iteration and automated testing.
+
+**Core Framework:**
+- [ ] Headless simulation mode (no rendering, fast-forward time)
+- [ ] Data collection: score distributions, possession time, shot attempts
+- [ ] Deterministic replay from recorded inputs
+
+**Design Analysis:**
+- [ ] Level design metrics - which levels play well, scoring patterns
+- [ ] AI persona comparisons - pit different profiles against each other
+- [ ] Team composition analysis - which AI pairings work well together
+- [ ] Speed mechanics tuning - acceleration curves, air control feel
+- [ ] Shooting mechanics analysis - variance, arc, charge timing sweet spots
+
+**Automated Testing Benefits:**
+- [ ] Regression tests: run N games, verify win rates stay stable
+- [ ] Balance validation: detect OP profiles or broken mechanics
+- [ ] Performance benchmarks: track physics tick time across changes
+- [ ] Fuzz testing: random AI matchups to find edge case bugs
+
 ## Multiplayer
 - [ ] Add netcode decision doc
 - [ ] Add 1v1 multiplayer
@@ -27,9 +48,14 @@
 - [ ] Ball "lineage" tracking across games
 
 ## AI
-- [ ] Run AI enhancement plan: `~/.claude/plans/eager-floating-scone.md` (rename AiInput→InputState, add AI profiles system with cycling)
-- [ ] Clean up plan file when done
 - [ ] Add NPC AI scripting via Lua decision doc
+
+## Stealing Mechanics
+- [ ] Add randomness to steal contests (not just button mashing)
+- [ ] Steal pushback - knockback on successful steal to prevent immediate steal-back
+- [ ] Make stealing easier if ball holder is charging a shot
+- [ ] Consider other vulnerability states (jumping, recovering from collision)
+- [ ] Steal cooldown or fatigue to prevent spam
 
 ## Equipment
 - [ ] Equipment system (clubs, rackets, mallets)
@@ -61,3 +87,7 @@
 - [x] Made ball styles data-driven via assets/ball_options.txt
 - [x] Debug level spawns all ball styles dynamically
 - [x] Removed old ball texture files (stripe, dot, ring, solid)
+- [x] AI enhancement Phase 1: Renamed `AiInput` → `InputState` (unified input buffer)
+- [x] AI enhancement Phase 2: Auto-reload config files every 10s (replaced F2 hotkey)
+- [x] AI enhancement Phase 3: Created `assets/ai_profiles.txt` with 10 AI personas
+- [x] AI enhancement Phase 4: AI profile cycling (D-pad) + random profile on reset (R key)

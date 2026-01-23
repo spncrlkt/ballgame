@@ -1,8 +1,9 @@
 //! Player physics systems
 
 use bevy::prelude::*;
+use rand::Rng;
 
-use crate::ai::{AiGoal, AiInput, AiState};
+use crate::ai::{AiGoal, AiProfileDatabase, AiState, InputState};
 use crate::ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
     BallStyle, BallTextures, CurrentPalette,
@@ -18,7 +19,7 @@ use crate::ui::PhysicsTweaks;
 use crate::world::{Basket, BasketRim, CornerRamp, LevelPlatform, Platform};
 
 /// Runs in FixedUpdate to apply captured input to physics.
-/// All players read from their AiInput component (human input is copied there).
+/// All players read from their InputState component (human input is copied there).
 pub fn apply_input(
     tweaks: Res<PhysicsTweaks>,
     mut players: Query<
@@ -28,7 +29,7 @@ pub fn apply_input(
             &mut JumpState,
             &mut Facing,
             &Grounded,
-            &mut AiInput,
+            &mut InputState,
         ),
         With<Player>,
     >,
@@ -194,12 +195,14 @@ pub fn check_collisions(
 }
 
 /// Handle player respawn and level changes
+#[allow(clippy::too_many_arguments)]
 pub fn respawn_player(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut commands: Commands,
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
+    profile_db: Res<AiProfileDatabase>,
     mut current_level: ResMut<CurrentLevel>,
     current_palette: Res<CurrentPalette>,
     mut score: ResMut<crate::scoring::Score>,
@@ -280,6 +283,14 @@ pub fn respawn_player(
             current_palette.0,
             is_debug,
         );
+
+        // Randomize AI profile on reset
+        let num_profiles = profile_db.len();
+        for mut ai_state in &mut ai_players {
+            ai_state.profile_index = rand::thread_rng().gen_range(0..num_profiles);
+            let profile = profile_db.get(ai_state.profile_index);
+            info!("AI reset with profile: {}", profile.name);
+        }
     }
 
     // Level change: update geometry and reset positions

@@ -1,9 +1,9 @@
-//! AI decision system - updates AiInput based on game state
+//! AI decision system - updates InputState based on game state
 
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::ai::{AiGoal, AiInput, AiState};
+use crate::ai::{AiGoal, AiProfileDatabase, AiState, InputState};
 use crate::ball::{Ball, BallState};
 use crate::constants::*;
 use crate::player::{HoldingBall, HumanControlled, Player, TargetBasket, Team};
@@ -14,12 +14,13 @@ use crate::world::Basket;
 /// Runs in Update schedule after capture_input.
 pub fn ai_decision_update(
     time: Res<Time>,
+    profile_db: Res<AiProfileDatabase>,
     mut ai_query: Query<
         (
             Entity,
             &Transform,
             &Team,
-            &mut AiInput,
+            &mut InputState,
             &mut AiState,
             &TargetBasket,
             Option<&HoldingBall>,
@@ -50,6 +51,9 @@ pub fn ai_decision_update(
             input.throw_released = false;
             continue;
         }
+
+        // Get AI profile for this player
+        let profile = profile_db.get(ai_state.profile_index);
 
         let ai_pos = ai_transform.translation.truncate();
 
@@ -83,16 +87,16 @@ pub fn ai_decision_update(
             .map(|(t, _)| t.translation.truncate())
             .unwrap_or(Vec2::new(-600.0, 0.0));
 
-        // Defensive position (near own basket based on team)
+        // Defensive position (near own basket based on team, offset from profile)
         let defensive_pos = match *team {
-            Team::Left => Vec2::new(-400.0, ARENA_FLOOR_Y + 50.0),
-            Team::Right => Vec2::new(400.0, ARENA_FLOOR_Y + 50.0),
+            Team::Left => Vec2::new(-profile.defense_offset, ARENA_FLOOR_Y + 50.0),
+            Team::Right => Vec2::new(profile.defense_offset, ARENA_FLOOR_Y + 50.0),
         };
 
-        // Decide current goal
+        // Decide current goal (using profile values)
         let new_goal = if ai_has_ball {
             let distance_to_basket = ai_pos.distance(target_basket_pos);
-            if distance_to_basket < AI_SHOOT_RANGE {
+            if distance_to_basket < profile.shoot_range {
                 AiGoal::ChargeShot
             } else {
                 AiGoal::AttackWithBall
@@ -100,7 +104,7 @@ pub fn ai_decision_update(
         } else if opponent_has_ball {
             if let Some(opp_pos) = opponent_pos {
                 let distance_to_opponent = ai_pos.distance(opp_pos);
-                if distance_to_opponent < AI_STEAL_RANGE {
+                if distance_to_opponent < profile.steal_range {
                     AiGoal::AttemptSteal
                 } else {
                     AiGoal::ReturnToDefense
@@ -118,7 +122,7 @@ pub fn ai_decision_update(
             ai_state.current_goal = new_goal;
             if new_goal == AiGoal::ChargeShot {
                 let mut rng = rand::thread_rng();
-                ai_state.shot_charge_target = rng.gen_range(AI_CHARGE_TIME_MIN..AI_CHARGE_TIME_MAX);
+                ai_state.shot_charge_target = rng.gen_range(profile.charge_min..profile.charge_max);
             }
         }
 
@@ -137,7 +141,7 @@ pub fn ai_decision_update(
             AiGoal::ChaseBall => {
                 // Move toward ball
                 let dx = ball_pos.x - ai_pos.x;
-                if dx.abs() > AI_POSITION_TOLERANCE {
+                if dx.abs() > profile.position_tolerance {
                     input.move_x = dx.signum();
                 }
 
@@ -161,7 +165,7 @@ pub fn ai_decision_update(
             AiGoal::AttackWithBall => {
                 // Move toward target basket
                 let dx = target_basket_pos.x - ai_pos.x;
-                if dx.abs() > AI_POSITION_TOLERANCE {
+                if dx.abs() > profile.position_tolerance {
                     input.move_x = dx.signum();
                 }
 
@@ -183,7 +187,7 @@ pub fn ai_decision_update(
                     // Start charging
                     input.throw_held = true;
                     ai_state.shot_charge_target =
-                        rand::thread_rng().gen_range(AI_CHARGE_TIME_MIN..AI_CHARGE_TIME_MAX);
+                        rand::thread_rng().gen_range(profile.charge_min..profile.charge_max);
                 } else if input.throw_held {
                     // Count down charge target
                     ai_state.shot_charge_target -= time.delta_secs();
@@ -199,7 +203,7 @@ pub fn ai_decision_update(
                 // Move toward opponent
                 if let Some(opp_pos) = opponent_pos {
                     let dx = opp_pos.x - ai_pos.x;
-                    if dx.abs() > AI_POSITION_TOLERANCE {
+                    if dx.abs() > profile.position_tolerance {
                         input.move_x = dx.signum();
                     }
 
@@ -215,7 +219,7 @@ pub fn ai_decision_update(
             AiGoal::ReturnToDefense => {
                 // Move toward defensive position
                 let dx = defensive_pos.x - ai_pos.x;
-                if dx.abs() > AI_POSITION_TOLERANCE {
+                if dx.abs() > profile.position_tolerance {
                     input.move_x = dx.signum();
                 }
 

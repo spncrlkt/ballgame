@@ -4,6 +4,103 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Audit: 2026-01-23 (Session 1) - AI Enhancement Plan Complete
+
+### Session Summary
+
+Implemented the complete AI enhancement plan (4 phases):
+1. Renamed `AiInput` → `InputState`
+2. Added auto-reload config watcher (replaced F2 hotkey)
+3. Created AI profiles system with 10 personas
+4. Added profile cycling and random profile on reset
+
+### Changes Made
+
+**Phase 1: Rename AiInput → InputState**
+- Renamed component to better reflect its purpose (unified input buffer for all players)
+- Updated all files: `ai/mod.rs`, `ai/decision.rs`, `player/physics.rs`, `shooting/throw.rs`, `shooting/charge.rs`, `steal.rs`, `ball/interaction.rs`, `main.rs`, `lib.rs`
+- Updated documentation to reflect new naming
+
+**Phase 2: Auto-Reload Config Files**
+- Created `src/config_watcher.rs` with `ConfigWatcher` resource
+- Polls config files every 10 seconds, reloads on change:
+  - `assets/levels.txt`
+  - `assets/palettes.txt`
+  - `assets/ai_profiles.txt`
+  - `assets/ball_options.txt` (logs only - requires restart)
+- Removed F2 hotkey from `src/levels/mod.rs`
+
+**Phase 3: AI Profiles System**
+- Created `src/ai/profiles.rs` with `AiProfile` struct and `AiProfileDatabase` resource
+- Created `assets/ai_profiles.txt` with 10 AI personalities:
+  - Balanced, Aggressive, Defensive, Sniper, Rusher
+  - Turtle, Chaotic, Patient, Hunter, Goalie
+- Each profile has: position_tolerance, shoot_range, charge_min, charge_max, steal_range, defense_offset
+- Added `profile_index` to `AiState` component
+- Updated `ai_decision_update` to use per-player profile values
+- Removed unused AI constants from `constants.rs`
+
+**Phase 4: Profile Cycling + Random on Reset**
+- Added `AiProfile` to `CycleTarget` enum (now 5 targets)
+- D-pad Down cycles through: Level → Viewport → Palette → Ball Style → AI Profile
+- RT/LT cycles the AI-controlled player's profile
+- R key (reset) randomizes AI profile
+
+**Documentation Updates**
+- Updated `CLAUDE.md`:
+  - Added `AiProfileDatabase` and `ConfigWatcher` to Resources
+  - Added `InputState` and `AiState` to Player Components
+  - Updated cycle system documentation
+  - Changed R key description to mention profile randomization
+- Updated `todo.md`:
+  - Added Simulation Engine section with automated testing benefits
+  - Added Stealing Mechanics section
+  - Moved completed AI phases to Done
+
+### Audit Findings
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| CLAUDE.md accuracy | PASS | Updated with new components and systems |
+| Input buffering | PASS | All `just_pressed` in Update systems |
+| Constants | PASS | Removed unused AI_ constants, no magic numbers |
+| System order | PASS | FixedUpdate chain matches documentation |
+| Unused code | PASS | Clean compilation |
+| Pattern violations | PASS | No raw input in FixedUpdate |
+| Collision epsilon | N/A | No new collision code |
+| Frame-rate physics | PASS | No new physics code |
+| Compilation | PASS | `cargo check` clean |
+| Clippy | WARN | ~30 warnings (type_complexity, standard Bevy patterns) |
+
+### Files Created
+
+- `src/config_watcher.rs` - Config file auto-reload system
+- `src/ai/profiles.rs` - AI profile parsing and database
+- `assets/ai_profiles.txt` - 10 AI personality definitions
+
+### Files Modified
+
+- `src/ai/mod.rs` - Added profiles module, renamed AiInput→InputState, added profile_index
+- `src/ai/decision.rs` - Uses profile values instead of constants
+- `src/player/physics.rs` - Random profile on reset
+- `src/shooting/throw.rs`, `charge.rs` - InputState rename
+- `src/steal.rs` - InputState rename
+- `src/ball/interaction.rs` - InputState rename
+- `src/levels/mod.rs` - Removed F2 reload (now in config_watcher)
+- `src/ui/debug.rs` - Added AiProfile to CycleTarget
+- `src/main.rs` - Added ConfigWatcher and AiProfileDatabase resources
+- `src/lib.rs` - Added exports for new types
+- `src/constants.rs` - Removed unused AI_ constants
+- `CLAUDE.md` - Updated architecture documentation
+- `todo.md` - Updated with new sections and completed items
+- `audit_record.md` - This entry
+
+### Files Deleted
+
+- `~/.claude/plans/eager-floating-scone.md` - Completed plan file
+
+---
+
 ## Audit: 2026-01-22 (Session 3)
 
 ### Session Summary

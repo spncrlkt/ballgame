@@ -1,0 +1,90 @@
+# AI Profiles - Each profile defines an AI personality
+# Values are hot-reloaded every 10 seconds when changed
+#
+# Parameters:
+#   position_tolerance - How close AI needs to be to target before stopping (pixels)
+#   shoot_range - Distance from basket at which AI will shoot (pixels)
+#   charge_min - Minimum charge time before releasing shot (seconds)
+#   charge_max - Maximum charge time for shots (seconds)
+#   steal_range - Distance at which AI will attempt steal (pixels)
+#   defense_offset - How far from own basket AI defends (pixels)
+
+profile: Balanced
+position_tolerance: 30
+shoot_range: 400
+charge_min: 0.5
+charge_max: 1.2
+steal_range: 80
+defense_offset: 400
+
+profile: Aggressive
+position_tolerance: 20
+shoot_range: 500
+charge_min: 0.3
+charge_max: 0.8
+steal_range: 120
+defense_offset: 250
+
+profile: Defensive
+position_tolerance: 40
+shoot_range: 300
+charge_min: 0.7
+charge_max: 1.5
+steal_range: 50
+defense_offset: 500
+
+profile: Sniper
+position_tolerance: 15
+shoot_range: 600
+charge_min: 0.8
+charge_max: 1.0
+steal_range: 40
+defense_offset: 450
+
+profile: Rusher
+position_tolerance: 25
+shoot_range: 200
+charge_min: 0.2
+charge_max: 0.5
+steal_range: 150
+defense_offset: 200
+
+profile: Turtle
+position_tolerance: 50
+shoot_range: 250
+charge_min: 1.0
+charge_max: 2.0
+steal_range: 30
+defense_offset: 550
+
+profile: Chaotic
+position_tolerance: 10
+shoot_range: 450
+charge_min: 0.1
+charge_max: 1.5
+steal_range: 100
+defense_offset: 350
+
+profile: Patient
+position_tolerance: 35
+shoot_range: 350
+charge_min: 0.9
+charge_max: 1.3
+steal_range: 60
+defense_offset: 420
+
+profile: Hunter
+position_tolerance: 18
+shoot_range: 380
+charge_min: 0.4
+charge_max: 0.9
+steal_range: 140
+defense_offset: 300
+
+profile: Goalie
+position_tolerance: 45
+shoot_range: 550
+charge_min: 0.6
+charge_max: 1.1
+steal_range: 70
+defense_offset: 480

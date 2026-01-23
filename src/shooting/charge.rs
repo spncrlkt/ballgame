@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use crate::ai::AiInput;
+use crate::ai::InputState;
 use crate::player::Player;
 
 /// Charge time accumulator
@@ -26,10 +26,10 @@ pub struct LastShotInfo {
 }
 
 /// Update shot charge while throw button is held.
-/// All players read from their AiInput component.
+/// All players read from their InputState component.
 pub fn update_shot_charge(
     time: Res<Time>,
-    mut player_query: Query<(&mut ChargingShot, &AiInput), With<Player>>,
+    mut player_query: Query<(&mut ChargingShot, &InputState), With<Player>>,
 ) {
     for (mut charging, input) in &mut player_query {
         if input.throw_held {

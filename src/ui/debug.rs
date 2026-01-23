@@ -2,11 +2,12 @@
 
 use bevy::prelude::*;
 
+use crate::ai::{AiProfileDatabase, AiState};
 use crate::ball::{Ball, BallStyle, BallTextures};
 use crate::constants::{DEFAULT_VIEWPORT_INDEX, VIEWPORT_PRESETS};
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
-use crate::player::{Player, Team};
+use crate::player::{HumanControlled, Player, Team};
 use crate::scoring::CurrentLevel;
 use crate::shooting::LastShotInfo;
 use crate::steal::StealContest;
@@ -25,14 +26,16 @@ pub enum CycleTarget {
     Viewport,
     Palette,
     BallStyle,
+    AiProfile,
 }
 
 impl CycleTarget {
-    pub const ALL: [CycleTarget; 4] = [
+    pub const ALL: [CycleTarget; 5] = [
         CycleTarget::Level,
         CycleTarget::Viewport,
         CycleTarget::Palette,
         CycleTarget::BallStyle,
+        CycleTarget::AiProfile,
     ];
 
     pub fn name(&self) -> &'static str {
@@ -41,6 +44,7 @@ impl CycleTarget {
             CycleTarget::Viewport => "Viewport",
             CycleTarget::Palette => "Palette",
             CycleTarget::BallStyle => "Ball Style",
+            CycleTarget::AiProfile => "AI Profile",
         }
     }
 
@@ -230,6 +234,7 @@ fn apply_viewport(viewport_scale: &ViewportScale, window_query: &mut Query<&mut 
 pub struct CycleIndicator;
 
 /// Unified cycle system - D-pad Down selects target, RT/LT cycle values
+#[allow(clippy::too_many_arguments)]
 pub fn unified_cycle_system(
     gamepads: Query<&Gamepad>,
     mut cycle_selection: ResMut<CycleSelection>,
@@ -238,10 +243,12 @@ pub fn unified_cycle_system(
     mut viewport_scale: ResMut<ViewportScale>,
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
+    profile_db: Res<AiProfileDatabase>,
     ball_textures: Res<BallTextures>,
     time: Res<Time>,
     mut window_query: Query<&mut Window>,
     mut ball_query: Query<(&mut BallStyle, &mut Sprite), With<Ball>>,
+    mut ai_query: Query<&mut AiState, (With<Player>, Without<HumanControlled>)>,
 ) {
     // Decay display timer
     if cycle_selection.display_timer > 0.0 {
@@ -332,10 +339,25 @@ pub fn unified_cycle_system(
                 info!("Ball Style: {}", style.name());
             }
         }
+        CycleTarget::AiProfile => {
+            // Cycle AI-controlled player's profile
+            let num_profiles = profile_db.len();
+            for mut ai_state in &mut ai_query {
+                if cycle_next {
+                    ai_state.profile_index = (ai_state.profile_index + 1) % num_profiles;
+                } else if cycle_prev {
+                    ai_state.profile_index =
+                        (ai_state.profile_index + num_profiles - 1) % num_profiles;
+                }
+                let profile = profile_db.get(ai_state.profile_index);
+                info!("AI Profile: {}", profile.name);
+            }
+        }
     }
 }
 
 /// Update cycle indicator display
+#[allow(clippy::too_many_arguments)]
 pub fn update_cycle_indicator(
     cycle_selection: Res<CycleSelection>,
     current_level: Res<CurrentLevel>,
@@ -343,7 +365,9 @@ pub fn update_cycle_indicator(
     viewport_scale: Res<ViewportScale>,
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
+    profile_db: Res<AiProfileDatabase>,
     ball_query: Query<&BallStyle, With<Ball>>,
+    ai_query: Query<&AiState, (With<Player>, Without<HumanControlled>)>,
     mut query: Query<(&mut Text2d, &mut Visibility), With<CycleIndicator>>,
 ) {
     let Ok((mut text, mut visibility)) = query.single_mut() else {
@@ -371,6 +395,14 @@ pub fn update_cycle_indicator(
                 .iter()
                 .next()
                 .map(|s| s.name().to_string())
+                .unwrap_or_else(|| "None".to_string())
+        }
+        CycleTarget::AiProfile => {
+            // Get profile from AI-controlled player
+            ai_query
+                .iter()
+                .next()
+                .map(|s| profile_db.get(s.profile_index).name.clone())
                 .unwrap_or_else(|| "None".to_string())
         }
     };

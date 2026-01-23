@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use crate::ai::AiInput;
+use crate::ai::InputState;
 use crate::ball::{Ball, BallState};
 use crate::player::{HoldingBall, Player};
 
@@ -18,14 +18,14 @@ pub struct StealContest {
 }
 
 /// Update steal contest state.
-/// All players read from their AiInput component.
+/// All players read from their InputState component.
 pub fn steal_contest_update(
     mut commands: Commands,
     mut steal_contest: ResMut<StealContest>,
     time: Res<Time>,
     mut ball_query: Query<&mut BallState, With<Ball>>,
     holding_query: Query<&HoldingBall>,
-    mut players: Query<&mut AiInput, With<Player>>,
+    mut players: Query<&mut InputState, With<Player>>,
 ) {
     if !steal_contest.active {
         return;

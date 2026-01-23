@@ -59,7 +59,9 @@ src/
 - `LastShotInfo` - Debug info about the most recent shot (angle, power, variance breakdown)
 - `BallTextures` - Handles to all 60 ball textures (6 styles × 10 palettes)
 - `ViewportScale` - Current viewport preset for testing different screen sizes
-- `CycleSelection` - Which option category is selected for controller cycling (Level/Viewport/Palette/BallStyle)
+- `CycleSelection` - Which option category is selected for controller cycling (Level/Viewport/Palette/BallStyle/AiProfile)
+- `AiProfileDatabase` - Loaded AI personality profiles from assets/ai_profiles.txt
+- `ConfigWatcher` - Tracks config file modification times for auto-reload (every 10s)
 
 **Player Components:**
 - `Player` - Marker for player entities
@@ -71,6 +73,8 @@ src/
 - `HoldingBall` - Reference to held ball entity
 - `ChargingShot` - Charge time accumulator
 - `TargetBasket` - Which basket (Left/Right) player is aiming at
+- `InputState` - Per-player input buffer (human input copied here, AI writes directly)
+- `AiState` - AI goal state machine + profile_index for AI personality
 
 **Ball Components:**
 - `Ball` - Marker for ball entity
@@ -112,7 +116,7 @@ Keyboard + Gamepad supported:
 - E or West button: Pickup ball / Steal
 - F or Right Bumper: Charge and throw (hold to charge, release to throw)
 - Q or Left Bumper: Swap player control (human ↔ AI)
-- R or Start: Reset current level (cycles palette)
+- R or Start: Reset current level (randomizes AI profile)
 - ] key: Next level (keyboard only)
 - [ key: Previous level (keyboard only)
 - V key: Cycle viewport size (keyboard only)
@@ -120,7 +124,7 @@ Keyboard + Gamepad supported:
 - F1: Toggle physics tweak panel (keyboard only)
 
 **Controller Unified Cycle System:**
-- D-pad Down: Select cycle target (Level → Viewport → Palette → Ball Style)
+- D-pad Down: Select cycle target (Level → Viewport → Palette → Ball Style → AI Profile)
 - RT (Right Trigger): Cycle selected option forward
 - LT (Left Trigger): Cycle selected option backward
 

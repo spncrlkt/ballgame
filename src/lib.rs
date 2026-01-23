@@ -3,6 +3,7 @@
 //! This crate provides all game components, resources, and systems organized into modules.
 
 // Core modules
+pub mod config_watcher;
 pub mod constants;
 pub mod helpers;
 
@@ -20,7 +21,7 @@ pub mod ui;
 pub mod world;
 
 // Re-export commonly used types for convenience
-pub use ai::{AiGoal, AiInput, AiState};
+pub use ai::{AiGoal, AiProfile, AiProfileDatabase, AiState, InputState, AI_PROFILES_FILE};
 pub use ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
     BallStyle, BallTextures, CurrentPalette, StyleTextures,
@@ -43,6 +44,7 @@ pub use ui::{
     ViewportScale,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
+pub use config_watcher::ConfigWatcher;
 
 // =============================================================================
 // TRAJECTORY CALCULATION (shared with tools like heatmap generator)

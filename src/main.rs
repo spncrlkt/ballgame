@@ -3,13 +3,13 @@
 //! Main entry point: app setup and system registration.
 
 use ballgame::{
-    AiGoal, AiInput, AiState, Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace,
+    AiGoal, AiProfileDatabase, AiState, Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace,
     BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground, ChargeGaugeFill,
-    ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette, CycleIndicator, CycleSelection,
-    DebugSettings, DebugText, Facing, Grounded, HumanControlled, JumpState, LastShotInfo,
+    ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel, CurrentPalette, CycleIndicator, CycleSelection,
+    DebugSettings, DebugText, Facing, Grounded, HumanControlled, InputState, JumpState, LastShotInfo,
     LevelDatabase, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, ScoreLevelText,
     StealContest, StyleTextures, TargetBasket, Team, TweakPanel, TweakRow, Velocity, ViewportScale,
-    ai, ball, constants::*, helpers::*, input, levels, player, scoring, shooting, steal, ui, world,
+    ai, ball, config_watcher, constants::*, helpers::*, input, levels, player, scoring, shooting, steal, ui, world,
     PALETTES_FILE,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
@@ -89,6 +89,8 @@ fn main() {
         .init_resource::<LastShotInfo>()
         .init_resource::<ViewportScale>()
         .init_resource::<CycleSelection>()
+        .init_resource::<ConfigWatcher>()
+        .init_resource::<AiProfileDatabase>()
         .add_systems(Startup, setup)
         // Input systems must run in order: capture -> copy -> swap -> AI
         .add_systems(
@@ -107,7 +109,7 @@ fn main() {
             (
                 player::respawn_player,
                 ui::toggle_debug,
-                levels::reload_levels,
+                config_watcher::check_config_changes,
                 ui::update_debug_text,
                 ui::update_score_level_text,
                 ui::animate_pickable_ball,
@@ -193,7 +195,7 @@ fn setup(
             Collider,
             Team::Left,
             HumanControlled, // Starts as human-controlled
-            AiInput::default(),
+            InputState::default(),
             AiState::default(),
         ))
         .id();
@@ -216,7 +218,7 @@ fn setup(
             TargetBasket(Basket::Left), // Right team scores in left basket
             Collider,
             Team::Right,
-            AiInput::default(),
+            InputState::default(),
             AiState {
                 // On debug level, AI stands still (Idle); otherwise normal AI
                 current_goal: if is_debug_level_for_ai {

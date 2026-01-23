@@ -1,19 +1,21 @@
 //! AI module - AI decision making and input generation
 
 mod decision;
+mod profiles;
 
 pub use decision::*;
+pub use profiles::*;
 
 use bevy::prelude::*;
 
 use crate::input::PlayerInput;
 use crate::player::{HumanControlled, Player};
 
-/// Per-entity input state for AI-controlled players.
-/// Both players have this component since either can be AI-controlled.
-/// Mirrors PlayerInput structure for consistent physics behavior.
+/// Per-entity input buffer used by physics systems.
+/// All players have this component - human input is copied here, AI writes directly.
+/// This unifies input handling so physics systems read from one source.
 #[derive(Component, Default)]
-pub struct AiInput {
+pub struct InputState {
     pub move_x: f32,
     pub jump_buffer_timer: f32,
     pub jump_held: bool,
@@ -27,6 +29,8 @@ pub struct AiInput {
 pub struct AiState {
     pub current_goal: AiGoal,
     pub shot_charge_target: f32,
+    /// Index into AiProfileDatabase for this AI's personality
+    pub profile_index: usize,
 }
 
 /// Goals the AI can pursue
@@ -47,36 +51,36 @@ pub enum AiGoal {
     AttemptSteal,
 }
 
-/// Copy human PlayerInput into the human-controlled player's AiInput.
-/// This unifies input handling - all systems just read from AiInput.
+/// Copy human PlayerInput into the human-controlled player's InputState.
+/// This unifies input handling - all systems just read from InputState.
 /// Consumable flags (pickup_pressed, throw_released) are moved, not copied.
 /// Runs early in Update, after capture_input.
 pub fn copy_human_input(
     mut human_input: ResMut<PlayerInput>,
-    mut human_query: Query<&mut AiInput, (With<Player>, With<HumanControlled>)>,
+    mut human_query: Query<&mut InputState, (With<Player>, With<HumanControlled>)>,
 ) {
-    let Ok(mut ai_input) = human_query.single_mut() else {
+    let Ok(mut input_state) = human_query.single_mut() else {
         return;
     };
 
     // Continuous inputs (overwrite each frame)
-    ai_input.move_x = human_input.move_x;
-    ai_input.jump_held = human_input.jump_held;
-    ai_input.throw_held = human_input.throw_held;
+    input_state.move_x = human_input.move_x;
+    input_state.jump_held = human_input.jump_held;
+    input_state.throw_held = human_input.throw_held;
 
-    // Jump buffer timer: copy from PlayerInput to AiInput
+    // Jump buffer timer: copy from PlayerInput to InputState
     // The timer decrements in capture_input (Update) and gets consumed in apply_input (FixedUpdate)
-    // We always copy the latest value - if FixedUpdate consumed it, ai_input.timer will be 0
+    // We always copy the latest value - if FixedUpdate consumed it, input_state.timer will be 0
     // and won't trigger another jump until a new press sets human_input.timer again
-    ai_input.jump_buffer_timer = human_input.jump_buffer_timer;
+    input_state.jump_buffer_timer = human_input.jump_buffer_timer;
 
-    // Consumable flags (move to AiInput, clear from PlayerInput)
+    // Consumable flags (move to InputState, clear from PlayerInput)
     if human_input.pickup_pressed {
-        ai_input.pickup_pressed = true;
+        input_state.pickup_pressed = true;
         human_input.pickup_pressed = false;
     }
     if human_input.throw_released {
-        ai_input.throw_released = true;
+        input_state.throw_released = true;
         human_input.throw_released = false;
     }
 }
@@ -89,7 +93,7 @@ pub fn swap_control(
     mut input: ResMut<PlayerInput>,
     human_query: Query<Entity, (With<Player>, With<HumanControlled>)>,
     other_query: Query<Entity, (With<Player>, Without<HumanControlled>)>,
-    mut ai_inputs: Query<&mut AiInput>,
+    mut input_states: Query<&mut InputState>,
 ) {
     if !input.swap_pressed {
         return;
@@ -110,8 +114,8 @@ pub fn swap_control(
     commands.entity(current_human).remove::<HumanControlled>();
     commands.entity(other_player).insert(HumanControlled);
 
-    // Reset both players' AiInput to prevent stale input
-    for mut ai_input in &mut ai_inputs {
-        *ai_input = AiInput::default();
+    // Reset both players' InputState to prevent stale input
+    for mut input_state in &mut input_states {
+        *input_state = InputState::default();
     }
 }
