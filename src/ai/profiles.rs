@@ -26,6 +26,8 @@ pub struct AiProfile {
     pub steal_range: f32,
     /// How far from own basket AI defends (pixels)
     pub defense_offset: f32,
+    /// Minimum shot quality (0.0-1.0) before AI will shoot (based on position heatmap)
+    pub min_shot_quality: f32,
 }
 
 impl Default for AiProfile {
@@ -38,12 +40,13 @@ impl Default for AiProfile {
             charge_max: 1.2,
             steal_range: 80.0,
             defense_offset: 400.0,
+            min_shot_quality: 0.4, // Only shoot from acceptable positions
         }
     }
 }
 
 /// Database of AI profiles loaded from file
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct AiProfileDatabase {
     profiles: Vec<AiProfile>,
 }
@@ -92,6 +95,18 @@ impl AiProfileDatabase {
     /// Check if empty
     pub fn is_empty(&self) -> bool {
         self.profiles.is_empty()
+    }
+
+    /// Get profiles as a slice
+    pub fn profiles(&self) -> &[AiProfile] {
+        &self.profiles
+    }
+
+    /// Find index of a profile by name (case-insensitive)
+    pub fn index_of(&self, name: &str) -> Option<usize> {
+        self.profiles
+            .iter()
+            .position(|p| p.name.eq_ignore_ascii_case(name))
     }
 }
 
@@ -159,6 +174,11 @@ fn parse_profiles(content: &str) -> Vec<AiProfile> {
                 "defense_offset" => {
                     if let Ok(v) = value.parse() {
                         profile.defense_offset = v;
+                    }
+                }
+                "min_shot_quality" => {
+                    if let Ok(v) = value.parse() {
+                        profile.min_shot_quality = v;
                     }
                 }
                 _ => {}

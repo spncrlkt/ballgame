@@ -17,10 +17,25 @@
 # Blank lines and # comments are ignored.
 
 # =============================================================================
-# FAVORITES (1-9)
+# DEFAULT PALETTE
 # =============================================================================
 
-# 1. (was #3) Cyan vs hot pink on deep indigo - maximum neon energy
+# 1. Northern lights - ethereal green vs violet-pink (moved from #17)
+palette: Aurora
+left: 0.300 1.000 0.550
+left_rim: 0.230 0.750 0.410
+right: 0.850 0.300 0.700
+right_rim: 0.640 0.230 0.530
+background: 0.030 0.060 0.100
+platforms: 0.100 0.140 0.220
+text: 0.850 0.950 0.900
+text_accent: 0.500 1.000 0.700
+
+# =============================================================================
+# FAVORITES (2-10)
+# =============================================================================
+
+# 2. (was #3) Cyan vs hot pink on deep indigo - maximum neon energy
 palette: Electric Neon
 left: 0.000 1.000 0.784
 left_rim: 0.000 0.750 0.590
@@ -199,17 +214,6 @@ background: 0.050 0.040 0.070
 platforms: 0.150 0.130 0.180
 text: 0.900 0.850 0.900
 text_accent: 0.850 0.300 0.350
-
-# 17. Northern lights - ethereal green vs violet-pink
-palette: Aurora
-left: 0.300 1.000 0.550
-left_rim: 0.230 0.750 0.410
-right: 0.850 0.300 0.700
-right_rim: 0.640 0.230 0.530
-background: 0.030 0.060 0.100
-platforms: 0.100 0.140 0.220
-text: 0.850 0.950 0.900
-text_accent: 0.500 1.000 0.700
 
 # 18. Bright rust vs dark patina - industrial contrast
 palette: Rust

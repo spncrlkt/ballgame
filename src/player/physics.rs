@@ -193,6 +193,51 @@ pub fn check_collisions(
     }
 }
 
+/// Handle double-click Start to reset settings to defaults
+/// Runs before respawn_player to detect double-click
+pub fn check_settings_reset(
+    gamepads: Query<&Gamepad>,
+    mut current_settings: ResMut<crate::settings::CurrentSettings>,
+    mut current_level: ResMut<CurrentLevel>,
+    mut current_palette: ResMut<CurrentPalette>,
+    mut viewport_scale: ResMut<crate::ui::ViewportScale>,
+    mut cycle_selection: ResMut<crate::ui::CycleSelection>,
+    time: Res<Time>,
+    mut window_query: Query<&mut Window>,
+) {
+    // Check for Start button press for double-click detection
+    let start_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::Start));
+
+    if !start_pressed {
+        return;
+    }
+
+    // Check for double-click Start to reset settings
+    let current_time = time.elapsed_secs_f64();
+    if current_settings.check_double_click(current_time) {
+        // Double-click detected - reset settings to defaults
+        current_settings.reset_to_defaults();
+
+        // Apply reset settings to resources
+        current_level.0 = current_settings.settings.level;
+        current_palette.0 = current_settings.settings.palette_index;
+        viewport_scale.preset_index = current_settings.settings.viewport_index;
+        cycle_selection.active_direction = crate::ui::CycleDirection::from_str(&current_settings.settings.active_direction);
+        cycle_selection.down_option = crate::ui::DownOption::from_str(&current_settings.settings.down_option);
+        cycle_selection.right_option = crate::ui::RightOption::from_str(&current_settings.settings.right_option);
+
+        // Apply viewport change
+        let (width, height, _) = crate::constants::VIEWPORT_PRESETS[viewport_scale.preset_index];
+        if let Ok(mut window) = window_query.single_mut() {
+            window.resolution.set(width, height);
+        }
+
+        info!("Settings reset to defaults via double-click Start");
+    }
+}
+
 /// Handle player respawn and level changes
 #[allow(clippy::too_many_arguments)]
 pub fn respawn_player(

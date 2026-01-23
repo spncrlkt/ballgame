@@ -5,7 +5,10 @@
 // Core modules
 pub mod config_watcher;
 pub mod constants;
+pub mod events;
 pub mod helpers;
+pub mod settings;
+pub mod simulation;
 pub mod snapshot;
 
 // Game logic modules
@@ -23,12 +26,17 @@ pub mod ui;
 pub mod world;
 
 // Re-export commonly used types for convenience
-pub use ai::{AI_PROFILES_FILE, AiGoal, AiProfile, AiProfileDatabase, AiState, InputState};
+pub use ai::{
+    AI_PROFILES_FILE, AiGoal, AiNavState, AiProfile, AiProfileDatabase, AiState, EdgeType,
+    InputState, NavAction, NavEdge, NavGraph, NavNode, PathResult, find_path, find_path_to_shoot,
+};
 pub use ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
     BallTextures, CurrentPalette, StyleTextures,
 };
 pub use config_watcher::ConfigWatcher;
+pub use events::{EventBuffer, EventLogConfig, EventLogger, GameConfig, GameEvent, PlayerId};
+pub use settings::{CurrentSettings, InitSettings, save_settings_system};
 pub use constants::*;
 pub use helpers::*;
 pub use input::PlayerInput;

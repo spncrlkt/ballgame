@@ -174,3 +174,18 @@ pub const VIEWPORT_PRESETS: &[(f32, f32, &str)] = &[
 
 /// Default viewport preset index (1440p)
 pub const DEFAULT_VIEWPORT_INDEX: usize = 2;
+
+// =============================================================================
+// AI NAVIGATION
+// =============================================================================
+
+/// Maximum jump height AI will attempt (slightly less than physics max for safety)
+pub const NAV_MAX_JUMP_HEIGHT: f32 = 210.0;
+/// Tolerance for considering AI "at" a position
+pub const NAV_POSITION_TOLERANCE: f32 = 15.0;
+/// Tolerance for jump/drop positioning (closer to edge)
+pub const NAV_JUMP_TOLERANCE: f32 = 8.0;
+/// Distance threshold for recalculating path (if target moved this far)
+pub const NAV_PATH_RECALC_DISTANCE: f32 = 100.0;
+/// Minimum distance to walk before executing jump (ensures momentum)
+pub const NAV_JUMP_APPROACH_DISTANCE: f32 = 20.0;

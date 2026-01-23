@@ -1,10 +1,19 @@
 //! AI module - AI decision making and input generation
 
 mod decision;
+pub mod navigation;
+pub mod pathfinding;
 mod profiles;
+pub mod shot_quality;
 
 pub use decision::*;
+pub use navigation::{
+    AiNavState, EdgeType, NavAction, NavEdge, NavGraph, NavNode, mark_nav_dirty_on_level_change,
+    rebuild_nav_graph,
+};
+pub use pathfinding::{PathResult, find_path, find_path_to_shoot};
 pub use profiles::*;
+pub use shot_quality::{evaluate_shot_quality, SHOT_QUALITY_ACCEPTABLE, SHOT_QUALITY_GOOD};
 
 use bevy::prelude::*;
 
@@ -31,6 +40,12 @@ pub struct AiState {
     pub shot_charge_target: f32,
     /// Index into AiProfileDatabase for this AI's personality
     pub profile_index: usize,
+    /// Target position for navigation (set by goal system, consumed by nav system)
+    pub nav_target: Option<bevy::prelude::Vec2>,
+    /// Whether AI is performing a jump shot
+    pub jump_shot_active: bool,
+    /// Timer for jump shot (tracks jump phase)
+    pub jump_shot_timer: f32,
 }
 
 /// Goals the AI can pursue

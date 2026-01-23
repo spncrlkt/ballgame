@@ -100,3 +100,22 @@ steps: 0
 mirror: 520 140 160
 mirror: 340 100 140
 center: 50 400
+
+level: Twin Towers
+basket_height: 720
+basket_push_in: 260
+steps: 0
+mirror: 520 120 100
+mirror: 520 300 160
+mirror: 520 500 60
+
+#   level: <name>           Start a new level
+#   basket_height: <h>      Main basket height above floor (8 dunkable: <560, 2 high: >560)
+#   basket_push_in: <dist>  Distance from wall inner edge to basket center (default = 156)
+#   steps: <count>          Corner steps count (0 = no steps, default = 13)
+#   corner_height: <h>      Total corner ramp height (default = 320)
+#   corner_width: <w>       Total corner ramp width (default = 200)
+#   step_push_in: <dist>    Distance from wall to where stairs start (default = 0)
+#   mirror: <x> <y> <w>     Platform at (-x, y) and (+x, y) with width w
+#   center: <y> <w>         Centered platform at (0, y) with width w
+#   debug: true             Debug mode: spawns all ball styles, AI idle (default = false)

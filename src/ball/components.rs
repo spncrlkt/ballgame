@@ -88,13 +88,13 @@ impl BallTextures {
 }
 
 /// Current color palette index (0 to palette_count-1)
-/// Default is palette 26 (index 25)
+/// Default is the first palette (Aurora)
 #[derive(Resource)]
 pub struct CurrentPalette(pub usize);
 
 impl Default for CurrentPalette {
     fn default() -> Self {
-        Self(25) // Palette 26 (1-indexed)
+        Self(0) // First palette (Aurora)
     }
 }
 

@@ -20,12 +20,17 @@ path = "src/bin/heatmap.rs"
 name = "generate_ball"
 path = "src/bin/generate_ball.rs"
 
+[[bin]]
+name = "simulate"
+path = "src/bin/simulate.rs"
+
 [dependencies]
 rand = "0.8"
 image = "0.25"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = "0.4"
+uuid = { version = "1.0", features = ["v4"] }
 
 [dependencies.bevy]
 version = "0.17.3"

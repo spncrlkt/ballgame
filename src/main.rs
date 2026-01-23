@@ -4,16 +4,16 @@
 
 use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
-    AiGoal, AiProfileDatabase, AiState, Ball, BallPlayerContact, BallPulse, BallRolling,
+    AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact, BallPulse, BallRolling,
     BallShotGrace, BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground,
     ChargeGaugeFill, ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel, CurrentPalette,
-    CurrentPresets, CycleIndicator, CycleSelection, DebugSettings, DebugText, Facing, Grounded,
-    HumanControlled, InputState, JumpState, LastShotInfo, LevelDatabase, PALETTES_FILE,
-    PRESETS_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, PresetDatabase, Score,
-    ScoreLevelText, SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown,
+    CurrentPresets, CurrentSettings, CycleIndicator, CycleSelection, DebugSettings, DebugText,
+    Facing, Grounded, HumanControlled, InputState, JumpState, LastShotInfo, LevelDatabase, NavGraph,
+    PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, PresetDatabase,
+    Score, ScoreLevelText, SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown,
     StyleTextures, TargetBasket, Team, TweakPanel, TweakRow, Velocity, ViewportScale, ai,
     apply_preset_to_tweaks, ball, config_watcher, constants::*, helpers::*, input, levels, player,
-    scoring, shooting, snapshot, steal, ui, world,
+    save_settings_system, scoring, shooting, snapshot, steal, ui, world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
@@ -52,6 +52,22 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let screenshot_and_quit = args.iter().any(|a| a == "--screenshot-and-quit");
 
+    // Load persistent settings (uses defaults if file doesn't exist)
+    let current_settings = CurrentSettings::default();
+
+    // Save settings on first run to ensure file exists
+    if let Err(e) = current_settings.settings.save() {
+        warn!("Failed to save initial settings: {}", e);
+    }
+
+    // Extract values from loaded settings for resource initialization
+    let loaded_viewport_index = current_settings.settings.viewport_index;
+    let loaded_palette_index = current_settings.settings.palette_index;
+    let loaded_level = current_settings.settings.level;
+    let loaded_active_direction = current_settings.settings.active_direction.clone();
+    let loaded_down_option = current_settings.settings.down_option.clone();
+    let loaded_right_option = current_settings.settings.right_option.clone();
+
     // Load level database from file
     let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
 
@@ -67,15 +83,19 @@ fn main() {
         .map(|p| p.background)
         .unwrap_or(DEFAULT_BACKGROUND_COLOR);
 
+    // Use loaded viewport preset (clamped to valid range)
+    let viewport_index = loaded_viewport_index.min(VIEWPORT_PRESETS.len() - 1);
+    let (viewport_width, viewport_height, _) = VIEWPORT_PRESETS[viewport_index];
+
     App::new()
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    // Use default viewport preset (1440p) for initial size
+                    // Use loaded viewport preset for initial size
                     // Set scale_factor_override to 1.0 for consistent behavior on HiDPI displays
                     resolution: bevy::window::WindowResolution::new(
-                        VIEWPORT_PRESETS[DEFAULT_VIEWPORT_INDEX].0 as u32,
-                        VIEWPORT_PRESETS[DEFAULT_VIEWPORT_INDEX].1 as u32,
+                        viewport_width as u32,
+                        viewport_height as u32,
                     )
                     .with_scale_factor_override(1.0),
                     title: "Ballgame".into(),
@@ -90,37 +110,52 @@ fn main() {
         .insert_resource(palette_db)
         .insert_resource(preset_db)
         .insert_resource(level_db)
+        .insert_resource(current_settings)
         .init_resource::<PlayerInput>()
         .init_resource::<DebugSettings>()
         .init_resource::<StealContest>()
         .init_resource::<Score>()
-        .init_resource::<CurrentLevel>()
-        .init_resource::<CurrentPalette>()
+        .insert_resource(CurrentLevel(loaded_level))
+        .insert_resource(CurrentPalette(loaded_palette_index))
         .init_resource::<PhysicsTweaks>()
         .init_resource::<LastShotInfo>()
-        .init_resource::<ViewportScale>()
-        .init_resource::<CycleSelection>()
+        .insert_resource(ViewportScale { preset_index: loaded_viewport_index })
+        .insert_resource(CycleSelection {
+            active_direction: ui::CycleDirection::from_str(&loaded_active_direction),
+            down_option: ui::DownOption::from_str(&loaded_down_option),
+            right_option: ui::RightOption::from_str(&loaded_right_option),
+            ai_player_index: 0,
+            menu_enabled: false,
+        })
         .init_resource::<ConfigWatcher>()
         .init_resource::<AiProfileDatabase>()
         .init_resource::<CurrentPresets>()
+        .init_resource::<NavGraph>()
         .insert_resource(SnapshotConfig {
+            // Only enable screenshots when running via screenshot script
+            enabled: screenshot_and_quit,
             exit_after_startup: screenshot_and_quit,
             ..default()
         })
         .init_resource::<SnapshotTriggerState>()
         .add_systems(Startup, setup)
-        // Input systems must run in order: capture -> copy -> swap -> AI
+        // Input systems must run in order: capture -> copy -> swap -> nav graph -> nav -> AI
         .add_systems(
             Update,
             (
                 input::capture_input,
                 ai::copy_human_input,
                 ai::swap_control,
+                ai::mark_nav_dirty_on_level_change,
+                ai::rebuild_nav_graph,
+                ai::ai_navigation_update,
                 ai::ai_decision_update,
             )
                 .chain(),
         )
-        // Core Update systems
+        // Settings reset (double-click Start) - must run before respawn
+        .add_systems(Update, player::check_settings_reset)
+        // Core Update systems - split to avoid tuple size limit
         .add_systems(
             Update,
             (
@@ -130,6 +165,11 @@ fn main() {
                 config_watcher::check_config_changes,
                 ui::update_debug_text,
                 ui::update_score_level_text,
+            ),
+        )
+        .add_systems(
+            Update,
+            (
                 ui::animate_pickable_ball,
                 ui::animate_score_flash,
                 ui::update_charge_gauge,
@@ -165,6 +205,8 @@ fn main() {
                 snapshot::manual_snapshot,
             ),
         )
+        // Settings persistence - save when dirty
+        .add_systems(Update, save_settings_system)
         .add_systems(
             FixedUpdate,
             (
@@ -195,6 +237,10 @@ fn setup(
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
     asset_server: Res<AssetServer>,
+    current_palette: Res<CurrentPalette>,
+    current_level: Res<CurrentLevel>,
+    current_settings: Res<CurrentSettings>,
+    profile_db: Res<AiProfileDatabase>,
 ) {
     // Camera - orthographic, shows entire arena
     // FixedVertical ensures the full arena height is always visible regardless of window size
@@ -209,10 +255,27 @@ fn setup(
         }),
     ));
 
-    // Get initial palette colors
-    let initial_palette = palette_db.get(0).expect("No palettes loaded");
+    // Get palette colors from loaded settings (clamped to valid range)
+    let palette_index = current_palette.0.min(palette_db.len().saturating_sub(1));
+    let initial_palette = palette_db.get(palette_index).expect("No palettes loaded");
 
-    // Left team player - spawns on left side, starts human-controlled
+    // Get level index from loaded settings (1-indexed, convert to 0-indexed)
+    let level_index = (current_level.0 as usize).saturating_sub(1).min(level_db.len().saturating_sub(1));
+
+    // Load AI profile indices for players
+    let left_ai_profile_index = current_settings.settings.left_ai_profile.as_ref()
+        .and_then(|name| profile_db.index_of(name))
+        .unwrap_or(0);
+    let right_ai_profile_index = profile_db.index_of(&current_settings.settings.right_ai_profile)
+        .unwrap_or(0);
+
+    // Determine if left player is human or AI based on settings
+    let left_is_human = current_settings.settings.left_ai_profile.is_none();
+
+    // Check if this is a debug level early (for AI goal)
+    let is_debug_level_for_ai = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
+
+    // Left team player - spawns on left side
     let left_player = commands
         .spawn((
             Sprite::from_color(initial_palette.left, PLAYER_SIZE),
@@ -231,17 +294,27 @@ fn setup(
             TargetBasket(Basket::Right), // Left team scores in right basket
             Collider,
             Team::Left,
-            HumanControlled, // Starts as human-controlled
             (
                 InputState::default(),
-                AiState::default(),
+                AiState {
+                    current_goal: if is_debug_level_for_ai {
+                        AiGoal::Idle
+                    } else {
+                        AiGoal::default()
+                    },
+                    profile_index: left_ai_profile_index,
+                    ..default()
+                },
+                AiNavState::default(),
                 StealCooldown::default(),
             ),
         ))
         .id();
 
-    // Check if this is a debug level early (for AI goal)
-    let is_debug_level_for_ai = level_db.get(0).map(|l| l.debug).unwrap_or(false);
+    // Conditionally add HumanControlled marker to left player
+    if left_is_human {
+        commands.entity(left_player).insert(HumanControlled);
+    }
 
     // Right team player - spawns on right side, starts AI-controlled
     let right_player = commands
@@ -267,8 +340,10 @@ fn setup(
                     } else {
                         AiGoal::default()
                     },
+                    profile_index: right_ai_profile_index,
                     ..default()
                 },
+                AiNavState::default(),
                 StealCooldown::default(),
             ),
         ))
@@ -357,10 +432,7 @@ fn setup(
     commands.insert_resource(ball_textures.clone());
 
     // Check if this is a debug level (spawns all ball styles, AI idle)
-    let is_debug_level = level_db.get(0).map(|l| l.debug).unwrap_or(false);
-
-    // Initial palette index is 0
-    let initial_palette_idx = 0;
+    let is_debug_level = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
 
     if is_debug_level {
         // Debug level: spawn ALL ball styles dynamically
@@ -378,7 +450,7 @@ fn setup(
             if let Some(textures) = ball_textures.get(style_name) {
                 commands.spawn((
                     Sprite {
-                        image: textures.textures[initial_palette_idx].clone(),
+                        image: textures.textures[palette_index].clone(),
                         custom_size: Some(BALL_SIZE),
                         ..default()
                     },
@@ -396,15 +468,17 @@ fn setup(
             }
         }
     } else {
-        // Normal levels: spawn single ball with first style
-        let default_style = ball_textures
-            .default_style()
-            .cloned()
-            .unwrap_or_else(|| "wedges".to_string());
-        if let Some(textures) = ball_textures.get(&default_style) {
+        // Normal levels: spawn single ball with loaded style (or default if not found)
+        let loaded_style = &current_settings.settings.ball_style;
+        let ball_style_name = if ball_textures.get(loaded_style).is_some() {
+            loaded_style.clone()
+        } else {
+            ball_textures.default_style().cloned().unwrap_or_else(|| "wedges".to_string())
+        };
+        if let Some(textures) = ball_textures.get(&ball_style_name) {
             commands.spawn((
                 Sprite {
-                    image: textures.textures[initial_palette_idx].clone(),
+                    image: textures.textures[palette_index].clone(),
                     custom_size: Some(BALL_SIZE),
                     ..default()
                 },
@@ -417,7 +491,7 @@ fn setup(
                 BallRolling::default(),
                 BallShotGrace::default(),
                 BallSpin::default(),
-                BallStyle::new(&default_style),
+                BallStyle::new(&ball_style_name),
             ));
         }
     }
@@ -446,11 +520,11 @@ fn setup(
         Platform,
     ));
 
-    // Spawn level 1 platforms
-    levels::spawn_level_platforms(&mut commands, &level_db, 0, initial_palette.platforms);
+    // Spawn level platforms for the loaded level
+    levels::spawn_level_platforms(&mut commands, &level_db, level_index, initial_palette.platforms);
 
     // Baskets (goals) - height and X position vary per level
-    let initial_level = level_db.get(0);
+    let initial_level = level_db.get(level_index);
     let basket_y = initial_level
         .map(|l| ARENA_FLOOR_Y + l.basket_height)
         .unwrap_or(ARENA_FLOOR_Y + 400.0);
@@ -546,8 +620,7 @@ fn setup(
             ));
         });
 
-    // Corner ramps - angled walls in bottom corners
-    let initial_level = level_db.get(0);
+    // Corner ramps - angled walls in bottom corners (reuse initial_level from earlier)
     let initial_step_count = initial_level
         .map(|l| l.step_count)
         .unwrap_or(CORNER_STEP_COUNT);

@@ -10,6 +10,7 @@ use crate::palettes::PaletteDatabase;
 use crate::player::{HumanControlled, Player, Team};
 use crate::presets::{CurrentPresets, PresetDatabase, apply_composite_preset};
 use crate::scoring::CurrentLevel;
+use crate::settings::CurrentSettings;
 use crate::shooting::LastShotInfo;
 use crate::steal::StealContest;
 use crate::ui::hud::ScoreLevelText;
@@ -27,6 +28,26 @@ pub enum CycleDirection {
     Down,
     Left,
     Right,
+}
+
+impl CycleDirection {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CycleDirection::Up => "Up",
+            CycleDirection::Down => "Down",
+            CycleDirection::Left => "Left",
+            CycleDirection::Right => "Right",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "Up" => CycleDirection::Up,
+            "Left" => CycleDirection::Left,
+            "Right" => CycleDirection::Right,
+            _ => CycleDirection::Down, // Default
+        }
+    }
 }
 
 /// Options available for D-pad Down (presets)
@@ -57,6 +78,15 @@ impl DownOption {
             DownOption::Shooting => "Shooting",
         }
     }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "Movement" => DownOption::Movement,
+            "Ball" => DownOption::Ball,
+            "Shooting" => DownOption::Shooting,
+            _ => DownOption::Composite, // Default
+        }
+    }
 }
 
 /// Options available for D-pad Right (visual/level settings)
@@ -82,6 +112,14 @@ impl RightOption {
             RightOption::Level => "Level",
             RightOption::Palette => "Palette",
             RightOption::BallStyle => "BallStyle",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "Palette" => RightOption::Palette,
+            "BallStyle" => RightOption::BallStyle,
+            _ => RightOption::Level, // Default
         }
     }
 }
@@ -265,6 +303,7 @@ pub fn unified_cycle_system(
     mut current_palette: ResMut<crate::ball::CurrentPalette>,
     mut viewport_scale: ResMut<ViewportScale>,
     mut current_presets: ResMut<CurrentPresets>,
+    mut current_settings: ResMut<CurrentSettings>,
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
     profile_db: Res<AiProfileDatabase>,
@@ -322,6 +361,8 @@ pub fn unified_cycle_system(
             // First press or different direction - just select (no cycling)
             cycle_selection.menu_enabled = true;
             cycle_selection.active_direction = pressed_direction;
+            current_settings.settings.active_direction = pressed_direction.as_str().to_string();
+            current_settings.mark_dirty();
             info!("Selected: {:?}", pressed_direction);
         } else {
             // Second press on same direction - cycle options
@@ -332,6 +373,8 @@ pub fn unified_cycle_system(
                 }
                 CycleDirection::Down => {
                     cycle_selection.down_option = cycle_selection.down_option.next();
+                    current_settings.settings.down_option = cycle_selection.down_option.name().to_string();
+                    current_settings.mark_dirty();
                     info!("Cycle: Down ({})", cycle_selection.down_option.name());
                 }
                 CycleDirection::Left => {
@@ -340,6 +383,8 @@ pub fn unified_cycle_system(
                 }
                 CycleDirection::Right => {
                     cycle_selection.right_option = cycle_selection.right_option.next();
+                    current_settings.settings.right_option = cycle_selection.right_option.name().to_string();
+                    current_settings.mark_dirty();
                     info!("Cycle: Right ({})", cycle_selection.right_option.name());
                 }
             }
@@ -373,6 +418,8 @@ pub fn unified_cycle_system(
                 viewport_scale.cycle_prev();
             }
             apply_viewport(&viewport_scale, &mut window_query);
+            current_settings.settings.viewport_index = viewport_scale.preset_index;
+            current_settings.mark_dirty();
         }
         CycleDirection::Down => {
             // Presets: Composite, Movement, Ball, Shooting
@@ -471,6 +518,13 @@ pub fn unified_cycle_system(
                     if *team == target_team {
                         ai_state.profile_index = (ai_state.profile_index + 1) % num_profiles;
                         let profile = profile_db.get(ai_state.profile_index);
+                        // Save to settings
+                        if *team == Team::Left {
+                            current_settings.settings.left_ai_profile = Some(profile.name.clone());
+                        } else {
+                            current_settings.settings.right_ai_profile = profile.name.clone();
+                        }
+                        current_settings.mark_dirty();
                         info!(
                             "AI {}: {}",
                             if *team == Team::Left { "L" } else { "R" },
@@ -498,6 +552,8 @@ pub fn unified_cycle_system(
                             current_level.0 - 1
                         };
                     }
+                    current_settings.settings.level = current_level.0;
+                    current_settings.mark_dirty();
                     info!("Level: {}", current_level.0);
                 }
                 RightOption::Palette => {
@@ -507,6 +563,8 @@ pub fn unified_cycle_system(
                     } else if cycle_prev {
                         current_palette.0 = (current_palette.0 + num_palettes - 1) % num_palettes;
                     }
+                    current_settings.settings.palette_index = current_palette.0;
+                    current_settings.mark_dirty();
                     info!("Palette: {}", current_palette.0);
                 }
                 RightOption::BallStyle => {
@@ -526,7 +584,10 @@ pub fn unified_cycle_system(
                         }
                     }
 
+                    // Save ball style to settings
                     if let Some((style, _)) = ball_query.iter().next() {
+                        current_settings.settings.ball_style = style.name().to_string();
+                        current_settings.mark_dirty();
                         info!("BallStyle: {}", style.name());
                     }
                 }

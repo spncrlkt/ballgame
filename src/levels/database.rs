@@ -27,7 +27,7 @@ pub struct LevelData {
 }
 
 /// Database of all loaded levels
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct LevelDatabase {
     pub levels: Vec<LevelData>,
 }
