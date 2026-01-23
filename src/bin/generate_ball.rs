@@ -1,16 +1,8 @@
 //! Ball texture generator
 //!
-//! Generates 6 ball styles × 20 color palettes = 120 PNG textures.
+//! Generates ball textures for all styles × all color palettes.
+//! Styles and palettes are read from config files (single source of truth).
 //!
-//! Styles:
-//! - stripe: White ball with horizontal stripe
-//! - wedges: 4 large wedges (beach ball style)
-//! - dot: White ball with large center circle
-//! - half: Ball split vertically down middle
-//! - ring: White ball with colored ring
-//! - solid: Solid team color with black outline
-//!
-//! Configuration is read from assets/ball_options.txt.
 //! Run with: `cargo run --bin generate_ball`
 
 use image::{Rgba, RgbaImage};
@@ -22,126 +14,78 @@ use std::fs;
 const WHITE: [u8; 4] = [245, 245, 240, 255]; // Off-white (cream)
 const BLACK: [u8; 4] = [20, 20, 20, 255]; // Outline
 
-/// Color palette with left and right team colors
+const PALETTES_FILE: &str = "assets/palettes.txt";
+const OPTIONS_FILE: &str = "assets/ball_options.txt";
+
+/// Color palette with left and right team colors (RGB 0-255)
+#[derive(Clone)]
 struct Palette {
+    name: String,
     left: [u8; 4],
     right: [u8; 4],
 }
 
-/// 20 named color palettes (must match palettes/database.rs)
-const PALETTES: [Palette; 20] = [
-    // 0: Ocean Fire - Blue vs Orange
-    Palette {
-        left: [30, 144, 255, 255],
-        right: [255, 107, 53, 255],
-    },
-    // 1: Forest Crimson - Green vs Red
-    Palette {
-        left: [34, 139, 34, 255],
-        right: [220, 20, 60, 255],
-    },
-    // 2: Electric Neon - Cyan vs Pink
-    Palette {
-        left: [0, 255, 200, 255],
-        right: [255, 50, 150, 255],
-    },
-    // 3: Royal Gold - Blue vs Gold
-    Palette {
-        left: [65, 105, 225, 255],
-        right: [255, 215, 0, 255],
-    },
-    // 4: Sunset - Violet vs Orange
-    Palette {
-        left: [238, 130, 238, 255],
-        right: [255, 165, 0, 255],
-    },
-    // 5: Arctic Ember - Sky vs Tomato
-    Palette {
-        left: [135, 206, 250, 255],
-        right: [232, 76, 61, 255],
-    },
-    // 6: Toxic Slime - Lime vs Purple
-    Palette {
-        left: [0, 255, 0, 255],
-        right: [148, 0, 211, 255],
-    },
-    // 7: Bubblegum - Teal vs Pink
-    Palette {
-        left: [0, 192, 192, 255],
-        right: [255, 105, 180, 255],
-    },
-    // 8: Desert Storm - Tan vs Brown
-    Palette {
-        left: [210, 180, 140, 255],
-        right: [139, 69, 19, 255],
-    },
-    // 9: Neon Noir - Cyan vs Magenta
-    Palette {
-        left: [0, 250, 250, 255],
-        right: [250, 0, 120, 255],
-    },
-    // 10: Ice and Fire - White-blue vs Deep red
-    Palette {
-        left: [179, 217, 255, 255],
-        right: [204, 26, 26, 255],
-    },
-    // 11: Jungle Fever - Bright green vs Hot pink
-    Palette {
-        left: [51, 230, 77, 255],
-        right: [255, 51, 128, 255],
-    },
-    // 12: Copper Patina - Teal vs Copper
-    Palette {
-        left: [51, 153, 140, 255],
-        right: [217, 115, 51, 255],
-    },
-    // 13: Midnight Sun - Gold vs Deep blue
-    Palette {
-        left: [255, 204, 51, 255],
-        right: [26, 51, 153, 255],
-    },
-    // 14: Cherry Blossom - Pink vs Mint
-    Palette {
-        left: [255, 153, 179, 255],
-        right: [102, 204, 153, 255],
-    },
-    // 15: Volcanic - Orange vs Black
-    Palette {
-        left: [255, 128, 0, 255],
-        right: [51, 51, 64, 255],
-    },
-    // 16: Deep Sea - Aqua vs Coral
-    Palette {
-        left: [0, 204, 230, 255],
-        right: [255, 128, 115, 255],
-    },
-    // 17: Autumn Harvest - Orange vs Purple
-    Palette {
-        left: [242, 153, 51, 255],
-        right: [128, 51, 153, 255],
-    },
-    // 18: Synthwave - Hot pink vs Electric blue
-    Palette {
-        left: [255, 51, 153, 255],
-        right: [51, 153, 255, 255],
-    },
-    // 19: Monochrome - White vs Gray
-    Palette {
-        left: [242, 242, 242, 255],
-        right: [128, 128, 128, 255],
-    },
-];
+/// Load palettes from assets/palettes.txt
+fn load_palettes() -> Vec<Palette> {
+    let content = fs::read_to_string(PALETTES_FILE).unwrap_or_else(|e| {
+        panic!("\n\nERROR: Could not read palettes file '{}': {}\n", PALETTES_FILE, e)
+    });
 
-const OPTIONS_FILE: &str = "assets/ball_options.txt";
+    let mut palettes = Vec::new();
+    let mut current_name: Option<String> = None;
+    let mut current_left: Option<[u8; 4]> = None;
+    let mut current_right: Option<[u8; 4]> = None;
 
-/// Global configuration from ball_options.txt
-struct BallConfig {
-    size: u32,
-    border: f32,
-    styles: Vec<StyleConfig>,
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if let Some(name) = line.strip_prefix("palette:") {
+            if let (Some(name), Some(left), Some(right)) =
+                (current_name.take(), current_left.take(), current_right.take())
+            {
+                palettes.push(Palette { name, left, right });
+            }
+            current_name = Some(name.trim().to_string());
+            current_left = None;
+            current_right = None;
+        } else if let Some(rgb) = line.strip_prefix("left:") {
+            current_left = parse_rgb_to_u8(rgb);
+        } else if let Some(rgb) = line.strip_prefix("right:") {
+            current_right = parse_rgb_to_u8(rgb);
+        }
+    }
+
+    if let (Some(name), Some(left), Some(right)) = (current_name, current_left, current_right) {
+        palettes.push(Palette { name, left, right });
+    }
+
+    println!("Loaded {} palettes from {}", palettes.len(), PALETTES_FILE);
+    palettes
 }
 
-/// Configuration for a single style
+fn parse_rgb_to_u8(s: &str) -> Option<[u8; 4]> {
+    let parts: Vec<&str> = s.trim().split_whitespace().collect();
+    if parts.len() >= 3 {
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            parts[0].parse::<f32>(),
+            parts[1].parse::<f32>(),
+            parts[2].parse::<f32>(),
+        ) {
+            return Some([
+                (r * 255.0).round() as u8,
+                (g * 255.0).round() as u8,
+                (b * 255.0).round() as u8,
+                255,
+            ]);
+        }
+    }
+    None
+}
+
+/// Style configuration
 #[derive(Clone)]
 struct StyleConfig {
     name: String,
@@ -149,94 +93,64 @@ struct StyleConfig {
     params: HashMap<String, f32>,
 }
 
-fn main() {
-    let config = load_config();
+/// Global configuration
+struct BallConfig {
+    size: u32,
+    border: f32,
+    styles: Vec<StyleConfig>,
+    palettes: Vec<Palette>,
+}
 
-    println!("Generating ball textures from {}...", OPTIONS_FILE);
+fn main() {
+    let palettes = load_palettes();
+    let config = load_config(palettes);
+
+    println!("\nGenerating ball textures...");
     println!("  Size: {}px, Border: {}px", config.size, config.border);
     println!("  Styles: {}", config.styles.len());
-    println!("  Palettes: {}", PALETTES.len());
+    println!("  Palettes: {}", config.palettes.len());
 
     for style in &config.styles {
-        for (palette_idx, _palette) in PALETTES.iter().enumerate() {
+        for (palette_idx, palette) in config.palettes.iter().enumerate() {
             let filename = format!("assets/ball_{}_{}.png", style.name, palette_idx);
-            generate_texture(&filename, &config, style, palette_idx);
-            println!("  Created: {}", filename);
+            generate_texture(&filename, &config, style, palette);
+            println!("  Created: {} ({})", filename, palette.name);
         }
     }
 
     println!(
         "\nGenerated {} ball textures.",
-        config.styles.len() * PALETTES.len()
+        config.styles.len() * config.palettes.len()
     );
 }
 
-/// Load and parse ball_options.txt, panicking with helpful message on error
-fn load_config() -> BallConfig {
+fn load_config(palettes: Vec<Palette>) -> BallConfig {
     let content = fs::read_to_string(OPTIONS_FILE).unwrap_or_else(|e| {
-        panic!(
-            "\n\nERROR: Could not read ball options file '{}': {}\n\n\
-             The ball generator requires this configuration file.\n\
-             Please ensure assets/ball_options.txt exists with proper format:\n\n\
-             size: 128\n\
-             border: 4\n\n\
-             style: stripe\n\
-             pattern: stripe\n\
-             param: height 0.20\n\n\
-             ... (see CLAUDE.md for full example)\n",
-            OPTIONS_FILE, e
-        )
+        panic!("\n\nERROR: Could not read '{}': {}\n", OPTIONS_FILE, e)
     });
-
-    parse_config(&content)
+    parse_config(&content, palettes)
 }
 
-/// Parse the configuration file content
-fn parse_config(content: &str) -> BallConfig {
+fn parse_config(content: &str, palettes: Vec<Palette>) -> BallConfig {
     let mut size: Option<u32> = None;
     let mut border: Option<f32> = None;
     let mut styles: Vec<StyleConfig> = Vec::new();
     let mut current_style: Option<StyleConfig> = None;
 
-    for (line_num, line) in content.lines().enumerate() {
+    for line in content.lines() {
         let line = line.trim();
-
-        // Skip empty lines and comments
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
 
         if let Some(val) = line.strip_prefix("size:") {
-            size = Some(val.trim().parse().unwrap_or_else(|_| {
-                panic!(
-                    "\n\nERROR: Invalid 'size' value on line {}: '{}'\n\
-                     Expected integer (e.g., 'size: 128')\n",
-                    line_num + 1,
-                    val.trim()
-                )
-            }));
+            size = Some(val.trim().parse().expect("Invalid size"));
         } else if let Some(val) = line.strip_prefix("border:") {
-            border = Some(val.trim().parse().unwrap_or_else(|_| {
-                panic!(
-                    "\n\nERROR: Invalid 'border' value on line {}: '{}'\n\
-                     Expected number (e.g., 'border: 4')\n",
-                    line_num + 1,
-                    val.trim()
-                )
-            }));
+            border = Some(val.trim().parse().expect("Invalid border"));
         } else if let Some(name) = line.strip_prefix("style:") {
-            // Save previous style if exists
             if let Some(style) = current_style.take() {
-                if style.pattern.is_empty() {
-                    panic!(
-                        "\n\nERROR: Style '{}' has no pattern defined.\n\
-                         Each style must have 'pattern: <type>' after 'style: <name>'\n",
-                        style.name
-                    );
-                }
                 styles.push(style);
             }
-            // Start new style
             current_style = Some(StyleConfig {
                 name: name.trim().to_string(),
                 pattern: String::new(),
@@ -244,110 +158,36 @@ fn parse_config(content: &str) -> BallConfig {
             });
         } else if let Some(pattern) = line.strip_prefix("pattern:") {
             if let Some(style) = &mut current_style {
-                let pattern = pattern.trim().to_string();
-                // Validate pattern type
-                if !["stripe", "wedges", "dot", "half", "ring", "solid"].contains(&pattern.as_str())
-                {
-                    panic!(
-                        "\n\nERROR: Unknown pattern '{}' on line {}.\n\
-                         Valid patterns: stripe, wedges, dot, half, ring, solid\n",
-                        pattern,
-                        line_num + 1
-                    );
-                }
-                style.pattern = pattern;
-            } else {
-                panic!(
-                    "\n\nERROR: 'pattern:' on line {} outside of style definition.\n\
-                     First define a style with 'style: <name>'\n",
-                    line_num + 1
-                );
+                style.pattern = pattern.trim().to_string();
             }
         } else if let Some(param) = line.strip_prefix("param:") {
             if let Some(style) = &mut current_style {
                 let parts: Vec<&str> = param.split_whitespace().collect();
-                if parts.len() != 2 {
-                    panic!(
-                        "\n\nERROR: Invalid param on line {}: '{}'\n\
-                         Expected format: 'param: <name> <value>' (e.g., 'param: height 0.20')\n",
-                        line_num + 1,
-                        param.trim()
-                    );
+                if parts.len() == 2 {
+                    if let Ok(value) = parts[1].parse::<f32>() {
+                        style.params.insert(parts[0].to_string(), value);
+                    }
                 }
-                let value: f32 = parts[1].parse().unwrap_or_else(|_| {
-                    panic!(
-                        "\n\nERROR: Invalid param value on line {}: '{}'\n\
-                         Expected number (e.g., 'param: height 0.20')\n",
-                        line_num + 1,
-                        parts[1]
-                    )
-                });
-                style.params.insert(parts[0].to_string(), value);
-            } else {
-                panic!(
-                    "\n\nERROR: 'param:' on line {} outside of style definition.\n\
-                     First define a style with 'style: <name>'\n",
-                    line_num + 1
-                );
             }
-        } else {
-            panic!(
-                "\n\nERROR: Unknown directive on line {}: '{}'\n\
-                 Valid directives: size, border, style, pattern, param\n",
-                line_num + 1,
-                line
-            );
         }
     }
 
-    // Don't forget the last style
     if let Some(style) = current_style {
-        if style.pattern.is_empty() {
-            panic!(
-                "\n\nERROR: Style '{}' has no pattern defined.\n\
-                 Each style must have 'pattern: <type>' after 'style: <name>'\n",
-                style.name
-            );
-        }
         styles.push(style);
     }
 
-    // Validate required fields
-    let size = size.unwrap_or_else(|| {
-        panic!(
-            "\n\nERROR: Missing required 'size:' in ball_options.txt\n\
-             Add 'size: 128' (or desired pixel size) near the top of the file.\n"
-        )
-    });
-
-    let border = border.unwrap_or_else(|| {
-        panic!(
-            "\n\nERROR: Missing required 'border:' in ball_options.txt\n\
-             Add 'border: 4' (or desired border thickness) near the top of the file.\n"
-        )
-    });
-
-    if styles.is_empty() {
-        panic!(
-            "\n\nERROR: No styles defined in ball_options.txt\n\
-             Add at least one style definition:\n\n\
-             style: stripe\n\
-             pattern: stripe\n\
-             param: height 0.20\n"
-        );
-    }
-
     BallConfig {
-        size,
-        border,
+        size: size.expect("Missing size"),
+        border: border.expect("Missing border"),
         styles,
+        palettes,
     }
 }
 
-fn generate_texture(path: &str, config: &BallConfig, style: &StyleConfig, palette_idx: usize) {
+fn generate_texture(path: &str, config: &BallConfig, style: &StyleConfig, palette: &Palette) {
     let size = config.size;
     let center = size as f32 / 2.0;
-    let radius = center - config.border; // Leave room for border
+    let radius = center - config.border;
 
     let mut img = RgbaImage::new(size, size);
 
@@ -364,9 +204,8 @@ fn generate_texture(path: &str, config: &BallConfig, style: &StyleConfig, palett
             let dist = (fx * fx + fy * fy).sqrt();
 
             if dist <= radius {
-                let color = get_pixel_color(fx, fy, dist, radius, style, palette_idx);
+                let color = get_pixel_color(fx, fy, dist, radius, style, palette);
 
-                // Edge anti-aliasing
                 let edge_dist = radius - dist;
                 let alpha = if edge_dist < 2.0 {
                     ((edge_dist / 2.0) * 255.0) as u8
@@ -379,15 +218,14 @@ fn generate_texture(path: &str, config: &BallConfig, style: &StyleConfig, palett
         }
     }
 
-    // Draw solid black border ring (from interior edge to ball edge)
-    let outer_radius = center - 1.0; // Leave 1px for anti-aliasing
+    // Draw border ring
+    let outer_radius = center - 1.0;
     for y in 0..size {
         for x in 0..size {
             let fx = x as f32 - center;
             let fy = y as f32 - center;
             let dist = (fx * fx + fy * fy).sqrt();
 
-            // Draw in the border ring: between interior radius and outer edge
             if dist > radius && dist <= outer_radius {
                 let edge_dist = outer_radius - dist;
                 let alpha = if edge_dist < 1.5 {
@@ -409,103 +247,235 @@ fn get_pixel_color(
     dist: f32,
     radius: f32,
     style: &StyleConfig,
-    palette_idx: usize,
+    palette: &Palette,
 ) -> [u8; 4] {
     let normalized_dist = dist / radius;
     let angle = fy.atan2(fx);
-    let palette = &PALETTES[palette_idx];
 
     match style.pattern.as_str() {
-        "stripe" => draw_stripe(fx, fy, radius, style, palette),
-        "wedges" => draw_wedges(angle, palette),
-        "dot" => draw_dot(normalized_dist, fx, style, palette),
+        "wedges" => draw_wedges(angle, style, palette),
         "half" => draw_half(fx, palette),
-        "ring" => draw_ring(normalized_dist, fx, style, palette),
-        "solid" => draw_solid(fx, palette),
-        _ => WHITE, // Fallback (shouldn't happen due to validation)
-    }
-}
-
-/// Stripe: White ball with horizontal stripe through middle
-fn draw_stripe(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
-    let height = style.params.get("height").copied().unwrap_or(0.20);
-    let stripe_half_height = radius * height;
-
-    if fy.abs() < stripe_half_height {
-        // Inside stripe - left half uses left color, right half uses right color
-        if fx < 0.0 {
-            palette.left
-        } else {
-            palette.right
-        }
-    } else {
-        WHITE
-    }
-}
-
-/// Wedges: 4 equal 90-degree sections (beach ball style)
-fn draw_wedges(angle: f32, palette: &Palette) -> [u8; 4] {
-    // Normalize angle to 0..2PI
-    let angle = if angle < 0.0 { angle + 2.0 * PI } else { angle };
-    let sector = ((angle / (PI / 2.0)) as i32) % 4;
-
-    // Alternating: left color, white, right color, white
-    match sector {
-        0 => palette.left,
-        1 => WHITE,
-        2 => palette.right,
-        3 => WHITE,
+        "spiral" => draw_spiral(fx, fy, normalized_dist, angle, style, palette),
+        "checker" => draw_checker(fx, fy, radius, style, palette),
+        "star" => draw_star(angle, normalized_dist, style, palette),
+        "swirl" => draw_swirl(angle, normalized_dist, style, palette),
+        "plasma" => draw_plasma(fx, fy, radius, style, palette),
+        "shatter" => draw_shatter(fx, fy, radius, style, palette),
+        "wave" => draw_wave(fx, fy, radius, style, palette),
+        "atoms" => draw_atoms(fx, fy, normalized_dist, angle, style, palette),
         _ => WHITE,
     }
 }
 
-/// Dot: White ball with large center circle
-fn draw_dot(normalized_dist: f32, fx: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
-    let dot_radius = style.params.get("radius").copied().unwrap_or(0.45);
+/// Wedges: N equal sections (beach ball style)
+fn draw_wedges(angle: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let sections = style.params.get("sections").copied().unwrap_or(4.0) as i32;
+    let angle = if angle < 0.0 { angle + 2.0 * PI } else { angle };
+    let sector = ((angle / (2.0 * PI / sections as f32)) as i32) % sections;
 
-    if normalized_dist < dot_radius {
-        // Inside dot - split by x position
-        if fx < 0.0 {
-            palette.left
-        } else {
-            palette.right
-        }
+    // Alternating colors
+    if sector % 2 == 0 {
+        palette.left
     } else {
-        WHITE
+        palette.right
     }
 }
 
-/// Half: Ball split vertically down the middle
+/// Half: Split vertically down the middle
 fn draw_half(fx: f32, palette: &Palette) -> [u8; 4] {
-    if fx < 0.0 {
+    if fx < 0.0 { palette.left } else { palette.right }
+}
+
+/// Spiral: Spiral arms from center
+fn draw_spiral(_fx: f32, _fy: f32, norm_dist: f32, angle: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let arms = style.params.get("arms").copied().unwrap_or(3.0);
+    let tightness = style.params.get("tightness").copied().unwrap_or(2.5);
+
+    // Spiral equation: angle offset based on distance
+    let spiral_angle = angle + norm_dist * tightness * PI;
+    let spiral_sector = (spiral_angle * arms / (2.0 * PI)).floor() as i32;
+
+    if spiral_sector % 2 == 0 {
         palette.left
     } else {
         palette.right
     }
 }
 
-/// Ring: White ball with colored ring around middle
-fn draw_ring(normalized_dist: f32, fx: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
-    let ring_inner = style.params.get("inner").copied().unwrap_or(0.45);
-    let ring_outer = style.params.get("outer").copied().unwrap_or(0.70);
+/// Checker: Checkerboard pattern
+fn draw_checker(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let squares = style.params.get("squares").copied().unwrap_or(6.0);
+    let cell_size = (radius * 2.0) / squares;
 
-    if normalized_dist > ring_inner && normalized_dist < ring_outer {
-        // Inside ring - split by x position
-        if fx < 0.0 {
-            palette.left
-        } else {
-            palette.right
-        }
+    let cx = ((fx + radius) / cell_size).floor() as i32;
+    let cy = ((fy + radius) / cell_size).floor() as i32;
+
+    if (cx + cy) % 2 == 0 {
+        palette.left
+    } else {
+        palette.right
+    }
+}
+
+/// Star: N-pointed star shape
+fn draw_star(angle: f32, norm_dist: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let points = style.params.get("points").copied().unwrap_or(5.0);
+    let inner_radius = style.params.get("inner_radius").copied().unwrap_or(0.35);
+
+    // Calculate star edge at this angle
+    let angle = if angle < 0.0 { angle + 2.0 * PI } else { angle };
+    let sector_angle = 2.0 * PI / points;
+    let angle_in_sector = angle % sector_angle;
+
+    // Triangle wave for star points
+    let half_sector = sector_angle / 2.0;
+    let star_dist = if angle_in_sector < half_sector {
+        inner_radius + (1.0 - inner_radius) * (1.0 - angle_in_sector / half_sector)
+    } else {
+        inner_radius + (1.0 - inner_radius) * ((angle_in_sector - half_sector) / half_sector)
+    };
+
+    if norm_dist < star_dist {
+        // Inside star - split by angle
+        let point_index = (angle / sector_angle).floor() as i32;
+        if point_index % 2 == 0 { palette.left } else { palette.right }
     } else {
         WHITE
     }
 }
 
-/// Solid: Entire ball is team color (split by x position)
-fn draw_solid(fx: f32, palette: &Palette) -> [u8; 4] {
-    if fx < 0.0 {
+/// Swirl: Pinwheel pattern
+fn draw_swirl(angle: f32, norm_dist: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let blades = style.params.get("blades").copied().unwrap_or(6.0);
+    let twist = style.params.get("twist").copied().unwrap_or(1.5);
+
+    // Twist increases with distance
+    let twisted_angle = angle + norm_dist * twist * PI;
+    let blade_angle = 2.0 * PI / blades;
+    let sector = (twisted_angle / blade_angle).floor() as i32;
+
+    if sector % 2 == 0 {
         palette.left
     } else {
         palette.right
+    }
+}
+
+/// Plasma: Organic plasma blobs using noise-like function
+fn draw_plasma(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let scale = style.params.get("scale").copied().unwrap_or(3.0);
+    let threshold = style.params.get("threshold").copied().unwrap_or(0.5);
+
+    // Normalize coordinates
+    let nx = fx / radius;
+    let ny = fy / radius;
+
+    // Simple plasma function using sin waves
+    let v1 = (nx * scale * PI).sin();
+    let v2 = (ny * scale * PI).sin();
+    let v3 = ((nx + ny) * scale * 0.7 * PI).sin();
+    let v4 = ((nx * nx + ny * ny).sqrt() * scale * PI).sin();
+
+    let value = (v1 + v2 + v3 + v4) / 4.0;
+
+    if value > threshold - 0.5 {
+        palette.left
+    } else {
+        palette.right
+    }
+}
+
+/// Shatter: Broken glass fragments using voronoi-like pattern
+fn draw_shatter(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let pieces = style.params.get("pieces").copied().unwrap_or(8.0) as usize;
+    let chaos = style.params.get("chaos").copied().unwrap_or(0.6);
+
+    // Generate deterministic "random" points based on piece count
+    let mut min_dist = f32::MAX;
+    let mut closest_idx = 0;
+
+    for i in 0..pieces {
+        // Pseudo-random point positions using golden ratio
+        let golden = 1.618033988749;
+        let angle = i as f32 * golden * 2.0 * PI;
+        let r = (i as f32 / pieces as f32).sqrt() * radius * chaos + radius * (1.0 - chaos) * 0.3;
+        let px = angle.cos() * r;
+        let py = angle.sin() * r;
+
+        let dist = ((fx - px).powi(2) + (fy - py).powi(2)).sqrt();
+        if dist < min_dist {
+            min_dist = dist;
+            closest_idx = i;
+        }
+    }
+
+    // Add center point
+    let center_dist = (fx * fx + fy * fy).sqrt();
+    if center_dist < min_dist {
+        closest_idx = pieces; // Center gets its own index
+    }
+
+    if closest_idx % 2 == 0 {
+        palette.left
+    } else {
+        palette.right
+    }
+}
+
+/// Wave: Wavy horizontal bands
+fn draw_wave(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let frequency = style.params.get("frequency").copied().unwrap_or(3.0);
+    let amplitude = style.params.get("amplitude").copied().unwrap_or(0.2);
+
+    // Normalize
+    let nx = fx / radius;
+    let ny = fy / radius;
+
+    // Wave offset based on x position
+    let wave_offset = (nx * frequency * PI).sin() * amplitude;
+    let adjusted_y = ny - wave_offset;
+
+    // Create bands
+    let band = (adjusted_y * frequency).floor() as i32;
+
+    if band % 2 == 0 {
+        palette.left
+    } else {
+        palette.right
+    }
+}
+
+/// Atoms: Orbital rings pattern
+fn draw_atoms(fx: f32, fy: f32, norm_dist: f32, _angle: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let rings = style.params.get("rings").copied().unwrap_or(3.0) as i32;
+    let thickness = style.params.get("thickness").copied().unwrap_or(0.12);
+
+    // Check each orbital ring at different angles
+    for i in 0..rings {
+        let ring_angle = PI * i as f32 / rings as f32;
+
+        // Rotate point to check against horizontal ellipse
+        let cos_a = ring_angle.cos();
+        let sin_a = ring_angle.sin();
+        let rx = fx * cos_a + fy * sin_a;
+        let ry = -fx * sin_a + fy * cos_a;
+
+        // Ellipse with high eccentricity
+        let ellipse_dist = (rx * rx + (ry * 3.0).powi(2)).sqrt();
+        let target_dist = norm_dist * ((fx * fx + fy * fy).sqrt() / ellipse_dist.max(0.001));
+
+        // Check if on ring
+        let ring_center = 0.7; // Rings at 70% radius
+        if (target_dist - ring_center).abs() < thickness {
+            return if i % 2 == 0 { palette.left } else { palette.right };
+        }
+    }
+
+    // Nucleus in center
+    if norm_dist < 0.2 {
+        // Split nucleus
+        if fx < 0.0 { palette.left } else { palette.right }
+    } else {
+        WHITE
     }
 }

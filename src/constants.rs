@@ -135,6 +135,8 @@ pub const CORNER_STEP_THICKNESS: f32 = 20.0;
 pub const STEP_PUSH_IN: f32 = 0.0; // Distance from wall to where stairs start (top step extends to wall)
 pub const STEP_BOUNCE_RETENTION: f32 = 0.92; // Steps keep more velocity than normal bounce
 pub const STEP_DEFLECT_ANGLE_MAX: f32 = 35.0; // Max random deflection angle in degrees
+pub const RIM_BOUNCE_RETENTION: f32 = 0.85; // Rims: between normal (0.7) and steps (0.92)
+pub const RIM_DEFLECT_ANGLE_MAX: f32 = 20.0; // Rims: less chaotic than steps (35°)
 
 // =============================================================================
 // SPAWN POSITIONS

@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use crate::ball::{Ball, BallStyleType, BallTextures};
+use crate::ball::{Ball, BallStyle, BallTextures};
 use crate::constants::VIEWPORT_PRESETS;
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
@@ -241,11 +241,12 @@ pub fn unified_cycle_system(
     mut current_palette: ResMut<crate::ball::CurrentPalette>,
     mut viewport_scale: ResMut<ViewportScale>,
     level_db: Res<LevelDatabase>,
+    palette_db: Res<PaletteDatabase>,
     ball_textures: Res<BallTextures>,
     time: Res<Time>,
     mut window_query: Query<&mut Window>,
     mut camera_query: Query<&mut Projection, With<Camera2d>>,
-    mut ball_query: Query<(&mut BallStyleType, &mut Sprite), With<Ball>>,
+    mut ball_query: Query<(&mut BallStyle, &mut Sprite), With<Ball>>,
 ) {
     // Decay display timer
     if cycle_selection.display_timer > 0.0 {
@@ -304,7 +305,7 @@ pub fn unified_cycle_system(
         }
         CycleTarget::Palette => {
             // Just change the index - apply_palette_colors system handles the visuals
-            let num_palettes = crate::palettes::NUM_PALETTES;
+            let num_palettes = palette_db.len();
             if cycle_next {
                 current_palette.0 = (current_palette.0 + 1) % num_palettes;
             } else if cycle_prev {
@@ -315,23 +316,20 @@ pub fn unified_cycle_system(
         CycleTarget::BallStyle => {
             // Cycle all balls to the next/prev style
             for (mut style, mut sprite) in &mut ball_query {
-                let current_idx = BallStyleType::ALL
-                    .iter()
-                    .position(|s| *s == *style)
-                    .unwrap_or(0);
-                let num_styles = BallStyleType::ALL.len();
-
-                let new_idx = if cycle_next {
-                    (current_idx + 1) % num_styles
+                let new_style_name = if cycle_next {
+                    ball_textures.next_style(style.name())
                 } else {
-                    (current_idx + num_styles - 1) % num_styles
+                    ball_textures.prev_style(style.name())
                 };
 
-                *style = BallStyleType::ALL[new_idx];
+                style.0 = new_style_name.to_string();
 
                 // Update sprite texture
-                let textures = ball_textures.get(*style);
-                sprite.image = textures.textures[current_palette.0].clone();
+                if let Some(textures) = ball_textures.get(style.name()) {
+                    if let Some(texture) = textures.textures.get(current_palette.0) {
+                        sprite.image = texture.clone();
+                    }
+                }
             }
 
             // Log the new style (use first ball's style)
@@ -349,7 +347,8 @@ pub fn update_cycle_indicator(
     current_palette: Res<crate::ball::CurrentPalette>,
     viewport_scale: Res<ViewportScale>,
     level_db: Res<LevelDatabase>,
-    ball_query: Query<&BallStyleType, With<Ball>>,
+    palette_db: Res<PaletteDatabase>,
+    ball_query: Query<&BallStyle, With<Ball>>,
     mut query: Query<(&mut Text2d, &mut Visibility), With<CycleIndicator>>,
 ) {
     let Ok((mut text, mut visibility)) = query.single_mut() else {
@@ -370,7 +369,7 @@ pub fn update_cycle_indicator(
             let (_, _, label) = viewport_scale.current();
             label.to_string()
         }
-        CycleTarget::Palette => format!("{}/{}", current_palette.0 + 1, crate::palettes::NUM_PALETTES),
+        CycleTarget::Palette => format!("{}/{}", current_palette.0 + 1, palette_db.len()),
         CycleTarget::BallStyle => {
             // Get style from first ball
             ball_query
@@ -434,7 +433,7 @@ pub fn apply_palette_colors(
             Without<BasketRim>,
         ),
     >,
-    mut ball_query: Query<(&BallStyleType, &mut Sprite), With<Ball>>,
+    mut ball_query: Query<(&BallStyle, &mut Sprite), With<Ball>>,
 ) {
     // Only run when palette actually changes
     if !current_palette.is_changed() {
@@ -493,7 +492,10 @@ pub fn apply_palette_colors(
 
     // Ball textures
     for (style, mut sprite) in &mut ball_query {
-        let textures = ball_textures.get(*style);
-        sprite.image = textures.textures[current_palette.0].clone();
+        if let Some(textures) = ball_textures.get(style.name()) {
+            if let Some(texture) = textures.textures.get(current_palette.0) {
+                sprite.image = texture.clone();
+            }
+        }
     }
 }

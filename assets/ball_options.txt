@@ -2,38 +2,83 @@
 # =======================
 #
 # Format:
-#   size: <pixels>          Texture size in pixels (default = 128)
-#   border: <pixels>        Black circumference border thickness (default = 4)
+#   size: <pixels>          Texture size in pixels
+#   border: <pixels>        Black circumference border thickness
 #
 #   style: <name>           Start a new style definition
-#   pattern: <type>         Pattern type: stripe, wedges, dot, half, ring, solid
+#   pattern: <type>         Pattern type (see below)
 #   param: <name> <value>   Style-specific parameter
 #
-# Colors (turquoise, terracotta, white, black) are defined in constants.rs
-# Generator will FAIL if this file is missing or malformed.
+# Available patterns:
+#   wedges    - 4 equal sections (beach ball style)
+#   half      - split vertically down middle
+#   spiral    - spiral arms from center
+#   checker   - checkerboard pattern
+#   star      - 5-pointed star
+#   swirl     - pinwheel pattern
+#   plasma    - organic plasma blobs
+#   shatter   - broken glass fragments
+#   wave      - wavy horizontal bands
+#   atoms     - orbital rings pattern
+#
+# Colors are loaded from assets/palettes.txt
+# Run: cargo run --bin generate_ball
 
 size: 128
 border: 10
 
-style: stripe
-pattern: stripe
-param: height 0.20
-
+# Classic beach ball quarters
 style: wedges
 pattern: wedges
 param: sections 4
 
-style: dot
-pattern: dot
-param: radius 0.45
-
+# Clean vertical split
 style: half
 pattern: half
 
-style: ring
-pattern: ring
-param: inner 0.45
-param: outer 0.70
+# Hypnotic spiral arms
+style: spiral
+pattern: spiral
+param: arms 3
+param: tightness 2.5
 
-style: solid
-pattern: solid
+# Retro checkerboard
+style: checker
+pattern: checker
+param: squares 6
+
+# Bold star shape
+style: star
+pattern: star
+param: points 5
+param: inner_radius 0.35
+
+# Mesmerizing pinwheel
+style: swirl
+pattern: swirl
+param: blades 6
+param: twist 1.5
+
+# Organic plasma blobs
+style: plasma
+pattern: plasma
+param: scale 3.0
+param: threshold 0.5
+
+# Dramatic shattered glass
+style: shatter
+pattern: shatter
+param: pieces 8
+param: chaos 0.6
+
+# Flowing wave bands
+style: wave
+pattern: wave
+param: frequency 3.0
+param: amplitude 0.2
+
+# Atomic orbital rings
+style: atoms
+pattern: atoms
+param: rings 3
+param: thickness 0.12

@@ -118,6 +118,7 @@ pub fn ball_collisions(
             }
 
             let is_step = maybe_step.is_some();
+            let is_rim = maybe_rim.is_some();
 
             // Resolve collision with bounce
             if overlap_y < overlap_x {
@@ -145,6 +146,22 @@ pub fn ball_collisions(
                                 reflected.x * sin_a + reflected.y * cos_a,
                             );
                             ball_velocity.0 = rotated.normalize() * speed * STEP_BOUNCE_RETENTION;
+                            rolling.0 = false;
+                        } else if is_rim {
+                            // Rim bounce - snappy but less chaotic than steps
+                            let speed = ball_velocity.0.length();
+                            let deflect_angle =
+                                rng.gen_range(-RIM_DEFLECT_ANGLE_MAX..RIM_DEFLECT_ANGLE_MAX);
+                            let deflect_rad = deflect_angle.to_radians();
+
+                            let reflected = Vec2::new(ball_velocity.0.x, -ball_velocity.0.y);
+                            let cos_a = deflect_rad.cos();
+                            let sin_a = deflect_rad.sin();
+                            let rotated = Vec2::new(
+                                reflected.x * cos_a - reflected.y * sin_a,
+                                reflected.x * sin_a + reflected.y * cos_a,
+                            );
+                            ball_velocity.0 = rotated.normalize() * speed * RIM_BOUNCE_RETENTION;
                             rolling.0 = false;
                         } else {
                             // Normal floor bounce
@@ -181,6 +198,20 @@ pub fn ball_collisions(
                                 reflected.x * sin_a + reflected.y * cos_a,
                             );
                             ball_velocity.0 = rotated.normalize() * speed * STEP_BOUNCE_RETENTION;
+                        } else if is_rim {
+                            // Rim bounce from below
+                            let speed = ball_velocity.0.length();
+                            let deflect_angle =
+                                rng.gen_range(-RIM_DEFLECT_ANGLE_MAX..RIM_DEFLECT_ANGLE_MAX);
+                            let deflect_rad = deflect_angle.to_radians();
+                            let reflected = Vec2::new(ball_velocity.0.x, -ball_velocity.0.y);
+                            let cos_a = deflect_rad.cos();
+                            let sin_a = deflect_rad.sin();
+                            let rotated = Vec2::new(
+                                reflected.x * cos_a - reflected.y * sin_a,
+                                reflected.x * sin_a + reflected.y * cos_a,
+                            );
+                            ball_velocity.0 = rotated.normalize() * speed * RIM_BOUNCE_RETENTION;
                         } else {
                             ball_velocity.0.y = -ball_velocity.0.y * tweaks.ball_bounce;
                         }
@@ -207,6 +238,20 @@ pub fn ball_collisions(
                         reflected.x * sin_a + reflected.y * cos_a,
                     );
                     ball_velocity.0 = rotated.normalize() * speed * STEP_BOUNCE_RETENTION;
+                } else if is_rim {
+                    // Rim side bounce
+                    let speed = ball_velocity.0.length();
+                    let deflect_angle =
+                        rng.gen_range(-RIM_DEFLECT_ANGLE_MAX..RIM_DEFLECT_ANGLE_MAX);
+                    let deflect_rad = deflect_angle.to_radians();
+                    let reflected = Vec2::new(-ball_velocity.0.x, ball_velocity.0.y);
+                    let cos_a = deflect_rad.cos();
+                    let sin_a = deflect_rad.sin();
+                    let rotated = Vec2::new(
+                        reflected.x * cos_a - reflected.y * sin_a,
+                        reflected.x * sin_a + reflected.y * cos_a,
+                    );
+                    ball_velocity.0 = rotated.normalize() * speed * RIM_BOUNCE_RETENTION;
                 } else {
                     ball_velocity.0.x = -ball_velocity.0.x * tweaks.ball_bounce;
                 }

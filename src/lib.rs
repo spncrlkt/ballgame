@@ -23,9 +23,9 @@ pub mod world;
 pub use ai::{AiGoal, AiInput, AiState};
 pub use ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
-    BallStyleType, BallTextures, CurrentPalette, StyleTextures,
+    BallStyle, BallTextures, CurrentPalette, StyleTextures,
 };
-pub use palettes::{Palette, PaletteDatabase, NUM_PALETTES, PALETTES_FILE};
+pub use palettes::{Palette, PaletteDatabase, PALETTES_FILE};
 pub use constants::*;
 pub use helpers::*;
 pub use input::PlayerInput;

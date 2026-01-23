@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::ai::{AiGoal, AiInput, AiState};
 use crate::ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
-    BallStyleType, BallTextures, CurrentPalette,
+    BallStyle, BallTextures, CurrentPalette,
 };
 use crate::palettes::PaletteDatabase;
 use crate::constants::*;
@@ -376,47 +376,63 @@ fn spawn_balls(
     is_debug: bool,
 ) {
     if is_debug {
-        // Debug level: spawn 6 balls with different styles
-        let x_positions = [-600.0, -360.0, -120.0, 120.0, 360.0, 600.0];
-        for (style, x) in BallStyleType::ALL.iter().zip(x_positions.iter()) {
-            let textures = ball_textures.get(*style);
-            commands.spawn((
-                Sprite {
-                    image: textures.textures[palette_index].clone(),
-                    custom_size: Some(BALL_SIZE),
-                    ..default()
-                },
-                Transform::from_xyz(*x, ARENA_FLOOR_Y + BALL_SIZE.y / 2.0 + 20.0, 2.0),
-                Ball,
-                BallState::default(),
-                Velocity::default(),
-                BallPlayerContact::default(),
-                BallPulse::default(),
-                BallRolling::default(),
-                BallShotGrace::default(),
-                BallSpin::default(),
-                *style,
-            ));
+        // Debug level: spawn ALL ball styles dynamically
+        let num_styles = ball_textures.len();
+        let total_width = 1200.0;
+        let spacing = if num_styles > 1 {
+            total_width / (num_styles - 1) as f32
+        } else {
+            0.0
+        };
+        let start_x = -total_width / 2.0;
+
+        for (i, style_name) in ball_textures.style_order.iter().enumerate() {
+            let x = start_x + (i as f32 * spacing);
+            if let Some(textures) = ball_textures.get(style_name) {
+                if let Some(texture) = textures.textures.get(palette_index) {
+                    commands.spawn((
+                        Sprite {
+                            image: texture.clone(),
+                            custom_size: Some(BALL_SIZE),
+                            ..default()
+                        },
+                        Transform::from_xyz(x, ARENA_FLOOR_Y + BALL_SIZE.y / 2.0 + 20.0, 2.0),
+                        Ball,
+                        BallState::default(),
+                        Velocity::default(),
+                        BallPlayerContact::default(),
+                        BallPulse::default(),
+                        BallRolling::default(),
+                        BallShotGrace::default(),
+                        BallSpin::default(),
+                        BallStyle::new(style_name),
+                    ));
+                }
+            }
         }
     } else {
-        // Normal level: spawn single ball with default style
-        let default_textures = ball_textures.get(BallStyleType::default());
-        commands.spawn((
-            Sprite {
-                image: default_textures.textures[palette_index].clone(),
-                custom_size: Some(BALL_SIZE),
-                ..default()
-            },
-            Transform::from_translation(BALL_SPAWN),
-            Ball,
-            BallState::default(),
-            Velocity::default(),
-            BallPlayerContact::default(),
-            BallPulse::default(),
-            BallRolling::default(),
-            BallShotGrace::default(),
-            BallSpin::default(),
-            BallStyleType::default(),
-        ));
+        // Normal level: spawn single ball with first style
+        let default_style = ball_textures.default_style().cloned().unwrap_or_else(|| "wedges".to_string());
+        if let Some(textures) = ball_textures.get(&default_style) {
+            if let Some(texture) = textures.textures.get(palette_index) {
+                commands.spawn((
+                    Sprite {
+                        image: texture.clone(),
+                        custom_size: Some(BALL_SIZE),
+                        ..default()
+                    },
+                    Transform::from_translation(BALL_SPAWN),
+                    Ball,
+                    BallState::default(),
+                    Velocity::default(),
+                    BallPlayerContact::default(),
+                    BallPulse::default(),
+                    BallRolling::default(),
+                    BallShotGrace::default(),
+                    BallSpin::default(),
+                    BallStyle::new(&default_style),
+                ));
+            }
+        }
     }
 }

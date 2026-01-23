@@ -51,9 +51,6 @@ impl Default for PaletteDatabase {
     }
 }
 
-/// Number of palettes (used by ball texture system)
-pub const NUM_PALETTES: usize = 20;
-
 /// Path to palettes file
 pub const PALETTES_FILE: &str = "assets/palettes.txt";
 
@@ -74,14 +71,11 @@ impl PaletteDatabase {
         match fs::read_to_string(path) {
             Ok(content) => {
                 let db = Self::parse(&content);
-                if db.palettes.len() != NUM_PALETTES {
-                    warn!(
-                        "Expected {} palettes, found {}. Using defaults.",
-                        NUM_PALETTES,
-                        db.palettes.len()
-                    );
+                if db.palettes.is_empty() {
+                    warn!("No palettes loaded from file, using defaults");
                     return Self::default_palettes();
                 }
+                info!("Loaded {} palettes from {}", db.palettes.len(), path);
                 db
             }
             Err(e) => {
@@ -262,31 +256,15 @@ impl PaletteDatabase {
         self.palettes.len()
     }
 
-    /// Default palettes - 20 unique color schemes with good contrast
-    /// Format: name, left, left_rim, right, right_rim, background, platforms
+    /// Minimal fallback palettes - used only if assets/palettes.txt fails to load
+    /// The real palettes should be defined in assets/palettes.txt (single source of truth)
     pub fn default_palettes() -> Self {
         Self {
             palettes: vec![
-                Palette::new("Ocean Fire", (0.118, 0.565, 1.0), (0.05, 0.25, 0.45), (1.0, 0.42, 0.208), (0.45, 0.19, 0.09), (0.35, 0.32, 0.28), (0.15, 0.13, 0.12)),
-                Palette::new("Forest Crimson", (0.133, 0.545, 0.133), (0.10, 0.41, 0.10), (0.863, 0.078, 0.235), (0.65, 0.06, 0.18), (0.18, 0.15, 0.12), (0.35, 0.30, 0.25)),
-                Palette::new("Electric Neon", (0.0, 1.0, 0.784), (0.0, 0.75, 0.59), (1.0, 0.196, 0.588), (0.75, 0.15, 0.44), (0.06, 0.06, 0.1), (0.18, 0.18, 0.25)),
-                Palette::new("Royal Gold", (0.255, 0.412, 0.882), (0.19, 0.31, 0.66), (1.0, 0.843, 0.0), (0.75, 0.63, 0.0), (0.12, 0.08, 0.18), (0.28, 0.22, 0.35)),
-                Palette::new("Sunset", (0.933, 0.51, 0.933), (0.42, 0.23, 0.42), (1.0, 0.647, 0.0), (0.45, 0.29, 0.0), (0.22, 0.14, 0.18), (0.42, 0.32, 0.38)),
-                Palette::new("Arctic Ember", (0.529, 0.808, 0.98), (0.24, 0.36, 0.44), (0.91, 0.298, 0.239), (0.41, 0.13, 0.11), (0.18, 0.22, 0.28), (0.38, 0.42, 0.50)),
-                Palette::new("Toxic Slime", (0.0, 1.0, 0.0), (0.0, 0.75, 0.0), (0.58, 0.0, 0.827), (0.44, 0.0, 0.62), (0.06, 0.1, 0.04), (0.18, 0.28, 0.14)),
-                Palette::new("Bubblegum", (0.0, 0.753, 0.753), (0.0, 0.34, 0.34), (1.0, 0.412, 0.706), (0.45, 0.19, 0.32), (0.2, 0.16, 0.24), (0.40, 0.35, 0.45)),
-                Palette::new("Desert Storm", (0.824, 0.706, 0.549), (0.37, 0.32, 0.25), (0.545, 0.271, 0.075), (0.25, 0.12, 0.03), (0.38, 0.32, 0.24), (0.18, 0.14, 0.10)),
-                Palette::new("Neon Noir", (0.0, 0.98, 0.98), (0.0, 0.74, 0.74), (0.98, 0.0, 0.471), (0.74, 0.0, 0.35), (0.05, 0.05, 0.07), (0.18, 0.18, 0.22)),
-                Palette::new("Ice and Fire", (0.7, 0.85, 1.0), (0.32, 0.38, 0.45), (0.8, 0.1, 0.1), (0.36, 0.05, 0.05), (0.15, 0.2, 0.28), (0.35, 0.40, 0.50)),
-                Palette::new("Jungle Fever", (0.2, 0.9, 0.3), (0.15, 0.68, 0.23), (1.0, 0.2, 0.5), (0.75, 0.15, 0.38), (0.08, 0.12, 0.06), (0.22, 0.30, 0.18)),
-                Palette::new("Copper Patina", (0.2, 0.6, 0.55), (0.09, 0.27, 0.25), (0.85, 0.45, 0.2), (0.38, 0.20, 0.09), (0.2, 0.22, 0.2), (0.40, 0.42, 0.40)),
-                Palette::new("Midnight Sun", (1.0, 0.8, 0.2), (0.75, 0.60, 0.15), (0.1, 0.2, 0.6), (0.08, 0.15, 0.45), (0.12, 0.1, 0.2), (0.30, 0.28, 0.40)),
-                Palette::new("Cherry Blossom", (1.0, 0.6, 0.7), (0.45, 0.27, 0.32), (0.4, 0.8, 0.6), (0.18, 0.36, 0.27), (0.28, 0.25, 0.22), (0.48, 0.45, 0.42)),
-                Palette::new("Volcanic", (1.0, 0.5, 0.0), (0.75, 0.38, 0.0), (0.2, 0.2, 0.25), (0.15, 0.15, 0.19), (0.15, 0.08, 0.05), (0.35, 0.22, 0.18)),
-                Palette::new("Deep Sea", (0.0, 0.8, 0.9), (0.0, 0.60, 0.68), (1.0, 0.5, 0.45), (0.75, 0.38, 0.34), (0.05, 0.1, 0.15), (0.18, 0.25, 0.32)),
-                Palette::new("Autumn Harvest", (0.95, 0.6, 0.2), (0.43, 0.27, 0.09), (0.5, 0.2, 0.6), (0.23, 0.09, 0.27), (0.25, 0.18, 0.12), (0.45, 0.38, 0.30)),
-                Palette::new("Synthwave", (1.0, 0.2, 0.6), (0.75, 0.15, 0.45), (0.2, 0.6, 1.0), (0.15, 0.45, 0.75), (0.1, 0.05, 0.15), (0.28, 0.20, 0.35)),
-                Palette::new("Monochrome", (0.95, 0.95, 0.95), (0.71, 0.71, 0.71), (0.5, 0.5, 0.5), (0.38, 0.38, 0.38), (0.15, 0.15, 0.15), (0.35, 0.35, 0.35)),
+                // Just 3 essential fallbacks - the real palettes are in assets/palettes.txt
+                Palette::new("Neon", (0.0, 1.0, 0.8), (0.0, 0.75, 0.6), (1.0, 0.2, 0.6), (0.75, 0.15, 0.45), (0.06, 0.06, 0.1), (0.18, 0.18, 0.25)),
+                Palette::new("Classic", (0.1, 0.5, 1.0), (0.05, 0.25, 0.5), (1.0, 0.4, 0.2), (0.5, 0.2, 0.1), (0.35, 0.32, 0.28), (0.15, 0.13, 0.12)),
+                Palette::new("Mono", (0.95, 0.95, 0.95), (0.7, 0.7, 0.7), (0.5, 0.5, 0.5), (0.38, 0.38, 0.38), (0.15, 0.15, 0.15), (0.35, 0.35, 0.35)),
             ],
         }
     }

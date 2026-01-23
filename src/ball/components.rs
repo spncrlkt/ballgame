@@ -1,81 +1,88 @@
 //! Ball-related components
 
 use bevy::prelude::*;
-
-use crate::palettes::NUM_PALETTES;
+use std::collections::HashMap;
 
 /// Marker for ball entities
 #[derive(Component)]
 pub struct Ball;
 
-/// Visual style of a ball (each has textures for all palettes)
-#[derive(Component, Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
-pub enum BallStyleType {
-    #[default]
-    Stripe,
-    Wedges,
-    Dot,
-    Half,
-    Ring,
-    Solid,
-}
+/// Ball style name - stored as a string to be fully dynamic
+#[derive(Component, Clone, Default, Debug, PartialEq, Eq, Hash)]
+pub struct BallStyle(pub String);
 
-impl BallStyleType {
-    /// All ball styles in order (matches debug level left-to-right)
-    pub const ALL: [BallStyleType; 6] = [
-        BallStyleType::Stripe,
-        BallStyleType::Wedges,
-        BallStyleType::Dot,
-        BallStyleType::Half,
-        BallStyleType::Ring,
-        BallStyleType::Solid,
-    ];
+impl BallStyle {
+    pub fn new(name: &str) -> Self {
+        Self(name.to_string())
+    }
 
-    /// Name for display
-    pub fn name(&self) -> &'static str {
-        match self {
-            BallStyleType::Stripe => "stripe",
-            BallStyleType::Wedges => "wedges",
-            BallStyleType::Dot => "dot",
-            BallStyleType::Half => "half",
-            BallStyleType::Ring => "ring",
-            BallStyleType::Solid => "solid",
-        }
+    pub fn name(&self) -> &str {
+        &self.0
     }
 }
 
 /// Textures for a single ball style (one per palette)
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct StyleTextures {
-    pub textures: [Handle<Image>; NUM_PALETTES],
+    pub textures: Vec<Handle<Image>>,
 }
 
 /// Holds handles to all ball textures for all styles and palettes
-#[derive(Resource, Clone)]
+/// Dynamically loaded based on ball_options.txt
+#[derive(Resource, Clone, Default)]
 pub struct BallTextures {
-    pub stripe: StyleTextures,
-    pub wedges: StyleTextures,
-    pub dot: StyleTextures,
-    pub half: StyleTextures,
-    pub ring: StyleTextures,
-    pub solid: StyleTextures,
+    /// Map from style name to its textures
+    pub styles: HashMap<String, StyleTextures>,
+    /// Ordered list of style names (for cycling through styles)
+    pub style_order: Vec<String>,
 }
 
 impl BallTextures {
-    /// Get textures for a specific style
-    pub fn get(&self, style: BallStyleType) -> &StyleTextures {
-        match style {
-            BallStyleType::Stripe => &self.stripe,
-            BallStyleType::Wedges => &self.wedges,
-            BallStyleType::Dot => &self.dot,
-            BallStyleType::Half => &self.half,
-            BallStyleType::Ring => &self.ring,
-            BallStyleType::Solid => &self.solid,
-        }
+    /// Get textures for a specific style by name
+    pub fn get(&self, style: &str) -> Option<&StyleTextures> {
+        self.styles.get(style)
+    }
+
+    /// Get the first style name (default)
+    pub fn default_style(&self) -> Option<&String> {
+        self.style_order.first()
+    }
+
+    /// Get style at index (for cycling)
+    pub fn style_at(&self, index: usize) -> Option<&String> {
+        self.style_order.get(index)
+    }
+
+    /// Number of available styles
+    pub fn len(&self) -> usize {
+        self.style_order.len()
+    }
+
+    /// Get index of a style by name
+    pub fn index_of(&self, style: &str) -> Option<usize> {
+        self.style_order.iter().position(|s| s == style)
+    }
+
+    /// Get next style (wrapping)
+    pub fn next_style(&self, current: &str) -> &str {
+        let idx = self.index_of(current).unwrap_or(0);
+        let next_idx = (idx + 1) % self.style_order.len();
+        &self.style_order[next_idx]
+    }
+
+    /// Get previous style (wrapping)
+    pub fn prev_style(&self, current: &str) -> &str {
+        let idx = self.index_of(current).unwrap_or(0);
+        let prev_idx = if idx == 0 {
+            self.style_order.len() - 1
+        } else {
+            idx - 1
+        };
+        &self.style_order[prev_idx]
     }
 }
 
-/// Current color palette index (0 to NUM_PALETTES-1)
+/// Current color palette index (0 to palette_count-1)
 #[derive(Resource, Default)]
 pub struct CurrentPalette(pub usize);
 

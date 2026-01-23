@@ -4,7 +4,7 @@
 
 use ballgame::{
     AiGoal, AiInput, AiState, Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace,
-    BallSpin, BallState, BallStyleType, BallTextures, ChargeGaugeBackground, ChargeGaugeFill,
+    BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground, ChargeGaugeFill,
     ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette, CycleIndicator, CycleSelection,
     DebugSettings, DebugText, Facing, Grounded, HumanControlled, JumpState, LastShotInfo,
     LevelDatabase, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, ScoreLevelText,
@@ -13,7 +13,36 @@ use ballgame::{
     PALETTES_FILE,
 };
 use bevy::{diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
+use std::collections::HashMap;
+use std::fs;
 use world::{Basket, BasketRim, Collider, Platform};
+
+/// Path to ball options file
+const BALL_OPTIONS_FILE: &str = "assets/ball_options.txt";
+
+/// Parse ball_options.txt to get list of style names
+fn load_ball_style_names() -> Vec<String> {
+    let content = fs::read_to_string(BALL_OPTIONS_FILE).unwrap_or_else(|e| {
+        warn!("Could not read ball options file: {}, using defaults", e);
+        return String::new();
+    });
+
+    let mut styles = Vec::new();
+    for line in content.lines() {
+        let line = line.trim();
+        if let Some(name) = line.strip_prefix("style:") {
+            styles.push(name.trim().to_string());
+        }
+    }
+
+    if styles.is_empty() {
+        // Fallback defaults
+        styles = vec!["wedges".to_string(), "half".to_string()];
+    }
+
+    info!("Loaded {} ball styles: {:?}", styles.len(), styles);
+    styles
+}
 
 fn main() {
     // Load level database from file
@@ -256,21 +285,24 @@ fn setup(
         .id();
     commands.entity(right_player).add_child(right_gauge_fill);
 
-    // Load ball textures for all styles (6 styles × 10 palettes = 60 textures)
-    let load_style = |style: &str| -> StyleTextures {
-        StyleTextures {
-            textures: std::array::from_fn(|i| {
-                asset_server.load(format!("ball_{}_{}.png", style, i))
-            }),
-        }
-    };
+    // Load ball style names from config file
+    let style_names = load_ball_style_names();
+    let num_palettes = palette_db.len();
+
+    // Load ball textures for all styles dynamically
+    let mut styles_map = HashMap::new();
+    for style_name in &style_names {
+        let textures = StyleTextures {
+            textures: (0..num_palettes)
+                .map(|i| asset_server.load(format!("ball_{}_{}.png", style_name, i)))
+                .collect(),
+        };
+        styles_map.insert(style_name.clone(), textures);
+    }
+
     let ball_textures = BallTextures {
-        stripe: load_style("stripe"),
-        wedges: load_style("wedges"),
-        dot: load_style("dot"),
-        half: load_style("half"),
-        ring: load_style("ring"),
-        solid: load_style("solid"),
+        styles: styles_map,
+        style_order: style_names.clone(),
     };
     commands.insert_resource(ball_textures.clone());
 
@@ -281,18 +313,49 @@ fn setup(
     let initial_palette_idx = 0;
 
     if is_debug_level {
-        // Debug level: spawn 6 balls with different styles
-        let x_positions = [-600.0, -360.0, -120.0, 120.0, 360.0, 600.0];
+        // Debug level: spawn ALL ball styles dynamically
+        let num_styles = style_names.len();
+        let total_width = 1200.0; // Spread balls across this width
+        let spacing = if num_styles > 1 {
+            total_width / (num_styles - 1) as f32
+        } else {
+            0.0
+        };
+        let start_x = -total_width / 2.0;
 
-        for (style, x) in BallStyleType::ALL.iter().zip(x_positions.iter()) {
-            let textures = ball_textures.get(*style);
+        for (i, style_name) in style_names.iter().enumerate() {
+            let x = start_x + (i as f32 * spacing);
+            if let Some(textures) = ball_textures.get(style_name) {
+                commands.spawn((
+                    Sprite {
+                        image: textures.textures[initial_palette_idx].clone(),
+                        custom_size: Some(BALL_SIZE),
+                        ..default()
+                    },
+                    Transform::from_xyz(x, ARENA_FLOOR_Y + BALL_SIZE.y / 2.0 + 20.0, 2.0),
+                    Ball,
+                    BallState::default(),
+                    Velocity::default(),
+                    BallPlayerContact::default(),
+                    BallPulse::default(),
+                    BallRolling::default(),
+                    BallShotGrace::default(),
+                    BallSpin::default(),
+                    BallStyle::new(style_name),
+                ));
+            }
+        }
+    } else {
+        // Normal levels: spawn single ball with first style
+        let default_style = ball_textures.default_style().cloned().unwrap_or_else(|| "wedges".to_string());
+        if let Some(textures) = ball_textures.get(&default_style) {
             commands.spawn((
                 Sprite {
                     image: textures.textures[initial_palette_idx].clone(),
                     custom_size: Some(BALL_SIZE),
                     ..default()
                 },
-                Transform::from_xyz(*x, ARENA_FLOOR_Y + BALL_SIZE.y / 2.0 + 20.0, 2.0),
+                Transform::from_translation(BALL_SPAWN),
                 Ball,
                 BallState::default(),
                 Velocity::default(),
@@ -301,29 +364,9 @@ fn setup(
                 BallRolling::default(),
                 BallShotGrace::default(),
                 BallSpin::default(),
-                *style, // BallStyleType component
+                BallStyle::new(&default_style),
             ));
         }
-    } else {
-        // Normal levels: spawn single ball with default style (dot)
-        let default_textures = ball_textures.get(BallStyleType::default());
-        commands.spawn((
-            Sprite {
-                image: default_textures.textures[initial_palette_idx].clone(),
-                custom_size: Some(BALL_SIZE),
-                ..default()
-            },
-            Transform::from_translation(BALL_SPAWN),
-            Ball,
-            BallState::default(),
-            Velocity::default(),
-            BallPlayerContact::default(),
-            BallPulse::default(),
-            BallRolling::default(),
-            BallShotGrace::default(),
-            BallSpin::default(),
-            BallStyleType::default(),
-        ));
     }
 
     // Arena floor (spans between walls)
