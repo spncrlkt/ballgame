@@ -85,7 +85,10 @@ impl PaletteDatabase {
                 db
             }
             Err(e) => {
-                warn!("Failed to load palettes from {}: {}, using defaults", path, e);
+                warn!(
+                    "Failed to load palettes from {}: {}, using defaults",
+                    path, e
+                );
                 Self::default_palettes()
             }
         }
@@ -104,9 +107,12 @@ impl PaletteDatabase {
         content.push_str("#   right: <r> <g> <b>           Right team color\n");
         content.push_str("#   right_rim: <r> <g> <b>       Right basket rim color\n");
         content.push_str("#   background: <r> <g> <b>      Arena background color\n");
-        content.push_str("#   platforms: <r> <g> <b>       Floor, walls, steps, and floating platforms\n");
+        content.push_str(
+            "#   platforms: <r> <g> <b>       Floor, walls, steps, and floating platforms\n",
+        );
         content.push_str("#   text: <r> <g> <b>            Primary UI text color\n");
-        content.push_str("#   text_accent: <r> <g> <b>     Accent UI text color (cycle indicator)\n");
+        content
+            .push_str("#   text_accent: <r> <g> <b>     Accent UI text color (cycle indicator)\n");
         content.push_str("#\n");
         content.push_str("# 30 palettes total (ball textures generated for each palette).\n");
         content.push_str("#\n");
@@ -291,9 +297,39 @@ impl PaletteDatabase {
         Self {
             palettes: vec![
                 // Just 3 essential fallbacks - the real palettes are in assets/palettes.txt
-                Palette::new("Neon", (0.0, 1.0, 0.8), (0.0, 0.75, 0.6), (1.0, 0.2, 0.6), (0.75, 0.15, 0.45), (0.06, 0.06, 0.1), (0.18, 0.18, 0.25), (0.95, 0.9, 0.8), (0.9, 0.75, 0.4)),
-                Palette::new("Classic", (0.1, 0.5, 1.0), (0.05, 0.25, 0.5), (1.0, 0.4, 0.2), (0.5, 0.2, 0.1), (0.35, 0.32, 0.28), (0.15, 0.13, 0.12), (0.95, 0.9, 0.8), (0.9, 0.75, 0.4)),
-                Palette::new("Mono", (0.95, 0.95, 0.95), (0.7, 0.7, 0.7), (0.5, 0.5, 0.5), (0.38, 0.38, 0.38), (0.15, 0.15, 0.15), (0.35, 0.35, 0.35), (0.95, 0.9, 0.8), (0.9, 0.75, 0.4)),
+                Palette::new(
+                    "Neon",
+                    (0.0, 1.0, 0.8),
+                    (0.0, 0.75, 0.6),
+                    (1.0, 0.2, 0.6),
+                    (0.75, 0.15, 0.45),
+                    (0.06, 0.06, 0.1),
+                    (0.18, 0.18, 0.25),
+                    (0.95, 0.9, 0.8),
+                    (0.9, 0.75, 0.4),
+                ),
+                Palette::new(
+                    "Classic",
+                    (0.1, 0.5, 1.0),
+                    (0.05, 0.25, 0.5),
+                    (1.0, 0.4, 0.2),
+                    (0.5, 0.2, 0.1),
+                    (0.35, 0.32, 0.28),
+                    (0.15, 0.13, 0.12),
+                    (0.95, 0.9, 0.8),
+                    (0.9, 0.75, 0.4),
+                ),
+                Palette::new(
+                    "Mono",
+                    (0.95, 0.95, 0.95),
+                    (0.7, 0.7, 0.7),
+                    (0.5, 0.5, 0.5),
+                    (0.38, 0.38, 0.38),
+                    (0.15, 0.15, 0.15),
+                    (0.35, 0.35, 0.35),
+                    (0.95, 0.9, 0.8),
+                    (0.9, 0.75, 0.4),
+                ),
             ],
         }
     }
@@ -339,6 +375,16 @@ impl PaletteBuilder {
         let text = self.text.unwrap_or((0.95, 0.9, 0.8));
         let text_accent = self.text_accent.unwrap_or((0.9, 0.75, 0.4));
 
-        Some(Palette::new(&self.name, left, left_rim, right, right_rim, background, platforms, text, text_accent))
+        Some(Palette::new(
+            &self.name,
+            left,
+            left_rim,
+            right,
+            right_rim,
+            background,
+            platforms,
+            text,
+            text_accent,
+        ))
     }
 }

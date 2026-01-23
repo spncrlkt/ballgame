@@ -5,13 +5,13 @@ use rand::Rng;
 
 use crate::ai::{AiGoal, AiProfileDatabase, AiState, InputState};
 use crate::ball::{
-    Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
-    BallStyle, BallTextures, CurrentPalette,
+    Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
+    BallTextures, CurrentPalette,
 };
-use crate::palettes::PaletteDatabase;
 use crate::constants::*;
 use crate::helpers::*;
-use crate::levels::{reload_level_geometry, LevelDatabase};
+use crate::levels::{LevelDatabase, reload_level_geometry};
+use crate::palettes::PaletteDatabase;
 use crate::player::components::*;
 use crate::scoring::CurrentLevel;
 use crate::ui::PhysicsTweaks;
@@ -207,10 +207,16 @@ pub fn respawn_player(
     mut score: ResMut<crate::scoring::Score>,
     ball_textures: Res<BallTextures>,
     mut players: Query<
-        (Entity, &mut Transform, &mut Velocity, Option<&HoldingBall>, &Team),
+        (
+            Entity,
+            &mut Transform,
+            &mut Velocity,
+            Option<&HoldingBall>,
+            &Team,
+        ),
         With<Player>,
     >,
-    mut ai_players: Query<&mut AiState, (With<Player>, Without<HumanControlled>)>,
+    mut ai_players: Query<&mut AiState, With<Player>>,
     ball_query: Query<Entity, With<Ball>>,
     level_platforms: Query<Entity, With<LevelPlatform>>,
     corner_ramps: Query<Entity, With<CornerRamp>>,
@@ -271,17 +277,9 @@ pub fn respawn_player(
         }
 
         let level_index = (current_level.0 - 1) as usize;
-        let is_debug = level_db
-            .get(level_index)
-            .map(|l| l.debug)
-            .unwrap_or(false);
+        let is_debug = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
 
-        spawn_balls(
-            &mut commands,
-            &ball_textures,
-            current_palette.0,
-            is_debug,
-        );
+        spawn_balls(&mut commands, &ball_textures, current_palette.0, is_debug);
 
         // Randomize AI profile on reset
         let num_profiles = profile_db.len();
@@ -319,17 +317,9 @@ pub fn respawn_player(
             commands.entity(ball_entity).despawn();
         }
 
-        let is_debug = level_db
-            .get(level_index)
-            .map(|l| l.debug)
-            .unwrap_or(false);
+        let is_debug = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
 
-        spawn_balls(
-            &mut commands,
-            &ball_textures,
-            current_palette.0,
-            is_debug,
-        );
+        spawn_balls(&mut commands, &ball_textures, current_palette.0, is_debug);
 
         // Reload level geometry (platforms + corner ramps)
         if let Some((left_x, right_x, basket_y)) = reload_level_geometry(
@@ -352,10 +342,7 @@ pub fn respawn_player(
             }
 
             // Update AI goals based on debug status
-            let is_debug = level_db
-                .get(level_index)
-                .map(|l| l.debug)
-                .unwrap_or(false);
+            let is_debug = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
             let new_goal = if is_debug {
                 AiGoal::Idle
             } else {
@@ -412,7 +399,10 @@ fn spawn_balls(
         }
     } else {
         // Normal level: spawn single ball with first style
-        let default_style = ball_textures.default_style().cloned().unwrap_or_else(|| "wedges".to_string());
+        let default_style = ball_textures
+            .default_style()
+            .cloned()
+            .unwrap_or_else(|| "wedges".to_string());
         if let Some(textures) = ball_textures.get(&default_style) {
             if let Some(texture) = textures.textures.get(palette_index) {
                 commands.spawn((

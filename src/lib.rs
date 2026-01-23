@@ -14,6 +14,7 @@ pub mod input;
 pub mod levels;
 pub mod palettes;
 pub mod player;
+pub mod presets;
 pub mod scoring;
 pub mod shooting;
 pub mod steal;
@@ -21,30 +22,34 @@ pub mod ui;
 pub mod world;
 
 // Re-export commonly used types for convenience
-pub use ai::{AiGoal, AiProfile, AiProfileDatabase, AiState, InputState, AI_PROFILES_FILE};
+pub use ai::{AI_PROFILES_FILE, AiGoal, AiProfile, AiProfileDatabase, AiState, InputState};
 pub use ball::{
-    Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
-    BallStyle, BallTextures, CurrentPalette, StyleTextures,
+    Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
+    BallTextures, CurrentPalette, StyleTextures,
 };
-pub use palettes::{Palette, PaletteDatabase, PALETTES_FILE};
+pub use config_watcher::ConfigWatcher;
 pub use constants::*;
 pub use helpers::*;
 pub use input::PlayerInput;
 pub use levels::{LevelData, LevelDatabase, PlatformDef};
+pub use palettes::{PALETTES_FILE, Palette, PaletteDatabase};
 pub use player::{
     CoyoteTimer, Facing, Grounded, HoldingBall, HumanControlled, JumpState, Player, TargetBasket,
     Team, Velocity,
 };
+pub use presets::{
+    BallPreset, CompositePreset, CurrentPresets, MovementPreset, PRESETS_FILE, PresetDatabase,
+    ShootingPreset, apply_composite_preset, apply_preset_to_tweaks,
+};
 pub use scoring::{CurrentLevel, Score};
 pub use shooting::{ChargingShot, LastShotInfo};
-pub use steal::StealContest;
+pub use steal::{StealContest, StealCooldown};
 pub use ui::{
     ChargeGaugeBackground, ChargeGaugeFill, CycleIndicator, CycleSelection, CycleTarget,
-    DebugSettings, DebugText, PhysicsTweaks, ScoreFlash, ScoreLevelText, TweakPanel, TweakRow,
-    ViewportScale,
+    DebugSettings, DebugText, PhysicsTweaks, ScoreFlash, ScoreLevelText, StealCooldownIndicator,
+    StealFailFlash, TweakPanel, TweakRow, ViewportScale, VulnerableIndicator,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
-pub use config_watcher::ConfigWatcher;
 
 // =============================================================================
 // TRAJECTORY CALCULATION (shared with tools like heatmap generator)

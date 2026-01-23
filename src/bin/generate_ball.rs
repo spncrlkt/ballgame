@@ -28,7 +28,10 @@ struct Palette {
 /// Load palettes from assets/palettes.txt
 fn load_palettes() -> Vec<Palette> {
     let content = fs::read_to_string(PALETTES_FILE).unwrap_or_else(|e| {
-        panic!("\n\nERROR: Could not read palettes file '{}': {}\n", PALETTES_FILE, e)
+        panic!(
+            "\n\nERROR: Could not read palettes file '{}': {}\n",
+            PALETTES_FILE, e
+        )
     });
 
     let mut palettes = Vec::new();
@@ -43,9 +46,11 @@ fn load_palettes() -> Vec<Palette> {
         }
 
         if let Some(name) = line.strip_prefix("palette:") {
-            if let (Some(name), Some(left), Some(right)) =
-                (current_name.take(), current_left.take(), current_right.take())
-            {
+            if let (Some(name), Some(left), Some(right)) = (
+                current_name.take(),
+                current_left.take(),
+                current_right.take(),
+            ) {
                 palettes.push(Palette { name, left, right });
             }
             current_name = Some(name.trim().to_string());
@@ -125,9 +130,8 @@ fn main() {
 }
 
 fn load_config(palettes: Vec<Palette>) -> BallConfig {
-    let content = fs::read_to_string(OPTIONS_FILE).unwrap_or_else(|e| {
-        panic!("\n\nERROR: Could not read '{}': {}\n", OPTIONS_FILE, e)
-    });
+    let content = fs::read_to_string(OPTIONS_FILE)
+        .unwrap_or_else(|e| panic!("\n\nERROR: Could not read '{}': {}\n", OPTIONS_FILE, e));
     parse_config(&content, palettes)
 }
 
@@ -283,11 +287,22 @@ fn draw_wedges(angle: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
 
 /// Half: Split vertically down the middle
 fn draw_half(fx: f32, palette: &Palette) -> [u8; 4] {
-    if fx < 0.0 { palette.left } else { palette.right }
+    if fx < 0.0 {
+        palette.left
+    } else {
+        palette.right
+    }
 }
 
 /// Spiral: Spiral arms from center
-fn draw_spiral(_fx: f32, _fy: f32, norm_dist: f32, angle: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+fn draw_spiral(
+    _fx: f32,
+    _fy: f32,
+    norm_dist: f32,
+    angle: f32,
+    style: &StyleConfig,
+    palette: &Palette,
+) -> [u8; 4] {
     let arms = style.params.get("arms").copied().unwrap_or(3.0);
     let tightness = style.params.get("tightness").copied().unwrap_or(2.5);
 
@@ -338,7 +353,11 @@ fn draw_star(angle: f32, norm_dist: f32, style: &StyleConfig, palette: &Palette)
     if norm_dist < star_dist {
         // Inside star - split by angle
         let point_index = (angle / sector_angle).floor() as i32;
-        if point_index % 2 == 0 { palette.left } else { palette.right }
+        if point_index % 2 == 0 {
+            palette.left
+        } else {
+            palette.right
+        }
     } else {
         WHITE
     }
@@ -446,7 +465,14 @@ fn draw_wave(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palet
 }
 
 /// Atoms: Orbital rings pattern
-fn draw_atoms(fx: f32, fy: f32, norm_dist: f32, _angle: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+fn draw_atoms(
+    fx: f32,
+    fy: f32,
+    norm_dist: f32,
+    _angle: f32,
+    style: &StyleConfig,
+    palette: &Palette,
+) -> [u8; 4] {
     let rings = style.params.get("rings").copied().unwrap_or(3.0) as i32;
     let thickness = style.params.get("thickness").copied().unwrap_or(0.12);
 
@@ -467,14 +493,22 @@ fn draw_atoms(fx: f32, fy: f32, norm_dist: f32, _angle: f32, style: &StyleConfig
         // Check if on ring
         let ring_center = 0.7; // Rings at 70% radius
         if (target_dist - ring_center).abs() < thickness {
-            return if i % 2 == 0 { palette.left } else { palette.right };
+            return if i % 2 == 0 {
+                palette.left
+            } else {
+                palette.right
+            };
         }
     }
 
     // Nucleus in center
     if norm_dist < 0.2 {
         // Split nucleus
-        if fx < 0.0 { palette.left } else { palette.right }
+        if fx < 0.0 {
+            palette.left
+        } else {
+            palette.right
+        }
     } else {
         WHITE
     }

@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::ball::components::*;
 use crate::constants::*;
-use crate::helpers::{apply_bounce_deflection, ReflectAxis};
+use crate::helpers::{ReflectAxis, apply_bounce_deflection};
 use crate::player::Velocity;
 use crate::ui::PhysicsTweaks;
 use crate::world::{BasketRim, CornerRamp, Platform};

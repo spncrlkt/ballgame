@@ -100,12 +100,17 @@ pub const BALL_KICK_STRENGTH: f32 = 100.0; // How much velocity player imparts t
 pub const BALL_KICK_THRESHOLD: f32 = 30.0; // Ball speed below this counts as "stationary"
 
 // =============================================================================
-// STEAL CONTEST
+// STEAL SYSTEM
 // =============================================================================
 
 pub const STEAL_RANGE: f32 = 60.0; // How close to initiate steal
-pub const STEAL_CONTEST_DURATION: f32 = 0.4; // Seconds to mash buttons
-pub const STEAL_DEFENDER_ADVANTAGE: u32 = 2; // Defender starts with this many "presses"
+pub const STEAL_SUCCESS_CHANCE: f32 = 0.33; // Base success chance (1/3)
+pub const STEAL_CHARGING_BONUS: f32 = 0.17; // +17% if defender is charging (total 50%)
+pub const STEAL_PUSHBACK_STRENGTH: f32 = 400.0; // Knockback velocity on successful steal
+pub const STEAL_COOLDOWN: f32 = 0.3; // Seconds between steal attempts
+pub const STEAL_VICTIM_COOLDOWN: f32 = 1.0; // Seconds before victim can steal back
+pub const STEAL_INDICATOR_SIZE: f32 = 16.0; // Size of cooldown/fail indicators
+pub const STEAL_FAIL_FLASH_DURATION: f32 = 0.15; // Duration of fail flash
 
 // =============================================================================
 // ARENA DIMENSIONS
@@ -160,9 +165,6 @@ pub const LEVELS_FILE: &str = "assets/levels.txt";
 /// Viewport scale presets: (width, height, label)
 /// Ordered small to large - RT cycles up, LT cycles down
 pub const VIEWPORT_PRESETS: &[(f32, f32, &str)] = &[
-    (800.0, 450.0, "800x450 (half)"),
-    (1024.0, 576.0, "1024x576"),
-    (1280.0, 720.0, "1280x720 (720p)"),
     (1600.0, 900.0, "1600x900 (native)"),
     (1920.0, 1080.0, "1920x1080 (1080p)"),
     (2560.0, 1440.0, "2560x1440 (1440p)"),
@@ -171,4 +173,4 @@ pub const VIEWPORT_PRESETS: &[(f32, f32, &str)] = &[
 ];
 
 /// Default viewport preset index (1440p)
-pub const DEFAULT_VIEWPORT_INDEX: usize = 5;
+pub const DEFAULT_VIEWPORT_INDEX: usize = 2;

@@ -9,7 +9,7 @@ pub use profiles::*;
 use bevy::prelude::*;
 
 use crate::input::PlayerInput;
-use crate::player::{HumanControlled, Player};
+use crate::player::{HumanControlled, Player, Team};
 
 /// Per-entity input buffer used by physics systems.
 /// All players have this component - human input is copied here, AI writes directly.
@@ -86,13 +86,12 @@ pub fn copy_human_input(
 }
 
 /// Swap which player the human controls (Q key / L bumper).
-/// Moves the HumanControlled marker to the other player.
-/// AI controls whichever player doesn't have HumanControlled.
+/// Cycles through: Left player → Right player → Observer (both AI) → Left player
 pub fn swap_control(
     mut commands: Commands,
     mut input: ResMut<PlayerInput>,
-    human_query: Query<Entity, (With<Player>, With<HumanControlled>)>,
-    other_query: Query<Entity, (With<Player>, Without<HumanControlled>)>,
+    players: Query<(Entity, &Team), With<Player>>,
+    human_query: Query<(Entity, &Team), (With<Player>, With<HumanControlled>)>,
     mut input_states: Query<&mut InputState>,
 ) {
     if !input.swap_pressed {
@@ -100,19 +99,40 @@ pub fn swap_control(
     }
     input.swap_pressed = false;
 
-    // Find current human-controlled player
-    let Ok(current_human) = human_query.single() else {
+    // Find left and right players
+    let mut left_player = None;
+    let mut right_player = None;
+    for (entity, team) in &players {
+        match team {
+            Team::Left => left_player = Some(entity),
+            Team::Right => right_player = Some(entity),
+        }
+    }
+
+    let (Some(left), Some(right)) = (left_player, right_player) else {
         return;
     };
 
-    // Find the other player
-    let Ok(other_player) = other_query.single() else {
-        return;
-    };
-
-    // Swap: remove HumanControlled from current, add to other
-    commands.entity(current_human).remove::<HumanControlled>();
-    commands.entity(other_player).insert(HumanControlled);
+    // Determine current state and cycle to next
+    // Left → Right → Observer → Left
+    match human_query.iter().next() {
+        Some((_, Team::Left)) => {
+            // Currently controlling left, switch to right
+            commands.entity(left).remove::<HumanControlled>();
+            commands.entity(right).insert(HumanControlled);
+            info!("Control: Right player");
+        }
+        Some((_, Team::Right)) => {
+            // Currently controlling right, switch to observer mode
+            commands.entity(right).remove::<HumanControlled>();
+            info!("Control: Observer (both AI)");
+        }
+        None => {
+            // Observer mode, switch to left
+            commands.entity(left).insert(HumanControlled);
+            info!("Control: Left player");
+        }
+    }
 
     // Reset both players' InputState to prevent stale input
     for mut input_state in &mut input_states {

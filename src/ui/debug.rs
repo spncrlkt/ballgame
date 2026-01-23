@@ -7,7 +7,8 @@ use crate::ball::{Ball, BallStyle, BallTextures};
 use crate::constants::{DEFAULT_VIEWPORT_INDEX, VIEWPORT_PRESETS};
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
-use crate::player::{HumanControlled, Player, Team};
+use crate::player::{Player, Team};
+use crate::presets::{CurrentPresets, PresetDatabase, apply_composite_preset};
 use crate::scoring::CurrentLevel;
 use crate::shooting::LastShotInfo;
 use crate::steal::StealContest;
@@ -22,29 +23,42 @@ use crate::world::{Basket, BasketRim, CornerRamp, LevelPlatform, Platform};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CycleTarget {
     #[default]
+    CompositePreset, // Global - sets everything
     Level,
-    Viewport,
+    AiProfile,
     Palette,
     BallStyle,
-    AiProfile,
+    Viewport,
+    MovementPreset,
+    BallPreset,
+    ShootingPreset,
 }
 
 impl CycleTarget {
-    pub const ALL: [CycleTarget; 5] = [
-        CycleTarget::Level,
-        CycleTarget::Viewport,
-        CycleTarget::Palette,
-        CycleTarget::BallStyle,
-        CycleTarget::AiProfile,
+    /// Ordered by significance: Global first, then gameplay, visuals, testing, tuning
+    pub const ALL: [CycleTarget; 9] = [
+        CycleTarget::CompositePreset, // Global - sets all options
+        CycleTarget::Level,           // Core gameplay
+        CycleTarget::AiProfile,       // Affects gameplay
+        CycleTarget::Palette,         // Visual - colors
+        CycleTarget::BallStyle,       // Visual - ball appearance
+        CycleTarget::Viewport,        // Testing different resolutions
+        CycleTarget::MovementPreset,  // Physics tuning
+        CycleTarget::BallPreset,      // Physics tuning
+        CycleTarget::ShootingPreset,  // Physics tuning
     ];
 
     pub fn name(&self) -> &'static str {
         match self {
+            CycleTarget::CompositePreset => "Global",
             CycleTarget::Level => "Level",
-            CycleTarget::Viewport => "Viewport",
+            CycleTarget::AiProfile => "AI Profile",
             CycleTarget::Palette => "Palette",
             CycleTarget::BallStyle => "Ball Style",
-            CycleTarget::AiProfile => "AI Profile",
+            CycleTarget::Viewport => "Viewport",
+            CycleTarget::MovementPreset => "Movement",
+            CycleTarget::BallPreset => "Ball",
+            CycleTarget::ShootingPreset => "Shooting",
         }
     }
 
@@ -52,34 +66,36 @@ impl CycleTarget {
         let idx = Self::ALL.iter().position(|t| t == self).unwrap_or(0);
         Self::ALL[(idx + 1) % Self::ALL.len()]
     }
+
+    pub fn prev(&self) -> Self {
+        let idx = Self::ALL.iter().position(|t| t == self).unwrap_or(0);
+        Self::ALL[(idx + Self::ALL.len() - 1) % Self::ALL.len()]
+    }
 }
 
-/// Tracks which cycle target is selected and provides brief feedback
+/// Tracks which cycle target is selected for controller cycling
 #[derive(Resource)]
 pub struct CycleSelection {
     pub target: CycleTarget,
-    pub display_timer: f32, // Show indicator briefly after changing
+    pub ai_profile_player: Team, // Which player's AI profile to edit (Left or Right)
 }
 
 impl Default for CycleSelection {
     fn default() -> Self {
         Self {
-            target: CycleTarget::Level,
-            display_timer: 0.0,
+            target: CycleTarget::CompositePreset, // Global - first option
+            ai_profile_player: Team::Left,
         }
     }
 }
 
 impl CycleSelection {
-    pub const DISPLAY_DURATION: f32 = 1.5; // How long to show the indicator
-
     pub fn select_next(&mut self) {
         self.target = self.target.next();
-        self.display_timer = Self::DISPLAY_DURATION;
     }
 
-    pub fn flash(&mut self) {
-        self.display_timer = Self::DISPLAY_DURATION;
+    pub fn select_prev(&mut self) {
+        self.target = self.target.prev();
     }
 }
 
@@ -122,7 +138,8 @@ impl ViewportScale {
 
     /// Cycle to previous preset
     pub fn cycle_prev(&mut self) {
-        self.preset_index = (self.preset_index + VIEWPORT_PRESETS.len() - 1) % VIEWPORT_PRESETS.len();
+        self.preset_index =
+            (self.preset_index + VIEWPORT_PRESETS.len() - 1) % VIEWPORT_PRESETS.len();
     }
 }
 
@@ -130,26 +147,25 @@ impl ViewportScale {
 #[derive(Component)]
 pub struct DebugText;
 
-/// Toggle debug UI visibility (Tab / D-pad Up)
+/// Toggle debug UI visibility (Tab only)
 pub fn toggle_debug(
     keyboard: Res<ButtonInput<KeyCode>>,
-    gamepads: Query<&Gamepad>,
     mut settings: ResMut<DebugSettings>,
-    mut text_query: Query<&mut Visibility, With<DebugText>>,
+    mut text_query: Query<&mut Visibility, (With<DebugText>, Without<CycleIndicator>)>,
+    mut cycle_query: Query<&mut Visibility, (With<CycleIndicator>, Without<DebugText>)>,
 ) {
-    let pressed = keyboard.just_pressed(KeyCode::Tab)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::DPadUp));
-
-    if pressed {
+    if keyboard.just_pressed(KeyCode::Tab) {
         settings.visible = !settings.visible;
+        let new_visibility = if settings.visible {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
         if let Ok(mut visibility) = text_query.single_mut() {
-            *visibility = if settings.visible {
-                Visibility::Inherited
-            } else {
-                Visibility::Hidden
-            };
+            *visibility = new_visibility;
+        }
+        if let Ok(mut visibility) = cycle_query.single_mut() {
+            *visibility = new_visibility;
         }
     }
 }
@@ -169,11 +185,8 @@ pub fn update_debug_text(
         return;
     };
 
-    let steal_str = if steal_contest.active {
-        format!(
-            " | Steal: A:{} D:{} ({:.1}s)",
-            steal_contest.attacker_presses, steal_contest.defender_presses, steal_contest.timer
-        )
+    let steal_str = if steal_contest.last_attempt_failed {
+        format!(" | Steal: FAILED ({:.2}s)", steal_contest.fail_flash_timer)
     } else {
         String::new()
     };
@@ -241,27 +254,29 @@ pub fn unified_cycle_system(
     mut current_level: ResMut<CurrentLevel>,
     mut current_palette: ResMut<crate::ball::CurrentPalette>,
     mut viewport_scale: ResMut<ViewportScale>,
+    mut current_presets: ResMut<CurrentPresets>,
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
     profile_db: Res<AiProfileDatabase>,
+    preset_db: Res<PresetDatabase>,
     ball_textures: Res<BallTextures>,
-    time: Res<Time>,
     mut window_query: Query<&mut Window>,
     mut ball_query: Query<(&mut BallStyle, &mut Sprite), With<Ball>>,
-    mut ai_query: Query<&mut AiState, (With<Player>, Without<HumanControlled>)>,
+    mut ai_query: Query<(&mut AiState, &Team), With<Player>>,
 ) {
-    // Decay display timer
-    if cycle_selection.display_timer > 0.0 {
-        cycle_selection.display_timer -= time.delta_secs();
-    }
-
-    // D-pad Down selects next cycle target
-    let select_pressed = gamepads
+    // D-pad Down/Up selects next/prev cycle target
+    let select_next = gamepads
         .iter()
         .any(|gp| gp.just_pressed(GamepadButton::DPadDown));
+    let select_prev = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadUp));
 
-    if select_pressed {
+    if select_next {
         cycle_selection.select_next();
+        info!("Cycle target: {}", cycle_selection.target.name());
+    } else if select_prev {
+        cycle_selection.select_prev();
         info!("Cycle target: {}", cycle_selection.target.name());
     }
 
@@ -276,8 +291,6 @@ pub fn unified_cycle_system(
     if !cycle_next && !cycle_prev {
         return;
     }
-
-    cycle_selection.flash();
 
     match cycle_selection.target {
         CycleTarget::Level => {
@@ -340,17 +353,107 @@ pub fn unified_cycle_system(
             }
         }
         CycleTarget::AiProfile => {
-            // Cycle AI-controlled player's profile
-            let num_profiles = profile_db.len();
-            for mut ai_state in &mut ai_query {
-                if cycle_next {
-                    ai_state.profile_index = (ai_state.profile_index + 1) % num_profiles;
-                } else if cycle_prev {
-                    ai_state.profile_index =
-                        (ai_state.profile_index + num_profiles - 1) % num_profiles;
+            // LT toggles which player to edit, RT cycles their profile
+            if cycle_prev {
+                // Toggle selected player
+                cycle_selection.ai_profile_player = match cycle_selection.ai_profile_player {
+                    Team::Left => Team::Right,
+                    Team::Right => Team::Left,
+                };
+                info!(
+                    "AI Profile: editing {} player",
+                    match cycle_selection.ai_profile_player {
+                        Team::Left => "Left",
+                        Team::Right => "Right",
+                    }
+                );
+            } else if cycle_next {
+                // Cycle profile for selected player
+                let num_profiles = profile_db.len();
+                for (mut ai_state, team) in &mut ai_query {
+                    if *team == cycle_selection.ai_profile_player {
+                        ai_state.profile_index = (ai_state.profile_index + 1) % num_profiles;
+                        let profile = profile_db.get(ai_state.profile_index);
+                        info!(
+                            "{} AI Profile: {}",
+                            match team {
+                                Team::Left => "Left",
+                                Team::Right => "Right",
+                            },
+                            profile.name
+                        );
+                    }
                 }
-                let profile = profile_db.get(ai_state.profile_index);
-                info!("AI Profile: {}", profile.name);
+            }
+        }
+        CycleTarget::MovementPreset => {
+            let num = preset_db.movement_len();
+            if cycle_next {
+                current_presets.movement = (current_presets.movement + 1) % num;
+            } else if cycle_prev {
+                current_presets.movement = (current_presets.movement + num - 1) % num;
+            }
+            current_presets.mark_apply();
+            if let Some(p) = preset_db.get_movement(current_presets.movement) {
+                info!("Movement Preset: {}", p.name);
+            }
+        }
+        CycleTarget::BallPreset => {
+            let num = preset_db.ball_len();
+            if cycle_next {
+                current_presets.ball = (current_presets.ball + 1) % num;
+            } else if cycle_prev {
+                current_presets.ball = (current_presets.ball + num - 1) % num;
+            }
+            current_presets.mark_apply();
+            if let Some(p) = preset_db.get_ball(current_presets.ball) {
+                info!("Ball Preset: {}", p.name);
+            }
+        }
+        CycleTarget::ShootingPreset => {
+            let num = preset_db.shooting_len();
+            if cycle_next {
+                current_presets.shooting = (current_presets.shooting + 1) % num;
+            } else if cycle_prev {
+                current_presets.shooting = (current_presets.shooting + num - 1) % num;
+            }
+            current_presets.mark_apply();
+            if let Some(p) = preset_db.get_shooting(current_presets.shooting) {
+                info!("Shooting Preset: {}", p.name);
+            }
+        }
+        CycleTarget::CompositePreset => {
+            let num = preset_db.composite_len();
+            if cycle_next {
+                current_presets.composite = (current_presets.composite + 1) % num;
+            } else if cycle_prev {
+                current_presets.composite = (current_presets.composite + num - 1) % num;
+            }
+            let idx = current_presets.composite;
+            apply_composite_preset(&mut current_presets, &preset_db, idx);
+
+            // Apply additional global settings from composite preset
+            if let Some(p) = preset_db.get_composite(idx) {
+                // Apply level if specified
+                if let Some(level) = p.level {
+                    current_level.0 = level;
+                }
+                // Apply palette if specified
+                if let Some(palette) = p.palette {
+                    current_palette.0 = palette;
+                }
+                // Apply ball style if specified
+                if let Some(ref style_name) = p.ball_style {
+                    if let Some(style_textures) = ball_textures.get(style_name) {
+                        for (mut style, mut sprite) in &mut ball_query {
+                            *style = BallStyle::new(style_name);
+                            if let Some(handle) = style_textures.textures.get(current_palette.0) {
+                                sprite.image = handle.clone();
+                            }
+                        }
+                    }
+                }
+                info!("Global Preset: {}", p.name);
             }
         }
     }
@@ -363,23 +466,18 @@ pub fn update_cycle_indicator(
     current_level: Res<CurrentLevel>,
     current_palette: Res<crate::ball::CurrentPalette>,
     viewport_scale: Res<ViewportScale>,
+    current_presets: Res<CurrentPresets>,
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
     profile_db: Res<AiProfileDatabase>,
+    preset_db: Res<PresetDatabase>,
     ball_query: Query<&BallStyle, With<Ball>>,
-    ai_query: Query<&AiState, (With<Player>, Without<HumanControlled>)>,
+    ai_query: Query<(&AiState, &Team), With<Player>>,
     mut query: Query<(&mut Text2d, &mut Visibility), With<CycleIndicator>>,
 ) {
-    let Ok((mut text, mut visibility)) = query.single_mut() else {
+    let Ok((mut text, _visibility)) = query.single_mut() else {
         return;
     };
-
-    if cycle_selection.display_timer <= 0.0 {
-        *visibility = Visibility::Hidden;
-        return;
-    }
-
-    *visibility = Visibility::Inherited;
 
     // Show current target and its value
     let value_str = match cycle_selection.target {
@@ -398,13 +496,38 @@ pub fn update_cycle_indicator(
                 .unwrap_or_else(|| "None".to_string())
         }
         CycleTarget::AiProfile => {
-            // Get profile from AI-controlled player
-            ai_query
-                .iter()
-                .next()
-                .map(|s| profile_db.get(s.profile_index).name.clone())
-                .unwrap_or_else(|| "None".to_string())
+            // Show both players' profiles, highlight selected with brackets
+            let mut left_profile = "?".to_string();
+            let mut right_profile = "?".to_string();
+            for (ai_state, team) in &ai_query {
+                let profile_name = profile_db.get(ai_state.profile_index).name.clone();
+                match team {
+                    Team::Left => left_profile = profile_name,
+                    Team::Right => right_profile = profile_name,
+                }
+            }
+            // Highlight selected player with brackets
+            match cycle_selection.ai_profile_player {
+                Team::Left => format!("[L:{}] R:{}", left_profile, right_profile),
+                Team::Right => format!("L:{} [R:{}]", left_profile, right_profile),
+            }
         }
+        CycleTarget::MovementPreset => preset_db
+            .get_movement(current_presets.movement)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "None".to_string()),
+        CycleTarget::BallPreset => preset_db
+            .get_ball(current_presets.ball)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "None".to_string()),
+        CycleTarget::ShootingPreset => preset_db
+            .get_shooting(current_presets.shooting)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "None".to_string()),
+        CycleTarget::CompositePreset => preset_db
+            .get_composite(current_presets.composite)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "None".to_string()),
     };
 
     **text = format!("[{}] {}", cycle_selection.target.name(), value_str);
@@ -425,7 +548,12 @@ pub fn apply_palette_colors(
     >,
     mut rim_query: Query<
         &mut Sprite,
-        (With<BasketRim>, Without<Player>, Without<Ball>, Without<Basket>),
+        (
+            With<BasketRim>,
+            Without<Player>,
+            Without<Ball>,
+            Without<Basket>,
+        ),
     >,
     mut floor_query: Query<
         &mut Sprite,

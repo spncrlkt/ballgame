@@ -1,13 +1,14 @@
 //! Ball-player interaction systems
 
 use bevy::prelude::*;
+use rand::Rng;
 
 use crate::ai::InputState;
 use crate::ball::components::*;
 use crate::constants::*;
 use crate::player::{Facing, HoldingBall, Player, Velocity};
 use crate::shooting::ChargingShot;
-use crate::steal::StealContest;
+use crate::steal::{StealContest, StealCooldown};
 
 /// Handle ball-player collision physics
 pub fn ball_player_collision(
@@ -102,45 +103,31 @@ pub fn ball_follow_holder(
     }
 }
 
-/// Handle ball pickup.
+/// Handle ball pickup and instant steal attempts.
 /// All players read from their InputState component.
 pub fn pickup_ball(
     mut commands: Commands,
     mut steal_contest: ResMut<StealContest>,
     mut non_holding_players: Query<
-        (Entity, &Transform, &mut ChargingShot, &mut InputState),
+        (
+            Entity,
+            &Transform,
+            &mut ChargingShot,
+            &mut InputState,
+            &mut StealCooldown,
+        ),
         (With<Player>, Without<HoldingBall>),
     >,
-    mut holding_players: Query<(Entity, &Transform, &HoldingBall, &mut InputState), With<Player>>,
+    mut holding_players: Query<
+        (Entity, &Transform, &HoldingBall, &ChargingShot, &mut Velocity, &mut StealCooldown),
+        With<Player>,
+    >,
     mut ball_query: Query<(Entity, &Transform, &mut BallState), With<Ball>>,
 ) {
-    // If steal contest is active, count presses from both players
-    if steal_contest.active {
-        // Count presses for attacker
-        for (entity, _, _, mut input) in &mut non_holding_players {
-            if input.pickup_pressed {
-                input.pickup_pressed = false;
-                if steal_contest.attacker == Some(entity) {
-                    steal_contest.attacker_presses += 1;
-                }
-            }
-        }
-
-        // Count presses for defender
-        for (entity, _, _, mut input) in &mut holding_players {
-            if input.pickup_pressed {
-                input.pickup_pressed = false;
-                if steal_contest.defender == Some(entity) {
-                    steal_contest.defender_presses += 1;
-                }
-            }
-        }
-
-        return; // Don't allow pickup during contest
-    }
-
     // Check each non-holding player for pickup/steal attempts
-    for (player_entity, player_transform, mut charging, mut input) in &mut non_holding_players {
+    for (player_entity, player_transform, mut charging, mut input, mut cooldown) in
+        &mut non_holding_players
+    {
         if !input.pickup_pressed {
             continue;
         }
@@ -175,21 +162,63 @@ pub fn pickup_ball(
             return; // Done - picked up ball
         }
 
+        // Skip steal attempts if on cooldown
+        if cooldown.0 > 0.0 {
+            continue;
+        }
+
         // If no free ball nearby, check for steal opportunity
-        for (defender_entity, defender_transform, _holding, _) in &holding_players {
+        for (defender_entity, defender_transform, holding, defender_charging, mut defender_velocity, mut defender_cooldown) in
+            &mut holding_players
+        {
             let distance = player_pos.distance(defender_transform.translation.truncate());
 
             if distance < STEAL_RANGE {
-                // Initiate steal contest
-                steal_contest.active = true;
-                steal_contest.attacker = Some(player_entity);
-                steal_contest.defender = Some(defender_entity);
-                steal_contest.attacker_presses = 1; // Count the initiating press
-                steal_contest.defender_presses = STEAL_DEFENDER_ADVANTAGE;
-                steal_contest.timer = STEAL_CONTEST_DURATION;
+                // Instant steal attempt - calculate success chance
+                let mut success_chance = STEAL_SUCCESS_CHANCE;
+
+                // Bonus if defender is charging a shot
+                if defender_charging.charge_time > 0.0 {
+                    success_chance += STEAL_CHARGING_BONUS;
+                }
+
+                // Roll for success
+                let mut rng = rand::thread_rng();
+                let roll: f32 = rng.gen_range(0.0..1.0);
+
+                if roll < success_chance {
+                    // Steal succeeded! Transfer ball
+                    let ball_entity = holding.0;
+                    if let Ok((_, _, mut ball_state)) = ball_query.get_mut(ball_entity) {
+                        *ball_state = BallState::Held(player_entity);
+                        commands.entity(defender_entity).remove::<HoldingBall>();
+                        commands
+                            .entity(player_entity)
+                            .insert(HoldingBall(ball_entity));
+
+                        // Apply pushback to defender (away from attacker)
+                        let pushback_dir = if defender_transform.translation.x >= player_pos.x {
+                            1.0
+                        } else {
+                            -1.0
+                        };
+                        defender_velocity.0.x += pushback_dir * STEAL_PUSHBACK_STRENGTH;
+                        defender_velocity.0.y += STEAL_PUSHBACK_STRENGTH * 0.3; // Small upward nudge
+
+                        // Apply no-stealback cooldown to victim
+                        defender_cooldown.0 = STEAL_VICTIM_COOLDOWN;
+                    }
+                } else {
+                    // Steal failed - set fail flash
+                    steal_contest.last_attempt_failed = true;
+                    steal_contest.fail_flash_timer = STEAL_FAIL_FLASH_DURATION;
+                    steal_contest.fail_flash_entity = Some(player_entity);
+                }
+
+                // Apply cooldown to attacker regardless of success
+                cooldown.0 = STEAL_COOLDOWN;
                 return;
             }
         }
     }
 }
-

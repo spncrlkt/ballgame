@@ -2,15 +2,17 @@
 //!
 //! Main entry point: app setup and system registration.
 
+use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
-    AiGoal, AiProfileDatabase, AiState, Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace,
-    BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground, ChargeGaugeFill,
-    ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel, CurrentPalette, CycleIndicator, CycleSelection,
-    DebugSettings, DebugText, Facing, Grounded, HumanControlled, InputState, JumpState, LastShotInfo,
-    LevelDatabase, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, ScoreLevelText,
-    StealContest, StyleTextures, TargetBasket, Team, TweakPanel, TweakRow, Velocity, ViewportScale,
-    ai, ball, config_watcher, constants::*, helpers::*, input, levels, player, scoring, shooting, steal, ui, world,
-    PALETTES_FILE,
+    AiGoal, AiProfileDatabase, AiState, Ball, BallPlayerContact, BallPulse, BallRolling,
+    BallShotGrace, BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground,
+    ChargeGaugeFill, ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel, CurrentPalette,
+    CurrentPresets, CycleIndicator, CycleSelection, DebugSettings, DebugText, Facing, Grounded,
+    HumanControlled, InputState, JumpState, LastShotInfo, LevelDatabase, PALETTES_FILE,
+    PRESETS_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, PresetDatabase, Score,
+    ScoreLevelText, StealContest, StealCooldown, StyleTextures, TargetBasket, Team, TweakPanel,
+    TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball, config_watcher,
+    constants::*, helpers::*, input, levels, player, scoring, shooting, steal, ui, world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
@@ -51,6 +53,9 @@ fn main() {
     // Load palette database (creates default file if missing)
     let palette_db = PaletteDatabase::load_or_create(PALETTES_FILE);
 
+    // Load preset database
+    let preset_db = PresetDatabase::load_from_file(PRESETS_FILE);
+
     // Get initial background color from first palette
     let initial_bg = palette_db
         .get(0)
@@ -78,6 +83,7 @@ fn main() {
         ))
         .insert_resource(ClearColor(initial_bg))
         .insert_resource(palette_db)
+        .insert_resource(preset_db)
         .insert_resource(level_db)
         .init_resource::<PlayerInput>()
         .init_resource::<DebugSettings>()
@@ -91,6 +97,7 @@ fn main() {
         .init_resource::<CycleSelection>()
         .init_resource::<ConfigWatcher>()
         .init_resource::<AiProfileDatabase>()
+        .init_resource::<CurrentPresets>()
         .add_systems(Startup, setup)
         // Input systems must run in order: capture -> copy -> swap -> AI
         .add_systems(
@@ -108,6 +115,7 @@ fn main() {
             Update,
             (
                 player::respawn_player,
+                steal::steal_cooldown_update,
                 ui::toggle_debug,
                 config_watcher::check_config_changes,
                 ui::update_debug_text,
@@ -115,6 +123,7 @@ fn main() {
                 ui::animate_pickable_ball,
                 ui::animate_score_flash,
                 ui::update_charge_gauge,
+                ui::update_steal_indicators,
             ),
         )
         // UI panel and cycle systems
@@ -127,10 +136,14 @@ fn main() {
                 ui::unified_cycle_system,
             ),
         )
-        // Cycle indicator and palette application
+        // Cycle indicator, palette application, and preset application
         .add_systems(
             Update,
-            (ui::update_cycle_indicator, ui::apply_palette_colors),
+            (
+                ui::update_cycle_indicator,
+                ui::apply_palette_colors,
+                apply_preset_to_tweaks,
+            ),
         )
         .add_systems(
             FixedUpdate,
@@ -146,7 +159,7 @@ fn main() {
                 ball::ball_player_collision,
                 ball::ball_follow_holder,
                 ball::pickup_ball,
-                steal::steal_contest_update,
+                steal::steal_cooldown_update,
                 shooting::update_shot_charge,
                 shooting::throw_ball,
                 scoring::check_scoring,
@@ -184,19 +197,26 @@ fn setup(
         .spawn((
             Sprite::from_color(initial_palette.left, PLAYER_SIZE),
             Transform::from_translation(PLAYER_SPAWN_LEFT),
-            Player,
-            Velocity::default(),
-            Grounded(false),
-            CoyoteTimer::default(),
-            JumpState::default(),
-            Facing::default(),
-            ChargingShot::default(),
+            (
+                Player,
+                Velocity::default(),
+                Grounded(false),
+                CoyoteTimer::default(),
+            ),
+            (
+                JumpState::default(),
+                Facing::default(),
+                ChargingShot::default(),
+            ),
             TargetBasket(Basket::Right), // Left team scores in right basket
             Collider,
             Team::Left,
             HumanControlled, // Starts as human-controlled
-            InputState::default(),
-            AiState::default(),
+            (
+                InputState::default(),
+                AiState::default(),
+                StealCooldown::default(),
+            ),
         ))
         .id();
 
@@ -208,26 +228,29 @@ fn setup(
         .spawn((
             Sprite::from_color(initial_palette.right, PLAYER_SIZE),
             Transform::from_translation(PLAYER_SPAWN_RIGHT),
-            Player,
-            Velocity::default(),
-            Grounded(false),
-            CoyoteTimer::default(),
-            JumpState::default(),
-            Facing(-1.0), // Faces left
-            ChargingShot::default(),
+            (
+                Player,
+                Velocity::default(),
+                Grounded(false),
+                CoyoteTimer::default(),
+            ),
+            (JumpState::default(), Facing(-1.0), ChargingShot::default()),
             TargetBasket(Basket::Left), // Right team scores in left basket
             Collider,
             Team::Right,
-            InputState::default(),
-            AiState {
-                // On debug level, AI stands still (Idle); otherwise normal AI
-                current_goal: if is_debug_level_for_ai {
-                    AiGoal::Idle
-                } else {
-                    AiGoal::default()
+            (
+                InputState::default(),
+                AiState {
+                    // On debug level, AI stands still (Idle); otherwise normal AI
+                    current_goal: if is_debug_level_for_ai {
+                        AiGoal::Idle
+                    } else {
+                        AiGoal::default()
+                    },
+                    ..default()
                 },
-                ..default()
-            },
+                StealCooldown::default(),
+            ),
         ))
         .id();
 
@@ -287,6 +310,10 @@ fn setup(
         ))
         .id();
     commands.entity(right_player).add_child(right_gauge_fill);
+
+    // Steal indicators for both players
+    spawn_steal_indicators(&mut commands, left_player, 1.0); // Left player faces right
+    spawn_steal_indicators(&mut commands, right_player, -1.0); // Right player faces left
 
     // Load ball style names from config file
     let style_names = load_ball_style_names();
@@ -350,7 +377,10 @@ fn setup(
         }
     } else {
         // Normal levels: spawn single ball with first style
-        let default_style = ball_textures.default_style().cloned().unwrap_or_else(|| "wedges".to_string());
+        let default_style = ball_textures
+            .default_style()
+            .cloned()
+            .unwrap_or_else(|| "wedges".to_string());
         if let Some(textures) = ball_textures.get(&default_style) {
             commands.spawn((
                 Sprite {
@@ -426,21 +456,30 @@ fn setup(
         .with_children(|parent| {
             // Left rim (outer - wall side, 50%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(initial_palette.right_rim, Vec2::new(RIM_THICKNESS, rim_outer_height)),
+                Sprite::from_color(
+                    initial_palette.right_rim,
+                    Vec2::new(RIM_THICKNESS, rim_outer_height),
+                ),
                 Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Right rim (inner - center side, 10%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(initial_palette.right_rim, Vec2::new(RIM_THICKNESS, rim_inner_height)),
+                Sprite::from_color(
+                    initial_palette.right_rim,
+                    Vec2::new(RIM_THICKNESS, rim_inner_height),
+                ),
                 Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Bottom rim - center at basket bottom edge
             parent.spawn((
-                Sprite::from_color(initial_palette.right_rim, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
+                Sprite::from_color(
+                    initial_palette.right_rim,
+                    Vec2::new(rim_bottom_width, RIM_THICKNESS),
+                ),
                 Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
                 Platform,
                 BasketRim,
@@ -457,21 +496,30 @@ fn setup(
         .with_children(|parent| {
             // Left rim (inner - center side, 10%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(initial_palette.left_rim, Vec2::new(RIM_THICKNESS, rim_inner_height)),
+                Sprite::from_color(
+                    initial_palette.left_rim,
+                    Vec2::new(RIM_THICKNESS, rim_inner_height),
+                ),
                 Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Right rim (outer - wall side, 50%) - center at basket edge
             parent.spawn((
-                Sprite::from_color(initial_palette.left_rim, Vec2::new(RIM_THICKNESS, rim_outer_height)),
+                Sprite::from_color(
+                    initial_palette.left_rim,
+                    Vec2::new(RIM_THICKNESS, rim_outer_height),
+                ),
                 Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             // Bottom rim - center at basket bottom edge
             parent.spawn((
-                Sprite::from_color(initial_palette.left_rim, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
+                Sprite::from_color(
+                    initial_palette.left_rim,
+                    Vec2::new(rim_bottom_width, RIM_THICKNESS),
+                ),
                 Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
                 Platform,
                 BasketRim,
@@ -527,6 +575,7 @@ fn setup(
     ));
 
     // Cycle indicator - shows current cycle target when using controller (D-pad Down + RT/LT)
+    // Starts visible (like other debug UI), toggled with Tab
     commands.spawn((
         Text2d::new(""),
         TextFont {
@@ -536,7 +585,7 @@ fn setup(
         TextLayout::new_with_justify(Justify::Center),
         TextColor(TEXT_ACCENT),
         Transform::from_xyz(0.0, ARENA_HEIGHT / 2.0 - 60.0, 1.0),
-        Visibility::Hidden,
+        Visibility::Inherited,
         CycleIndicator,
     ));
 

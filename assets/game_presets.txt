@@ -1,0 +1,75 @@
+# Game Presets Configuration
+# Format: Name: key=value, key=value, ...
+#
+# Hot-reloads every 10 seconds when modified.
+
+[Movement]
+# Default: current game constants
+Default: move_speed=300, ground_accel=2400, ground_decel=1800, air_accel=1500, air_decel=900, jump_velocity=650, gravity_rise=980, gravity_fall=1400
+
+# Floaty: slower, more air control, higher jumps
+Floaty: move_speed=250, ground_accel=1800, ground_decel=1200, air_accel=1800, air_decel=600, jump_velocity=550, gravity_rise=600, gravity_fall=900
+
+# Responsive: faster, snappy controls, less air time
+Responsive: move_speed=350, ground_accel=3000, ground_decel=2400, air_accel=1200, air_decel=1200, jump_velocity=700, gravity_rise=1200, gravity_fall=1800
+
+# Heavy: slower, more commitment, harder to change direction
+Heavy: move_speed=280, ground_accel=1500, ground_decel=1000, air_accel=800, air_decel=400, jump_velocity=600, gravity_rise=1400, gravity_fall=2000
+
+# Slippery: extreme speed, almost no stopping power, ice skating
+Slippery: move_speed=450, ground_accel=800, ground_decel=200, air_accel=600, air_decel=100, jump_velocity=700, gravity_rise=800, gravity_fall=1200
+
+# Precise: slow but instant response, pinpoint control
+Precise: move_speed=200, ground_accel=5000, ground_decel=5000, air_accel=3000, air_decel=3000, jump_velocity=500, gravity_rise=1500, gravity_fall=2000
+
+[Ball]
+# Default: current game constants
+Default: ball_gravity=800, ball_bounce=0.7, ball_air_friction=0.95, ball_roll_friction=0.6
+
+# Bouncy: high bounce, low friction
+Bouncy: ball_gravity=600, ball_bounce=0.85, ball_air_friction=0.98, ball_roll_friction=0.75
+
+# Heavy: faster fall, less bounce
+Heavy: ball_gravity=1200, ball_bounce=0.5, ball_air_friction=0.9, ball_roll_friction=0.5
+
+# Floaty: slow fall, medium bounce
+Floaty: ball_gravity=500, ball_bounce=0.65, ball_air_friction=0.97, ball_roll_friction=0.7
+
+# Pinball: super bouncy, fast, chaotic
+Pinball: ball_gravity=1000, ball_bounce=0.95, ball_air_friction=0.99, ball_roll_friction=0.9
+
+# Dead: almost no bounce, stops immediately
+Dead: ball_gravity=1400, ball_bounce=0.2, ball_air_friction=0.7, ball_roll_friction=0.3
+
+[Shooting]
+# Default: current game constants
+Default: shot_charge_time=1.6, shot_max_power=900
+
+# Quick: faster charging, less power
+Quick: shot_charge_time=0.8, shot_max_power=750
+
+# Power: slower charging, more power
+Power: shot_charge_time=2.4, shot_max_power=1100
+
+# Wild: very fast charging, high power variance
+Wild: shot_charge_time=0.5, shot_max_power=1000
+
+# Sniper: very long charge, extreme power
+Sniper: shot_charge_time=4.0, shot_max_power=1500
+
+# Spam: instant shots, weak power
+Spam: shot_charge_time=0.2, shot_max_power=500
+
+[Composite]
+# Combinations of category presets for quick switching
+# Global presets can also set: level, palette, ball_style
+Default: movement=Default, ball=Default, shooting=Default
+Arcade: movement=Responsive, ball=Bouncy, shooting=Quick
+Realistic: movement=Heavy, ball=Heavy, shooting=Power
+Floaty: movement=Floaty, ball=Floaty, shooting=Default
+
+# Chaos: maximum mayhem - slippery players, pinball physics, spam shots
+Chaos: movement=Slippery, ball=Pinball, shooting=Spam
+
+# Tactical: slow and deliberate - precise control, dead ball, sniper shots
+Tactical: movement=Precise, ball=Dead, shooting=Sniper

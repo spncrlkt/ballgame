@@ -234,7 +234,7 @@ pub fn update_tweak_panel(
         // - Index 13: charge time → 1 decimal with "s" suffix
         // - Others: velocities/accelerations → 0 decimals
         let value_str = match row.0 {
-            5 | 7 | 9 => format!("{:.2}", value),  // Decel/bounce (0-1)
+            5 | 7 | 9 => format!("{:.2}", value), // Decel/bounce (0-1)
             10 | 11 => format!("{:.4}", value),   // Friction (small)
             13 => format!("{:.1}s", value),       // Charge time
             _ => format!("{:.0}", value),         // Velocities

@@ -7,11 +7,12 @@ use bevy::prelude::*;
 use std::fs;
 use std::time::SystemTime;
 
-use crate::ai::{AiProfileDatabase, AI_PROFILES_FILE};
+use crate::ai::{AI_PROFILES_FILE, AiProfileDatabase};
 use crate::ball::CurrentPalette;
 use crate::constants::LEVELS_FILE;
-use crate::levels::{reload_level_geometry, LevelDatabase};
-use crate::palettes::{PaletteDatabase, PALETTES_FILE};
+use crate::levels::{LevelDatabase, reload_level_geometry};
+use crate::palettes::{PALETTES_FILE, PaletteDatabase};
+use crate::presets::{PRESETS_FILE, PresetDatabase};
 use crate::scoring::CurrentLevel;
 use crate::world::{Basket, CornerRamp, LevelPlatform};
 
@@ -31,6 +32,7 @@ pub struct ConfigWatcher {
     pub palettes_mtime: Option<SystemTime>,
     pub ball_options_mtime: Option<SystemTime>,
     pub ai_profiles_mtime: Option<SystemTime>,
+    pub presets_mtime: Option<SystemTime>,
 }
 
 impl Default for ConfigWatcher {
@@ -41,6 +43,7 @@ impl Default for ConfigWatcher {
             palettes_mtime: get_mtime(PALETTES_FILE),
             ball_options_mtime: get_mtime(BALL_OPTIONS_FILE),
             ai_profiles_mtime: get_mtime(AI_PROFILES_FILE),
+            presets_mtime: get_mtime(PRESETS_FILE),
         }
     }
 }
@@ -60,6 +63,7 @@ pub fn check_config_changes(
     mut level_db: ResMut<LevelDatabase>,
     mut palette_db: ResMut<PaletteDatabase>,
     mut profile_db: ResMut<AiProfileDatabase>,
+    mut preset_db: ResMut<PresetDatabase>,
     current_level: Res<CurrentLevel>,
     current_palette: Res<CurrentPalette>,
     level_platforms: Query<Entity, With<LevelPlatform>>,
@@ -77,6 +81,7 @@ pub fn check_config_changes(
     let mut palettes_changed = false;
     let mut ball_options_changed = false;
     let mut ai_profiles_changed = false;
+    let mut presets_changed = false;
 
     // Check levels.txt
     let new_levels_mtime = get_mtime(LEVELS_FILE);
@@ -104,6 +109,13 @@ pub fn check_config_changes(
     if new_ai_profiles_mtime != watcher.ai_profiles_mtime {
         watcher.ai_profiles_mtime = new_ai_profiles_mtime;
         ai_profiles_changed = true;
+    }
+
+    // Check game_presets.txt
+    let new_presets_mtime = get_mtime(PRESETS_FILE);
+    if new_presets_mtime != watcher.presets_mtime {
+        watcher.presets_mtime = new_presets_mtime;
+        presets_changed = true;
     }
 
     // Reload levels if changed
@@ -153,5 +165,12 @@ pub fn check_config_changes(
     if ai_profiles_changed {
         *profile_db = AiProfileDatabase::load_from_file(AI_PROFILES_FILE);
         info!("Auto-reloaded AI profiles from {}", AI_PROFILES_FILE);
+    }
+
+    // Reload game presets if changed
+    if presets_changed {
+        *preset_db = PresetDatabase::load_from_file(PRESETS_FILE);
+        info!("Auto-reloaded game presets from {}", PRESETS_FILE);
+        // Note: Preset values are applied when cycling through presets
     }
 }

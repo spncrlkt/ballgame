@@ -103,6 +103,19 @@
 - [ ] Unlockable ball skins through achievements
 - [ ] Ball "lineage" tracking across games
 
+**Interaction Logging & Analytics:**
+- [ ] Event logging system - structured JSON/CSV output for all game events
+- [ ] Player actions: movement inputs, jumps, shots (charge time, angle, result)
+- [ ] Ball events: pickups, drops, bounces, basket entries, steals (success/fail)
+- [ ] Scoring events: timestamps, positions, shot trajectories, AI states
+- [ ] AI decisions: goal changes, target positions, decision reasoning
+- [ ] Physics snapshots: periodic state dumps (positions, velocities)
+- [ ] Session metadata: level, palette, AI profiles, preset configurations
+- [ ] Log rotation/compression for long sessions
+- [ ] Export formats compatible with pandas, R, SQL databases
+- [ ] Real-time streaming option for live dashboards
+- [ ] Replay reconstruction from logged events
+
 **Simulation Engine & Automated Testing:**
 - [ ] Headless simulation mode (no rendering, fast-forward time)
 - [ ] Data collection: score distributions, possession time, shot attempts

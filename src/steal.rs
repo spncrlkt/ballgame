@@ -1,77 +1,40 @@
-//! Steal contest system
+//! Steal system - instant steal attempts with cooldown
 
 use bevy::prelude::*;
 
-use crate::ai::InputState;
-use crate::ball::{Ball, BallState};
-use crate::player::{HoldingBall, Player};
-
-/// Steal contest resource tracking active steal attempts
+/// Steal feedback resource - tracks last attempt result for visual feedback
 #[derive(Resource, Default)]
 pub struct StealContest {
-    pub active: bool,
-    pub attacker: Option<Entity>,
-    pub defender: Option<Entity>,
-    pub attacker_presses: u32,
-    pub defender_presses: u32,
-    pub timer: f32,
+    /// Whether the last steal attempt failed (for fail flash)
+    pub last_attempt_failed: bool,
+    /// Timer for fail flash effect (counts down)
+    pub fail_flash_timer: f32,
+    /// Entity that last failed a steal (for positioning flash)
+    pub fail_flash_entity: Option<Entity>,
 }
 
-/// Update steal contest state.
-/// All players read from their InputState component.
-pub fn steal_contest_update(
-    mut commands: Commands,
-    mut steal_contest: ResMut<StealContest>,
+/// Cooldown timer preventing steal spam (seconds remaining)
+#[derive(Component, Default)]
+pub struct StealCooldown(pub f32);
+
+/// Tick down steal cooldowns and fail flash timer
+pub fn steal_cooldown_update(
     time: Res<Time>,
-    mut ball_query: Query<&mut BallState, With<Ball>>,
-    holding_query: Query<&HoldingBall>,
-    mut players: Query<&mut InputState, With<Player>>,
+    mut cooldowns: Query<&mut StealCooldown>,
+    mut steal_contest: ResMut<StealContest>,
 ) {
-    if !steal_contest.active {
-        return;
-    }
-
-    steal_contest.timer -= time.delta_secs();
-
-    // Count defender presses
-    if let Some(defender_entity) = steal_contest.defender {
-        if let Ok(mut input) = players.get_mut(defender_entity) {
-            if input.pickup_pressed {
-                steal_contest.defender_presses += 1;
-                input.pickup_pressed = false;
-            }
+    for mut cooldown in &mut cooldowns {
+        if cooldown.0 > 0.0 {
+            cooldown.0 -= time.delta_secs();
         }
     }
 
-    // Count attacker presses
-    if let Some(attacker_entity) = steal_contest.attacker {
-        if let Ok(mut input) = players.get_mut(attacker_entity) {
-            if input.pickup_pressed {
-                steal_contest.attacker_presses += 1;
-                input.pickup_pressed = false;
-            }
+    // Tick down fail flash timer
+    if steal_contest.fail_flash_timer > 0.0 {
+        steal_contest.fail_flash_timer -= time.delta_secs();
+        if steal_contest.fail_flash_timer <= 0.0 {
+            steal_contest.last_attempt_failed = false;
+            steal_contest.fail_flash_entity = None;
         }
-    }
-
-    if steal_contest.timer <= 0.0 {
-        // Contest ended - resolve it
-        let attacker = steal_contest.attacker.unwrap();
-        let defender = steal_contest.defender.unwrap();
-
-        if steal_contest.attacker_presses > steal_contest.defender_presses {
-            // Attacker wins - steal the ball
-            if let Ok(holding) = holding_query.get(defender) {
-                let ball_entity = holding.0;
-                if let Ok(mut ball_state) = ball_query.get_mut(ball_entity) {
-                    *ball_state = BallState::Held(attacker);
-                    commands.entity(defender).remove::<HoldingBall>();
-                    commands.entity(attacker).insert(HoldingBall(ball_entity));
-                }
-            }
-        }
-        // If defender wins or tie, they keep the ball (no action needed)
-
-        // Reset contest
-        *steal_contest = StealContest::default();
     }
 }
