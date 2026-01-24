@@ -12,6 +12,7 @@ pub mod replay;
 pub mod settings;
 pub mod simulation;
 pub mod snapshot;
+pub mod training;
 
 // Game logic modules
 pub mod ai;
@@ -70,6 +71,10 @@ pub use replay::{
     load_replay, not_replay_active, replay_active, MatchInfo, ReplayData, ReplayMode, ReplayState,
     TickFrame, TimedEvent, replay_input_handler, replay_playback, replay_setup, setup_replay_ui,
     update_replay_ui,
+};
+pub use training::{
+    GameResult, GameSummary, SessionSummary, TrainingPhase, TrainingState, Winner,
+    ensure_session_dir, evlog_path_for_game, print_session_summary, write_session_summary,
 };
 
 // =============================================================================

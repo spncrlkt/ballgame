@@ -1,6 +1,6 @@
 //! AI module - AI decision making and input generation
 
-mod decision;
+pub mod decision;
 pub mod navigation;
 pub mod pathfinding;
 mod profiles;
@@ -46,6 +46,10 @@ pub struct AiState {
     pub jump_shot_active: bool,
     /// Timer for jump shot (tracks jump phase)
     pub jump_shot_timer: f32,
+    /// Last position for stuck detection
+    pub last_position: Option<bevy::prelude::Vec2>,
+    /// Timer for how long AI has been stuck (not moving while trying to)
+    pub stuck_timer: f32,
 }
 
 /// Goals the AI can pursue
@@ -56,14 +60,16 @@ pub enum AiGoal {
     /// Move toward free ball and pick it up
     #[default]
     ChaseBall,
-    /// Return to defensive position when opponent has ball
-    ReturnToDefense,
     /// Move toward basket with ball
     AttackWithBall,
     /// Charging a shot at the basket
     ChargeShot,
     /// Attempting to steal from opponent
     AttemptSteal,
+    /// Chase ball carrier, position on shot line (uses navigation for platforms)
+    InterceptDefense,
+    /// Close-range: stay on opponent, attempt steals
+    PressureDefense,
 }
 
 /// Copy human PlayerInput into the human-controlled player's InputState.

@@ -3,9 +3,9 @@
   "palette_index": 0,
   "level": 9,
   "ball_style": "wedges",
-  "left_ai_profile": null,
-  "right_ai_profile": "Sniper",
-  "active_direction": "Right",
+  "left_ai_profile": "Defensive",
+  "right_ai_profile": "Rusher",
+  "active_direction": "Left",
   "down_option": "Composite",
   "right_option": "Level"
 }

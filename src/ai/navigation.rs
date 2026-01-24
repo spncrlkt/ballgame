@@ -28,6 +28,12 @@ pub struct NavNode {
     pub platform_entity: Option<Entity>,
     /// Whether this is the main floor
     pub is_floor: bool,
+    /// Pre-computed shot quality for shooting at left basket (0.0-1.0)
+    pub shot_quality_left: f32,
+    /// Pre-computed shot quality for shooting at right basket (0.0-1.0)
+    pub shot_quality_right: f32,
+    /// Classification of this platform's role
+    pub platform_role: PlatformRole,
 }
 
 impl NavNode {
@@ -54,6 +60,20 @@ pub enum EdgeType {
     Jump,
     /// Drop down to a lower platform
     Drop,
+}
+
+/// Classification of a platform's role for AI decision-making
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum PlatformRole {
+    /// Main arena floor
+    #[default]
+    Floor,
+    /// Corner ramp steps
+    Ramp,
+    /// Good position for shooting (quality >= 0.55)
+    ShotPosition,
+    /// Poor position - avoid (under basket, quality < 0.25)
+    DeadZone,
 }
 
 /// An edge in the navigation graph connecting two nodes
@@ -121,21 +141,36 @@ impl NavGraph {
     /// Find the best node from which to shoot at a target basket position.
     /// Takes `min_shot_quality` to filter out positions where shot quality is too low
     /// (e.g., directly under the basket where shots are nearly impossible).
+    /// Uses pre-computed shot quality values for efficiency.
     pub fn find_shooting_node(
         &self,
         target: Vec2,
         shoot_range: f32,
         min_shot_quality: f32,
     ) -> Option<usize> {
+        // Determine which basket we're shooting at based on target position
+        let shooting_at_left_basket = target.x < 0.0;
+
         // Find all nodes within shooting range of target that meet quality threshold
+        // Skip DeadZone nodes
         let mut candidates: Vec<(usize, f32, f32)> = self
             .nodes
             .iter()
             .enumerate()
             .filter_map(|(i, node)| {
+                // Skip dead zones
+                if node.platform_role == PlatformRole::DeadZone {
+                    return None;
+                }
+
                 let dist = node.center.distance(target);
                 if dist <= shoot_range {
-                    let quality = evaluate_shot_quality(node.center, target);
+                    // Use pre-computed shot quality
+                    let quality = if shooting_at_left_basket {
+                        node.shot_quality_left
+                    } else {
+                        node.shot_quality_right
+                    };
                     if quality >= min_shot_quality {
                         Some((i, dist, quality))
                     } else {
@@ -160,11 +195,22 @@ impl NavGraph {
 
         // No platform within shoot_range meeting quality threshold - find the best quality one
         // even if outside range, so AI navigates toward a usable shooting position
+        // Skip DeadZone nodes
         self.nodes
             .iter()
             .enumerate()
             .filter_map(|(i, node)| {
-                let quality = evaluate_shot_quality(node.center, target);
+                // Skip dead zones
+                if node.platform_role == PlatformRole::DeadZone {
+                    return None;
+                }
+
+                // Use pre-computed shot quality
+                let quality = if shooting_at_left_basket {
+                    node.shot_quality_left
+                } else {
+                    node.shot_quality_right
+                };
                 if quality >= min_shot_quality {
                     Some((i, quality))
                 } else {
@@ -173,6 +219,49 @@ impl NavGraph {
             })
             .max_by(|(_, q1), (_, q2)| q1.partial_cmp(q2).unwrap())
             .map(|(i, _)| i)
+    }
+
+    /// Find the best elevated platform for the AI to navigate to when no good
+    /// shooting position is found. Returns the highest reachable platform with
+    /// decent shot quality.
+    pub fn find_elevated_platform(
+        &self,
+        target: Vec2,
+        min_shot_quality: f32,
+    ) -> Option<usize> {
+        let shooting_at_left_basket = target.x < 0.0;
+
+        // Find elevated platforms (not floor) with decent shot quality
+        // Prefer higher platforms
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, node)| {
+                // Skip floor and dead zones
+                if node.is_floor || node.platform_role == PlatformRole::DeadZone {
+                    return None;
+                }
+
+                let quality = if shooting_at_left_basket {
+                    node.shot_quality_left
+                } else {
+                    node.shot_quality_right
+                };
+
+                // Accept platforms with decent quality (lower threshold than shooting)
+                if quality >= min_shot_quality * 0.7 {
+                    Some((i, node.top_y, quality))
+                } else {
+                    None
+                }
+            })
+            // Sort by height (higher = better), then quality
+            .max_by(|(_, h1, q1), (_, h2, q2)| {
+                h1.partial_cmp(h2)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| q1.partial_cmp(q2).unwrap())
+            })
+            .map(|(i, _, _)| i)
     }
 }
 
@@ -290,6 +379,9 @@ pub fn rebuild_nav_graph(
         top_y: floor_y,
         platform_entity: None,
         is_floor: true,
+        shot_quality_left: 0.0,  // Will be computed after all nodes are added
+        shot_quality_right: 0.0,
+        platform_role: PlatformRole::Floor,
     });
 
     // Collect level platforms and corner ramps
@@ -333,9 +425,25 @@ pub fn rebuild_nav_graph(
             top_y: pos.y + half_height,
             platform_entity: Some(entity),
             is_floor: false,
+            shot_quality_left: 0.0,  // Will be computed after all nodes are added
+            shot_quality_right: 0.0,
+            platform_role: if is_ramp { PlatformRole::Ramp } else { PlatformRole::ShotPosition },
         };
 
         nav_graph.nodes.push(node);
+    }
+
+    // Pre-compute shot qualities for all nodes
+    // Basket positions are at ±BASKET_PUSH_IN from arena edges
+    let basket_x_offset = ARENA_WIDTH / 2.0 - WALL_THICKNESS - BASKET_PUSH_IN;
+    let basket_y = ARENA_FLOOR_Y + BASKET_SIZE.y / 2.0 + 200.0; // Approximate basket center height
+    let left_basket = Vec2::new(-basket_x_offset, basket_y);
+    let right_basket = Vec2::new(basket_x_offset, basket_y);
+
+    for node in &mut nav_graph.nodes {
+        node.shot_quality_left = evaluate_shot_quality(node.center, left_basket);
+        node.shot_quality_right = evaluate_shot_quality(node.center, right_basket);
+        node.platform_role = classify_platform_role(node);
     }
 
     // Build edges between nodes
@@ -352,7 +460,7 @@ pub fn rebuild_nav_graph(
             let to = &nav_graph.nodes[j];
 
             // Check if we can reach node j from node i
-            if let Some(edge) = calculate_edge(from, to) {
+            if let Some(edge) = calculate_edge(from, to, &nav_graph.nodes) {
                 nav_graph.edges[i].push(edge);
             }
         }
@@ -366,10 +474,91 @@ pub fn rebuild_nav_graph(
         nav_graph.nodes.len(),
         nav_graph.edges.iter().map(|e| e.len()).sum::<usize>()
     );
+
+    // Debug: log nav graph structure
+    debug!("=== Nav Graph Debug ===");
+    for node in &nav_graph.nodes {
+        let role_str = match node.platform_role {
+            PlatformRole::Floor => "Floor",
+            PlatformRole::Ramp => "Ramp",
+            PlatformRole::ShotPosition => "Shot",
+            PlatformRole::DeadZone => "Dead",
+        };
+        let edges = &nav_graph.edges[node.id];
+        let edge_summary: Vec<String> = edges
+            .iter()
+            .map(|e| {
+                let edge_type = match e.edge_type {
+                    EdgeType::Walk => "W",
+                    EdgeType::Jump => "J",
+                    EdgeType::Drop => "D",
+                };
+                format!("{}->{}({})", node.id, e.to_node, edge_type)
+            })
+            .collect();
+        debug!(
+            "  Node {}: {:?} @ ({:.0}, {:.0}) x:[{:.0}, {:.0}] role={} edges=[{}]",
+            node.id,
+            if node.is_floor { "FLOOR" } else { "PLAT" },
+            node.center.x,
+            node.top_y,
+            node.left_x,
+            node.right_x,
+            role_str,
+            edge_summary.join(", ")
+        );
+    }
+    debug!("=== End Nav Graph ===");
+}
+
+/// Check if any platform would block the trajectory between two nodes
+fn is_trajectory_blocked(from: &NavNode, to: &NavNode, all_nodes: &[NavNode]) -> bool {
+    let min_y = from.top_y.min(to.top_y);
+    let max_y = from.top_y.max(to.top_y);
+
+    // Determine horizontal span of trajectory
+    let traj_left = from.center.x.min(to.center.x);
+    let traj_right = from.center.x.max(to.center.x);
+
+    for node in all_nodes {
+        // Skip the from and to nodes
+        if node.id == from.id || node.id == to.id {
+            continue;
+        }
+
+        // Skip floor (can always jump from floor)
+        if node.is_floor {
+            continue;
+        }
+
+        // Check if this platform is in the vertical range of the trajectory
+        // Platform top must be between from and to heights (with margin for player height)
+        let platform_in_y_range = node.top_y > min_y + PLAYER_SIZE.y / 2.0
+            && node.top_y < max_y - PLAYER_SIZE.y / 2.0;
+
+        if !platform_in_y_range {
+            continue;
+        }
+
+        // Check if platform overlaps horizontally with trajectory
+        let platform_overlaps_x = node.right_x > traj_left - PLAYER_SIZE.x / 2.0
+            && node.left_x < traj_right + PLAYER_SIZE.x / 2.0;
+
+        if platform_overlaps_x {
+            return true; // Blocked!
+        }
+    }
+
+    false
 }
 
 /// Calculate if an edge exists between two nodes and what type
-fn calculate_edge(from: &NavNode, to: &NavNode) -> Option<NavEdge> {
+fn calculate_edge(from: &NavNode, to: &NavNode, all_nodes: &[NavNode]) -> Option<NavEdge> {
+    // Check if any platform blocks the jump/drop trajectory
+    if is_trajectory_blocked(from, to, all_nodes) {
+        return None;
+    }
+
     let height_diff = to.top_y - from.top_y;
 
     // Check horizontal overlap/reachability
@@ -512,6 +701,27 @@ fn calculate_edge(from: &NavNode, to: &NavNode) -> Option<NavEdge> {
                 jump_hold_duration: 0.0,
             })
         }
+    }
+}
+
+/// Classify a platform's role based on its shot quality
+fn classify_platform_role(node: &NavNode) -> PlatformRole {
+    // Preserve floor and ramp designations
+    if node.is_floor {
+        return PlatformRole::Floor;
+    }
+
+    let best_quality = node.shot_quality_left.max(node.shot_quality_right);
+    let worst_quality = node.shot_quality_left.min(node.shot_quality_right);
+
+    if worst_quality < 0.25 {
+        // Bad for at least one basket - mark as dead zone
+        PlatformRole::DeadZone
+    } else if best_quality >= 0.55 {
+        PlatformRole::ShotPosition
+    } else {
+        // Keep existing role (Ramp for corner steps, or default)
+        PlatformRole::Ramp
     }
 }
 

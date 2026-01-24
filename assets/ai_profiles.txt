@@ -10,15 +10,21 @@
 #   defense_offset - How far from own basket AI defends (pixels)
 #   min_shot_quality - Minimum shot quality (0.0-1.0) before AI will shoot
 #                      Based on position heatmap: 0.0=anywhere, 1.0=perfect only
+#   pressure_distance - How close AI stays to ball carrier (lower = more pressure)
+#   aggression - How aggressively AI pursues (0.0=passive, 1.0=relentless)
+#   defensive_iq - How well AI positions on shot line (0.0-1.0)
 
 profile: Balanced
 position_tolerance: 30
-shoot_range: 400
+shoot_range: 600
 charge_min: 0.5
 charge_max: 1.2
 steal_range: 80
-defense_offset: 400
-min_shot_quality: 0.4
+defense_offset: 300
+min_shot_quality: 0.35
+pressure_distance: 120
+aggression: 0.5
+defensive_iq: 0.5
 
 profile: Aggressive
 position_tolerance: 20
@@ -28,6 +34,9 @@ charge_max: 0.8
 steal_range: 120
 defense_offset: 250
 min_shot_quality: 0.25
+pressure_distance: 80
+aggression: 0.9
+defensive_iq: 0.6
 
 profile: Defensive
 position_tolerance: 40
@@ -37,6 +46,9 @@ charge_max: 1.5
 steal_range: 50
 defense_offset: 500
 min_shot_quality: 0.5
+pressure_distance: 150
+aggression: 0.4
+defensive_iq: 0.7
 
 profile: Sniper
 position_tolerance: 15
@@ -46,6 +58,9 @@ charge_max: 1.0
 steal_range: 40
 defense_offset: 450
 min_shot_quality: 0.6
+pressure_distance: 180
+aggression: 0.3
+defensive_iq: 0.8
 
 profile: Rusher
 position_tolerance: 25
@@ -55,6 +70,9 @@ charge_max: 0.5
 steal_range: 150
 defense_offset: 200
 min_shot_quality: 0.2
+pressure_distance: 60
+aggression: 1.0
+defensive_iq: 0.4
 
 profile: Turtle
 position_tolerance: 50
@@ -64,6 +82,9 @@ charge_max: 2.0
 steal_range: 30
 defense_offset: 550
 min_shot_quality: 0.55
+pressure_distance: 200
+aggression: 0.2
+defensive_iq: 0.6
 
 profile: Chaotic
 position_tolerance: 10
@@ -73,6 +94,9 @@ charge_max: 1.5
 steal_range: 100
 defense_offset: 350
 min_shot_quality: 0.15
+pressure_distance: 100
+aggression: 0.7
+defensive_iq: 0.3
 
 profile: Patient
 position_tolerance: 35
@@ -82,6 +106,9 @@ charge_max: 1.3
 steal_range: 60
 defense_offset: 420
 min_shot_quality: 0.5
+pressure_distance: 140
+aggression: 0.35
+defensive_iq: 0.65
 
 profile: Hunter
 position_tolerance: 18
@@ -91,6 +118,9 @@ charge_max: 0.9
 steal_range: 140
 defense_offset: 300
 min_shot_quality: 0.35
+pressure_distance: 70
+aggression: 0.85
+defensive_iq: 0.55
 
 profile: Goalie
 position_tolerance: 45
@@ -100,3 +130,6 @@ charge_max: 1.1
 steal_range: 70
 defense_offset: 480
 min_shot_quality: 0.45
+pressure_distance: 160
+aggression: 0.3
+defensive_iq: 0.75

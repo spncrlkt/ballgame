@@ -12,6 +12,73 @@ use crate::constants::*;
 use crate::player::{Grounded, HoldingBall, HumanControlled, Player, TargetBasket, Team};
 use crate::world::Basket;
 
+/// Calculate the interception position on the line between ball carrier and defender's basket.
+/// The defender should position themselves between the opponent and their own basket
+/// (the basket the opponent is trying to score on).
+fn calculate_interception_position(
+    opponent_pos: Vec2,
+    basket_pos: Vec2,
+    pressure_distance: f32,
+    defensive_iq: f32,
+) -> Vec2 {
+    // Direction from opponent to basket (the shot line)
+    let shot_direction = (basket_pos - opponent_pos).normalize_or_zero();
+
+    // Base intercept position: on the shot line, pressure_distance away from opponent
+    let base_intercept = opponent_pos + shot_direction * pressure_distance;
+
+    // Apply defensive IQ - higher IQ means staying more precisely on the shot line
+    // Lower IQ introduces perpendicular positioning error
+    let perpendicular = Vec2::new(-shot_direction.y, shot_direction.x);
+    let error_magnitude = (1.0 - defensive_iq) * 40.0;
+    let offset = perpendicular * error_magnitude * (0.5 - defensive_iq);
+
+    let unclamped = base_intercept + offset;
+
+    // Clamp to valid arena bounds to prevent AI from targeting unreachable positions
+    // Leave margin for wall thickness and corner steps
+    let margin = WALL_THICKNESS + CORNER_STEP_TOTAL_WIDTH + PLAYER_SIZE.x;
+    let min_x = -ARENA_WIDTH / 2.0 + margin;
+    let max_x = ARENA_WIDTH / 2.0 - margin;
+    let min_y = ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0;
+
+    Vec2::new(
+        unclamped.x.clamp(min_x, max_x),
+        unclamped.y.max(min_y),
+    )
+}
+
+/// Check if a defender is positioned to block a shot trajectory
+pub fn defender_in_shot_path(
+    ball_pos: Vec2,
+    ball_velocity: Vec2,
+    defender_pos: Vec2,
+    blocking_radius: f32,
+) -> bool {
+    // Project defender position onto the shot trajectory
+    let shot_dir = ball_velocity.normalize_or_zero();
+    if shot_dir.length_squared() < 0.01 {
+        return false;
+    }
+
+    // Vector from ball to defender
+    let to_defender = defender_pos - ball_pos;
+
+    // Project onto shot direction
+    let projection_length = to_defender.dot(shot_dir);
+
+    // Defender must be in front of the ball (positive projection)
+    if projection_length < 0.0 {
+        return false;
+    }
+
+    // Calculate perpendicular distance from shot line
+    let closest_point = ball_pos + shot_dir * projection_length;
+    let perpendicular_dist = defender_pos.distance(closest_point);
+
+    perpendicular_dist < blocking_radius
+}
+
 /// Update AI navigation paths based on current goals.
 /// Runs before ai_decision_update to set up paths that the decision system will execute.
 pub fn ai_navigation_update(
@@ -71,17 +138,39 @@ pub fn ai_navigation_update(
             .find(|(_, b)| **b == target_basket.0)
             .map(|(t, _)| t.translation.truncate());
 
-        // Calculate defensive position
-        let defensive_pos = match *team {
-            Team::Left => Vec2::new(-profile.defense_offset, ARENA_FLOOR_Y + 50.0),
-            Team::Right => Vec2::new(profile.defense_offset, ARENA_FLOOR_Y + 50.0),
-        };
-
         // Find opponent position
         let opponent_pos = all_players
             .iter()
             .find(|(e, _, _, human)| *e != ai_entity && human.is_some())
             .map(|(_, t, _, _)| t.translation.truncate());
+
+        // Get the AI's own basket (the one they're defending)
+        // AI defends the opposite basket from what they're targeting
+        let own_basket_pos = basket_query
+            .iter()
+            .find(|(_, b)| **b != target_basket.0)
+            .map(|(t, _)| t.translation.truncate());
+
+        // Calculate defensive/interception position based on opponent and own basket
+        let intercept_pos = if let (Some(opp_pos), Some(own_basket)) = (opponent_pos, own_basket_pos) {
+            // Position on the shot line between opponent and our basket
+            calculate_interception_position(
+                opp_pos,
+                own_basket,
+                profile.pressure_distance,
+                profile.defensive_iq,
+            )
+        } else if let Some(opp_pos) = opponent_pos {
+            // Fallback: just get close to opponent
+            opp_pos
+        } else {
+            // Fallback defensive position (old logic)
+            let defensive_y = ARENA_FLOOR_Y + 50.0;
+            match *team {
+                Team::Left => Vec2::new(-profile.defense_offset, defensive_y),
+                Team::Right => Vec2::new(profile.defense_offset, defensive_y),
+            }
+        };
 
         // Determine navigation target based on goal
         let desired_target: Option<Vec2> = match ai_state.current_goal {
@@ -104,8 +193,16 @@ pub fn ai_navigation_update(
                     ) {
                         Some(nav_graph.nodes[path_result.goal_node].center)
                     } else {
-                        // Fallback: just move toward basket
-                        Some(basket_pos)
+                        // Fallback: find best elevated platform instead of going under basket
+                        // This prevents AI from getting stuck under the basket
+                        if let Some(elevated_idx) =
+                            nav_graph.find_elevated_platform(basket_pos, profile.min_shot_quality)
+                        {
+                            Some(nav_graph.nodes[elevated_idx].center)
+                        } else {
+                            // Last resort: stay in pursuit mode (don't navigate)
+                            None
+                        }
                     }
                 } else {
                     None
@@ -119,7 +216,10 @@ pub fn ai_navigation_update(
 
             AiGoal::AttemptSteal => opponent_pos,
 
-            AiGoal::ReturnToDefense => Some(defensive_pos),
+            AiGoal::InterceptDefense | AiGoal::PressureDefense => {
+                // Navigate to intercept position on the shot line
+                Some(intercept_pos)
+            }
         };
 
         // Check if we need to update the path
@@ -262,10 +362,28 @@ pub fn ai_decision_update(
             .map(|(t, _)| t.translation.truncate())
             .unwrap_or(Vec2::new(-600.0, 0.0));
 
-        // Defensive position (near own basket based on team, offset from profile)
-        let defensive_pos = match *team {
-            Team::Left => Vec2::new(-profile.defense_offset, ARENA_FLOOR_Y + 50.0),
-            Team::Right => Vec2::new(profile.defense_offset, ARENA_FLOOR_Y + 50.0),
+        // Get the AI's own basket (the one they're defending)
+        let own_basket_pos = basket_query
+            .iter()
+            .find(|(_, b)| **b != target_basket_type)
+            .map(|(t, _)| t.translation.truncate())
+            .unwrap_or(Vec2::new(600.0, 0.0)); // Fallback
+
+        // Calculate intercept position on the shot line
+        let intercept_pos = if let Some(opp_pos) = opponent_pos {
+            calculate_interception_position(
+                opp_pos,
+                own_basket_pos,
+                profile.pressure_distance,
+                profile.defensive_iq,
+            )
+        } else {
+            // Fallback defensive position
+            let defensive_y = ARENA_FLOOR_Y + 50.0;
+            match *team {
+                Team::Left => Vec2::new(-profile.defense_offset, defensive_y),
+                Team::Right => Vec2::new(profile.defense_offset, defensive_y),
+            }
         };
 
         // Decide current goal (using profile values)
@@ -307,13 +425,21 @@ pub fn ai_decision_update(
         } else if opponent_has_ball {
             if let Some(opp_pos) = opponent_pos {
                 let distance_to_opponent = ai_pos.distance(opp_pos);
+                // Calculate effective pressure threshold based on profile
+                // Higher aggression = tighter pressure, lower = zone defense
+                let pressure_threshold = profile.pressure_distance * (1.0 + (1.0 - profile.aggression));
+
                 if distance_to_opponent < profile.steal_range {
                     AiGoal::AttemptSteal
+                } else if distance_to_opponent < pressure_threshold {
+                    // Close enough to apply pressure - chase and harass
+                    AiGoal::PressureDefense
                 } else {
-                    AiGoal::ReturnToDefense
+                    // Far away - navigate to intercept position on shot line
+                    AiGoal::InterceptDefense
                 }
             } else {
-                AiGoal::ReturnToDefense
+                AiGoal::InterceptDefense
             }
         } else {
             // Ball is free
@@ -477,15 +603,15 @@ pub fn ai_decision_update(
                     input.throw_held = false;
                 }
 
-                AiGoal::ReturnToDefense => {
-                    // Move toward defensive position
-                    let dx = defensive_pos.x - ai_pos.x;
+                AiGoal::InterceptDefense => {
+                    // Navigate to intercept position on shot line
+                    let dx = intercept_pos.x - ai_pos.x;
                     if dx.abs() > profile.position_tolerance {
                         input.move_x = dx.signum();
                     }
 
-                    // Jump up to platform if needed (simple case)
-                    let dy = defensive_pos.y - ai_pos.y;
+                    // Jump up to platform if needed (simple case when nav not active)
+                    let dy = intercept_pos.y - ai_pos.y;
                     if dy > PLAYER_SIZE.y * 0.5 && grounded.0 {
                         input.jump_buffer_timer = JUMP_BUFFER_TIME;
                         input.jump_held = true;
@@ -493,6 +619,51 @@ pub fn ai_decision_update(
 
                     input.pickup_pressed = false;
                     input.throw_held = false;
+                }
+
+                AiGoal::PressureDefense => {
+                    // Close-range: chase opponent aggressively and attempt steals
+                    if let Some(opp_pos) = opponent_pos {
+                        let dx = opp_pos.x - ai_pos.x;
+                        // Move directly toward opponent
+                        if dx.abs() > profile.position_tolerance * 0.5 {
+                            input.move_x = dx.signum();
+                        }
+
+                        // Jump if opponent is above us
+                        let dy = opp_pos.y - ai_pos.y;
+                        if dy > PLAYER_SIZE.y * 0.5 && grounded.0 {
+                            input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                            input.jump_held = true;
+                        }
+
+                        // Attempt steal opportunistically when close enough
+                        let distance = ai_pos.distance(opp_pos);
+                        if distance < STEAL_RANGE * 1.2 {
+                            // Slightly extended range for pressure attempts
+                            input.pickup_pressed = true;
+                        }
+                    }
+
+                    input.throw_held = false;
+                }
+            }
+        }
+
+        // ChargeShot throw logic runs regardless of navigation
+        // (navigation handles movement, this handles the actual throw)
+        if ai_state.current_goal == AiGoal::ChargeShot && nav_controlling {
+            // We're navigating to a shooting position while in ChargeShot mode
+            // Start/continue charging while moving
+            if !input.throw_held && !input.throw_released {
+                input.throw_held = true;
+                ai_state.shot_charge_target =
+                    rand::thread_rng().gen_range(profile.charge_min..profile.charge_max);
+            } else if input.throw_held {
+                ai_state.shot_charge_target -= time.delta_secs();
+                if ai_state.shot_charge_target <= 0.0 {
+                    input.throw_held = false;
+                    input.throw_released = true;
                 }
             }
         }
@@ -502,6 +673,35 @@ pub fn ai_decision_update(
         if distance_to_ball < BALL_PICKUP_RADIUS && matches!(ball_state, BallState::Free) {
             input.pickup_pressed = true;
         }
+
+        // Stuck detection: if AI is trying to move but position doesn't change, try to unstick
+        let stuck_threshold = 5.0; // Distance that counts as "not stuck"
+        let position_changed = ai_state
+            .last_position
+            .map(|last| ai_pos.distance(last) > stuck_threshold)
+            .unwrap_or(true);
+
+        if input.move_x.abs() > 0.1 && !position_changed && grounded.0 {
+            // AI is trying to move but stuck
+            ai_state.stuck_timer += time.delta_secs();
+
+            // After being stuck for a bit, try to jump to get unstuck
+            if ai_state.stuck_timer > 0.5 {
+                input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                input.jump_held = true;
+                // Also try moving the opposite direction briefly
+                if ai_state.stuck_timer > 1.0 {
+                    input.move_x = -input.move_x;
+                    ai_state.stuck_timer = 0.0; // Reset after trying opposite direction
+                }
+            }
+        } else {
+            // Not stuck, reset timer
+            ai_state.stuck_timer = 0.0;
+        }
+
+        // Update last position for next frame's stuck detection
+        ai_state.last_position = Some(ai_pos);
 
         // Decay jump buffer timer
         input.jump_buffer_timer = (input.jump_buffer_timer - time.delta_secs()).max(0.0);

@@ -9,6 +9,8 @@ cargo build           # Debug build
 cargo build --release # Release build
 cargo run             # Run the game
 cargo run -- --replay <file.evlog>  # Run in replay mode
+cargo run --bin training            # Run training mode (5 games vs AI)
+cargo run --bin training -- --games 3 --profile Aggressive  # Custom training
 cargo check           # Check compilation without building
 cargo fmt             # Format code
 cargo clippy          # Lint code
@@ -132,6 +134,7 @@ src/
 ├── levels/          # LevelDatabase, spawning, hot reload
 ├── presets/         # Game tuning presets (movement, ball, shooting, composite)
 ├── replay/          # Replay system for playing back recorded .evlog files
+├── training/        # Training mode state, session management, summary generation
 ├── world/           # Platform, Collider, Basket, BasketRim components
 └── ui/              # Debug, HUD, animations, charge gauge, tweak panel
 ```
@@ -261,6 +264,41 @@ Display (top-left, always visible):
 - Comma (,): Step backward one tick (when paused)
 - Home: Jump to start
 - End: Jump to end
+
+### Training Mode
+
+Training mode (`cargo run --bin training`) lets you play 1v1 against AI across multiple games, logging everything for later analysis.
+
+**Usage:**
+```bash
+cargo run --bin training                        # 5 games vs Balanced AI
+cargo run --bin training -- --games 3           # 3 games
+cargo run --bin training -- --profile Aggressive  # Specific AI profile
+```
+
+**Controls:**
+- A/D or Left Stick: Move
+- Space/W or South button: Jump
+- E or West button: Pickup/Steal
+- F or Right Bumper: Throw (hold to charge)
+- Escape: Quit training session
+
+**Output:**
+```
+training_logs/
+└── session_20260123_143022/
+    ├── game_1_level4.evlog
+    ├── game_2_level7.evlog
+    ├── game_3_level2.evlog
+    ├── game_4_level9.evlog
+    ├── game_5_level3.evlog
+    └── summary.json
+```
+
+**Post-session analysis:** Ask Claude Code to analyze the training session:
+```
+"Analyze my training session in training_logs/session_20260123_143022/"
+```
 
 ---
 

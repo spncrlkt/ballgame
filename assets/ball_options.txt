@@ -1,84 +1,331 @@
 # Ball Generation Options
 # =======================
 #
-# Format:
-#   size: <pixels>          Texture size in pixels
-#   border: <pixels>        Black circumference border thickness
+# Naming: s## where ## is a 2-digit number for easy reference
+# Example: s01, s02, ... s99
 #
-#   style: <name>           Start a new style definition
-#   pattern: <type>         Pattern type (see below)
-#   param: <name> <value>   Style-specific parameter
-#
-# Available patterns:
-#   wedges    - 4 equal sections (beach ball style)
-#   half      - split vertically down middle
-#   spiral    - spiral arms from center
-#   checker   - checkerboard pattern
-#   star      - 5-pointed star
-#   swirl     - pinwheel pattern
-#   plasma    - organic plasma blobs
-#   shatter   - broken glass fragments
-#   wave      - wavy horizontal bands
-#   atoms     - orbital rings pattern
-#
-# Colors are loaded from assets/palettes.txt
 # Run: cargo run --bin generate_ball
 
 size: 128
 border: 10
 
-# Classic beach ball quarters
-style: wedges
+# =============================================================================
+# HALF PATTERNS (s01-s09)
+# =============================================================================
+
+# s01: Clean vertical split
+style: s01
+pattern: half
+
+# s02-s05: Wavy half - different frequencies and amplitudes
+style: s02
+pattern: wavy_half
+param: frequency 2.0
+param: amplitude 0.25
+
+style: s03
+pattern: wavy_half
+param: frequency 3.0
+param: amplitude 0.2
+
+style: s04
+pattern: wavy_half
+param: frequency 4.0
+param: amplitude 0.15
+
+style: s05
+pattern: wavy_half
+param: frequency 5.0
+param: amplitude 0.12
+
+# =============================================================================
+# WEDGE PATTERNS (s10-s29)
+# =============================================================================
+
+# s10-s12: Standard wedges
+style: s10
 pattern: wedges
 param: sections 4
 
-# Clean vertical split
-style: half
-pattern: half
+style: s11
+pattern: wedges
+param: sections 6
 
-# Hypnotic spiral arms
-style: spiral
-pattern: spiral
-param: arms 3
-param: tightness 2.5
+style: s12
+pattern: wedges
+param: sections 8
 
-# Retro checkerboard
-style: checker
+# s13-s18: Wavy wedges - various configurations
+style: s13
+pattern: wavy_wedges
+param: sections 4
+param: frequency 2.0
+param: amplitude 0.2
+
+style: s14
+pattern: wavy_wedges
+param: sections 4
+param: frequency 3.0
+param: amplitude 0.15
+
+style: s15
+pattern: wavy_wedges
+param: sections 6
+param: frequency 2.0
+param: amplitude 0.18
+
+style: s16
+pattern: wavy_wedges
+param: sections 6
+param: frequency 3.0
+param: amplitude 0.12
+
+style: s17
+pattern: wavy_wedges
+param: sections 8
+param: frequency 2.0
+param: amplitude 0.15
+
+style: s18
+pattern: wavy_wedges
+param: sections 8
+param: frequency 4.0
+param: amplitude 0.1
+
+# =============================================================================
+# CHECKER PATTERNS (s30-s39)
+# =============================================================================
+
+# s30-s33: Standard checkers (no offset)
+style: s30
+pattern: checker
+param: squares 3
+
+style: s31
+pattern: checker
+param: squares 4
+
+style: s32
+pattern: checker
+param: squares 5
+
+style: s33
 pattern: checker
 param: squares 6
 
-# Bold star shape
-style: star
-pattern: star
-param: points 5
-param: inner_radius 0.35
+# s34-s37: Offset checkers (shifted by half cell)
+style: s34
+pattern: checker
+param: squares 3
+param: offset 0.5
 
-# Mesmerizing pinwheel
-style: swirl
+style: s35
+pattern: checker
+param: squares 4
+param: offset 0.5
+
+style: s36
+pattern: checker
+param: squares 5
+param: offset 0.5
+
+style: s37
+pattern: checker
+param: squares 6
+param: offset 0.5
+
+# =============================================================================
+# SWIRL PATTERNS (s40-s49)
+# =============================================================================
+
+# s40-s42: Standard swirls (clockwise)
+style: s40
+pattern: swirl
+param: blades 4
+param: twist 1.5
+
+style: s41
 pattern: swirl
 param: blades 6
 param: twist 1.5
 
-# Organic plasma blobs
-style: plasma
+style: s42
+pattern: swirl
+param: blades 8
+param: twist 1.2
+
+# s43-s45: Reverse swirls (counter-clockwise)
+style: s43
+pattern: swirl
+param: blades 4
+param: twist 1.5
+param: direction -1
+
+style: s44
+pattern: swirl
+param: blades 6
+param: twist 1.5
+param: direction -1
+
+style: s45
+pattern: swirl
+param: blades 8
+param: twist 1.2
+param: direction -1
+
+# s46-s47: Tight/loose twist variants
+style: s46
+pattern: swirl
+param: blades 6
+param: twist 2.5
+
+style: s47
+pattern: swirl
+param: blades 6
+param: twist 0.8
+
+# =============================================================================
+# SPIRAL PATTERNS (s50-s59)
+# =============================================================================
+
+# s50-s52: Standard spirals
+style: s50
+pattern: spiral
+param: bands 3
+
+style: s51
+pattern: spiral
+param: bands 4
+
+style: s52
+pattern: spiral
+param: bands 5
+
+# s53-s55: Reverse spirals
+style: s53
+pattern: spiral
+param: bands 3
+param: direction -1
+
+style: s54
+pattern: spiral
+param: bands 4
+param: direction -1
+
+style: s55
+pattern: spiral
+param: bands 5
+param: direction -1
+
+# =============================================================================
+# STAR PATTERN (s60)
+# =============================================================================
+
+style: s60
+pattern: star
+param: points 5
+param: inner_radius 0.35
+
+# =============================================================================
+# PLASMA PATTERNS (s61-s63)
+# =============================================================================
+
+style: s61
 pattern: plasma
 param: scale 3.0
 param: threshold 0.5
 
-# Dramatic shattered glass
-style: shatter
+style: s62
+pattern: plasma
+param: scale 2.5
+param: threshold 0.45
+
+style: s63
+pattern: plasma
+param: scale 4.0
+param: threshold 0.55
+
+# =============================================================================
+# SHATTER PATTERNS (s64-s66)
+# =============================================================================
+
+style: s64
 pattern: shatter
 param: pieces 8
 param: chaos 0.6
 
-# Flowing wave bands
-style: wave
+style: s65
+pattern: shatter
+param: pieces 12
+param: chaos 0.5
+
+style: s66
+pattern: shatter
+param: pieces 6
+param: chaos 0.7
+
+# =============================================================================
+# WAVE PATTERNS (s70-s73)
+# =============================================================================
+
+style: s70
 pattern: wave
 param: frequency 3.0
 param: amplitude 0.2
+param: angle 0
 
-# Atomic orbital rings
-style: atoms
-pattern: atoms
-param: rings 3
-param: thickness 0.12
+style: s71
+pattern: wave
+param: frequency 4.0
+param: amplitude 0.15
+param: angle 45
+
+style: s72
+pattern: wave
+param: frequency 2.0
+param: amplitude 0.3
+param: angle 90
+
+style: s73
+pattern: wave
+param: frequency 5.0
+param: amplitude 0.1
+param: angle 30
+
+# =============================================================================
+# BASEBALL PATTERNS (s80-s87)
+# =============================================================================
+
+# s80-s83: Standard baseball rotations
+style: s80
+pattern: baseball
+param: rotation 0
+
+style: s81
+pattern: baseball
+param: rotation 30
+
+style: s82
+pattern: baseball
+param: rotation 60
+
+style: s83
+pattern: baseball
+param: rotation 150
+
+# s84-s87: Swapped color baseball
+style: s84
+pattern: baseball2
+param: rotation 0
+
+style: s85
+pattern: baseball2
+param: rotation 30
+
+style: s86
+pattern: baseball2
+param: rotation 60
+
+style: s87
+pattern: baseball2
+param: rotation 150

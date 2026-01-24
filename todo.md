@@ -4,25 +4,37 @@
 
 ## Active Work (Prioritized)
 
-### 0. D-Pad Menu UX
+### 0. Immediately
+- [ ] **Immediate** Run training binary to verify nav graph fix for corner steps
+  - Check debug logs show corner ramp nodes with proper Jump edges
+  - Verify AI can climb corner steps on levels 7 (Skyway) or 8 (Terraces)
+  - Changes made: removed CornerRamp from fill blocks, added nav graph debug logging
+- [ ] **Immediate** Teach AI its own jump capability
+  - AI should know max jump height and horizontal reach
+  - Enable skipping intermediate steps when a single jump can reach a higher platform
+  - Avoid inefficient step-by-step climbing when direct jump is possible
+- more ball options: more s60 star alts, yin yang, 3D rotated S11 "volleyball", 3D rotated basketball, striped balls, croquet balls, pool balls. full analysis after wards to see patternable "types" to combine
+- 
+
+### 1. D-Pad Menu UX
 - [ ] **P0** Improve D-pad menu display - see `notes/dpad-menu-ux.md`
 
-### 1. AI Behavior
+### 2. AI Behavior
 - [ ] **P1** Fix AI shooting - takes bad shots, misses easy ones
 - [ ] **P2** Fix AI positioning - stands in wrong places, doesn't cover basket well
 
-### 2. Movement/Physics Tuning
+### 3. Movement/Physics Tuning
 - [ ] **P3** Tune player movement - speed, acceleration, air control
 - [ ] **P4** Tune jump feel - height, coyote time, responsiveness
 
-### 3. Polish
+### 4. Polish
 - [ ] **P5** UI fix flash on score color
 - [ ] **P6** Viewport testing at various resolutions
 
-### 4. Settings
+### 5. Settings
 - [ ] **Immediate** Persist per-installation settings (viewport size, etc.) - save on change, load on game start
 
-### 5. Debug
+### 6. Debug
 - [ ] Add AI vs AI debug level for Level 2 (both players AI-controlled for testing)
 
 ---

@@ -11,5 +11,8 @@ Cargo.lock
 /regression/current.png
 /regression/diff.png
 
-# Simulation event logs (local only)
+# Simulation/training event logs (local only)
 /logs/
+/training_logs/
+/sim_logs/
+*_logs/

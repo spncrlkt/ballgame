@@ -2,6 +2,7 @@
 
 use bevy::prelude::*;
 
+use crate::ai::{AiNavState, AiState, AiGoal};
 use crate::ball::{Ball, BallState, CurrentPalette, Velocity};
 use crate::constants::*;
 use crate::palettes::PaletteDatabase;
@@ -12,8 +13,8 @@ use crate::world::Basket;
 /// Score resource tracking left/right team scores
 #[derive(Resource, Default)]
 pub struct Score {
-    pub left: u32,  // Team scoring in LEFT basket
-    pub right: u32, // Team scoring in RIGHT basket
+    pub left: u32,  // Left team's score
+    pub right: u32, // Right team's score
 }
 
 /// Current level number (1-indexed)
@@ -35,6 +36,7 @@ pub fn check_scoring(
     mut ball_query: Query<(&mut Transform, &mut Velocity, &mut BallState, &Sprite), With<Ball>>,
     basket_query: Query<(Entity, &Transform, &Basket, &Sprite), Without<Ball>>,
     player_query: Query<(Entity, &Sprite, &Team), With<Player>>,
+    mut ai_query: Query<(&mut AiState, &mut AiNavState), With<Player>>,
 ) {
     let palette = palette_db
         .get(current_palette.0)
@@ -59,8 +61,8 @@ pub fn check_scoring(
                 let points = if is_held { 2 } else { 1 };
 
                 match basket {
-                    Basket::Left => score.left += points,
-                    Basket::Right => score.right += points,
+                    Basket::Left => score.right += points,  // Right team scores in left basket
+                    Basket::Right => score.left += points,  // Left team scores in right basket
                 }
 
                 // Basket color based on its side (from current palette)
@@ -103,6 +105,18 @@ pub fn check_scoring(
                 ball_transform.translation = BALL_SPAWN;
                 ball_velocity.0 = Vec2::ZERO;
                 *ball_state = BallState::Free;
+
+                // Reset AI state for all players - this prevents AI from getting stuck
+                // in corners or with stale navigation after a score
+                for (mut ai_state, mut nav_state) in &mut ai_query {
+                    ai_state.current_goal = AiGoal::ChaseBall;
+                    ai_state.jump_shot_active = false;
+                    ai_state.jump_shot_timer = 0.0;
+                    ai_state.nav_target = None;
+                    ai_state.last_position = None;
+                    ai_state.stuck_timer = 0.0;
+                    nav_state.clear();
+                }
 
                 info!(
                     "SCORE {}pts! Left: {} Right: {}",

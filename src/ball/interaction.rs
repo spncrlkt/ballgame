@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::ai::InputState;
+use crate::ai::{decision::defender_in_shot_path, InputState};
 use crate::ball::components::*;
 use crate::constants::*;
 use crate::player::{Facing, HoldingBall, Player, Velocity};
@@ -24,7 +24,7 @@ pub fn ball_player_collision(
         ),
         With<Ball>,
     >,
-    mut player_query: Query<(&Transform, &mut Velocity, &Sprite), (With<Player>, Without<Ball>)>,
+    mut player_query: Query<(Entity, &Transform, &mut Velocity, &Sprite), (With<Player>, Without<Ball>)>,
 ) {
     for (
         ball_transform,
@@ -48,7 +48,13 @@ pub fn ball_player_collision(
 
         let mut is_overlapping = false;
 
-        for (player_transform, mut player_velocity, player_sprite) in &mut player_query {
+        // Get shooter entity if ball is in flight
+        let shooter_entity = match ball_state {
+            BallState::InFlight { shooter, .. } => Some(*shooter),
+            _ => None,
+        };
+
+        for (player_entity, player_transform, mut player_velocity, player_sprite) in &mut player_query {
             let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
             let player_half = player_size / 2.0;
             let player_pos = player_transform.translation.truncate();
@@ -60,8 +66,28 @@ pub fn ball_player_collision(
             if overlap_x > 0.0 && overlap_y > 0.0 {
                 is_overlapping = true;
 
+                // Check if this is a defender blocking a shot
+                // If the ball is in flight and this player is NOT the shooter,
+                // check if they're in the shot path and reduce grace accordingly
+                let is_blocking_defender = shooter_entity
+                    .map(|shooter| shooter != player_entity)
+                    .unwrap_or(false)
+                    && defender_in_shot_path(
+                        ball_pos,
+                        ball_velocity.0,
+                        player_pos,
+                        PLAYER_SIZE.x * 1.5, // Blocking radius
+                    );
+
+                // Calculate effective grace - reduce if defender is blocking
+                let effective_grace = if is_blocking_defender {
+                    grace.0 * DEFENSE_GRACE_REDUCTION
+                } else {
+                    grace.0
+                };
+
                 // Only apply effects on first frame of contact, and skip if in grace period
-                if !contact.overlapping && grace.0 <= 0.0 {
+                if !contact.overlapping && effective_grace <= 0.0 {
                     let ball_speed = ball_velocity.0.length();
                     let player_speed = player_velocity.0.length();
 

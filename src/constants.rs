@@ -190,6 +190,17 @@ pub const NAV_PATH_RECALC_DISTANCE: f32 = 100.0;
 /// Minimum distance to walk before executing jump (ensures momentum)
 pub const NAV_JUMP_APPROACH_DISTANCE: f32 = 20.0;
 // =============================================================================
+// AI DEFENSIVE BEHAVIOR
+// =============================================================================
+
+/// Default pressure distance - how close AI tries to stay to ball carrier (pixels)
+pub const DEFENSE_PRESSURE_DISTANCE: f32 = 120.0;
+/// Grace period multiplier when defender is blocking a shot (0.3 = 70% reduction)
+pub const DEFENSE_GRACE_REDUCTION: f32 = 0.3;
+/// Maximum shot variance penalty from defender proximity
+pub const DEFENSE_SHOT_VARIANCE_MAX: f32 = 0.20;
+
+// =============================================================================
 // DEFAULT AI PROFILES
 // =============================================================================
 

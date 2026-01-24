@@ -258,7 +258,9 @@ fn get_pixel_color(
 
     match style.pattern.as_str() {
         "wedges" => draw_wedges(angle, style, palette),
+        "wavy_wedges" => draw_wavy_wedges(fx, fy, radius, angle, normalized_dist, style, palette),
         "half" => draw_half(fx, palette),
+        "wavy_half" => draw_wavy_half(fx, fy, radius, style, palette),
         "spiral" => draw_spiral(fx, fy, normalized_dist, angle, style, palette),
         "checker" => draw_checker(fx, fy, radius, style, palette),
         "star" => draw_star(angle, normalized_dist, style, palette),
@@ -267,6 +269,8 @@ fn get_pixel_color(
         "shatter" => draw_shatter(fx, fy, radius, style, palette),
         "wave" => draw_wave(fx, fy, radius, style, palette),
         "atoms" => draw_atoms(fx, fy, normalized_dist, angle, style, palette),
+        "baseball" => draw_baseball(fx, fy, radius, style, palette, false),
+        "baseball2" => draw_baseball(fx, fy, radius, style, palette, true),
         _ => WHITE,
     }
 }
@@ -294,7 +298,44 @@ fn draw_half(fx: f32, palette: &Palette) -> [u8; 4] {
     }
 }
 
-/// Spiral: Spiral arms from center
+/// Wavy Half: Sinusoidal split
+fn draw_wavy_half(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let frequency = style.params.get("frequency").copied().unwrap_or(3.0);
+    let amplitude = style.params.get("amplitude").copied().unwrap_or(0.2);
+
+    let ny = fy / radius;
+    let wave_offset = (ny * frequency * PI).sin() * amplitude * radius;
+
+    if fx < wave_offset {
+        palette.left
+    } else {
+        palette.right
+    }
+}
+
+/// Wavy Wedges: Sinusoidal edges on wedge sections
+fn draw_wavy_wedges(fx: f32, fy: f32, radius: f32, angle: f32, norm_dist: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+    let sections = style.params.get("sections").copied().unwrap_or(4.0) as i32;
+    let frequency = style.params.get("frequency").copied().unwrap_or(3.0);
+    let amplitude = style.params.get("amplitude").copied().unwrap_or(0.15);
+
+    let angle = if angle < 0.0 { angle + 2.0 * PI } else { angle };
+    let sector_size = 2.0 * PI / sections as f32;
+
+    // Add wave to the sector boundaries based on distance from center
+    let wave = (norm_dist * frequency * PI).sin() * amplitude;
+    let adjusted_angle = angle + wave;
+
+    let sector = ((adjusted_angle / sector_size) as i32) % sections;
+
+    if sector % 2 == 0 {
+        palette.left
+    } else {
+        palette.right
+    }
+}
+
+/// Spiral: Archimedean spiral - bands wind outward from center like a cinnamon roll
 fn draw_spiral(
     _fx: f32,
     _fy: f32,
@@ -303,14 +344,21 @@ fn draw_spiral(
     style: &StyleConfig,
     palette: &Palette,
 ) -> [u8; 4] {
-    let arms = style.params.get("arms").copied().unwrap_or(3.0);
-    let tightness = style.params.get("tightness").copied().unwrap_or(2.5);
+    let bands = style.params.get("bands").copied().unwrap_or(4.0);
+    let direction = style.params.get("direction").copied().unwrap_or(1.0); // -1 for reverse
 
-    // Spiral equation: angle offset based on distance
-    let spiral_angle = angle + norm_dist * tightness * PI;
-    let spiral_sector = (spiral_angle * arms / (2.0 * PI)).floor() as i32;
+    // Normalize angle to [0, 2π]
+    let angle = if angle < 0.0 { angle + 2.0 * PI } else { angle };
 
-    if spiral_sector % 2 == 0 {
+    // Archimedean spiral: r = a + b*θ
+    // We reverse this to find which "wind" of the spiral we're on
+    // Total angle traveled = angle + (2π * number of complete rotations based on distance)
+    let total_angle = angle * direction + norm_dist * bands * 2.0 * PI;
+
+    // Which band are we in? Alternates every π
+    let band = (total_angle / PI).floor() as i32;
+
+    if band % 2 == 0 {
         palette.left
     } else {
         palette.right
@@ -320,10 +368,11 @@ fn draw_spiral(
 /// Checker: Checkerboard pattern
 fn draw_checker(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
     let squares = style.params.get("squares").copied().unwrap_or(6.0);
+    let offset = style.params.get("offset").copied().unwrap_or(0.0); // 0.5 = half cell offset
     let cell_size = (radius * 2.0) / squares;
 
-    let cx = ((fx + radius) / cell_size).floor() as i32;
-    let cy = ((fy + radius) / cell_size).floor() as i32;
+    let cx = ((fx + radius + offset * cell_size) / cell_size).floor() as i32;
+    let cy = ((fy + radius + offset * cell_size) / cell_size).floor() as i32;
 
     if (cx + cy) % 2 == 0 {
         palette.left
@@ -351,25 +400,36 @@ fn draw_star(angle: f32, norm_dist: f32, style: &StyleConfig, palette: &Palette)
     };
 
     if norm_dist < star_dist {
-        // Inside star - split by angle
-        let point_index = (angle / sector_angle).floor() as i32;
-        if point_index % 2 == 0 {
+        // Inside star - color by which half of sector we're in
+        // This gives even 50/50 color split regardless of point count
+        if angle_in_sector < half_sector {
             palette.left
         } else {
             palette.right
         }
     } else {
-        WHITE
+        // Outside star - radial gradient from left (center) to right (edge)
+        let t = norm_dist; // 0 at center, 1 at edge
+        [
+            ((1.0 - t) * palette.left[0] as f32 + t * palette.right[0] as f32) as u8,
+            ((1.0 - t) * palette.left[1] as f32 + t * palette.right[1] as f32) as u8,
+            ((1.0 - t) * palette.left[2] as f32 + t * palette.right[2] as f32) as u8,
+            255,
+        ]
     }
 }
 
-/// Swirl: Pinwheel pattern
+/// Swirl: Pinwheel with twisted blades - discrete sectors that bend with distance
 fn draw_swirl(angle: f32, norm_dist: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
     let blades = style.params.get("blades").copied().unwrap_or(6.0);
     let twist = style.params.get("twist").copied().unwrap_or(1.5);
+    let direction = style.params.get("direction").copied().unwrap_or(1.0); // -1 for reverse
 
-    // Twist increases with distance
-    let twisted_angle = angle + norm_dist * twist * PI;
+    // Normalize angle to [0, 2π]
+    let angle = if angle < 0.0 { angle + 2.0 * PI } else { angle };
+
+    // Twist increases with distance - blades curve outward
+    let twisted_angle = angle + norm_dist * twist * direction * PI;
     let blade_angle = 2.0 * PI / blades;
     let sector = (twisted_angle / blade_angle).floor() as i32;
 
@@ -441,20 +501,28 @@ fn draw_shatter(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Pa
     }
 }
 
-/// Wave: Wavy horizontal bands
+/// Wave: Wavy bands at configurable angle
 fn draw_wave(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
     let frequency = style.params.get("frequency").copied().unwrap_or(3.0);
     let amplitude = style.params.get("amplitude").copied().unwrap_or(0.2);
+    let wave_angle_deg = style.params.get("angle").copied().unwrap_or(0.0);
+    let wave_angle = wave_angle_deg * PI / 180.0;
 
     // Normalize
     let nx = fx / radius;
     let ny = fy / radius;
 
-    // Wave offset based on x position
-    let wave_offset = (nx * frequency * PI).sin() * amplitude;
+    // Wave travels along angled direction, but bands stay horizontal
+    // Project position onto wave direction
+    let wave_dir_x = wave_angle.cos();
+    let wave_dir_y = wave_angle.sin();
+    let wave_pos = nx * wave_dir_x + ny * wave_dir_y;
+
+    // Wave offset based on position along wave direction
+    let wave_offset = (wave_pos * frequency * PI).sin() * amplitude;
     let adjusted_y = ny - wave_offset;
 
-    // Create bands
+    // Create horizontal bands
     let band = (adjusted_y * frequency).floor() as i32;
 
     if band % 2 == 0 {
@@ -512,4 +580,83 @@ fn draw_atoms(
     } else {
         WHITE
     }
+}
+
+/// Baseball seam point at parameter t (0 to 4π for full curve)
+fn baseball_seam_point(t: f32) -> [f32; 3] {
+    let a = 0.4;
+    let theta = PI / 2.0 - (PI / 2.0 - a) * t.cos();
+    let phi = t / 2.0 + a * (2.0 * t).sin();
+    [theta.sin() * phi.cos(), theta.sin() * phi.sin(), theta.cos()]
+}
+
+/// Rotate point around Y axis
+fn rotate_y_baseball(p: [f32; 3], angle: f32) -> [f32; 3] {
+    let c = angle.cos();
+    let s = angle.sin();
+    [p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c]
+}
+
+/// Compute signed angle contribution for spherical winding number
+fn spherical_angle(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> f32 {
+    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let cross = [
+        ab[1] * ac[2] - ab[2] * ac[1],
+        ab[2] * ac[0] - ab[0] * ac[2],
+        ab[0] * ac[1] - ab[1] * ac[0],
+    ];
+    let dot = cross[0] * a[0] + cross[1] * a[1] + cross[2] * a[2];
+    let ab_len = (ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2]).sqrt();
+    let ac_len = (ac[0] * ac[0] + ac[1] * ac[1] + ac[2] * ac[2]).sqrt();
+    if ab_len < 1e-10 || ac_len < 1e-10 { return 0.0; }
+    let cos_angle = (ab[0] * ac[0] + ab[1] * ac[1] + ab[2] * ac[2]) / (ab_len * ac_len);
+    let sin_sign = if dot > 0.0 { 1.0 } else { -1.0 };
+    sin_sign * cos_angle.clamp(-1.0, 1.0).acos()
+}
+
+/// Determine which region a 3D point on the unit sphere belongs to
+fn which_baseball_region(point: [f32; 3]) -> bool {
+    let num_samples = 400;
+    let mut total = 0.0f32;
+    for i in 0..num_samples {
+        let t1 = (i as f32 / num_samples as f32) * 4.0 * PI;
+        let t2 = ((i + 1) as f32 / num_samples as f32) * 4.0 * PI;
+        let s1 = baseball_seam_point(t1);
+        let s2 = baseball_seam_point(t2);
+        total += spherical_angle(point, s1, s2);
+    }
+    total > 0.0
+}
+
+/// Baseball: 3D sphere with proper baseball seam curve
+fn draw_baseball(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette, swap: bool) -> [u8; 4] {
+    let rotation_deg = style.params.get("rotation").copied().unwrap_or(0.0);
+    let rotation = rotation_deg * PI / 180.0;
+
+    let px = fx / radius;
+    let py = fy / radius;
+    let r2 = px * px + py * py;
+
+    if r2 > 1.0 {
+        return [0, 0, 0, 0];
+    }
+
+    // Project to sphere surface
+    let pz = (1.0 - r2).sqrt();
+    let world_point = [px, -py, pz]; // flip y for screen coords
+
+    // Rotate backwards into seam's reference frame
+    let local_point = rotate_y_baseball(world_point, -rotation);
+
+    // Check which region using spherical winding number
+    let region = which_baseball_region(local_point);
+
+    let (color_a, color_b) = if swap {
+        (palette.right, palette.left)
+    } else {
+        (palette.left, palette.right)
+    };
+
+    if region { color_a } else { color_b }
 }

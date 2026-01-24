@@ -28,6 +28,15 @@ pub struct AiProfile {
     pub defense_offset: f32,
     /// Minimum shot quality (0.0-1.0) before AI will shoot (based on position heatmap)
     pub min_shot_quality: f32,
+    /// How close AI tries to stay to ball carrier (pixels)
+    /// Lower = more aggressive pressure, higher = zone defense
+    pub pressure_distance: f32,
+    /// How aggressively AI pursues ball carrier (0.0-1.0)
+    /// 0.0 = passive zone, 1.0 = relentless chase
+    pub aggression: f32,
+    /// How well AI positions on shot line (0.0-1.0)
+    /// Higher = better interception angles
+    pub defensive_iq: f32,
 }
 
 impl Default for AiProfile {
@@ -41,6 +50,9 @@ impl Default for AiProfile {
             steal_range: 80.0,
             defense_offset: 400.0,
             min_shot_quality: 0.4, // Only shoot from acceptable positions
+            pressure_distance: 120.0,
+            aggression: 0.5,
+            defensive_iq: 0.5,
         }
     }
 }
@@ -179,6 +191,21 @@ fn parse_profiles(content: &str) -> Vec<AiProfile> {
                 "min_shot_quality" => {
                     if let Ok(v) = value.parse() {
                         profile.min_shot_quality = v;
+                    }
+                }
+                "pressure_distance" => {
+                    if let Ok(v) = value.parse() {
+                        profile.pressure_distance = v;
+                    }
+                }
+                "aggression" => {
+                    if let Ok(v) = value.parse() {
+                        profile.aggression = v;
+                    }
+                }
+                "defensive_iq" => {
+                    if let Ok(v) = value.parse() {
+                        profile.defensive_iq = v;
                     }
                 }
                 _ => {}
