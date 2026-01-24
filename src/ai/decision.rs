@@ -415,14 +415,19 @@ pub fn ai_decision_update(
             let in_shoot_range = effective_distance < profile.shoot_range;
             let reached_target = at_nav_target && nav_complete;
 
-            // Safety check: don't start charging if opponent is too close (steal risk)
-            let opponent_too_close = opponent_pos
-                .map(|opp| ai_pos.distance(opp) < profile.steal_range * 1.5)
+            // Safety check: don't START charging if opponent is very close (steal risk)
+            // But if already charging, COMMIT to the shot - aborting leads to steals anyway
+            let already_charging = ai_state.current_goal == AiGoal::ChargeShot;
+            let opponent_too_close = !already_charging && opponent_pos
+                .map(|opp| ai_pos.distance(opp) < profile.steal_range * 1.2)
                 .unwrap_or(false);
 
             // Only shoot if shot quality is acceptable AND position conditions are met
-            // AND opponent isn't close enough to steal
+            // AND opponent isn't too close (or we're already committed to the shot)
             if quality_acceptable && (in_shoot_range || reached_target) && !opponent_too_close {
+                AiGoal::ChargeShot
+            } else if already_charging {
+                // Commit to the shot once started
                 AiGoal::ChargeShot
             } else {
                 AiGoal::AttackWithBall
@@ -779,8 +784,8 @@ fn execute_nav_action(
                 nav_state.jump_timer += time.delta_secs();
                 let target_hold_time = hold_duration * SHOT_CHARGE_TIME; // Scale to actual time
 
-                if nav_state.jump_timer < target_hold_time.min(0.3) {
-                    // Still holding jump
+                if nav_state.jump_timer < target_hold_time.min(0.5) {
+                    // Still holding jump (allow up to 0.5s for tall platforms)
                     input.jump_held = true;
                 } else {
                     // Release and continue moving toward landing

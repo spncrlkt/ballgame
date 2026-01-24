@@ -144,9 +144,9 @@ pub fn throw_ball(
         // Add distance variance to total
         variance += distance_variance;
 
-        // Apply variance to angle (max ±30° at full variance), biased 5% upward
+        // Apply variance to angle (max ±30° at full variance), slight upward bias
         let max_angle_variance = 30.0_f32.to_radians();
-        let angle_variance = (rng.gen_range(-variance..variance) + 0.05) * max_angle_variance;
+        let angle_variance = (rng.gen_range(-variance..variance) + 0.01) * max_angle_variance;
         let final_angle = base_angle + angle_variance;
 
         // Half power for quick shots (< 400ms charge)

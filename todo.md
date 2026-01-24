@@ -28,8 +28,26 @@
 - [ ] **P0** Improve D-pad menu display - see `notes/dpad-menu-ux.md`
 
 ### 2. AI Behavior
+- [ ] **P0** Remove AI handicaps - give AI equal capabilities to player
+  - Remove 0.4s jump shot charge cap (decision.rs:588)
+  - Remove 0.5s nav jump hold cap (decision.rs:787)
+  - Increase jump shot hold time from 0.15s to 0.25s (decision.rs:576-580)
+  - Extend jump shot timeout from 0.3s to 1.0s (decision.rs:604-605)
+  - See plan file: `~/.claude/plans/smooth-floating-token.md`
 - [ ] **P1** Fix AI shooting - takes bad shots, misses easy ones
 - [ ] **P2** Fix AI positioning - stands in wrong places, doesn't cover basket well
+
+### 2a. Shot Accuracy Testing (Overshoot Fix)
+- [x] **Reduce upward bias** - Changed angle variance bias from `+0.05` to `+0.01` in throw.rs:149
+- [ ] **Extend simulate.rs** - Add `--shot-test` mode for shooting accuracy trials
+  - Spawn player at 3-4 fixed positions (varying distances/angles to basket)
+  - Fire 30 shots at full charge from each position
+  - Track outcome: overshoot (above basket), undershoot (below basket), goal (in basket)
+  - Report ratio per position and overall, PASS if over/under ~40-60%
+- [ ] **Create test level** - Add `test_shot_accuracy` to `assets/test_levels.txt`
+  - Simple flat floor with basket at known height
+  - Marked shooter positions at various distances
+- [ ] **Tune speed multiplier** - If still overshooting, reduce `1.10` → `1.05` in throw.rs:161
 
 ### 3. Movement/Physics Tuning
 - [ ] **P3** Tune player movement - speed, acceleration, air control
