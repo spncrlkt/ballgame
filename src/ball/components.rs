@@ -133,3 +133,101 @@ pub struct BallShotGrace(pub f32);
 /// Tracks ball's angular velocity (radians per second)
 #[derive(Component, Default)]
 pub struct BallSpin(pub f32);
+
+/// Marker for display-only balls in debug level (not playable)
+/// Stores the index for wave animation timing
+#[derive(Component)]
+pub struct DisplayBall {
+    pub index: usize,
+    pub total: usize,
+}
+
+/// Wave pattern types for display ball animations
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WavePattern {
+    LeftToRight,
+    RightToLeft,
+    CenterOut,
+    EdgesIn,
+}
+
+impl WavePattern {
+    /// Get the wave intensity for a ball at given position
+    pub fn intensity(&self, ball_pos: f32, wave_progress: f32, wave_width: f32) -> f32 {
+        let target_pos = match self {
+            WavePattern::LeftToRight => wave_progress,
+            WavePattern::RightToLeft => 1.0 - wave_progress,
+            WavePattern::CenterOut => {
+                // Wave expands from center (0.5) outward
+                let dist_from_center = (ball_pos - 0.5).abs();
+                let wave_radius = wave_progress * 0.5;
+                let dist_from_wave = (dist_from_center - wave_radius).abs();
+                return (-dist_from_wave * dist_from_wave / (2.0 * wave_width * wave_width)).exp();
+            }
+            WavePattern::EdgesIn => {
+                // Wave contracts from edges toward center
+                let dist_from_center = (ball_pos - 0.5).abs();
+                let wave_radius = (1.0 - wave_progress) * 0.5;
+                let dist_from_wave = (dist_from_center - wave_radius).abs();
+                return (-dist_from_wave * dist_from_wave / (2.0 * wave_width * wave_width)).exp();
+            }
+        };
+        let dist_from_wave = (ball_pos - target_pos).abs();
+        (-dist_from_wave * dist_from_wave / (2.0 * wave_width * wave_width)).exp()
+    }
+
+    /// Cycle to next pattern
+    pub fn next(&self) -> Self {
+        match self {
+            WavePattern::LeftToRight => WavePattern::RightToLeft,
+            WavePattern::RightToLeft => WavePattern::CenterOut,
+            WavePattern::CenterOut => WavePattern::EdgesIn,
+            WavePattern::EdgesIn => WavePattern::LeftToRight,
+        }
+    }
+}
+
+/// Individual wave state
+#[derive(Clone)]
+pub struct WaveState {
+    pub timer: f32,
+    pub period: f32,
+    pub duration: f32,
+    pub pattern: WavePattern,
+}
+
+/// Timer for display ball wave pulse animations
+#[derive(Resource)]
+pub struct DisplayBallWave {
+    pub scale_wave: WaveState,
+    pub spin_wave: WaveState,
+}
+
+impl Default for DisplayBallWave {
+    fn default() -> Self {
+        Self {
+            scale_wave: WaveState {
+                timer: 0.0,
+                period: 5.0,
+                duration: 1.5,
+                pattern: WavePattern::LeftToRight,
+            },
+            spin_wave: WaveState {
+                timer: 2.5, // Offset from scale wave
+                period: 7.0, // Different period for variety
+                duration: 1.2,
+                pattern: WavePattern::CenterOut,
+            },
+        }
+    }
+}
+
+/// Marker for ball style label text
+#[derive(Component)]
+pub struct BallLabel;
+
+/// Spin velocity for display balls (separate from game BallSpin)
+#[derive(Component, Default)]
+pub struct DisplayBallSpin {
+    pub velocity: f32, // Radians per second
+}

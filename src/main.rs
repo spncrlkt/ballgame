@@ -4,16 +4,17 @@
 
 use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
-    AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact, BallPulse, BallRolling,
-    BallShotGrace, BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground,
+    AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallLabel, BallPlayerContact, BallPulse,
+    BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground,
     ChargeGaugeFill, ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel, CurrentPalette,
     CurrentPresets, CurrentSettings, CycleIndicator, CycleSelection, DebugSettings, DebugText,
-    Facing, Grounded, HumanControlled, InputState, JumpState, LastShotInfo, LevelDatabase, NavGraph,
-    PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, PresetDatabase,
-    Score, ScoreLevelText, SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown,
-    StyleTextures, TargetBasket, Team, TweakPanel, TweakRow, Velocity, ViewportScale, ai,
-    apply_preset_to_tweaks, ball, config_watcher, constants::*, helpers::*, input, levels, player,
-    replay, save_settings_system, scoring, shooting, snapshot, steal, ui, world,
+    DisplayBall, DisplayBallSpin, DisplayBallWave, Facing, Grounded, HumanControlled, InputState,
+    JumpState, LastShotInfo, LevelDatabase, NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase,
+    PhysicsTweaks, Player, PlayerInput, PresetDatabase, Score, ScoreLevelText, SnapshotConfig,
+    SnapshotTriggerState, StealContest, StealCooldown, StyleTextures, TargetBasket, Team, TweakPanel,
+    TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball, config_watcher,
+    constants::*, display_ball_wave, helpers::*, input, levels, player, replay, save_settings_system,
+    scoring, shooting, snapshot, steal, ui, world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
@@ -143,6 +144,7 @@ fn main() {
             ..default()
         })
         .init_resource::<SnapshotTriggerState>()
+        .init_resource::<DisplayBallWave>()
         // Replay mode resources
         .insert_resource(if let Some(ref path) = replay_file {
             replay::ReplayMode::new(path.clone())
@@ -190,6 +192,7 @@ fn main() {
                 ui::animate_score_flash,
                 ui::update_charge_gauge,
                 ui::update_steal_indicators,
+                display_ball_wave,
             )
                 .run_if(replay::not_replay_active),
         )
@@ -477,37 +480,81 @@ fn setup(
     let is_debug_level = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
 
     if is_debug_level {
-        // Debug level: spawn ALL ball styles dynamically
+        // Debug level: spawn ALL ball styles on shelf platforms with labels
+        // Platforms are at heights 380, 480, 580, 680, 780 (5 shelves)
+        let shelf_heights = [380.0, 480.0, 580.0, 680.0, 780.0];
+        let num_shelves = shelf_heights.len();
         let num_styles = style_names.len();
-        let total_width = 1200.0; // Spread balls across this width
-        let spacing = if num_styles > 1 {
-            total_width / (num_styles - 1) as f32
-        } else {
-            0.0
-        };
-        let start_x = -total_width / 2.0;
+        let balls_per_shelf = (num_styles + num_shelves - 1) / num_shelves;
+        let shelf_width = 1100.0; // Usable width (leaving margins)
 
         for (i, style_name) in style_names.iter().enumerate() {
-            let x = start_x + (i as f32 * spacing);
+            let shelf_idx = i / balls_per_shelf;
+            let pos_in_shelf = i % balls_per_shelf;
+            let balls_this_shelf = if shelf_idx == num_shelves - 1 {
+                num_styles - shelf_idx * balls_per_shelf
+            } else {
+                balls_per_shelf
+            };
+
+            if shelf_idx >= num_shelves {
+                break;
+            }
+
+            let spacing = if balls_this_shelf > 1 {
+                shelf_width / (balls_this_shelf - 1) as f32
+            } else {
+                0.0
+            };
+            let x = -shelf_width / 2.0 + pos_in_shelf as f32 * spacing;
+            let y = ARENA_FLOOR_Y + shelf_heights[shelf_idx] + BALL_SIZE.y / 2.0 + 10.0;
+
             if let Some(textures) = ball_textures.get(style_name) {
+                // Spawn display ball (not playable)
                 commands.spawn((
                     Sprite {
                         image: textures.textures[palette_index].clone(),
                         custom_size: Some(BALL_SIZE),
                         ..default()
                     },
-                    Transform::from_xyz(x, ARENA_FLOOR_Y + BALL_SIZE.y / 2.0 + 20.0, 2.0),
-                    Ball,
-                    BallState::default(),
-                    Velocity::default(),
-                    BallPlayerContact::default(),
-                    BallPulse::default(),
-                    BallRolling::default(),
-                    BallShotGrace::default(),
-                    BallSpin::default(),
+                    Transform::from_xyz(x, y, 2.0),
+                    DisplayBall { index: i, total: num_styles },
+                    DisplayBallSpin::default(),
                     BallStyle::new(style_name),
                 ));
+
+                // Spawn label above ball
+                commands.spawn((
+                    Text2d::new(style_name.clone()),
+                    TextFont { font_size: 10.0, ..default() },
+                    TextColor(TEXT_SECONDARY),
+                    Transform::from_xyz(x, y + BALL_SIZE.y / 2.0 + 8.0, 3.0),
+                    BallLabel,
+                ));
             }
+        }
+
+        // Spawn one random playable ball on the floor
+        let random_idx = rand::random::<usize>() % num_styles;
+        let random_style = &style_names[random_idx];
+        if let Some(textures) = ball_textures.get(random_style) {
+            commands.spawn((
+                Sprite {
+                    image: textures.textures[palette_index].clone(),
+                    custom_size: Some(BALL_SIZE),
+                    ..default()
+                },
+                Transform::from_translation(BALL_SPAWN),
+                Ball,
+                BallState::default(),
+                Velocity::default(),
+                BallPlayerContact::default(),
+                BallPulse::default(),
+                BallRolling::default(),
+                BallShotGrace::default(),
+                BallSpin::default(),
+                BallStyle::new(random_style),
+            ));
         }
     } else {
         // Normal levels: spawn single ball with loaded style (or default if not found)

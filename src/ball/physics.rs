@@ -283,3 +283,63 @@ pub fn ball_spin(
         transform.rotate_z(spin.0 * time.delta_secs());
     }
 }
+
+/// Animate display balls with independent wave pulse effects
+pub fn display_ball_wave(
+    time: Res<Time>,
+    mut wave: ResMut<DisplayBallWave>,
+    mut query: Query<(&DisplayBall, &mut Transform, &mut DisplayBallSpin)>,
+) {
+    let dt = time.delta_secs();
+    let wave_width = 0.12;
+
+    // Update scale wave timer
+    wave.scale_wave.timer += dt;
+    let scale_active = wave.scale_wave.timer < wave.scale_wave.duration;
+    if wave.scale_wave.timer > wave.scale_wave.period {
+        wave.scale_wave.timer -= wave.scale_wave.period;
+        wave.scale_wave.pattern = wave.scale_wave.pattern.next();
+    }
+
+    // Update spin wave timer
+    wave.spin_wave.timer += dt;
+    let spin_active = wave.spin_wave.timer < wave.spin_wave.duration;
+    if wave.spin_wave.timer > wave.spin_wave.period {
+        wave.spin_wave.timer -= wave.spin_wave.period;
+        wave.spin_wave.pattern = wave.spin_wave.pattern.next();
+    }
+
+    for (display, mut transform, mut spin) in &mut query {
+        if display.total == 0 {
+            continue;
+        }
+
+        let ball_pos = display.index as f32 / display.total as f32;
+
+        // Scale wave effect
+        if scale_active {
+            let progress = wave.scale_wave.timer / wave.scale_wave.duration;
+            let intensity = wave.scale_wave.pattern.intensity(ball_pos, progress, wave_width);
+            transform.scale = Vec3::splat(1.0 + intensity * 0.3);
+        } else {
+            transform.scale = Vec3::ONE;
+        }
+
+        // Spin wave effect
+        if spin_active {
+            let progress = wave.spin_wave.timer / wave.spin_wave.duration;
+            let intensity = wave.spin_wave.pattern.intensity(ball_pos, progress, wave_width);
+            if intensity > 0.1 {
+                spin.velocity = 8.0 * intensity;
+            }
+        }
+
+        // Apply spin and decay
+        if spin.velocity.abs() > 0.01 {
+            transform.rotate_z(spin.velocity * dt);
+            spin.velocity *= 0.94_f32.powf(dt * 60.0);
+        } else {
+            spin.velocity = 0.0;
+        }
+    }
+}

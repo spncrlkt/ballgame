@@ -5,6 +5,7 @@
 ## Active Work (Prioritized)
 
 ### 0. Immediately
+- the steps are all fucked up
 - [ ] **Immediate** Run training binary to verify nav graph fix for corner steps
   - Check debug logs show corner ramp nodes with proper Jump edges
   - Verify AI can climb corner steps on levels 7 (Skyway) or 8 (Terraces)
@@ -14,7 +15,7 @@
   - Enable skipping intermediate steps when a single jump can reach a higher platform
   - Avoid inefficient step-by-step climbing when direct jump is possible
 - more ball options: more s60 star alts, yin yang, 3D rotated S11 "volleyball", 3D rotated basketball, striped balls, croquet balls, pool balls. full analysis after wards to see patternable "types" to combine
-- 
+- the ball spawning from our previous work isnt working
 
 ### 1. D-Pad Menu UX
 - [ ] **P0** Improve D-pad menu display - see `notes/dpad-menu-ux.md`
@@ -39,7 +40,17 @@
 
 ---
 
+## TODO - Debug Level Ball Display
+- [ ] Labels need to update color when palette changes (currently static TEXT_SECONDARY)
+- [ ] Consider adding a 6th shelf if 55 balls look too cramped
+- [ ] Optional: make playable floor ball also a random style on level reset
+
 ## Done (recent - see todone.md for full archive)
+- [x] **Debug level ball display** - All ball styles on shelf platforms with labels and wave animations
+  - Display balls on 5 shelves (heights 380-780) with style name labels
+  - One random playable ball spawned on floor between players
+  - Two independent wave animations: scale pulse and spin wave
+  - Waves cycle through patterns: left-to-right, right-to-left, center-out, edges-in
 - [x] **Replay System** - Play back recorded .evlog files with variable speed
   - Created `src/replay/` module (loader, state, systems, UI)
   - `cargo run -- --replay <file.evlog>` to enter replay mode

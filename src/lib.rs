@@ -34,8 +34,9 @@ pub use ai::{
     InputState, NavAction, NavEdge, NavGraph, NavNode, PathResult, find_path, find_path_to_shoot,
 };
 pub use ball::{
-    Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
-    BallTextures, CurrentPalette, StyleTextures,
+    Ball, BallLabel, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
+    BallStyle, BallTextures, CurrentPalette, DisplayBall, DisplayBallSpin, DisplayBallWave,
+    StyleTextures, display_ball_wave,
 };
 pub use config_watcher::ConfigWatcher;
 pub use events::{EventBuffer, EventLogConfig, EventLogger, GameConfig, GameEvent, PlayerId};

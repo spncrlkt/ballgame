@@ -23,6 +23,11 @@ level: Debug
 basket_height: 300
 basket_push_in: 200
 steps: 0
+center: 380 1200
+center: 480 1200
+center: 580 1200
+center: 680 1200
+center: 780 1200
 debug: true
 
 level: Open Floor
