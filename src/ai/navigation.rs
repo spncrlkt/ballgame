@@ -203,6 +203,14 @@ impl AiNavState {
         self.path_index >= self.current_path.len()
     }
 
+    /// Check and auto-clear navigation when path completes
+    /// Call this at the end of navigation execution each frame
+    pub fn update_completion(&mut self) {
+        if self.active && self.path_complete() {
+            self.clear();
+        }
+    }
+
     /// Clear the current path
     pub fn clear(&mut self) {
         self.current_path.clear();

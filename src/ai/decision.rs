@@ -317,8 +317,9 @@ pub fn ai_decision_update(
         // Update goal (and randomize charge target when starting to charge)
         if new_goal != ai_state.current_goal {
             ai_state.current_goal = new_goal;
-            // Clear navigation and jump shot state when goal changes
-            nav_state.clear();
+            // DON'T clear navigation on goal change - only clear when destination changes
+            // (handled by ai_navigation_update based on NAV_PATH_RECALC_DISTANCE)
+            // Reset jump shot state when goal changes
             ai_state.jump_shot_active = false;
             ai_state.jump_shot_timer = 0.0;
             if new_goal == AiGoal::ChargeShot {
@@ -339,6 +340,8 @@ pub fn ai_decision_update(
         if nav_controlling {
             // Execute navigation actions
             execute_nav_action(&mut input, &mut nav_state, ai_pos, grounded.0, &time);
+            // Auto-clear navigation when path completes
+            nav_state.update_completion();
         } else {
             // Execute behavior based on goal (simple movement fallback)
             match ai_state.current_goal {

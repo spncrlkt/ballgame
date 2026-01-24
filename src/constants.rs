@@ -189,3 +189,11 @@ pub const NAV_JUMP_TOLERANCE: f32 = 8.0;
 pub const NAV_PATH_RECALC_DISTANCE: f32 = 100.0;
 /// Minimum distance to walk before executing jump (ensures momentum)
 pub const NAV_JUMP_APPROACH_DISTANCE: f32 = 20.0;
+// =============================================================================
+// DEFAULT AI PROFILES
+// =============================================================================
+
+/// Default AI profile for left player
+pub const DEFAULT_LEFT_PROFILE: &str = "Defensive";
+/// Default AI profile for right player
+pub const DEFAULT_RIGHT_PROFILE: &str = "Rusher";

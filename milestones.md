@@ -116,6 +116,7 @@
 - [ ] Export formats compatible with pandas, R, SQL databases
 - [ ] Real-time streaming option for live dashboards
 - [ ] Replay reconstruction from logged events
+- [ ] In-game replay browser - list/filter/search replays with metadata (date, profiles, score, level)
 
 **Simulation Engine & Automated Testing:**
 - [ ] Headless simulation mode (no rendering, fast-forward time)

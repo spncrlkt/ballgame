@@ -3,6 +3,7 @@
 //! This crate provides all game components, resources, and systems organized into modules.
 
 // Core modules
+pub mod analytics;
 pub mod config_watcher;
 pub mod constants;
 pub mod events;

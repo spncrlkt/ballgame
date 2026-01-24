@@ -28,6 +28,13 @@
 ---
 
 ## Done (recent - see todone.md for full archive)
+- [x] **Analytics System** - Decoupled simulation + analysis workflow
+  - Added `--log-events` and `--log-dir` flags to simulate binary
+  - Created `src/analytics/` module (parser, metrics, leaderboard, targets, suggestions, defaults)
+  - Created `cargo run --bin analyze` for post-simulation analysis
+  - Profile leaderboard ranked by win rate
+  - Target comparison vs tuning goals (TOML config in `assets/tuning_targets.toml`)
+  - Auto-update defaults in `src/constants.rs` with `--update-defaults`
 - [x] Created AI simulation system (`cargo run --bin simulate`) for headless AI testing
   - Single match, multi-match, tournament, and level-sweep modes
   - Tracks goals, possession time, distance traveled, goal states

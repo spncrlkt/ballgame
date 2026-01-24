@@ -252,6 +252,12 @@ pub struct SimMetrics {
     pub match_ended: bool,
     /// End reason
     pub end_reason: String,
+    /// Previous jump state for transition detection [left, right]
+    pub prev_jumping: [bool; 2],
+    /// Previous nav active state [left, right]
+    pub prev_nav_active: [bool; 2],
+    /// Previous nav path length (to detect completion vs clear) [left, right]
+    pub prev_nav_path_len: [usize; 2],
 }
 
 impl Default for SimMetrics {
@@ -269,6 +275,9 @@ impl Default for SimMetrics {
             time_since_score: 0.0,
             match_ended: false,
             end_reason: String::new(),
+            prev_jumping: [false, false],
+            prev_nav_active: [false, false],
+            prev_nav_path_len: [0, 0],
         }
     }
 }

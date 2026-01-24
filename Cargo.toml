@@ -24,6 +24,10 @@ path = "src/bin/generate_ball.rs"
 name = "simulate"
 path = "src/bin/simulate.rs"
 
+[[bin]]
+name = "analyze"
+path = "src/bin/analyze.rs"
+
 [dependencies]
 rand = "0.8"
 image = "0.25"

@@ -1,0 +1,24 @@
+# Tuning Targets for Game Balance
+#
+# These targets define the ideal game metrics we're aiming for.
+# The analyze tool compares simulation results against these targets
+# and suggests parameter changes to help reach them.
+
+[targets]
+# Average score per player per match (left + right should average ~28 total)
+avg_score = { target = 14.0, tolerance = 1.0 }
+
+# Average score difference between winner and loser
+# Lower = closer matches, higher = more blowouts
+score_differential = { target = 2.0, tolerance = 1.0 }
+
+# Target match duration in seconds (3 minutes)
+match_duration_secs = { target = 180.0, tolerance = 15.0 }
+
+# Turnovers per match (steals + dropped balls)
+# Creates back-and-forth gameplay without being frustrating
+turnovers_per_match = { target = 20.0, tolerance = 5.0 }
+
+# Missed shots per match
+# Balance between skill expression and scoring opportunity
+missed_shots_per_match = { target = 20.0, tolerance = 5.0 }

@@ -41,6 +41,10 @@ pub struct SimConfig {
     pub output_file: Option<String>,
     /// Suppress progress output
     pub quiet: bool,
+    /// Enable event logging to .evlog files
+    pub log_events: bool,
+    /// Directory for event log files (default: "logs")
+    pub log_dir: String,
 }
 
 impl Default for SimConfig {
@@ -56,6 +60,8 @@ impl Default for SimConfig {
             stalemate_timeout: 30.0,
             output_file: None,
             quiet: false,
+            log_events: false,
+            log_dir: "logs".to_string(),
         }
     }
 }
@@ -146,6 +152,15 @@ impl SimConfig {
                 "--quiet" | "-q" => {
                     config.quiet = true;
                 }
+                "--log-events" => {
+                    config.log_events = true;
+                }
+                "--log-dir" => {
+                    if i + 1 < args.len() {
+                        config.log_dir = args[i + 1].clone();
+                        i += 1;
+                    }
+                }
                 "--help" | "-h" => {
                     print_help();
                     std::process::exit(0);
@@ -179,6 +194,8 @@ OPTIONS:
     --seed <N>          RNG seed for reproducibility
     --output <FILE>     Output JSON to file (default: stdout)
     --quiet, -q         Suppress progress output
+    --log-events        Enable event logging to .evlog files
+    --log-dir <DIR>     Directory for event logs (default: logs)
     --help, -h          Show this help
 
 EXAMPLES:
@@ -190,6 +207,9 @@ EXAMPLES:
 
     # Test Sniper profile across all levels
     cargo run --bin simulate -- --level-sweep 5 --left Sniper
+
+    # Run matches with event logging for analytics
+    cargo run --bin simulate -- --tournament 5 --log-events --log-dir logs/
 
 PROFILES:
     Balanced, Aggressive, Defensive, Sniper, Rusher, Turtle, Chaotic, Patient, Hunter, Goalie

@@ -3,6 +3,9 @@
 use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
 use rand::Rng;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::ai::{
@@ -14,11 +17,12 @@ use crate::ball::{
     CurrentPalette, Velocity, ball_collisions, ball_follow_holder, ball_gravity, ball_player_collision,
     ball_spin, ball_state_update, apply_velocity, pickup_ball,
 };
+use crate::events::{EventBuffer, GameEvent, PlayerId};
 use crate::palettes::PaletteDatabase;
 use crate::constants::*;
 use crate::levels::LevelDatabase;
 use crate::player::{
-    CoyoteTimer, Facing, Grounded, JumpState, Player, TargetBasket, Team,
+    CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, TargetBasket, Team,
     apply_gravity, apply_input, check_collisions,
 };
 use crate::scoring::{CurrentLevel, Score, check_scoring};
@@ -36,6 +40,21 @@ pub struct SimControl {
     pub config: SimConfig,
     pub should_exit: bool,
     pub current_seed: u64,
+}
+
+/// Resource for event logging in simulation
+#[derive(Resource, Default)]
+pub struct SimEventBuffer {
+    pub buffer: EventBuffer,
+    pub enabled: bool,
+    pub log_dir: PathBuf,
+    /// Track previous score for detecting score changes
+    pub prev_score_left: u32,
+    pub prev_score_right: u32,
+    /// Track previous ball holder for possession events
+    pub prev_ball_holder: Option<Entity>,
+    /// Track previous charging state for shot events
+    pub prev_charging: [bool; 2],
 }
 
 /// Run a single match and return the result
@@ -61,6 +80,37 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
     app.init_resource::<LastShotInfo>();
     app.insert_resource(CurrentPalette(0)); // Use first palette for simulation
     app.init_resource::<PaletteDatabase>();
+
+    // Event logging buffer
+    let mut event_buffer = SimEventBuffer {
+        buffer: EventBuffer::new(),
+        enabled: config.log_events,
+        log_dir: PathBuf::from(&config.log_dir),
+        prev_score_left: 0,
+        prev_score_right: 0,
+        prev_ball_holder: None,
+        prev_charging: [false, false],
+    };
+
+    // Start session if logging enabled
+    if event_buffer.enabled {
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+        event_buffer.buffer.start_session(&timestamp);
+
+        // Log match start event
+        let level_name = level_db
+            .get((config.level - 1) as usize)
+            .map(|l| l.name.clone())
+            .unwrap_or_else(|| format!("Level {}", config.level));
+        event_buffer.buffer.log(0.0, GameEvent::MatchStart {
+            level: config.level,
+            level_name,
+            left_profile: config.left_profile.clone(),
+            right_profile: config.right_profile.clone(),
+            seed,
+        });
+    }
+    app.insert_resource(event_buffer);
 
     // Simulation resources
     app.insert_resource(SimControl {
@@ -89,7 +139,7 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
             .chain(),
     );
 
-    app.add_systems(Update, (steal_cooldown_update, metrics_update));
+    app.add_systems(Update, (steal_cooldown_update, metrics_update, emit_simulation_events));
 
     app.add_systems(
         FixedUpdate,
@@ -124,9 +174,19 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
         }
     }
 
-    // Extract results
-    let metrics = app.world().resource::<SimMetrics>();
-    let score = app.world().resource::<Score>();
+    // Extract results - clone the values we need to avoid borrow conflicts
+    let (elapsed, score_left, score_right, left_stats, right_stats) = {
+        let metrics = app.world().resource::<SimMetrics>();
+        let score = app.world().resource::<Score>();
+        (
+            metrics.elapsed,
+            score.left,
+            score.right,
+            metrics.left.clone(),
+            metrics.right.clone(),
+        )
+    };
+
     let level_name = level_db
         .get((config.level - 1) as usize)
         .map(|l| l.name.clone())
@@ -137,18 +197,34 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
         level_name,
         left_profile: config.left_profile.clone(),
         right_profile: config.right_profile.clone(),
-        duration: metrics.elapsed,
-        score_left: score.left,
-        score_right: score.right,
+        duration: elapsed,
+        score_left,
+        score_right,
         winner: String::new(),
-        left_stats: metrics.left.clone(),
-        right_stats: metrics.right.clone(),
+        left_stats,
+        right_stats,
         seed,
     };
 
     result.left_stats.finalize();
     result.right_stats.finalize();
     result.determine_winner();
+
+    // Write event log if enabled
+    {
+        let mut event_buffer = app.world_mut().resource_mut::<SimEventBuffer>();
+        if event_buffer.enabled {
+            // Log match end event
+            event_buffer.buffer.log(elapsed, GameEvent::MatchEnd {
+                score_left,
+                score_right,
+                duration: elapsed,
+            });
+
+            // Write buffer to file
+            write_event_log(&event_buffer);
+        }
+    }
 
     result
 }
@@ -368,7 +444,7 @@ fn sim_setup(
 fn metrics_update(
     time: Res<Time>,
     mut metrics: ResMut<SimMetrics>,
-    players: Query<(&Transform, &Team, &AiState, Option<&crate::player::HoldingBall>), With<Player>>,
+    players: Query<(&Transform, &Team, &AiState, &JumpState, &AiNavState, Option<&HoldingBall>), With<Player>>,
     score: Res<Score>,
 ) {
     let dt = time.delta_secs();
@@ -376,10 +452,53 @@ fn metrics_update(
     metrics.time_since_score += dt;
 
     // Track player stats
-    for (transform, team, ai_state, holding) in &players {
+    for (transform, team, ai_state, jump_state, nav_state, holding) in &players {
         let pos = transform.translation.truncate();
         let goal_name = format!("{:?}", ai_state.current_goal);
         let has_ball = holding.is_some();
+
+        // Get player index for array access
+        let idx = match team {
+            Team::Left => 0,
+            Team::Right => 1,
+        };
+
+        // Track jumps: increment when is_jumping transitions false → true
+        let currently_jumping = jump_state.is_jumping;
+        if currently_jumping && !metrics.prev_jumping[idx] {
+            match team {
+                Team::Left => metrics.left.jumps += 1,
+                Team::Right => metrics.right.jumps += 1,
+            }
+        }
+        metrics.prev_jumping[idx] = currently_jumping;
+
+        // Track nav completions: increment when path completes successfully
+        let nav_active = nav_state.active;
+        let path_len = nav_state.current_path.len();
+        let path_complete = nav_state.path_complete();
+
+        // Detect completion: was active with a path, now complete or inactive
+        if metrics.prev_nav_active[idx]
+            && metrics.prev_nav_path_len[idx] > 0
+            && (path_complete || !nav_active)
+        {
+            // Path finished - count as completed if we made progress
+            if nav_state.path_index > 0 || path_complete {
+                match team {
+                    Team::Left => metrics.left.nav_paths_completed += 1,
+                    Team::Right => metrics.right.nav_paths_completed += 1,
+                }
+            } else {
+                // Cleared without progress - count as failed
+                match team {
+                    Team::Left => metrics.left.nav_paths_failed += 1,
+                    Team::Right => metrics.right.nav_paths_failed += 1,
+                }
+            }
+        }
+        metrics.prev_nav_active[idx] = nav_active;
+        metrics.prev_nav_path_len[idx] = path_len;
 
         match team {
             Team::Left => {
@@ -456,6 +575,166 @@ fn sim_check_end_conditions(
     // Stalemate
     if metrics.time_since_score >= config.stalemate_timeout && (score.left > 0 || score.right > 0) {
         control.should_exit = true;
+    }
+}
+
+/// Emit game events during simulation
+fn emit_simulation_events(
+    mut event_buffer: ResMut<SimEventBuffer>,
+    metrics: Res<SimMetrics>,
+    score: Res<Score>,
+    steal_contest: Res<StealContest>,
+    players: Query<(Entity, &Team, &ChargingShot, Option<&HoldingBall>), With<Player>>,
+    balls: Query<&BallState, With<Ball>>,
+) {
+    if !event_buffer.enabled {
+        return;
+    }
+
+    let time = metrics.elapsed;
+
+    // Detect score changes (Goal events)
+    if score.left > event_buffer.prev_score_left {
+        event_buffer.buffer.log(time, GameEvent::Goal {
+            player: PlayerId::L,
+            score_left: score.left,
+            score_right: score.right,
+        });
+        event_buffer.prev_score_left = score.left;
+    }
+    if score.right > event_buffer.prev_score_right {
+        event_buffer.buffer.log(time, GameEvent::Goal {
+            player: PlayerId::R,
+            score_left: score.left,
+            score_right: score.right,
+        });
+        event_buffer.prev_score_right = score.right;
+    }
+
+    // Detect steal events from StealContest
+    // StealContest.fail_flash_timer is set on failed steals
+    if steal_contest.fail_flash_timer > 0.0 {
+        // We can detect that a steal just happened but StealContest doesn't tell us
+        // which player attempted - this is a limitation we'll track via metrics instead
+    }
+
+    // Track ball possession changes and shot charging
+    for (entity, team, charging, holding) in &players {
+        let player_id = match team {
+            Team::Left => PlayerId::L,
+            Team::Right => PlayerId::R,
+        };
+        let idx = match team {
+            Team::Left => 0,
+            Team::Right => 1,
+        };
+
+        // Track pickup/drop
+        let is_holding = holding.is_some();
+        let was_holding = event_buffer.prev_ball_holder == Some(entity);
+
+        if is_holding && !was_holding {
+            event_buffer.buffer.log(time, GameEvent::Pickup { player: player_id });
+            event_buffer.prev_ball_holder = Some(entity);
+        }
+
+        // Detect shot charging start
+        let is_charging = charging.charge_time > 0.0;
+        if is_charging && !event_buffer.prev_charging[idx] {
+            event_buffer.buffer.log(time, GameEvent::ShotStart {
+                player: player_id,
+                pos: (0.0, 0.0), // Position not tracked in this simplified version
+                quality: 0.5, // Not available in simulation
+            });
+        }
+        event_buffer.prev_charging[idx] = is_charging;
+    }
+
+    // Detect when ball becomes free (drop or shot release)
+    for ball_state in &balls {
+        match ball_state {
+            BallState::InFlight { shooter, power } => {
+                // If ball just became InFlight, log shot release
+                // We detect this by checking if prev_ball_holder is Some but ball is now InFlight
+                if event_buffer.prev_ball_holder.is_some() {
+                    let player_id = if Some(*shooter) == event_buffer.prev_ball_holder {
+                        // Find which team this is
+                        players.iter()
+                            .find(|(e, _, _, _)| *e == *shooter)
+                            .map(|(_, team, _, _)| match team {
+                                Team::Left => PlayerId::L,
+                                Team::Right => PlayerId::R,
+                            })
+                    } else {
+                        None
+                    };
+
+                    if let Some(pid) = player_id {
+                        event_buffer.buffer.log(time, GameEvent::ShotRelease {
+                            player: pid,
+                            charge: 0.5, // Approximation
+                            angle: 60.0, // Default angle
+                            power: *power,
+                        });
+                    }
+                    event_buffer.prev_ball_holder = None;
+                }
+            }
+            BallState::Free => {
+                // If ball just became Free after being Held, it was a drop
+                if event_buffer.prev_ball_holder.is_some() {
+                    // Find who was holding it
+                    if let Some((_, team, _, _)) = players.iter()
+                        .find(|(e, _, _, _)| Some(*e) == event_buffer.prev_ball_holder)
+                    {
+                        let player_id = match team {
+                            Team::Left => PlayerId::L,
+                            Team::Right => PlayerId::R,
+                        };
+                        event_buffer.buffer.log(time, GameEvent::Drop { player: player_id });
+                    }
+                    event_buffer.prev_ball_holder = None;
+                }
+            }
+            BallState::Held(_) => {
+                // Ball is held - already tracked above
+            }
+        }
+    }
+}
+
+/// Write the event buffer to a .evlog file
+fn write_event_log(event_buffer: &SimEventBuffer) {
+    if !event_buffer.enabled {
+        return;
+    }
+
+    // Create log directory if needed
+    if let Err(e) = fs::create_dir_all(&event_buffer.log_dir) {
+        eprintln!("Failed to create log directory: {}", e);
+        return;
+    }
+
+    // Generate filename from session ID
+    let session_id = event_buffer.buffer.session_id();
+    if session_id.is_empty() {
+        return;
+    }
+
+    let filename = format!("{}.evlog", &session_id[..session_id.len().min(36)]);
+    let path = event_buffer.log_dir.join(filename);
+
+    // Serialize and write
+    let content = event_buffer.buffer.serialize();
+    match File::create(&path) {
+        Ok(mut file) => {
+            if let Err(e) = file.write_all(content.as_bytes()) {
+                eprintln!("Failed to write event log: {}", e);
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to create event log file: {}", e);
+        }
     }
 }
 
