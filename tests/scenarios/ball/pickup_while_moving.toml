@@ -35,7 +35,7 @@ player = "p1"
 frame_min = 25
 frame_max = 45
 
-[expect.state]
+[[expect.state]]
 after_frame = 50
 checks = [
     "p1.holding_ball = true",

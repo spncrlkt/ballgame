@@ -1,5 +1,10 @@
 # Test: Player walks right
-# Verifies basic horizontal movement works
+# Verifies basic horizontal movement works correctly
+#
+# FAIL conditions this test catches:
+# - Movement system not working: player stays at x=0
+# - Velocity not being applied: position changes but velocity_x = 0
+# - Wrong direction: player moves left instead of right
 
 name = "Walk right"
 description = "Player moves right when move_right input is held"
@@ -15,16 +20,27 @@ team = "left"
 x = 0.0
 y = -350.0
 
+# Start moving right immediately
 [[input]]
 frame = 0
 p1 = { move_right = true }
 
+# Stop at frame 60 (1 second)
 [[input]]
 frame = 60
 p1 = { move_right = false }
 
-[expect.state]
+# Check at frame 30 (mid-movement) - should be moving and have velocity
+[[expect.state]]
+after_frame = 30
+checks = [
+    "p1.x > 50",            # Should have moved right significantly
+    "p1.velocity_x > 100",  # Should have positive velocity (moving right)
+]
+
+# Check at frame 60 (end of movement) - should have traveled far
+[[expect.state]]
 after_frame = 60
 checks = [
-    "p1.x > 100",
+    "p1.x > 200",           # Should have covered significant distance
 ]

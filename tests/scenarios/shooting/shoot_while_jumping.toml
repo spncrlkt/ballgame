@@ -36,7 +36,7 @@ player = "p1"
 frame_min = 30
 frame_max = 45
 
-[expect.state]
+[[expect.state]]
 after_frame = 40
 checks = [
     "p1.grounded = false",  # Should still be in air when shot releases

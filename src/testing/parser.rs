@@ -102,7 +102,9 @@ impl InputSnapshot {
 pub struct TestExpectations {
     #[serde(default)]
     pub sequence: Vec<ExpectedEvent>,
-    pub state: Option<StateAssertion>,
+    /// Multiple state assertions at different frames (uses [[expect.state]] TOML syntax)
+    #[serde(default)]
+    pub state: Vec<StateAssertion>,
 }
 
 /// Expected event in sequence
@@ -121,7 +123,7 @@ fn default_tolerance() -> u64 {
 }
 
 /// State assertion after simulation
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct StateAssertion {
     pub after_frame: u64,
     #[serde(default)]

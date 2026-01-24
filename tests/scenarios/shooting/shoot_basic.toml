@@ -36,7 +36,7 @@ player = "shooter"
 frame_min = 35
 frame_max = 50
 
-[expect.state]
+[[expect.state]]
 after_frame = 60
 checks = [
     "shooter.holding_ball = false",

@@ -15,6 +15,8 @@ pub enum TrainingPhase {
     Playing,
     /// Game ended, recording result
     GameEnded,
+    /// Awaiting player notes input
+    AwaitingNotes,
     /// Transitioning to next game
     StartingNext,
     /// All games complete, showing summary
@@ -48,6 +50,8 @@ pub struct GameResult {
     pub winner: Winner,
     pub duration_secs: f32,
     pub evlog_path: PathBuf,
+    /// Optional notes entered by player after the game
+    pub notes: Option<String>,
 }
 
 /// Main training session state resource
@@ -151,6 +155,7 @@ impl TrainingState {
             winner,
             duration_secs: self.game_elapsed,
             evlog_path,
+            notes: None,
         };
 
         self.game_results.push(result);

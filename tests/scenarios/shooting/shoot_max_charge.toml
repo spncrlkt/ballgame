@@ -1,5 +1,10 @@
 # Test: Max charge shot
-# Verifies player can hold charge to maximum
+# Verifies player can hold charge to maximum and get max power shot
+#
+# FAIL conditions this test catches:
+# - Charge not accumulating: shot weak despite long charge
+# - Max power not reached: ball velocity below expected
+# - Shot not releasing: ball still held after throw_held=false
 
 name = "Max charge shot"
 description = "Player charges shot to maximum before releasing"
@@ -7,22 +12,23 @@ description = "Player charges shot to maximum before releasing"
 [setup]
 level = "test_flat_floor"
 
-# Floor is at y=-450, spawn at -350 (100 above floor)
+# Floor at y=-450, floor top at -430, player center at -398
 [[setup.entities]]
 type = "player"
 id = "shooter"
 team = "left"
 x = 0.0
-y = -350.0
+y = -398.0
 holding_ball = true
 
-# Hold charge for full charge time (~1.5 seconds = 90 frames)
+# Hold charge for full charge time (1.6s = 96 frames)
 [[input]]
 frame = 10
 shooter = { throw_held = true }
 
+# Release after full charge
 [[input]]
-frame = 100
+frame = 110
 shooter = { throw_held = false }
 
 [[expect.sequence]]
@@ -33,9 +39,12 @@ player = "shooter"
 event = "ShotRelease"
 player = "shooter"
 
-[expect.state]
-after_frame = 120
+# Check immediately after release - ball should have high velocity
+[[expect.state]]
+after_frame = 115
 checks = [
     "shooter.holding_ball = false",
     "ball.state = InFlight",
+    "ball.velocity_y > 400",     # Full charge shot should have strong upward velocity
+    "ball.velocity_x > 100",     # Should have forward velocity toward basket
 ]

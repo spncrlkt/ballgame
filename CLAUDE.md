@@ -24,6 +24,12 @@ cargo run --bin test-scenarios -- -v     # Verbose mode (shows failures)
 
 Dynamic linking is disabled in `.cargo/config.toml` to avoid macOS dyld issues.
 
+**Binary compatibility:** When updating the main game (`src/main.rs`), also update the other binaries to keep them compatible:
+- `src/bin/training.rs` - Training mode (1v1 vs AI with logging)
+- `src/bin/test-scenarios.rs` - Scenario test runner
+
+Features like countdown, new resources, or system changes should be propagated to these binaries.
+
 **User Preference:** Do not add or commit code automatically. The user handles git operations.
 
 ## Session Checklists
@@ -336,6 +342,8 @@ training_logs/
 ```
 "Analyze my training session in training_logs/session_20260123_143022/"
 ```
+
+**Analysis goal:** When analyzing training sessions, the objective is to identify ways to improve AI behavior. Review the evlog events, player notes, and AI goal transitions to find patterns where the AI makes poor decisions. Then examine the AI code in `src/ai/` and suggest specific changes to improve decision-making, positioning, or timing.
 
 ---
 

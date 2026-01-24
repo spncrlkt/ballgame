@@ -4,7 +4,7 @@ use super::parser::{ExpectedEvent, StateAssertion};
 use crate::events::GameEvent;
 
 /// Error when an assertion fails
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AssertionError {
     pub message: String,
     pub expected: String,
@@ -133,6 +133,8 @@ pub struct EntityState {
 pub struct BallState {
     pub x: f32,
     pub y: f32,
+    pub velocity_x: f32,
+    pub velocity_y: f32,
     pub state: String, // "Free", "Held", "InFlight"
 }
 
@@ -210,6 +212,8 @@ pub fn check_state(assertion: &StateAssertion, state: &WorldState) -> Result<(),
             match path_parts.get(1) {
                 Some(&"x") => check_float_comparison(path, ball.x, operator, expected_value)?,
                 Some(&"y") => check_float_comparison(path, ball.y, operator, expected_value)?,
+                Some(&"velocity_x") => check_float_comparison(path, ball.velocity_x, operator, expected_value)?,
+                Some(&"velocity_y") => check_float_comparison(path, ball.velocity_y, operator, expected_value)?,
                 Some(&"state") => {
                     let expected = expected_value.trim_matches('"');
                     if ball.state != expected {

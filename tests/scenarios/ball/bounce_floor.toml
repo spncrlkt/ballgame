@@ -1,5 +1,10 @@
 # Test: Ball bounces on floor
-# Verifies ball physics - dropped ball bounces
+# Verifies ball physics - dropped ball bounces correctly
+#
+# FAIL conditions this test catches:
+# - Ball gravity not working: ball stays in place
+# - Ball collision not working: ball falls through floor
+# - Ball bounce not working: ball hits floor but doesn't bounce
 
 name = "Ball bounces on floor"
 description = "Ball dropped from height bounces on the floor"
@@ -8,15 +13,41 @@ description = "Ball dropped from height bounces on the floor"
 level = "test_flat_floor"
 
 # Ball starts high, will fall and bounce
-# Floor is at y=-450
+# Floor is at y=-450, floor top at -430
+# Ball half-height is 13, so ball center at floor is -417
 [[setup.entities]]
 type = "ball"
 x = 0.0
 y = -200.0
 
-[expect.state]
-after_frame = 180
+# Check at frame 20 - ball should be falling
+[[expect.state]]
+after_frame = 20
 checks = [
-    "ball.y > -440",  # Ball should be above floor (bounced)
+    "ball.velocity_y < 0",   # Should be falling
+    "ball.y < -200",         # Should have moved down
+]
+
+# Check at frame 40 - ball should have hit floor and be bouncing up
+# Fall distance ~230 units, fall time sqrt(2*230/800) ≈ 0.76s = 45 frames
+# So around frame 40 the ball should be near or at floor level
+[[expect.state]]
+after_frame = 40
+checks = [
+    "ball.y > -420",         # Should not have fallen through floor
+]
+
+# Check at frame 60 - should be bouncing back up
+[[expect.state]]
+after_frame = 60
+checks = [
+    "ball.y > -410",         # Should be above floor after bounce
     "ball.state = Free",
+]
+
+# Check at frame 120 - after multiple bounces, should still be above floor
+[[expect.state]]
+after_frame = 120
+checks = [
+    "ball.y > -420",         # Ball should be above floor
 ]

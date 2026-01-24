@@ -32,7 +32,7 @@ velocity_y = 600.0  # Strong upward velocity to reach rim at y=-240
 # Check at frame 20: ball should have hit rim and be bouncing down
 # - With rim collision: ball bounces off, stays near basket (x ≈ 720), y < -250
 # - Without rim: ball passes through, SCORES, and respawns at center (x = 0)
-[expect.state]
+[[expect.state]]
 after_frame = 20
 checks = [
     "ball.x > 600",  # Ball is still near right basket (not respawned at center after scoring)

@@ -1,5 +1,10 @@
 # Test: Ball rolls and stops
 # Verifies ball rolling friction slows it to a stop
+#
+# FAIL conditions this test catches:
+# - Ball rolling friction not working: ball keeps going forever
+# - Friction too strong: ball stops too quickly
+# - Friction too weak: ball still moving fast at end
 
 name = "Rolling stops"
 description = "Ball with initial velocity rolls and stops due to friction"
@@ -7,16 +12,48 @@ description = "Ball with initial velocity rolls and stops due to friction"
 [setup]
 level = "test_flat_floor"
 
-# Floor is at y=-450, spawn ball just above floor with horizontal velocity
+# Floor is at y=-450, floor top at -430
+# Ball half-height 13, so ball center at floor is -417
+# Spawn ball at floor level with horizontal velocity
 [[setup.entities]]
 type = "ball"
 x = 0.0
-y = -420.0
+y = -417.0
 velocity_x = 300.0
 
-[expect.state]
+# Check at frame 30 - should be rolling and have slowed some
+[[expect.state]]
+after_frame = 30
+checks = [
+    "ball.velocity_x > 50",   # Still moving
+    "ball.velocity_x < 250",  # But slowed down
+    "ball.x > 50",            # Should have moved right
+]
+
+# Check at frame 90 - should have slowed significantly
+[[expect.state]]
+after_frame = 90
+checks = [
+    "ball.velocity_x > 0",    # Still positive direction
+    "ball.velocity_x < 100",  # Much slower
+    "ball.x > 150",           # Should have rolled further
+]
+
+# Check at frame 180 - should have slowed significantly
+# With friction 0.6/second: 300 * 0.6^3 ≈ 65 at 3 seconds
+[[expect.state]]
 after_frame = 180
 checks = [
-    "ball.velocity_x < 20",  # Should have slowed significantly
-    "ball.x > 100",          # Should have rolled to the right
+    "ball.velocity_x < 70",   # Should have slowed significantly
+    "ball.velocity_x > 20",   # But not stopped completely yet
+    "ball.x > 200",           # Should have rolled to the right
+]
+
+# Check at frame 300 - should be nearly stopped
+# 300 * 0.6^5 ≈ 23 at 5 seconds
+[[expect.state]]
+after_frame = 300
+checks = [
+    "ball.velocity_x < 30",   # Should be nearly stopped
+    "ball.x > 250",           # Should have rolled far
 ]

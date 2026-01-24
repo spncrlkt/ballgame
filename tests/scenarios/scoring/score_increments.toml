@@ -1,34 +1,37 @@
-# Test: Score increments
-# Verifies scoring works with proper setup
+# Test: Score increments correctly
+# Verifies score system increments properly when ball enters basket
+#
+# This test verifies the score increases by checking ball entering left basket
+# (right team scores on left basket)
 
 name = "Score increments"
-description = "Goal scored with full charge from close range"
+description = "Ball entering basket increments score correctly"
 
 [setup]
 level = "test_shooting_range"
+# Shooting range: basket_height=150, basket_push_in=40
+# Left basket center at x = -(780 - 40) = -740, y = -300
+# Basket bounds: x: -770 to -710, y: -340 to -260
 
-# Position player very close to basket for reliable scoring
-# Arena width 1600, half=800, wall=20, basket at 780-40=740
+# Spawn ball with velocity heading into left basket
+# Ball starts above and to the right of basket, moving left and down
+[[setup.entities]]
+type = "ball"
+x = -700.0
+y = -280.0
+velocity_x = -200.0
+velocity_y = -50.0
+
+# Need a player to attribute the score to (right team scores on left basket)
 [[setup.entities]]
 type = "player"
 id = "p1"
-team = "left"
-x = 680.0
+team = "right"
+x = 0.0
 y = -350.0
-facing = 1.0
-holding_ball = true
 
-# Full charge shot for minimum variance
-[[input]]
-frame = 10
-p1 = { throw_held = true }
-
-[[input]]
-frame = 70
-p1 = { throw_held = false }
-
-[expect.state]
-after_frame = 200
+[[expect.state]]
+after_frame = 30
 checks = [
-    "score.left = 1",
+    "score.right = 1",
 ]

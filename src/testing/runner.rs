@@ -46,6 +46,10 @@ struct TestControl {
     should_exit: bool,
     max_frame: u64,
     current_frame: u64,
+    /// Frames at which to check state assertions (sorted)
+    state_check_frames: Vec<u64>,
+    /// Index of next state check to perform
+    next_state_check: usize,
 }
 
 /// Resource to capture events during test
@@ -59,6 +63,12 @@ struct EventCapture {
     prev_ball_holder: Option<Entity>,
     prev_charging: HashMap<Entity, bool>,
     prev_steal_cooldowns: HashMap<Entity, f32>,
+}
+
+/// Resource to store state assertion error (if any)
+#[derive(Resource, Default)]
+struct StateAssertionResult {
+    error: Option<AssertionError>,
 }
 
 /// Run a single test and return the result
@@ -96,8 +106,8 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
     // Create scripted inputs
     let mut scripted_inputs = ScriptedInputs::from_inputs(&test.input);
 
-    // Set max frame from state assertion if present
-    if let Some(ref state) = test.expect.state {
+    // Set max frame from state assertions if present (use max of all assertions)
+    for state in &test.expect.state {
         scripted_inputs.set_max_frame(state.after_frame);
     }
 
@@ -123,13 +133,27 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
     app.init_resource::<LastShotInfo>();
     app.insert_resource(CurrentPalette(0));
     app.init_resource::<PaletteDatabase>();
+    // Collect state check frames
+    let state_check_frames: Vec<u64> = {
+        let mut frames: Vec<u64> = test.expect.state.iter().map(|s| s.after_frame).collect();
+        frames.sort();
+        frames.dedup();
+        frames
+    };
+
     app.insert_resource(scripted_inputs);
     app.insert_resource(TestControl {
         should_exit: false,
         max_frame: 0, // Will be set from ScriptedInputs
         current_frame: 0,
+        state_check_frames,
+        next_state_check: 0,
     });
     app.init_resource::<EventCapture>();
+    app.init_resource::<StateAssertionResult>();
+
+    // Store state assertions for inline checking
+    let state_assertions = test.expect.state.clone();
 
     // Startup
     let entities_clone = test.setup.entities.clone();
@@ -164,9 +188,40 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
             .chain(),
     );
 
-    // Run simulation
+    // Run simulation with inline state assertion checking
     loop {
         app.update();
+
+        // Check if we need to run state assertions at this frame
+        {
+            let control = app.world().resource::<TestControl>();
+            let current_frame = control.current_frame;
+            let next_check = control.next_state_check;
+
+            if next_check < control.state_check_frames.len() {
+                let check_frame = control.state_check_frames[next_check];
+                if current_frame >= check_frame {
+                    // Find all assertions for this frame
+                    let assertions_for_frame: Vec<_> = state_assertions
+                        .iter()
+                        .filter(|a| a.after_frame == check_frame)
+                        .collect();
+
+                    // Run state checks
+                    let world_state = extract_world_state(app.world_mut());
+                    for assertion in assertions_for_frame {
+                        if let Err(e) = check_state(assertion, &world_state) {
+                            app.world_mut().resource_mut::<StateAssertionResult>().error = Some(e);
+                            app.world_mut().resource_mut::<TestControl>().should_exit = true;
+                            break;
+                        }
+                    }
+
+                    // Move to next state check
+                    app.world_mut().resource_mut::<TestControl>().next_state_check += 1;
+                }
+            }
+        }
 
         let control = app.world().resource::<TestControl>();
         if control.should_exit {
@@ -174,8 +229,15 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
         }
     }
 
+    // Check for state assertion errors
+    {
+        let result = app.world().resource::<StateAssertionResult>();
+        if let Some(ref error) = result.error {
+            return TestResult::Fail { error: error.clone() };
+        }
+    }
+
     // Extract results
-    // Extract results before checking assertions
     let final_frame;
     let captured_events;
     {
@@ -187,14 +249,6 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
     // Check sequence assertions
     if let Err(e) = check_sequence(&test.expect.sequence, &captured_events) {
         return TestResult::Fail { error: e };
-    }
-
-    // Check state assertions
-    if let Some(ref state_assertion) = test.expect.state {
-        let world_state = extract_world_state(app.world_mut());
-        if let Err(e) = check_state(state_assertion, &world_state) {
-            return TestResult::Fail { error: e };
-        }
     }
 
     TestResult::Pass { frames: final_frame }
@@ -549,13 +603,15 @@ fn extract_world_state(world: &mut World) -> WorldState {
     }
 
     // Query ball
-    let mut ball_query = world.query::<(&Transform, &BallState)>();
+    let mut ball_query = world.query::<(&Transform, &Velocity, &BallState)>();
     let ball = ball_query
         .iter(world)
         .next()
-        .map(|(transform, state)| AssertionBallState {
+        .map(|(transform, velocity, state)| AssertionBallState {
             x: transform.translation.x,
             y: transform.translation.y,
+            velocity_x: velocity.0.x,
+            velocity_y: velocity.0.y,
             state: match state {
                 BallState::Free => "Free".to_string(),
                 BallState::Held(_) => "Held".to_string(),

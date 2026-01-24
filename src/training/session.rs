@@ -32,6 +32,8 @@ pub struct GameSummary {
     pub winner: String,
     pub duration_secs: f32,
     pub evlog: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 
 impl SessionSummary {
@@ -55,6 +57,7 @@ impl SessionSummary {
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default(),
+                notes: r.notes.clone(),
             })
             .collect();
 

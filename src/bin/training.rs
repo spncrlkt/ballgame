@@ -13,10 +13,10 @@ use ballgame::{
     BallShotGrace, BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground,
     ChargeGaugeFill, ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette, DebugSettings,
     EventBuffer, Facing, GameConfig, GameEvent, Grounded, HoldingBall, HumanControlled, InputState,
-    JumpState, LastShotInfo, LevelDatabase, NavGraph, PALETTES_FILE, PaletteDatabase, PhysicsTweaks,
-    PlayerId, Player, PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown,
-    StyleTextures, TargetBasket, Team, Velocity, ai, ball, constants::*, helpers::*, input, levels,
-    player, scoring, shooting, steal, world,
+    JumpState, LastShotInfo, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase,
+    PhysicsTweaks, PlayerId, Player, PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown,
+    StyleTextures, TargetBasket, Team, Velocity, ai, ball, constants::*, countdown, helpers::*, input,
+    levels, player, scoring, shooting, spawn_countdown_text, steal, world,
 };
 use ballgame::training::{
     TrainingPhase, TrainingState, ensure_session_dir, evlog_path_for_game, print_session_summary,
@@ -209,6 +209,7 @@ fn main() {
         .init_resource::<NavGraph>()
         .insert_resource(SnapshotConfig::default())
         .init_resource::<TrainingEventBuffer>()
+        .init_resource::<MatchCountdown>()
         // Startup systems
         .add_systems(Startup, training_setup)
         // Input systems chain
@@ -235,6 +236,8 @@ fn main() {
                 ballgame::ui::update_steal_indicators,
             ),
         )
+        // Countdown system
+        .add_systems(Update, countdown::update_countdown)
         // Training-specific systems
         .add_systems(
             Update,
@@ -246,7 +249,7 @@ fn main() {
                 check_restart,
             ),
         )
-        // Fixed update physics chain
+        // Fixed update physics chain - only runs when countdown is finished
         .add_systems(
             FixedUpdate,
             (
@@ -266,7 +269,8 @@ fn main() {
                 shooting::throw_ball,
                 scoring::check_scoring,
             )
-                .chain(),
+                .chain()
+                .run_if(countdown::not_in_countdown),
         )
         .run();
 }
@@ -607,6 +611,9 @@ fn training_setup(
         TrainingHudText,
     ));
 
+    // Countdown text (3-2-1 before match starts)
+    spawn_countdown_text(&mut commands);
+
     // Initialize event buffer for this game
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
     event_buffer.buffer.start_session(&timestamp);
@@ -658,6 +665,7 @@ fn training_state_machine(
     mut training_state: ResMut<TrainingState>,
     mut score: ResMut<Score>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
+    mut countdown: ResMut<MatchCountdown>,
     balls: Query<&BallState, With<Ball>>,
     time: Res<Time>,
     mut app_exit: MessageWriter<AppExit>,
@@ -714,60 +722,86 @@ fn training_state_machine(
         TrainingPhase::GameEnded => {
             training_state.transition_timer += time.delta_secs();
 
-            // Wait 2 seconds before next game
+            // Wait 2 seconds before prompting for notes
             if training_state.transition_timer > 2.0 {
-                if training_state.game_number >= training_state.games_total {
-                    training_state.phase = TrainingPhase::SessionComplete;
-                } else {
-                    // Pick new random level
-                    // Filter out debug levels and Pit (too hard for training)
-                    let training_levels: Vec<u32> = (0..level_db.len())
-                        .filter(|&i| {
-                            let level = level_db.get(i);
-                            let is_debug = level.map(|l| l.debug).unwrap_or(true);
-                            let is_pit = level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
-                            !is_debug && !is_pit
-                        })
-                        .map(|i| (i + 1) as u32)
-                        .collect();
+                training_state.phase = TrainingPhase::AwaitingNotes;
+            }
+        }
 
-                    if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
-                        training_state.current_level = level;
-                        training_state.current_level_name = level_db
-                            .get((level - 1) as usize)
-                            .map(|l| l.name.clone())
-                            .unwrap_or_else(|| format!("Level {}", level));
-                        current_level.0 = level;
+        TrainingPhase::AwaitingNotes => {
+            // Prompt for notes (blocking stdin read)
+            println!(
+                "\nEnter notes for Game {} (or press Enter to skip):",
+                training_state.game_number
+            );
+
+            let mut input = String::new();
+            if std::io::stdin().read_line(&mut input).is_ok() {
+                let notes = input.trim();
+                if !notes.is_empty() {
+                    // Store notes in last game result
+                    if let Some(last_result) = training_state.game_results.last_mut() {
+                        last_result.notes = Some(notes.to_string());
                     }
-
-                    training_state.next_game();
-
-                    // Reset score
-                    score.left = 0;
-                    score.right = 0;
-
-                    // Reset event buffer for new game
-                    *event_buffer = TrainingEventBuffer::default();
-                    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
-                    event_buffer.buffer.start_session(&timestamp);
-                    event_buffer.buffer.log(
-                        0.0,
-                        GameEvent::MatchStart {
-                            level: training_state.current_level,
-                            level_name: training_state.current_level_name.clone(),
-                            left_profile: "Player".to_string(),
-                            right_profile: training_state.ai_profile.clone(),
-                            seed: rand::random(),
-                        },
-                    );
-
-                    println!(
-                        "\nStarting Game {}/{} on {}",
-                        training_state.game_number,
-                        training_state.games_total,
-                        training_state.current_level_name
-                    );
                 }
+            }
+
+            // Move to next phase
+            training_state.transition_timer = 0.0;
+            if training_state.game_number >= training_state.games_total {
+                training_state.phase = TrainingPhase::SessionComplete;
+            } else {
+                // Pick new random level
+                // Filter out debug levels and Pit (too hard for training)
+                let training_levels: Vec<u32> = (0..level_db.len())
+                    .filter(|&i| {
+                        let level = level_db.get(i);
+                        let is_debug = level.map(|l| l.debug).unwrap_or(true);
+                        let is_pit = level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
+                        !is_debug && !is_pit
+                    })
+                    .map(|i| (i + 1) as u32)
+                    .collect();
+
+                if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
+                    training_state.current_level = level;
+                    training_state.current_level_name = level_db
+                        .get((level - 1) as usize)
+                        .map(|l| l.name.clone())
+                        .unwrap_or_else(|| format!("Level {}", level));
+                    current_level.0 = level;
+                }
+
+                training_state.next_game();
+
+                // Reset score
+                score.left = 0;
+                score.right = 0;
+
+                // Start countdown for new game
+                countdown.start();
+
+                // Reset event buffer for new game
+                *event_buffer = TrainingEventBuffer::default();
+                let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+                event_buffer.buffer.start_session(&timestamp);
+                event_buffer.buffer.log(
+                    0.0,
+                    GameEvent::MatchStart {
+                        level: training_state.current_level,
+                        level_name: training_state.current_level_name.clone(),
+                        left_profile: "Player".to_string(),
+                        right_profile: training_state.ai_profile.clone(),
+                        seed: rand::random(),
+                    },
+                );
+
+                println!(
+                    "\nStarting Game {}/{} on {}",
+                    training_state.game_number,
+                    training_state.games_total,
+                    training_state.current_level_name
+                );
             }
         }
 
@@ -1064,6 +1098,7 @@ fn check_restart(
     mut training_state: ResMut<TrainingState>,
     mut score: ResMut<Score>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
+    mut countdown: ResMut<MatchCountdown>,
     level_db: Res<LevelDatabase>,
     mut current_level: ResMut<CurrentLevel>,
     mut players: Query<&mut Transform, With<Player>>,
@@ -1129,6 +1164,9 @@ fn check_restart(
     training_state.game_start_time = None;
     training_state.game_elapsed = 0.0;
     training_state.transition_timer = 0.0;
+
+    // Start countdown for new game
+    countdown.start();
 
     // Reset event buffer for new game
     *event_buffer = TrainingEventBuffer::default();

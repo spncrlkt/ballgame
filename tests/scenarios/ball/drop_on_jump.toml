@@ -20,7 +20,7 @@ holding_ball = true
 frame = 10
 p1 = { jump = true }
 
-[expect.state]
+[[expect.state]]
 after_frame = 40
 checks = [
     "p1.holding_ball = true",  # Should still hold ball while airborne

@@ -1,5 +1,10 @@
 # Test: Shoot toward left basket
-# Verifies player can aim and shoot toward left basket
+# Verifies player can aim and shoot toward left basket correctly
+#
+# FAIL conditions this test catches:
+# - Shot direction wrong: ball goes right instead of left
+# - Ball velocity not set: ball has no horizontal velocity
+# - Shot not released: ball still held
 
 name = "Shoot aim left"
 description = "Player shoots toward left basket, ball moves left"
@@ -7,13 +12,13 @@ description = "Player shoots toward left basket, ball moves left"
 [setup]
 level = "test_flat_floor"
 
-# Position player on right side, facing left
+# Position player on right side, facing left (team right = targets left basket)
 [[setup.entities]]
 type = "player"
 id = "p1"
 team = "right"
 x = 200.0
-y = -350.0
+y = -398.0
 facing = -1.0
 holding_ball = true
 
@@ -32,9 +37,17 @@ player = "p1"
 frame_min = 35
 frame_max = 50
 
-[expect.state]
+# Check immediately after shot - ball should be moving left
+[[expect.state]]
+after_frame = 45
+checks = [
+    "ball.velocity_x < 0",   # Ball must be moving LEFT (negative x)
+    "ball.state = InFlight",
+]
+
+# Check at frame 60 - ball should have moved left
+[[expect.state]]
 after_frame = 60
 checks = [
-    "ball.x < 200",  # Ball should have moved left from start position
-    "ball.state = InFlight",
+    "ball.x < 180",          # Ball should have moved left from start (200)
 ]

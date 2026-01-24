@@ -1,5 +1,10 @@
 # Test: Air control while jumping
 # Verifies player can move horizontally while in the air
+#
+# FAIL conditions this test catches:
+# - Air control not working: player doesn't move horizontally during jump
+# - Grounded state incorrect: player reports grounded=true while airborne
+# - Air acceleration too low: horizontal movement too slow
 
 name = "Air control"
 description = "Player can move horizontally during a jump"
@@ -7,28 +12,51 @@ description = "Player can move horizontally during a jump"
 [setup]
 level = "test_flat_floor"
 
-# Floor is at y=-450, spawn at -350 (100 above floor)
+# Floor at y=-450, floor top at -430, player center at -398
+# Spawn at landing position to avoid fall delay
 [[setup.entities]]
 type = "player"
 id = "p1"
 team = "left"
 x = 0.0
-y = -350.0
+y = -398.0
 
+# Jump at frame 5
 [[input]]
-frame = 10
+frame = 5
 p1 = { jump = true }
 
+# Start moving right at frame 10 (while airborne)
 [[input]]
-frame = 15
+frame = 10
 p1 = { move_right = true }
 
+# Continue moving until frame 45
 [[input]]
-frame = 50
+frame = 45
 p1 = { move_right = false }
 
-[expect.state]
-after_frame = 60
+# Check at frame 20 - should be airborne and moving right
+[[expect.state]]
+after_frame = 20
 checks = [
-    "p1.x > 50",  # Should have moved right during jump
+    "p1.grounded = false",    # Must be in the air
+    "p1.velocity_x > 50",     # Should have horizontal velocity
+    "p1.x > 10",              # Should have moved right
+]
+
+# Check at frame 35 - still airborne, moved further
+[[expect.state]]
+after_frame = 35
+checks = [
+    "p1.grounded = false",    # Still airborne
+    "p1.x > 50",              # Should have moved right significantly
+]
+
+# Check at frame 100 - should have landed with significant horizontal displacement
+[[expect.state]]
+after_frame = 100
+checks = [
+    "p1.grounded = true",     # Should be back on ground
+    "p1.x > 80",              # Should have maintained horizontal movement
 ]

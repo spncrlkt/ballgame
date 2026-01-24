@@ -29,7 +29,7 @@ frame = 10
 stealer = { pickup = true }
 
 # No events expected - just verify state
-[expect.state]
+[[expect.state]]
 after_frame = 30
 checks = [
     "holder.holding_ball = true",   # Holder keeps ball

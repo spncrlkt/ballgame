@@ -1,5 +1,9 @@
 # Test: Steal succeeds or fails when in range
 # Verifies steal attempt occurs when defender is close to ball holder
+#
+# FAIL conditions this test catches:
+# - Steal system not triggering: no StealAttempt event
+# - Range detection broken: attempt doesn't happen despite proximity
 
 name = "Steal in range"
 description = "Steal attempt happens when defender is close to ball holder"
@@ -7,13 +11,14 @@ description = "Steal attempt happens when defender is close to ball holder"
 [setup]
 level = "test_steal_arena"
 
-# Two players very close together, one with ball
+# Two players very close together (within STEAL_RANGE = 60)
+# Floor at y=-450, floor top at -430, player center at -398
 [[setup.entities]]
 type = "player"
 id = "holder"
 team = "left"
 x = 0.0
-y = -350.0
+y = -398.0
 holding_ball = true
 
 [[setup.entities]]
@@ -21,16 +26,26 @@ type = "player"
 id = "stealer"
 team = "right"
 x = 40.0
-y = -350.0
+y = -398.0
 
 # Stealer attempts steal while in range
 [[input]]
 frame = 10
 stealer = { pickup = true }
 
-# Only check for StealAttempt - success/fail is RNG-based
+# Check for StealAttempt event - this proves the steal system triggered
 [[expect.sequence]]
 event = "StealAttempt"
 player = "stealer"
 frame_min = 5
 frame_max = 20
+
+# State check at frame 30 - after the attempt
+# We can't check the result (RNG-based) but we verify both players exist
+# and the game state is consistent
+[[expect.state]]
+after_frame = 30
+checks = [
+    "holder.x > -50",         # Holder is still in the arena
+    "stealer.x > 0",          # Stealer is still in the arena
+]
