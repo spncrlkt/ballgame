@@ -4,6 +4,63 @@ Results from code reviews performed during audits.
 
 ---
 
+## 2026-01-24
+
+### 1. Duplication (4 issues)
+
+| Location | Problem | Suggested Fix |
+|----------|---------|---------------|
+| `main.rs:482-586` + `player/physics.rs:403-473` | Ball spawning logic duplicated between setup and level change | Extract common patterns into shared helpers |
+| `ui/tweak_panel.rs:69-127` | Three large match statements with identical 14-case patterns | Consolidate into single data structure |
+| `ui/debug.rs:330-341` | Four separate identical gamepad D-pad input checks | Extract helper for collecting D-pad directions |
+| `ui/debug.rs:428-496` | Identical cycle wrapping logic (`(i+1)%len`) repeated | Extract `cycle_index(current, forward, max)` helper |
+
+### 2. Complexity (4 issues)
+
+| Location | Problem | Suggested Fix |
+|----------|---------|---------------|
+| `ui/debug.rs:298-550+` | `unified_cycle_system` handles too many concerns (857 line file) | Split into direction selection and per-direction cycling systems |
+| `player/physics.rs:242-401` | `respawn_player` handles reset AND level change | Split into `handle_reset` and `handle_level_change` |
+| `shooting/throw.rs:108-150` | 13 variance variables with multiple accumulations | Extract `calculate_shot_variance()` returning a struct |
+| `ball/physics.rs:120-226` | 5 separate bounce calls with similar patterns | Extract `bounce_with_type()` helper |
+
+### 3. Naming (3 issues)
+
+| Location | Problem | Suggested Fix |
+|----------|---------|---------------|
+| `player/components.rs` | `HoldingBall` name unclear (marker with entity reference) | Consider `BallHolder` or `CarryingBall(Entity)` |
+| `ball/components.rs` + `scoring/mod.rs` | `CurrentPalette`/`CurrentLevel` ambiguous | Rename to `PaletteIndex`/`LevelNumber` |
+| `ui/debug.rs:64-70` | `DownOption::next()` confusing (Down is D-pad direction) | Rename to `cycle()` |
+
+### 4. Structure (3 issues)
+
+| Location | Problem | Suggested Fix |
+|----------|---------|---------------|
+| `ui/debug.rs:23-125` | Cycle enum types mixed with system functions | Move to new `src/ui/cycle.rs` module |
+| `input/mod.rs`, `ai/mod.rs`, `ball/interaction.rs` | Input buffering consumption scattered | Add `src/input/buffering.rs` submodule |
+| `main.rs:81` + `palettes/database.rs:65-87` | Palette loading responsibility unclear | Ensure all loading goes through database module |
+
+### 5. Pattern Violations (1 issue)
+
+| Location | Problem | Suggested Fix |
+|----------|---------|---------------|
+| `ui/debug.rs:294` | `STICK_ACTIVE_DEADZONE` magic number not in constants.rs | Move to constants.rs |
+
+### Summary
+
+| Category | Count |
+|----------|-------|
+| Duplication | 4 |
+| Complexity | 4 |
+| Naming | 3 |
+| Structure | 3 |
+| Pattern Violations | 1 |
+| **Total** | **15** |
+
+**Note:** No input buffering or frame-rate independence violations. Two clippy errors fixed during audit (never_loop in simulation/runner.rs and training.rs). Regression baseline updated (debug level with all ball styles).
+
+---
+
 ## 2026-01-23 (Session 2)
 
 ### 1. Duplication (2 issues)

@@ -4,6 +4,66 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Audit: 2026-01-24 - Full Audit
+
+### Session Summary
+
+Full audit per CLAUDE.md checklist. Fixed compilation errors and updated documentation.
+
+### Changes Made
+
+**Bug Fixes:**
+- Fixed `NavNode` initializer in `src/ai/pathfinding.rs:286-303` - test code was missing `platform_role`, `shot_quality_left`, `shot_quality_right` fields that were added to the struct
+- Fixed `never_loop` clippy errors in `src/simulation/runner.rs:673-682` and `src/bin/training.rs:866-875` - converted for-break pattern to `.iter().next().map()` pattern
+
+**Documentation Updates:**
+- Updated CLAUDE.md system execution order to include missing systems:
+  - Chained input group now shows: `mark_nav_dirty_on_level_change`, `rebuild_nav_graph`, `ai_navigation_update`
+  - Other Update systems now show: `check_settings_reset`, `display_ball_wave`, `save_settings_system`
+- Updated regression baseline (`regression/baseline.png`) to current debug level display
+
+### Audit Findings
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| CLAUDE.md accuracy | FIXED | Updated system execution order |
+| Input buffering | PASS | All patterns correct |
+| Constants | PASS | No magic numbers in new code |
+| System order | FIXED | Documentation now matches main.rs |
+| Unused code | PASS | No dead code (3 warnings in generate_ball.rs - test bin) |
+| Pattern violations | PASS | No raw input in FixedUpdate |
+| Collision epsilon | N/A | No new collision code |
+| Frame-rate physics | PASS | All time-based correctly |
+| Compilation | FIXED | Was broken, now clean |
+| Clippy | FIXED | Was erroring (never_loop), now warnings only (~65 warnings) |
+| Visual regression | UPDATED | Baseline updated for current UI |
+| Visual verification | PASS | Debug level shows all ball styles correctly |
+
+### Clippy Warning Summary (~90 warnings across all targets)
+
+- Library: 65 warnings
+- Binaries: ~25 warnings (training, ballgame, generate_* tools)
+- Main categories: `type_complexity` (17), `collapsible_if` (6), `field_reassign_with_default` (2), `derivable_impls` (1), plus various unused variable warnings in generator binaries
+
+### Code Review Summary (from code_review_audits.md)
+
+- **Duplication:** 4 issues (spawn logic, match statements, D-pad checks, cycle wrapping)
+- **Complexity:** 4 issues (unified_cycle_system, respawn_player, variance calc, bounce logic)
+- **Naming:** 3 issues (HoldingBall, CurrentPalette/Level, DownOption::next)
+- **Structure:** 3 issues (cycle types in wrong module, input scattered, palette loading)
+- **Pattern Violations:** 1 issue (STICK_ACTIVE_DEADZONE not in constants)
+
+### Files Modified
+
+- `src/ai/pathfinding.rs` - Added missing fields to test NavNode initializers
+- `src/simulation/runner.rs` - Fixed never_loop clippy error
+- `src/bin/training.rs` - Fixed never_loop clippy error
+- `CLAUDE.md` - Updated system execution order
+- `code_review_audits.md` - Added 2026-01-24 findings
+- `audit_record.md` - This entry
+
+---
+
 ## Audit: 2026-01-23 (Session 3) - Snapshot & Regression Testing
 
 ### Session Summary

@@ -278,7 +278,7 @@ fn reconstruct_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::navigation::NavNode;
+    use crate::ai::navigation::{NavNode, PlatformRole};
 
     fn create_test_graph() -> NavGraph {
         // Simple test: floor and one platform above
@@ -291,6 +291,9 @@ mod tests {
                 top_y: -430.0,
                 platform_entity: None,
                 is_floor: true,
+                shot_quality_left: 0.5,
+                shot_quality_right: 0.5,
+                platform_role: PlatformRole::Floor,
             },
             NavNode {
                 id: 1,
@@ -300,6 +303,9 @@ mod tests {
                 top_y: -230.0,
                 platform_entity: None,
                 is_floor: false,
+                shot_quality_left: 0.6,
+                shot_quality_right: 0.6,
+                platform_role: PlatformRole::ShotPosition,
             },
         ];
 

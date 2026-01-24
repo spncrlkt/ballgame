@@ -206,7 +206,9 @@ src/
 
 ### System Execution Order
 
-**Update schedule:** `capture_input` → `copy_human_input` → `swap_control` → `ai_decision_update` → `respawn_player` → `steal_cooldown_update` → `toggle_debug` → `check_config_changes` → `update_debug_text` → `update_score_level_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `update_steal_indicators` → `toggle_tweak_panel` → `update_tweak_panel` → `cycle_viewport` → `unified_cycle_system` → `update_cycle_indicator` → `apply_palette_colors` → `apply_preset_to_tweaks` → `snapshot_trigger_system` → `toggle_snapshot_system` → `toggle_screenshot_capture` → `manual_snapshot`
+**Update schedule (chained input group):** `capture_input` → `copy_human_input` → `swap_control` → `mark_nav_dirty_on_level_change` → `rebuild_nav_graph` → `ai_navigation_update` → `ai_decision_update`
+
+**Update schedule (other systems):** `check_settings_reset` → `respawn_player` → `steal_cooldown_update` → `toggle_debug` → `check_config_changes` → `update_debug_text` → `update_score_level_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `update_steal_indicators` → `display_ball_wave` → `toggle_tweak_panel` → `update_tweak_panel` → `cycle_viewport` → `unified_cycle_system` → `update_cycle_indicator` → `apply_palette_colors` → `apply_preset_to_tweaks` → `snapshot_trigger_system` → `toggle_snapshot_system` → `toggle_screenshot_capture` → `manual_snapshot` → `save_settings_system`
 
 **FixedUpdate schedule (chained):** `apply_input` → `apply_gravity` → `ball_gravity` → `ball_spin` → `apply_velocity` → `check_collisions` → `ball_collisions` → `ball_state_update` → `ball_player_collision` → `ball_follow_holder` → `pickup_ball` → `steal_cooldown_update` → `update_shot_charge` → `throw_ball` → `check_scoring`
 

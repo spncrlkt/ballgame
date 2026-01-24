@@ -859,20 +859,21 @@ fn emit_training_events(
             }
         }
 
-        let mut ball_pos = (0.0, 0.0);
-        let mut ball_vel = (0.0, 0.0);
-        let mut ball_state_char = 'F';
-
-        for (transform, velocity, ball_state) in &balls {
-            ball_pos = (transform.translation.x, transform.translation.y);
-            ball_vel = (velocity.0.x, velocity.0.y);
-            ball_state_char = match ball_state {
-                BallState::Free => 'F',
-                BallState::Held(_) => 'H',
-                BallState::InFlight { .. } => 'I',
-            };
-            break;
-        }
+        // Collect ball data (only one ball in the game)
+        let (ball_pos, ball_vel, ball_state_char) = balls
+            .iter()
+            .next()
+            .map(|(transform, velocity, ball_state)| {
+                let pos = (transform.translation.x, transform.translation.y);
+                let vel = (velocity.0.x, velocity.0.y);
+                let state = match ball_state {
+                    BallState::Free => 'F',
+                    BallState::Held(_) => 'H',
+                    BallState::InFlight { .. } => 'I',
+                };
+                (pos, vel, state)
+            })
+            .unwrap_or(((0.0, 0.0), (0.0, 0.0), 'F'));
 
         event_buffer.buffer.log(
             time,
