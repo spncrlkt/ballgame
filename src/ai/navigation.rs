@@ -5,6 +5,7 @@
 
 use bevy::prelude::*;
 
+use crate::ai::shot_quality::evaluate_shot_quality;
 use crate::constants::*;
 use crate::levels::LevelDatabase;
 use crate::scoring::CurrentLevel;
@@ -117,40 +118,60 @@ impl NavGraph {
             .map(|(i, _)| i)
     }
 
-    /// Find the best node from which to shoot at a target basket position
-    pub fn find_shooting_node(&self, target: Vec2, shoot_range: f32) -> Option<usize> {
-        // Find all nodes within shooting range of target
-        let mut candidates: Vec<(usize, f32)> = self
+    /// Find the best node from which to shoot at a target basket position.
+    /// Takes `min_shot_quality` to filter out positions where shot quality is too low
+    /// (e.g., directly under the basket where shots are nearly impossible).
+    pub fn find_shooting_node(
+        &self,
+        target: Vec2,
+        shoot_range: f32,
+        min_shot_quality: f32,
+    ) -> Option<usize> {
+        // Find all nodes within shooting range of target that meet quality threshold
+        let mut candidates: Vec<(usize, f32, f32)> = self
             .nodes
             .iter()
             .enumerate()
             .filter_map(|(i, node)| {
                 let dist = node.center.distance(target);
                 if dist <= shoot_range {
-                    Some((i, dist))
+                    let quality = evaluate_shot_quality(node.center, target);
+                    if quality >= min_shot_quality {
+                        Some((i, dist, quality))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
             })
             .collect();
 
-        // Sort by distance (prefer closer positions for better accuracy)
-        candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        // Sort by quality (higher = better), then by distance (closer = better)
+        candidates.sort_by(|a, b| {
+            b.2.partial_cmp(&a.2) // Quality descending
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.1.partial_cmp(&b.1).unwrap()) // Distance ascending
+        });
 
-        if let Some((i, _)) = candidates.first() {
+        if let Some((i, _, _)) = candidates.first() {
             return Some(*i);
         }
 
-        // No platform within shoot_range - find the closest one anyway
-        // This ensures AI navigates to the best possible position
+        // No platform within shoot_range meeting quality threshold - find the best quality one
+        // even if outside range, so AI navigates toward a usable shooting position
         self.nodes
             .iter()
             .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                let dist_a = a.center.distance(target);
-                let dist_b = b.center.distance(target);
-                dist_a.partial_cmp(&dist_b).unwrap()
+            .filter_map(|(i, node)| {
+                let quality = evaluate_shot_quality(node.center, target);
+                if quality >= min_shot_quality {
+                    Some((i, quality))
+                } else {
+                    None
+                }
             })
+            .max_by(|(_, q1), (_, q2)| q1.partial_cmp(q2).unwrap())
             .map(|(i, _)| i)
     }
 }

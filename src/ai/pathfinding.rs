@@ -160,19 +160,21 @@ pub fn find_path(
     None
 }
 
-/// Find path to a position from which we can shoot at the target
+/// Find path to a position from which we can shoot at the target.
+/// Takes `min_shot_quality` to filter out positions where shot quality is too low.
 pub fn find_path_to_shoot(
     nav_graph: &NavGraph,
     start_pos: Vec2,
     target_basket_pos: Vec2,
     shoot_range: f32,
+    min_shot_quality: f32,
 ) -> Option<PathResult> {
     if nav_graph.nodes.is_empty() {
         return None;
     }
 
-    // Find a node within shooting range
-    let goal_node = nav_graph.find_shooting_node(target_basket_pos, shoot_range)?;
+    // Find a node within shooting range that meets quality threshold
+    let goal_node = nav_graph.find_shooting_node(target_basket_pos, shoot_range, min_shot_quality)?;
     let goal_pos = nav_graph.nodes[goal_node].center;
 
     find_path(nav_graph, start_pos, goal_pos)

@@ -60,7 +60,7 @@ impl Default for SimConfig {
             stalemate_timeout: 30.0,
             output_file: None,
             quiet: false,
-            log_events: false,
+            log_events: true, // Always log events for analytics
             log_dir: "logs".to_string(),
         }
     }

@@ -17,7 +17,7 @@ use crate::ball::{
     CurrentPalette, Velocity, ball_collisions, ball_follow_holder, ball_gravity, ball_player_collision,
     ball_spin, ball_state_update, apply_velocity, pickup_ball,
 };
-use crate::events::{EventBuffer, GameEvent, PlayerId};
+use crate::events::{EventBuffer, GameConfig, GameEvent, PlayerId};
 use crate::palettes::PaletteDatabase;
 use crate::constants::*;
 use crate::levels::LevelDatabase;
@@ -123,6 +123,37 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
             right_profile: config.right_profile.clone(),
             seed,
         });
+
+        // Log game configuration (all tunable parameters)
+        event_buffer.buffer.log(0.0, GameEvent::Config(GameConfig {
+            // Physics
+            gravity_rise: GRAVITY_RISE,
+            gravity_fall: GRAVITY_FALL,
+            jump_velocity: JUMP_VELOCITY,
+            move_speed: MOVE_SPEED,
+            ground_accel: GROUND_ACCEL,
+            air_accel: AIR_ACCEL,
+            // Ball physics
+            ball_gravity: BALL_GRAVITY,
+            ball_bounce: BALL_BOUNCE,
+            ball_air_friction: BALL_AIR_FRICTION,
+            ball_ground_friction: BALL_GROUND_FRICTION,
+            // Shooting
+            shot_max_power: SHOT_MAX_POWER,
+            shot_max_speed: SHOT_MAX_SPEED,
+            shot_charge_time: SHOT_CHARGE_TIME,
+            shot_max_variance: SHOT_MAX_VARIANCE,
+            shot_min_variance: SHOT_MIN_VARIANCE,
+            // Steal
+            steal_range: STEAL_RANGE,
+            steal_success_chance: STEAL_SUCCESS_CHANCE,
+            steal_cooldown: STEAL_COOLDOWN,
+            // Presets not tracked in simulation (uses defaults)
+            preset_movement: None,
+            preset_ball: None,
+            preset_shooting: None,
+            preset_composite: None,
+        }));
     }
     app.insert_resource(event_buffer);
 

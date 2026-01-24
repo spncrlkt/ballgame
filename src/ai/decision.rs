@@ -91,11 +91,17 @@ pub fn ai_navigation_update(
 
             AiGoal::AttackWithBall => {
                 // Navigate to a position within shooting range of basket
+                // Pass min_shot_quality to avoid navigating to positions where shots are low quality
+                // (e.g., directly under the basket)
                 if let Some(basket_pos) = target_basket_pos {
-                    // Try to find a shooting position (closest platform to basket)
-                    if let Some(path_result) =
-                        find_path_to_shoot(&nav_graph, ai_pos, basket_pos, profile.shoot_range)
-                    {
+                    // Try to find a shooting position that meets quality threshold
+                    if let Some(path_result) = find_path_to_shoot(
+                        &nav_graph,
+                        ai_pos,
+                        basket_pos,
+                        profile.shoot_range,
+                        profile.min_shot_quality,
+                    ) {
                         Some(nav_graph.nodes[path_result.goal_node].center)
                     } else {
                         // Fallback: just move toward basket
