@@ -55,6 +55,15 @@ pub struct SimEventBuffer {
     pub prev_ball_holder: Option<Entity>,
     /// Track previous charging state for shot events
     pub prev_charging: [bool; 2],
+    /// Track last tick time for 50ms sampling
+    pub last_tick_time: f32,
+    /// Frame counter for tick events
+    pub tick_frame_count: u64,
+    /// Track previous AI goals for change detection
+    pub prev_ai_goal_left: Option<String>,
+    pub prev_ai_goal_right: Option<String>,
+    /// Track previous steal cooldowns for steal detection
+    pub prev_steal_cooldowns: [f32; 2],
 }
 
 /// Run a single match and return the result
@@ -90,6 +99,11 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
         prev_score_right: 0,
         prev_ball_holder: None,
         prev_charging: [false, false],
+        last_tick_time: 0.0,
+        tick_frame_count: 0,
+        prev_ai_goal_left: None,
+        prev_ai_goal_right: None,
+        prev_steal_cooldowns: [0.0, 0.0],
     };
 
     // Start session if logging enabled
@@ -584,8 +598,8 @@ fn emit_simulation_events(
     metrics: Res<SimMetrics>,
     score: Res<Score>,
     steal_contest: Res<StealContest>,
-    players: Query<(Entity, &Team, &ChargingShot, Option<&HoldingBall>), With<Player>>,
-    balls: Query<&BallState, With<Ball>>,
+    players: Query<(Entity, &Team, &Transform, &Velocity, &ChargingShot, &AiState, &StealCooldown, Option<&HoldingBall>), With<Player>>,
+    balls: Query<(&Transform, &Velocity, &BallState), With<Ball>>,
 ) {
     if !event_buffer.enabled {
         return;
@@ -593,7 +607,62 @@ fn emit_simulation_events(
 
     let time = metrics.elapsed;
 
-    // Detect score changes (Goal events)
+    // === Tick events at 50ms (20 Hz) ===
+    if time - event_buffer.last_tick_time >= 0.05 {
+        event_buffer.last_tick_time = time;
+        event_buffer.tick_frame_count += 1;
+        let frame = event_buffer.tick_frame_count;
+
+        // Collect player data
+        let mut left_pos = (0.0, 0.0);
+        let mut left_vel = (0.0, 0.0);
+        let mut right_pos = (0.0, 0.0);
+        let mut right_vel = (0.0, 0.0);
+
+        for (_, team, transform, velocity, _, _, _, _) in &players {
+            let pos = (transform.translation.x, transform.translation.y);
+            let vel = (velocity.0.x, velocity.0.y);
+            match team {
+                Team::Left => {
+                    left_pos = pos;
+                    left_vel = vel;
+                }
+                Team::Right => {
+                    right_pos = pos;
+                    right_vel = vel;
+                }
+            }
+        }
+
+        // Collect ball data
+        let mut ball_pos = (0.0, 0.0);
+        let mut ball_vel = (0.0, 0.0);
+        let mut ball_state_char = 'F';
+
+        for (transform, velocity, ball_state) in &balls {
+            ball_pos = (transform.translation.x, transform.translation.y);
+            ball_vel = (velocity.0.x, velocity.0.y);
+            ball_state_char = match ball_state {
+                BallState::Free => 'F',
+                BallState::Held(_) => 'H',
+                BallState::InFlight { .. } => 'I',
+            };
+            break; // Only one ball
+        }
+
+        event_buffer.buffer.log(time, GameEvent::Tick {
+            frame,
+            left_pos,
+            left_vel,
+            right_pos,
+            right_vel,
+            ball_pos,
+            ball_vel,
+            ball_state: ball_state_char,
+        });
+    }
+
+    // === Detect score changes (Goal events) ===
     if score.left > event_buffer.prev_score_left {
         event_buffer.buffer.log(time, GameEvent::Goal {
             player: PlayerId::L,
@@ -611,15 +680,60 @@ fn emit_simulation_events(
         event_buffer.prev_score_right = score.right;
     }
 
-    // Detect steal events from StealContest
-    // StealContest.fail_flash_timer is set on failed steals
-    if steal_contest.fail_flash_timer > 0.0 {
-        // We can detect that a steal just happened but StealContest doesn't tell us
-        // which player attempted - this is a limitation we'll track via metrics instead
+    // === AI goal change detection ===
+    for (_, team, _, _, _, ai_state, _, _) in &players {
+        let goal_str = format!("{:?}", ai_state.current_goal);
+        let (prev, player_id) = match team {
+            Team::Left => (&mut event_buffer.prev_ai_goal_left, PlayerId::L),
+            Team::Right => (&mut event_buffer.prev_ai_goal_right, PlayerId::R),
+        };
+
+        if prev.as_ref() != Some(&goal_str) {
+            *prev = Some(goal_str.clone());
+            event_buffer.buffer.log(time, GameEvent::AiGoal {
+                player: player_id,
+                goal: goal_str,
+            });
+        }
     }
 
-    // Track ball possession changes and shot charging
-    for (entity, team, charging, holding) in &players {
+    // === Steal event detection ===
+    // Detect steal attempts when cooldown resets to max (meaning a steal just happened)
+    for (_, team, _, _, _, _, steal_cooldown, _) in &players {
+        let idx = match team {
+            Team::Left => 0,
+            Team::Right => 1,
+        };
+        let player_id = match team {
+            Team::Left => PlayerId::L,
+            Team::Right => PlayerId::R,
+        };
+
+        let current_cooldown = steal_cooldown.0;
+        let prev_cooldown = event_buffer.prev_steal_cooldowns[idx];
+
+        // Detect if cooldown just jumped up (steal was attempted)
+        // A steal attempt sets cooldown to STEAL_COOLDOWN, so if prev was low and now high...
+        if current_cooldown > prev_cooldown + 0.3 && current_cooldown > 0.5 {
+            event_buffer.buffer.log(time, GameEvent::StealAttempt {
+                attacker: player_id,
+            });
+            // Check StealContest for success/fail (fail_flash_timer > 0 means fail)
+            if steal_contest.fail_flash_timer > 0.0 {
+                event_buffer.buffer.log(time, GameEvent::StealFail {
+                    attacker: player_id,
+                });
+            } else {
+                event_buffer.buffer.log(time, GameEvent::StealSuccess {
+                    attacker: player_id,
+                });
+            }
+        }
+        event_buffer.prev_steal_cooldowns[idx] = current_cooldown;
+    }
+
+    // === Track ball possession changes and shot charging ===
+    for (entity, team, transform, _, charging, _, _, holding) in &players {
         let player_id = match team {
             Team::Left => PlayerId::L,
             Team::Right => PlayerId::R,
@@ -638,30 +752,28 @@ fn emit_simulation_events(
             event_buffer.prev_ball_holder = Some(entity);
         }
 
-        // Detect shot charging start
+        // Detect shot charging start - now with actual position
         let is_charging = charging.charge_time > 0.0;
         if is_charging && !event_buffer.prev_charging[idx] {
             event_buffer.buffer.log(time, GameEvent::ShotStart {
                 player: player_id,
-                pos: (0.0, 0.0), // Position not tracked in this simplified version
-                quality: 0.5, // Not available in simulation
+                pos: (transform.translation.x, transform.translation.y),
+                quality: 0.5, // Could calculate based on position
             });
         }
         event_buffer.prev_charging[idx] = is_charging;
     }
 
-    // Detect when ball becomes free (drop or shot release)
-    for ball_state in &balls {
+    // === Detect when ball becomes free (drop or shot release) ===
+    for (_, _, ball_state) in &balls {
         match ball_state {
             BallState::InFlight { shooter, power } => {
                 // If ball just became InFlight, log shot release
-                // We detect this by checking if prev_ball_holder is Some but ball is now InFlight
                 if event_buffer.prev_ball_holder.is_some() {
                     let player_id = if Some(*shooter) == event_buffer.prev_ball_holder {
-                        // Find which team this is
                         players.iter()
-                            .find(|(e, _, _, _)| *e == *shooter)
-                            .map(|(_, team, _, _)| match team {
+                            .find(|(e, _, _, _, _, _, _, _)| *e == *shooter)
+                            .map(|(_, team, _, _, _, _, _, _)| match team {
                                 Team::Left => PlayerId::L,
                                 Team::Right => PlayerId::R,
                             })
@@ -672,8 +784,8 @@ fn emit_simulation_events(
                     if let Some(pid) = player_id {
                         event_buffer.buffer.log(time, GameEvent::ShotRelease {
                             player: pid,
-                            charge: 0.5, // Approximation
-                            angle: 60.0, // Default angle
+                            charge: 0.5,
+                            angle: 60.0,
                             power: *power,
                         });
                     }
@@ -683,9 +795,8 @@ fn emit_simulation_events(
             BallState::Free => {
                 // If ball just became Free after being Held, it was a drop
                 if event_buffer.prev_ball_holder.is_some() {
-                    // Find who was holding it
-                    if let Some((_, team, _, _)) = players.iter()
-                        .find(|(e, _, _, _)| Some(*e) == event_buffer.prev_ball_holder)
+                    if let Some((_, team, _, _, _, _, _, _)) = players.iter()
+                        .find(|(e, _, _, _, _, _, _, _)| Some(*e) == event_buffer.prev_ball_holder)
                     {
                         let player_id = match team {
                             Team::Left => PlayerId::L,

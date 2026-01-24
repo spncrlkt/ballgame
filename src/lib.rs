@@ -8,6 +8,7 @@ pub mod config_watcher;
 pub mod constants;
 pub mod events;
 pub mod helpers;
+pub mod replay;
 pub mod settings;
 pub mod simulation;
 pub mod snapshot;
@@ -65,6 +66,11 @@ pub use ui::{
     VulnerableIndicator,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
+pub use replay::{
+    load_replay, not_replay_active, replay_active, MatchInfo, ReplayData, ReplayMode, ReplayState,
+    TickFrame, TimedEvent, replay_input_handler, replay_playback, replay_setup, setup_replay_ui,
+    update_replay_ui,
+};
 
 // =============================================================================
 // TRAJECTORY CALCULATION (shared with tools like heatmap generator)

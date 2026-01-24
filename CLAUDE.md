@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo build           # Debug build
 cargo build --release # Release build
 cargo run             # Run the game
+cargo run -- --replay <file.evlog>  # Run in replay mode
 cargo check           # Check compilation without building
 cargo fmt             # Format code
 cargo clippy          # Lint code
@@ -130,6 +131,7 @@ src/
 ├── steal.rs         # StealContest resource + steal cooldown system
 ├── levels/          # LevelDatabase, spawning, hot reload
 ├── presets/         # Game tuning presets (movement, ball, shooting, composite)
+├── replay/          # Replay system for playing back recorded .evlog files
 ├── world/           # Platform, Collider, Basket, BasketRim components
 └── ui/              # Debug, HUD, animations, charge gauge, tweak panel
 ```
@@ -147,6 +149,9 @@ src/
 - `LevelDatabase` - Loaded level definitions from assets/levels.txt
 - `LastShotInfo` - Debug info about the most recent shot (angle, power, variance breakdown)
 - `BallTextures` - Handles to ball textures (dynamic styles × palettes)
+- `ReplayMode` - Controls replay mode (active flag, file path)
+- `ReplayData` - Loaded replay data (ticks, events, match info)
+- `ReplayState` - Playback state (time, speed, paused, stepping)
 - `ViewportScale` - Current viewport preset for testing different screen sizes
 - `CycleSelection` - D-pad direction-based cycle state (active_direction, down_option, right_option, ai_player_index)
 - `AiProfileDatabase` - Loaded AI personality profiles from assets/ai_profiles.txt
@@ -248,6 +253,14 @@ Display (top-left, always visible):
 - Left/Right: Adjust value by ~10%
 - R: Reset selected parameter to default
 - Shift+R: Reset all parameters to defaults
+
+**Replay mode controls (when running with `--replay <file>`):**
+- Space: Toggle pause
+- Left/Right arrows: Adjust playback speed (0.25x/0.5x/1x/2x/4x)
+- Period (.): Step forward one tick (when paused)
+- Comma (,): Step backward one tick (when paused)
+- Home: Jump to start
+- End: Jump to end
 
 ---
 

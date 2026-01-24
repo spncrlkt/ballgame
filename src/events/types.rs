@@ -145,12 +145,15 @@ pub enum GameEvent {
     },
 
     // === Debug/Tick Events ===
-    /// Frame tick with positions (sampled, not every frame)
+    /// Frame tick with positions and velocities (sampled at 50ms / 20 Hz)
     Tick {
         frame: u64,
         left_pos: (f32, f32),
+        left_vel: (f32, f32),
         right_pos: (f32, f32),
+        right_vel: (f32, f32),
         ball_pos: (f32, f32),
+        ball_vel: (f32, f32),
         ball_state: char, // F=Free, H=Held, I=InFlight
     },
 }

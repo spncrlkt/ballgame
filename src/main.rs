@@ -13,7 +13,7 @@ use ballgame::{
     Score, ScoreLevelText, SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown,
     StyleTextures, TargetBasket, Team, TweakPanel, TweakRow, Velocity, ViewportScale, ai,
     apply_preset_to_tweaks, ball, config_watcher, constants::*, helpers::*, input, levels, player,
-    save_settings_system, scoring, shooting, snapshot, steal, ui, world,
+    replay, save_settings_system, scoring, shooting, snapshot, steal, ui, world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
@@ -51,6 +51,11 @@ fn main() {
     // Parse command-line arguments
     let args: Vec<String> = std::env::args().collect();
     let screenshot_and_quit = args.iter().any(|a| a == "--screenshot-and-quit");
+
+    // Check for replay mode: --replay <path>
+    let replay_file = args.iter()
+        .position(|a| a == "--replay")
+        .and_then(|i| args.get(i + 1).cloned());
 
     // Load persistent settings (uses defaults if file doesn't exist)
     let current_settings = CurrentSettings::default();
@@ -138,7 +143,16 @@ fn main() {
             ..default()
         })
         .init_resource::<SnapshotTriggerState>()
-        .add_systems(Startup, setup)
+        // Replay mode resources
+        .insert_resource(if let Some(ref path) = replay_file {
+            replay::ReplayMode::new(path.clone())
+        } else {
+            replay::ReplayMode::default()
+        })
+        .init_resource::<replay::ReplayState>()
+        // Startup system - use normal setup only when NOT in replay mode
+        .add_systems(Startup, setup.run_if(replay::not_replay_active))
+        // =========== NORMAL GAME SYSTEMS (disabled in replay mode) ===========
         // Input systems must run in order: capture -> copy -> swap -> nav graph -> nav -> AI
         .add_systems(
             Update,
@@ -151,10 +165,11 @@ fn main() {
                 ai::ai_navigation_update,
                 ai::ai_decision_update,
             )
-                .chain(),
+                .chain()
+                .run_if(replay::not_replay_active),
         )
         // Settings reset (double-click Start) - must run before respawn
-        .add_systems(Update, player::check_settings_reset)
+        .add_systems(Update, player::check_settings_reset.run_if(replay::not_replay_active))
         // Core Update systems - split to avoid tuple size limit
         .add_systems(
             Update,
@@ -165,7 +180,8 @@ fn main() {
                 config_watcher::check_config_changes,
                 ui::update_debug_text,
                 ui::update_score_level_text,
-            ),
+            )
+                .run_if(replay::not_replay_active),
         )
         .add_systems(
             Update,
@@ -174,7 +190,8 @@ fn main() {
                 ui::animate_score_flash,
                 ui::update_charge_gauge,
                 ui::update_steal_indicators,
-            ),
+            )
+                .run_if(replay::not_replay_active),
         )
         // UI panel and cycle systems
         .add_systems(
@@ -184,7 +201,8 @@ fn main() {
                 ui::update_tweak_panel,
                 ui::cycle_viewport,
                 ui::unified_cycle_system,
-            ),
+            )
+                .run_if(replay::not_replay_active),
         )
         // Cycle indicator, palette application, and preset application
         .add_systems(
@@ -193,7 +211,8 @@ fn main() {
                 ui::update_cycle_indicator,
                 ui::apply_palette_colors,
                 apply_preset_to_tweaks,
-            ),
+            )
+                .run_if(replay::not_replay_active),
         )
         // Snapshot system - captures game state on events
         .add_systems(
@@ -203,10 +222,11 @@ fn main() {
                 snapshot::toggle_snapshot_system,
                 snapshot::toggle_screenshot_capture,
                 snapshot::manual_snapshot,
-            ),
+            )
+                .run_if(replay::not_replay_active),
         )
         // Settings persistence - save when dirty
-        .add_systems(Update, save_settings_system)
+        .add_systems(Update, save_settings_system.run_if(replay::not_replay_active))
         .add_systems(
             FixedUpdate,
             (
@@ -226,7 +246,29 @@ fn main() {
                 shooting::throw_ball,
                 scoring::check_scoring,
             )
-                .chain(),
+                .chain()
+                .run_if(replay::not_replay_active),
+        )
+        // =========== REPLAY MODE SYSTEMS ===========
+        // Replay startup - load file, setup camera
+        .add_systems(Startup, replay_load_file.run_if(replay::replay_active))
+        // Replay setup - spawn game world (runs after load, needs ReplayData)
+        .add_systems(
+            Startup,
+            (replay::replay_setup, replay::setup_replay_ui)
+                .run_if(replay::replay_active)
+                .after(replay_load_file),
+        )
+        // Replay update systems
+        .add_systems(
+            Update,
+            (
+                replay::replay_playback,
+                replay::replay_input_handler,
+                replay::update_replay_ui,
+            )
+                .chain()
+                .run_if(replay::replay_active),
         )
         .run();
 }
@@ -744,4 +786,41 @@ fn setup(
                 ));
             }
         });
+}
+
+/// Setup system for replay mode - loads replay file
+fn replay_load_file(
+    mut commands: Commands,
+    replay_mode: Res<replay::ReplayMode>,
+) {
+    // Load the replay file
+    let Some(ref file_path) = replay_mode.file_path else {
+        error!("Replay mode active but no file path specified");
+        return;
+    };
+
+    match replay::load_replay(file_path) {
+        Ok(replay_data) => {
+            info!("Loaded replay: {} ticks, {} events", replay_data.ticks.len(), replay_data.events.len());
+            // Insert replay data as resource - other systems will use it
+            commands.insert_resource(replay_data);
+        }
+        Err(e) => {
+            error!("Failed to load replay file '{}': {}", file_path, e);
+            // Insert empty replay data so systems don't crash
+            commands.insert_resource(replay::ReplayData::default());
+        }
+    }
+
+    // Camera - orthographic, shows entire arena
+    commands.spawn((
+        Camera2d,
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        Projection::Orthographic(OrthographicProjection {
+            scaling_mode: bevy::camera::ScalingMode::FixedVertical {
+                viewport_height: ARENA_HEIGHT,
+            },
+            ..OrthographicProjection::default_2d()
+        }),
+    ));
 }

@@ -28,6 +28,15 @@
 ---
 
 ## Done (recent - see todone.md for full archive)
+- [x] **Replay System** - Play back recorded .evlog files with variable speed
+  - Created `src/replay/` module (loader, state, systems, UI)
+  - `cargo run -- --replay <file.evlog>` to enter replay mode
+  - Enhanced Tick events with velocity data (50ms / 20 Hz)
+  - AI goal change logging, steal event detection, fixed ShotStart positions
+  - Hermite interpolation for smooth playback
+  - Controls: Space=pause, </>=speed, ,/.=step, Home/End=jump
+  - Timeline UI with event markers (goals, steals, pickups)
+  - AI goal labels above players showing current behavior
 - [x] **Analytics System** - Decoupled simulation + analysis workflow
   - Added `--log-events` and `--log-dir` flags to simulate binary
   - Created `src/analytics/` module (parser, metrics, leaderboard, targets, suggestions, defaults)
@@ -36,11 +45,5 @@
   - Target comparison vs tuning goals (TOML config in `assets/tuning_targets.toml`)
   - Auto-update defaults in `src/constants.rs` with `--update-defaults`
 - [x] Created AI simulation system (`cargo run --bin simulate`) for headless AI testing
-  - Single match, multi-match, tournament, and level-sweep modes
-  - Tracks goals, possession time, distance traveled, goal states
-  - Fixed ChargeShot trigger for elevated baskets (under_elevated_basket condition)
 - [x] Created snapshot system (src/snapshot.rs) - captures game state + screenshots on events
-- [x] Added --screenshot-and-quit CLI flag for automated screenshot capture
 - [x] Created scripts/screenshot.sh and scripts/regression.sh for visual testing
-- [x] Created regression/ directory with baseline.png for visual regression testing
-- [x] Restructured D-pad menu to 4-direction model (Up/Down/Left/Right)

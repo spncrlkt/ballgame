@@ -15,9 +15,10 @@
 //! T:01500|ME|1|0|45.5
 //! ```
 //!
-//! Tick events (sampled every 100ms):
+//! Tick events (sampled every 50ms / 20 Hz):
 //! ```text
-//! T:00100|T|150|-200.5,-418.2|300.2,-418.2|0.0,50.5|F
+//! T:00050|T|1|-200.5,-418.2|50.0,0.0|300.2,-418.2|-30.0,0.0|0.0,50.5|0.0,-200.0|F
+//!          ^frame|left_pos|left_vel|right_pos|right_vel|ball_pos|ball_vel|state
 //! ```
 
 use super::types::{GameConfig, GameEvent, PlayerId};
@@ -123,16 +124,22 @@ pub fn serialize_event(time_ms: u32, event: &GameEvent) -> String {
         GameEvent::Tick {
             frame,
             left_pos,
+            left_vel,
             right_pos,
+            right_vel,
             ball_pos,
+            ball_vel,
             ball_state,
         } => {
             format!(
-                "{}|{}|{}|{}|{}",
+                "{}|{}|{}|{}|{}|{}|{}|{}",
                 frame,
                 fmt_pos(*left_pos),
+                fmt_pos(*left_vel),
                 fmt_pos(*right_pos),
+                fmt_pos(*right_vel),
                 fmt_pos(*ball_pos),
+                fmt_pos(*ball_vel),
                 ball_state
             )
         }
@@ -233,12 +240,15 @@ pub fn parse_event(line: &str) -> Option<(u32, GameEvent)> {
             throw: data[2].contains('T'),
             pickup: data[2].contains('P'),
         },
-        "T" if data.len() >= 5 => GameEvent::Tick {
+        "T" if data.len() >= 8 => GameEvent::Tick {
             frame: data[0].parse().ok()?,
             left_pos: parse_pos(data[1])?,
-            right_pos: parse_pos(data[2])?,
-            ball_pos: parse_pos(data[3])?,
-            ball_state: data[4].chars().next()?,
+            left_vel: parse_pos(data[2])?,
+            right_pos: parse_pos(data[3])?,
+            right_vel: parse_pos(data[4])?,
+            ball_pos: parse_pos(data[5])?,
+            ball_vel: parse_pos(data[6])?,
+            ball_state: data[7].chars().next()?,
         },
         _ => return None,
     };
@@ -317,16 +327,30 @@ mod tests {
         let event = GameEvent::Tick {
             frame: 150,
             left_pos: (-200.5, -418.2),
+            left_vel: (50.0, 0.0),
             right_pos: (300.2, -418.2),
+            right_vel: (-30.0, 0.0),
             ball_pos: (0.0, 50.5),
+            ball_vel: (0.0, -200.0),
             ball_state: 'F',
         };
         let line = serialize_event(100, &event);
         assert!(line.contains("|T|"));
         let (_, parsed) = parse_event(&line).unwrap();
-        if let GameEvent::Tick { frame, ball_state, .. } = parsed {
+        if let GameEvent::Tick {
+            frame,
+            left_vel,
+            right_vel,
+            ball_vel,
+            ball_state,
+            ..
+        } = parsed
+        {
             assert_eq!(frame, 150);
             assert_eq!(ball_state, 'F');
+            assert!((left_vel.0 - 50.0).abs() < 0.1);
+            assert!((right_vel.0 - -30.0).abs() < 0.1);
+            assert!((ball_vel.1 - -200.0).abs() < 0.1);
         } else {
             panic!("Wrong event type");
         }
