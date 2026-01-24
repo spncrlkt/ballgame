@@ -48,6 +48,7 @@
 - [ ] Optional: make playable floor ball also a random style on level reset
 
 ## Done (recent - see todone.md for full archive)
+- [x] **Code review guidelines** - Created comprehensive `code_review_guidelines.md` and integrated quick checklists into CLAUDE.md Maintenance section
 - [x] **Debug level ball display** - All ball styles on shelf platforms with labels and wave animations
   - Display balls on 5 shelves (heights 380-780) with style name labels
   - One random playable ball spawned on floor between players

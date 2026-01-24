@@ -18,6 +18,8 @@ cargo clippy          # Lint code
 
 No tests exist yet. Dynamic linking is disabled in `.cargo/config.toml` to avoid macOS dyld issues.
 
+**User Preference:** Do not add or commit code automatically. The user handles git operations.
+
 ## Session Checklists
 
 ### Get Started
@@ -408,6 +410,51 @@ velocity.x *= 0.98;           // Faster decay at higher FPS
 
 **Remind the user to audit every ~10 changes if they haven't recently.**
 
+For detailed explanations and code examples, see `code_review_guidelines.md`.
+
+### Code Review Quick Checklists
+
+Use these checklists when reviewing any code changes:
+
+**Physics & Timing:**
+- [ ] All physics calculations in FixedUpdate (not Update)
+- [ ] Time-based values use `* time.delta_secs()` or `.powf(time.delta_secs())`
+- [ ] No per-frame multipliers like `velocity *= 0.98`
+- [ ] Collision epsilon used for entities resting on surfaces
+- [ ] No spiral of death risk (physics steps capped)
+
+**Input Handling:**
+- [ ] `just_pressed()` inputs buffered before FixedUpdate consumption
+- [ ] Input buffer flags consumed (set to false) after use
+- [ ] Continuous inputs (axes) can overwrite each frame
+- [ ] No raw input reads in FixedUpdate
+
+**ECS Queries:**
+- [ ] Queries fetch only needed components
+- [ ] `With<T>`/`Without<T>` filters instead of `Option<&T>` where possible
+- [ ] No nested loops over large entity sets (O(n²) collision)
+- [ ] Mutable access (`&mut`) only when mutation actually occurs
+
+**Memory & Allocations:**
+- [ ] No `Vec::new()`, `String::new()`, `to_string()` in per-frame systems
+- [ ] Collections pre-allocated and reused via `.clear()`
+- [ ] No string formatting (`format!()`) in hot paths
+- [ ] Asset handles cloned, not assets re-added
+
+**System Organization:**
+- [ ] Dependent systems ordered with `.after()`/`.before()`/`.chain()`
+- [ ] Update = visuals/input, FixedUpdate = physics
+- [ ] No GlobalTransform reads before TransformPropagate
+- [ ] New system dependencies documented in CLAUDE.md
+
+**Component Design:**
+- [ ] Per-entity data in Components, not Resource hashmaps
+- [ ] Global singletons as Resources, not singleton entities
+- [ ] Components small and focused
+- [ ] Flag fields preferred over frequent add/remove component
+
+### Audit Checklist
+
 When asked to "audit", "review", or "check the repo", perform these checks:
 
 1. **CLAUDE.md accuracy** - Verify architecture section matches actual code (components, resources, systems)
@@ -416,18 +463,29 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 4. **System order** - Verify FixedUpdate chain matches documented order
 5. **Unused code** - Look for dead code, unused imports, commented-out blocks
 6. **Pattern violations** - Check for raw input reads in FixedUpdate, unbuffered press inputs
-7. **Collision epsilon** - All entities resting on platforms must use `- COLLISION_EPSILON` positioning to ensure overlap is detected next frame (prevents floating/falling through)
-8. **Frame-rate independent physics** - All continuous physics (gravity, friction, drag) must use `* time.delta_secs()` or `.powf(time.delta_secs())`. Per-frame multipliers like `velocity *= 0.98` are bugs.
+7. **Collision epsilon** - All entities resting on platforms must use `- COLLISION_EPSILON` positioning
+8. **Frame-rate independent physics** - All continuous physics must use `* time.delta_secs()` or `.powf()`
 9. **Compilation** - Run `cargo check` and `cargo clippy`
 10. **Visual regression** - Run `./scripts/regression.sh` to capture and compare against baseline
-11. **Visual verification** - Review the regression screenshot to verify UI elements are visible and correctly positioned
+11. **Visual verification** - Review the regression screenshot to verify UI looks correct
 
 **After auditing:**
 - Run the code review prompt from `code_review_prompt.md` and log results to `code_review_audits.md`
 - Compact the conversation context and get a fresh read of the codebase
 - Write the audit findings and changes since last audit to `audit_record.md`
 - Update `todo.md` - move completed items to Done section, add any new tasks discovered
-- Archive old done records: keep only the last 5 done items in `todo.md`, move older ones to `todone.md` with a dated section header (e.g., `## Archived 2026-01-23`)
+- Archive old done records: keep only the last 5 done items in `todo.md`, move older ones to `todone.md` with dated header
+
+### Scaling Concerns to Monitor
+
+These areas may need attention as the game grows:
+
+| Area | Current State | Watch For |
+|------|---------------|-----------|
+| Collision loops | O(balls × platforms) ~40 | Adding more physics objects |
+| String allocations | ~164 `to_string()` calls | Per-frame style/debug updates |
+| RNG instantiation | 23 `thread_rng()` calls | Adding particle systems |
+| HashMap lookups | String keys for ball styles | Per-frame texture changes |
 
 ### UI/UX Changes
 

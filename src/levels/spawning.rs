@@ -87,7 +87,7 @@ pub fn spawn_corner_ramps(
             CornerRamp,
         ));
 
-        // Fill under the step (visual only, no Platform or CornerRamp)
+        // Fill under the step (visual only, but needs CornerRamp for despawning)
         let step_bottom = y - CORNER_STEP_THICKNESS / 2.0;
         let fill_height = step_bottom - floor_top;
         if fill_height > 0.0 {
@@ -95,6 +95,7 @@ pub fn spawn_corner_ramps(
             commands.spawn((
                 Sprite::from_color(floor_color, Vec2::new(width, fill_height)),
                 Transform::from_xyz(x, fill_y, -0.1),
+                CornerRamp, // Needed so it gets despawned on level change
             ));
         }
     }
@@ -124,7 +125,7 @@ pub fn spawn_corner_ramps(
             CornerRamp,
         ));
 
-        // Fill under the step (visual only, no Platform or CornerRamp)
+        // Fill under the step (visual only, but needs CornerRamp for despawning)
         let step_bottom = y - CORNER_STEP_THICKNESS / 2.0;
         let fill_height = step_bottom - floor_top;
         if fill_height > 0.0 {
@@ -132,6 +133,7 @@ pub fn spawn_corner_ramps(
             commands.spawn((
                 Sprite::from_color(floor_color, Vec2::new(width, fill_height)),
                 Transform::from_xyz(x, fill_y, -0.1),
+                CornerRamp, // Needed so it gets despawned on level change
             ));
         }
     }

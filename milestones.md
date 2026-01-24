@@ -63,6 +63,15 @@
 - [ ] Multiplayer support
 - [ ] Deeper gameplay systems
 
+**Testing & CI:**
+- [ ] Scenario testing system (`cargo run --bin test-scenarios`)
+- [ ] Automated build + test workflow
+  - `cargo check` and `cargo clippy` for compilation
+  - `cargo run --bin test-scenarios` for functional tests
+  - `./scripts/regression.sh` for visual regression
+  - Local script or GitHub Actions
+  - Pre-commit hook option
+
 **Audio:**
 - [ ] Sound effects - jumps, shots, scores, steals, bounces
 - [ ] Music - background tracks

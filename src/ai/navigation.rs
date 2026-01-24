@@ -348,7 +348,7 @@ pub fn rebuild_nav_graph(
     current_level: Res<CurrentLevel>,
     _level_db: Res<LevelDatabase>,
     platform_query: Query<
-        (Entity, &GlobalTransform, &Sprite, Option<&CornerRamp>),
+        (Entity, &Transform, &Sprite, Option<&CornerRamp>),
         (With<Platform>, Without<BasketRim>),
     >,
     level_platform_query: Query<Entity, With<LevelPlatform>>,
@@ -396,7 +396,7 @@ pub fn rebuild_nav_graph(
         // Include level platforms and corner ramps
         if !is_level_platform && !is_ramp {
             // Check if this is the floor (already added)
-            let pos = transform.translation();
+            let pos = transform.translation;
             if (pos.y - ARENA_FLOOR_Y).abs() < 5.0 {
                 continue; // Skip floor, already added
             }
@@ -407,7 +407,7 @@ pub fn rebuild_nav_graph(
             continue; // Skip other non-level platforms
         }
 
-        let pos = transform.translation();
+        let pos = transform.translation;
         let size = sprite.custom_size.unwrap_or(Vec2::new(100.0, 20.0));
 
         let half_width = size.x.abs() / 2.0;

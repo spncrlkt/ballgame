@@ -4,6 +4,52 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Session: 2026-01-24 - Code Review Guidelines
+
+### Summary
+
+Created comprehensive code review guidelines document based on research into Bevy-specific performance pitfalls, general game development anti-patterns, and analysis of existing codebase patterns.
+
+### Research Conducted
+
+1. **Bevy Performance Pitfalls** - ECS query issues, Transform timing, asset loading, system scheduling, component vs resource misuse
+2. **Game Dev Anti-Patterns** - Physics/timing issues, memory allocation in hot paths, collision detection inefficiencies, state machine complexity
+3. **Codebase Analysis** - Identified existing good patterns and potential scaling concerns
+
+### Files Created/Modified
+
+- **Created:** `code_review_guidelines.md` - Comprehensive reference document with:
+  - Detailed explanations and code examples for each guideline
+  - Profiling guide (tools, what to look for, when to profile)
+  - Project-specific notes and scaling concerns
+
+- **Modified:** `CLAUDE.md` - Integrated quick reference checklists into Maintenance section:
+  - 6 category checklists (Physics, Input, ECS Queries, Memory, Systems, Components)
+  - Scaling concerns table for monitoring as game grows
+  - Reference to detailed guidelines document
+
+### Codebase Quality Assessment
+
+| Category | Score | Notes |
+|----------|-------|-------|
+| Physics Correctness | A+ | Frame-rate independent, epsilon usage correct |
+| Input Handling | A+ | Buffering pattern well implemented |
+| System Organization | A | Clear chains, good ordering |
+| Component Design | A | Minimal, well-separated concerns |
+| Query Patterns | A | Specific filters, minimal fetching |
+| Constants Management | A+ | Centralized, no magic numbers |
+
+### Scaling Concerns Identified
+
+| Area | Current | Risk |
+|------|---------|------|
+| Collision loops | O(balls × platforms) ~40 | Medium - watch entity count |
+| String allocations | ~164 to_string() calls | Low - not in hot paths |
+| RNG instantiation | 23 thread_rng() calls | Low - consider consolidating |
+| HashMap lookups | String keys for styles | Low - only on changes |
+
+---
+
 ## Audit: 2026-01-24 - Full Audit
 
 ### Session Summary
