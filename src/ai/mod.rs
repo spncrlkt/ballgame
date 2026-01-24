@@ -50,6 +50,8 @@ pub struct AiState {
     pub last_position: Option<bevy::prelude::Vec2>,
     /// Timer for how long AI has been stuck (not moving while trying to)
     pub stuck_timer: f32,
+    /// Elapsed time at last defensive goal switch (for hysteresis)
+    pub last_defense_switch: f32,
 }
 
 /// Goals the AI can pursue

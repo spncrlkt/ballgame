@@ -415,9 +415,14 @@ pub fn ai_decision_update(
             let in_shoot_range = effective_distance < profile.shoot_range;
             let reached_target = at_nav_target && nav_complete;
 
+            // Safety check: don't start charging if opponent is too close (steal risk)
+            let opponent_too_close = opponent_pos
+                .map(|opp| ai_pos.distance(opp) < profile.steal_range * 1.5)
+                .unwrap_or(false);
+
             // Only shoot if shot quality is acceptable AND position conditions are met
-            // This prevents shooting from bad positions even if we're "in range"
-            if quality_acceptable && (in_shoot_range || reached_target) {
+            // AND opponent isn't close enough to steal
+            if quality_acceptable && (in_shoot_range || reached_target) && !opponent_too_close {
                 AiGoal::ChargeShot
             } else {
                 AiGoal::AttackWithBall
@@ -429,14 +434,30 @@ pub fn ai_decision_update(
                 // Higher aggression = tighter pressure, lower = zone defense
                 let pressure_threshold = profile.pressure_distance * (1.0 + (1.0 - profile.aggression));
 
-                if distance_to_opponent < profile.steal_range {
+                // Determine ideal defensive goal
+                let ideal_defense = if distance_to_opponent < profile.steal_range {
                     AiGoal::AttemptSteal
                 } else if distance_to_opponent < pressure_threshold {
-                    // Close enough to apply pressure - chase and harass
                     AiGoal::PressureDefense
                 } else {
-                    // Far away - navigate to intercept position on shot line
                     AiGoal::InterceptDefense
+                };
+
+                // Apply hysteresis: only switch defensive modes if enough time has passed
+                // This prevents rapid oscillation when near threshold boundaries
+                let elapsed = time.elapsed_secs();
+                let time_since_switch = elapsed - ai_state.last_defense_switch;
+                let is_defensive_goal = matches!(
+                    ai_state.current_goal,
+                    AiGoal::InterceptDefense | AiGoal::PressureDefense | AiGoal::AttemptSteal
+                );
+
+                if !is_defensive_goal || time_since_switch > 0.4 || ideal_defense == AiGoal::AttemptSteal {
+                    // Allow switch if: not in defense mode, enough time passed, or steal opportunity
+                    ideal_defense
+                } else {
+                    // Keep current goal to prevent oscillation
+                    ai_state.current_goal
                 }
             } else {
                 AiGoal::InterceptDefense
@@ -448,6 +469,15 @@ pub fn ai_decision_update(
 
         // Update goal (and randomize charge target when starting to charge)
         if new_goal != ai_state.current_goal {
+            // Track defensive mode switches for hysteresis
+            let is_defensive_switch = matches!(
+                new_goal,
+                AiGoal::InterceptDefense | AiGoal::PressureDefense | AiGoal::AttemptSteal
+            );
+            if is_defensive_switch {
+                ai_state.last_defense_switch = time.elapsed_secs();
+            }
+
             ai_state.current_goal = new_goal;
             // DON'T clear navigation on goal change - only clear when destination changes
             // (handled by ai_navigation_update based on NAV_PATH_RECALC_DISTANCE)

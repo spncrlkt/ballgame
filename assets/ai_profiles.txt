@@ -16,15 +16,15 @@
 
 profile: Balanced
 position_tolerance: 30
-shoot_range: 600
+shoot_range: 450
 charge_min: 0.5
 charge_max: 1.2
 steal_range: 80
 defense_offset: 300
-min_shot_quality: 0.35
-pressure_distance: 120
+min_shot_quality: 0.50
+pressure_distance: 150
 aggression: 0.5
-defensive_iq: 0.5
+defensive_iq: 0.6
 
 profile: Aggressive
 position_tolerance: 20
