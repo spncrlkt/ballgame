@@ -1,11 +1,11 @@
 {
-  "viewport_index": 1,
-  "palette_index": 2,
+  "viewport_index": 2,
+  "palette_index": 0,
   "level": 4,
   "ball_style": "wedges",
-  "left_ai_profile": "Defensive",
-  "right_ai_profile": "Rusher",
+  "left_ai_profile": null,
+  "right_ai_profile": "Balanced",
   "active_direction": "Right",
-  "down_option": "Movement",
+  "down_option": "Composite",
   "right_option": "Level"
 }

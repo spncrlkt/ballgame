@@ -1,0 +1,47 @@
+# Test: Jump reaches platform height
+# Verifies player can jump high enough to reach platform level
+# (Player may or may not land on platform due to collision physics)
+
+name = "Jump reaches platform height"
+description = "Player jumps high enough to reach or exceed platform level"
+
+[setup]
+level = "test_flat_floor"  # Use flat floor to avoid platform collision from below
+
+# Floor is at y=-450 (top at -430), spawn at -350
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = 0.0
+y = -350.0
+
+# Press and hold jump for full height
+[[input]]
+frame = 10
+p1 = { jump = true }
+
+[[input]]
+frame = 20
+p1 = { jump = true }
+
+[[input]]
+frame = 30
+p1 = { jump = true }
+
+[[input]]
+frame = 40
+p1 = { jump = true }
+
+[[input]]
+frame = 50
+p1 = { jump = true }
+
+# Check at peak - should be well above floor
+# Player starts at -350, lands at ~-398, jumps with velocity 650
+# Max jump height ~215 units, so peak around y=-183
+[expect.state]
+after_frame = 50
+checks = [
+    "p1.y > -250",     # Should reach well above floor at peak
+]

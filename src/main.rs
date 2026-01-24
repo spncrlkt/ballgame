@@ -4,22 +4,23 @@
 
 use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
-    AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallLabel, BallPlayerContact, BallPulse,
-    BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground,
+    AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact, BallPulse, BallRolling,
+    BallShotGrace, BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground,
     ChargeGaugeFill, ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel, CurrentPalette,
     CurrentPresets, CurrentSettings, CycleIndicator, CycleSelection, DebugSettings, DebugText,
-    DisplayBall, DisplayBallSpin, DisplayBallWave, Facing, Grounded, HumanControlled, InputState,
-    JumpState, LastShotInfo, LevelDatabase, NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase,
-    PhysicsTweaks, Player, PlayerInput, PresetDatabase, Score, ScoreLevelText, SnapshotConfig,
-    SnapshotTriggerState, StealContest, StealCooldown, StyleTextures, TargetBasket, Team, TweakPanel,
-    TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball, config_watcher,
-    constants::*, display_ball_wave, helpers::*, input, levels, player, replay, save_settings_system,
-    scoring, shooting, snapshot, steal, ui, world,
+    DisplayBallWave, Facing, Grounded, HumanControlled, InputState,
+    JumpState, LastShotInfo, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PRESETS_FILE,
+    PaletteDatabase, PhysicsTweaks, Player, PlayerInput, PresetDatabase, Score, ScoreLevelText,
+    SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown, StyleTextures, TargetBasket,
+    Team, TweakPanel, TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball,
+    config_watcher, constants::*, countdown, display_ball_wave, input, levels, player,
+    replay, save_settings_system, scoring, shooting, snapshot, spawn_countdown_text, steal, ui,
+    world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
 use std::fs;
-use world::{Basket, BasketRim, Collider, Platform};
+use world::{Basket, Collider};
 
 /// Path to ball options file
 const BALL_OPTIONS_FILE: &str = "assets/ball_options.txt";
@@ -145,6 +146,7 @@ fn main() {
         })
         .init_resource::<SnapshotTriggerState>()
         .init_resource::<DisplayBallWave>()
+        .init_resource::<MatchCountdown>()
         // Replay mode resources
         .insert_resource(if let Some(ref path) = replay_file {
             replay::ReplayMode::new(path.clone())
@@ -155,7 +157,14 @@ fn main() {
         // Startup system - use normal setup only when NOT in replay mode
         .add_systems(Startup, setup.run_if(replay::not_replay_active))
         // =========== NORMAL GAME SYSTEMS (disabled in replay mode) ===========
+        // Countdown system - always runs to update timer and text
+        .add_systems(
+            Update,
+            countdown::update_countdown
+                .run_if(replay::not_replay_active),
+        )
         // Input systems must run in order: capture -> copy -> swap -> nav graph -> nav -> AI
+        // Only runs when NOT in countdown and NOT in replay mode
         .add_systems(
             Update,
             (
@@ -168,18 +177,26 @@ fn main() {
                 ai::ai_decision_update,
             )
                 .chain()
-                .run_if(replay::not_replay_active),
+                .run_if(replay::not_replay_active.and(countdown::not_in_countdown)),
         )
         // Settings reset (double-click Start) - must run before respawn
         .add_systems(Update, player::check_settings_reset.run_if(replay::not_replay_active))
-        // Core Update systems - split to avoid tuple size limit
+        // Core Update systems - split to avoid tuple issues with respawn_player
+        .add_systems(Update, player::respawn_player.run_if(replay::not_replay_active))
+        // Countdown trigger on level change (only in manual game mode)
+        .add_systems(Update, countdown::trigger_countdown_on_level_change.run_if(replay::not_replay_active))
         .add_systems(
             Update,
             (
-                player::respawn_player,
                 steal::steal_cooldown_update,
                 ui::toggle_debug,
                 config_watcher::check_config_changes,
+            )
+                .run_if(replay::not_replay_active),
+        )
+        .add_systems(
+            Update,
+            (
                 ui::update_debug_text,
                 ui::update_score_level_text,
             )
@@ -193,6 +210,7 @@ fn main() {
                 ui::update_charge_gauge,
                 ui::update_steal_indicators,
                 display_ball_wave,
+                player::manage_debug_display,
             )
                 .run_if(replay::not_replay_active),
         )
@@ -250,7 +268,7 @@ fn main() {
                 scoring::check_scoring,
             )
                 .chain()
-                .run_if(replay::not_replay_active),
+                .run_if(replay::not_replay_active.and(countdown::not_in_countdown)),
         )
         // =========== REPLAY MODE SYSTEMS ===========
         // Replay startup - load file, setup camera
@@ -481,61 +499,10 @@ fn setup(
 
     if is_debug_level {
         // Debug level: spawn ALL ball styles on shelf platforms with labels
-        // Platforms are at heights 380, 480, 580, 680, 780 (5 shelves)
-        let shelf_heights = [380.0, 480.0, 580.0, 680.0, 780.0];
-        let num_shelves = shelf_heights.len();
-        let num_styles = style_names.len();
-        let balls_per_shelf = (num_styles + num_shelves - 1) / num_shelves;
-        let shelf_width = 1100.0; // Usable width (leaving margins)
-
-        for (i, style_name) in style_names.iter().enumerate() {
-            let shelf_idx = i / balls_per_shelf;
-            let pos_in_shelf = i % balls_per_shelf;
-            let balls_this_shelf = if shelf_idx == num_shelves - 1 {
-                num_styles - shelf_idx * balls_per_shelf
-            } else {
-                balls_per_shelf
-            };
-
-            if shelf_idx >= num_shelves {
-                break;
-            }
-
-            let spacing = if balls_this_shelf > 1 {
-                shelf_width / (balls_this_shelf - 1) as f32
-            } else {
-                0.0
-            };
-            let x = -shelf_width / 2.0 + pos_in_shelf as f32 * spacing;
-            let y = ARENA_FLOOR_Y + shelf_heights[shelf_idx] + BALL_SIZE.y / 2.0 + 10.0;
-
-            if let Some(textures) = ball_textures.get(style_name) {
-                // Spawn display ball (not playable)
-                commands.spawn((
-                    Sprite {
-                        image: textures.textures[palette_index].clone(),
-                        custom_size: Some(BALL_SIZE),
-                        ..default()
-                    },
-                    Transform::from_xyz(x, y, 2.0),
-                    DisplayBall { index: i, total: num_styles },
-                    DisplayBallSpin::default(),
-                    BallStyle::new(style_name),
-                ));
-
-                // Spawn label above ball
-                commands.spawn((
-                    Text2d::new(style_name.clone()),
-                    TextFont { font_size: 10.0, ..default() },
-                    TextColor(TEXT_SECONDARY),
-                    Transform::from_xyz(x, y + BALL_SIZE.y / 2.0 + 8.0, 3.0),
-                    BallLabel,
-                ));
-            }
-        }
+        player::spawn_debug_display(&mut commands, &ball_textures, palette_index);
 
         // Spawn one random playable ball on the floor
-        let random_idx = rand::random::<usize>() % num_styles;
+        let random_idx = rand::random::<usize>() % style_names.len();
         let random_style = &style_names[random_idx];
         if let Some(textures) = ball_textures.get(random_style) {
             commands.spawn((
@@ -585,34 +552,14 @@ fn setup(
         }
     }
 
-    // Arena floor (spans between walls)
-    commands.spawn((
-        Sprite::from_color(
-            initial_palette.platforms,
-            Vec2::new(ARENA_WIDTH - WALL_THICKNESS * 2.0, 40.0),
-        ),
-        Transform::from_xyz(0.0, ARENA_FLOOR_Y, 0.0),
-        Platform,
-    ));
-
-    // Left wall (flush with arena edge)
-    commands.spawn((
-        Sprite::from_color(initial_palette.platforms, Vec2::new(WALL_THICKNESS, 5000.0)),
-        Transform::from_xyz(-ARENA_WIDTH / 2.0 + WALL_THICKNESS / 2.0, 2000.0, 0.0),
-        Platform,
-    ));
-
-    // Right wall (flush with arena edge)
-    commands.spawn((
-        Sprite::from_color(initial_palette.platforms, Vec2::new(WALL_THICKNESS, 5000.0)),
-        Transform::from_xyz(ARENA_WIDTH / 2.0 - WALL_THICKNESS / 2.0, 2000.0, 0.0),
-        Platform,
-    ));
+    // Arena floor and walls (shared spawning functions)
+    world::spawn_floor(&mut commands, initial_palette.platforms);
+    world::spawn_walls(&mut commands, initial_palette.platforms);
 
     // Spawn level platforms for the loaded level
     levels::spawn_level_platforms(&mut commands, &level_db, level_index, initial_palette.platforms);
 
-    // Baskets (goals) - height and X position vary per level
+    // Baskets with rims (shared spawning function)
     let initial_level = level_db.get(level_index);
     let basket_y = initial_level
         .map(|l| ARENA_FLOOR_Y + l.basket_height)
@@ -620,94 +567,15 @@ fn setup(
     let basket_push_in = initial_level
         .map(|l| l.basket_push_in)
         .unwrap_or(BASKET_PUSH_IN);
-    let (left_basket_x, right_basket_x) = basket_x_from_offset(basket_push_in);
-
-    // Rim dimensions (RIM_THICKNESS is now a top-level constant)
-    let rim_outer_height = BASKET_SIZE.y * 0.5; // 50% - wall side
-    let rim_inner_height = BASKET_SIZE.y * 0.1; // 10% - center side
-    let rim_outer_y = -BASKET_SIZE.y / 2.0 + rim_outer_height / 2.0; // Positioned at bottom
-    let rim_inner_y = -BASKET_SIZE.y / 2.0 + rim_inner_height / 2.0; // Positioned at bottom
-    let rim_bottom_width = BASKET_SIZE.x + RIM_THICKNESS; // Basket width + one rim thickness (side rims half-in)
-
-    // Left basket (left team's home) with contrasting rims (right team dark)
-    commands
-        .spawn((
-            Sprite::from_color(initial_palette.left, BASKET_SIZE),
-            Transform::from_xyz(left_basket_x, basket_y, -0.1), // Slightly behind
-            Basket::Left,
-        ))
-        .with_children(|parent| {
-            // Left rim (outer - wall side, 50%) - center at basket edge
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.right_rim,
-                    Vec2::new(RIM_THICKNESS, rim_outer_height),
-                ),
-                Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
-                Platform,
-                BasketRim,
-            ));
-            // Right rim (inner - center side, 10%) - center at basket edge
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.right_rim,
-                    Vec2::new(RIM_THICKNESS, rim_inner_height),
-                ),
-                Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
-                Platform,
-                BasketRim,
-            ));
-            // Bottom rim - center at basket bottom edge
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.right_rim,
-                    Vec2::new(rim_bottom_width, RIM_THICKNESS),
-                ),
-                Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
-                Platform,
-                BasketRim,
-            ));
-        });
-
-    // Right basket (right team's home) with contrasting rims (left team dark)
-    commands
-        .spawn((
-            Sprite::from_color(initial_palette.right, BASKET_SIZE),
-            Transform::from_xyz(right_basket_x, basket_y, -0.1),
-            Basket::Right,
-        ))
-        .with_children(|parent| {
-            // Left rim (inner - center side, 10%) - center at basket edge
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.left_rim,
-                    Vec2::new(RIM_THICKNESS, rim_inner_height),
-                ),
-                Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
-                Platform,
-                BasketRim,
-            ));
-            // Right rim (outer - wall side, 50%) - center at basket edge
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.left_rim,
-                    Vec2::new(RIM_THICKNESS, rim_outer_height),
-                ),
-                Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
-                Platform,
-                BasketRim,
-            ));
-            // Bottom rim - center at basket bottom edge
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.left_rim,
-                    Vec2::new(rim_bottom_width, RIM_THICKNESS),
-                ),
-                Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
-                Platform,
-                BasketRim,
-            ));
-        });
+    world::spawn_baskets(
+        &mut commands,
+        basket_y,
+        basket_push_in,
+        initial_palette.left,
+        initial_palette.right,
+        initial_palette.left_rim,
+        initial_palette.right_rim,
+    );
 
     // Corner ramps - angled walls in bottom corners (reuse initial_level from earlier)
     let initial_step_count = initial_level
@@ -833,6 +701,9 @@ fn setup(
                 ));
             }
         });
+
+    // Countdown text (3-2-1 before match starts)
+    spawn_countdown_text(&mut commands);
 }
 
 /// Setup system for replay mode - loads replay file

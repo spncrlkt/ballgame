@@ -333,10 +333,14 @@ pub fn respawn_player(
             let profile = profile_db.get(ai_state.profile_index);
             info!("AI reset with profile: {}", profile.name);
         }
-    }
+
+        }
 
     // Level change: update geometry and reset positions
     if level_changed {
+        // Reset score on level change
+        score.left = 0;
+        score.right = 0;
         let level_index = (current_level.0 - 1) as usize;
 
         // Get palette for new geometry colors
@@ -400,72 +404,142 @@ pub fn respawn_player(
     }
 }
 
-/// Helper to spawn balls at starting positions
+/// Helper to spawn a single playable ball at the starting position.
+/// Debug level shelf displays are handled separately in main.rs setup.
 fn spawn_balls(
     commands: &mut Commands,
     ball_textures: &BallTextures,
     palette_index: usize,
     is_debug: bool,
 ) {
-    if is_debug {
-        // Debug level: spawn ALL ball styles dynamically
+    // Pick ball style: random for debug level, default for normal levels
+    let style_name = if is_debug {
         let num_styles = ball_textures.len();
-        let total_width = 1200.0;
-        let spacing = if num_styles > 1 {
-            total_width / (num_styles - 1) as f32
+        let random_idx = rand::random::<usize>() % num_styles;
+        ball_textures.style_order.get(random_idx).cloned()
+    } else {
+        ball_textures.default_style().cloned()
+    }
+    .unwrap_or_else(|| "wedges".to_string());
+
+    if let Some(textures) = ball_textures.get(&style_name) {
+        if let Some(texture) = textures.textures.get(palette_index) {
+            commands.spawn((
+                Sprite {
+                    image: texture.clone(),
+                    custom_size: Some(BALL_SIZE),
+                    ..default()
+                },
+                Transform::from_translation(BALL_SPAWN),
+                Ball,
+                BallState::default(),
+                Velocity::default(),
+                BallPlayerContact::default(),
+                BallPulse::default(),
+                BallRolling::default(),
+                BallShotGrace::default(),
+                BallSpin::default(),
+                BallStyle::new(&style_name),
+            ));
+        }
+    }
+}
+
+/// Manage debug level display entities when changing levels.
+/// Despawns when leaving debug level, spawns when entering debug level.
+pub fn manage_debug_display(
+    mut commands: Commands,
+    current_level: Res<CurrentLevel>,
+    level_db: Res<LevelDatabase>,
+    ball_textures: Res<BallTextures>,
+    current_palette: Res<CurrentPalette>,
+    display_balls: Query<Entity, With<crate::ball::DisplayBall>>,
+    ball_labels: Query<Entity, With<crate::ball::BallLabel>>,
+) {
+    // Only run when level changes
+    if !current_level.is_changed() {
+        return;
+    }
+
+    let level_index = (current_level.0 - 1) as usize;
+    let is_debug = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
+    let has_display_balls = !display_balls.is_empty();
+
+    if is_debug && !has_display_balls {
+        // Entering debug level: spawn display balls and labels
+        spawn_debug_display(&mut commands, &ball_textures, current_palette.0);
+    } else if !is_debug && has_display_balls {
+        // Leaving debug level: despawn all display balls and labels
+        for entity in &display_balls {
+            commands.entity(entity).despawn();
+        }
+        for entity in &ball_labels {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+/// Spawn all ball styles on shelf platforms for debug level display
+pub fn spawn_debug_display(
+    commands: &mut Commands,
+    ball_textures: &BallTextures,
+    palette_index: usize,
+) {
+    use crate::ball::{BallLabel, DisplayBall, DisplayBallSpin};
+
+    let shelf_heights = [380.0, 480.0, 580.0, 680.0, 780.0];
+    let num_shelves = shelf_heights.len();
+    let num_styles = ball_textures.len();
+    let balls_per_shelf = (num_styles + num_shelves - 1) / num_shelves;
+    let shelf_width = 1100.0;
+
+    for (i, style_name) in ball_textures.style_order.iter().enumerate() {
+        let shelf_idx = i / balls_per_shelf;
+        let pos_in_shelf = i % balls_per_shelf;
+        let balls_this_shelf = if shelf_idx == num_shelves - 1 {
+            num_styles - shelf_idx * balls_per_shelf
+        } else {
+            balls_per_shelf
+        };
+
+        if shelf_idx >= num_shelves {
+            break;
+        }
+
+        let spacing = if balls_this_shelf > 1 {
+            shelf_width / (balls_this_shelf - 1) as f32
         } else {
             0.0
         };
-        let start_x = -total_width / 2.0;
+        let x = -shelf_width / 2.0 + pos_in_shelf as f32 * spacing;
+        let y = ARENA_FLOOR_Y + shelf_heights[shelf_idx] + BALL_SIZE.y / 2.0 + 10.0;
 
-        for (i, style_name) in ball_textures.style_order.iter().enumerate() {
-            let x = start_x + (i as f32 * spacing);
-            if let Some(textures) = ball_textures.get(style_name) {
-                if let Some(texture) = textures.textures.get(palette_index) {
-                    commands.spawn((
-                        Sprite {
-                            image: texture.clone(),
-                            custom_size: Some(BALL_SIZE),
-                            ..default()
-                        },
-                        Transform::from_xyz(x, ARENA_FLOOR_Y + BALL_SIZE.y / 2.0 + 20.0, 2.0),
-                        Ball,
-                        BallState::default(),
-                        Velocity::default(),
-                        BallPlayerContact::default(),
-                        BallPulse::default(),
-                        BallRolling::default(),
-                        BallShotGrace::default(),
-                        BallSpin::default(),
-                        BallStyle::new(style_name),
-                    ));
-                }
-            }
-        }
-    } else {
-        // Normal level: spawn single ball with first style
-        let default_style = ball_textures
-            .default_style()
-            .cloned()
-            .unwrap_or_else(|| "wedges".to_string());
-        if let Some(textures) = ball_textures.get(&default_style) {
+        if let Some(textures) = ball_textures.get(style_name) {
             if let Some(texture) = textures.textures.get(palette_index) {
+                // Spawn display ball
                 commands.spawn((
                     Sprite {
                         image: texture.clone(),
                         custom_size: Some(BALL_SIZE),
                         ..default()
                     },
-                    Transform::from_translation(BALL_SPAWN),
-                    Ball,
-                    BallState::default(),
-                    Velocity::default(),
-                    BallPlayerContact::default(),
-                    BallPulse::default(),
-                    BallRolling::default(),
-                    BallShotGrace::default(),
-                    BallSpin::default(),
-                    BallStyle::new(&default_style),
+                    Transform::from_xyz(x, y, 2.0),
+                    DisplayBall {
+                        row: shelf_idx,
+                        col: pos_in_shelf,
+                        total_rows: num_shelves,
+                    },
+                    DisplayBallSpin::default(),
+                    BallStyle::new(style_name),
+                ));
+
+                // Spawn label above ball
+                commands.spawn((
+                    Text2d::new(style_name.clone()),
+                    TextFont { font_size: 10.0, ..default() },
+                    TextColor(TEXT_SECONDARY),
+                    Transform::from_xyz(x, y + BALL_SIZE.y / 2.0 + 8.0, 3.0),
+                    BallLabel,
                 ));
             }
         }

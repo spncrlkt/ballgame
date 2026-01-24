@@ -1,0 +1,22 @@
+# Test: Ball rolls and stops
+# Verifies ball rolling friction slows it to a stop
+
+name = "Rolling stops"
+description = "Ball with initial velocity rolls and stops due to friction"
+
+[setup]
+level = "test_flat_floor"
+
+# Floor is at y=-450, spawn ball just above floor with horizontal velocity
+[[setup.entities]]
+type = "ball"
+x = 0.0
+y = -420.0
+velocity_x = 300.0
+
+[expect.state]
+after_frame = 180
+checks = [
+    "ball.velocity_x < 20",  # Should have slowed significantly
+    "ball.x > 100",          # Should have rolled to the right
+]

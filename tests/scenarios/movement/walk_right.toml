@@ -1,0 +1,30 @@
+# Test: Player walks right
+# Verifies basic horizontal movement works
+
+name = "Walk right"
+description = "Player moves right when move_right input is held"
+
+[setup]
+level = "test_flat_floor"
+
+# Floor is at y=-450, so spawn at -350 (100 above floor)
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = 0.0
+y = -350.0
+
+[[input]]
+frame = 0
+p1 = { move_right = true }
+
+[[input]]
+frame = 60
+p1 = { move_right = false }
+
+[expect.state]
+after_frame = 60
+checks = [
+    "p1.x > 100",
+]

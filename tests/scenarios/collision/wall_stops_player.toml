@@ -1,0 +1,33 @@
+# Test: Wall collision
+# Verifies player cannot walk through walls
+
+name = "Wall stops player"
+description = "Player is stopped by arena wall when walking into it"
+
+[setup]
+level = "test_flat_floor"
+
+# Floor is at y=-450, spawn near left wall
+# Arena width is 1600, wall at x=-800, inner edge at -780
+# Player half-width is ~25, so min x is about -755
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = -600.0
+y = -350.0
+
+[[input]]
+frame = 0
+p1 = { move_left = true }
+
+[[input]]
+frame = 120
+p1 = { move_left = false }
+
+[expect.state]
+after_frame = 120
+checks = [
+    "p1.x > -780",  # Should be stopped by wall inner edge
+    "p1.x < -700",  # Should have moved left significantly
+]

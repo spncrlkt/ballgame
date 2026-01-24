@@ -1,0 +1,36 @@
+# Test: Steal succeeds or fails when in range
+# Verifies steal attempt occurs when defender is close to ball holder
+
+name = "Steal in range"
+description = "Steal attempt happens when defender is close to ball holder"
+
+[setup]
+level = "test_steal_arena"
+
+# Two players very close together, one with ball
+[[setup.entities]]
+type = "player"
+id = "holder"
+team = "left"
+x = 0.0
+y = -350.0
+holding_ball = true
+
+[[setup.entities]]
+type = "player"
+id = "stealer"
+team = "right"
+x = 40.0
+y = -350.0
+
+# Stealer attempts steal while in range
+[[input]]
+frame = 10
+stealer = { pickup = true }
+
+# Only check for StealAttempt - success/fail is RNG-based
+[[expect.sequence]]
+event = "StealAttempt"
+player = "stealer"
+frame_min = 5
+frame_max = 20

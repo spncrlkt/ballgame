@@ -1,0 +1,26 @@
+# Test: Player jumps
+# Verifies jump input makes player gain height
+
+name = "Basic jump"
+description = "Player gains vertical height when jump is pressed"
+
+[setup]
+level = "test_flat_floor"
+
+# Floor is at y=-450, spawn at -350 (100 above floor)
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = 0.0
+y = -350.0
+
+[[input]]
+frame = 10
+p1 = { jump = true }
+
+[expect.state]
+after_frame = 40
+checks = [
+    "p1.y > -250",  # Should jump at least 100 units above spawn
+]

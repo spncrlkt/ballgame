@@ -1,0 +1,42 @@
+# Test: Player picks up stationary ball
+# Verifies pickup works when near ball
+
+name = "Pickup stationary ball"
+description = "Player can pick up a nearby ball with pickup input"
+
+[setup]
+level = "test_flat_floor"
+
+# Floor is at y=-450, spawn at -350 (100 above floor)
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = 0.0
+y = -350.0
+
+[[setup.entities]]
+type = "ball"
+x = 50.0
+y = -350.0
+
+[[input]]
+frame = 0
+p1 = { move_right = true }
+
+[[input]]
+frame = 20
+p1 = { move_right = false, pickup = true }
+
+[[expect.sequence]]
+event = "Pickup"
+player = "p1"
+frame_min = 15
+frame_max = 30
+
+[expect.state]
+after_frame = 30
+checks = [
+    "p1.holding_ball = true",
+    "ball.state = Held",
+]

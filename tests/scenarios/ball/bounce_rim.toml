@@ -1,0 +1,40 @@
+# Test: Ball bounces off basket rim
+# Verifies ball collides with basket rim when traveling upward from below.
+#
+# Bug case: Rims are child entities of baskets. If collision code uses local Transform
+# instead of GlobalTransform, the rim appears at (0, -40) instead of world position,
+# and the ball passes through.
+#
+# Setup: Ball spawned directly below rim with upward velocity.
+# Expected: Ball hits bottom rim and bounces back down to floor.
+# If broken: Ball passes through rim and ends up above basket level.
+
+name = "Bounce off rim"
+description = "Ball traveling upward collides with basket rim"
+
+[setup]
+level = "test_flat_floor"
+
+# Basket positions (based on constants):
+# - ARENA_WIDTH=1600, WALL_THICKNESS=20 -> wall_inner = 780
+# - Right basket x = 780 - 60 (push_in) = 720
+# - ARENA_FLOOR_Y = -450, basket_height = 250 -> basket y = -200
+# - Bottom rim y ≈ -200 - 40 = -240
+# Spawn ball directly under right basket rim, traveling upward
+[[setup.entities]]
+type = "ball"
+x = 720.0
+y = -350.0
+velocity_x = 0.0
+velocity_y = 600.0  # Strong upward velocity to reach rim at y=-240
+
+[expect]
+# Check at frame 20: ball should have hit rim and be bouncing down
+# - With rim collision: ball bounces off, stays near basket (x ≈ 720), y < -250
+# - Without rim: ball passes through, SCORES, and respawns at center (x = 0)
+[expect.state]
+after_frame = 20
+checks = [
+    "ball.x > 600",  # Ball is still near right basket (not respawned at center after scoring)
+    "ball.y < -250",  # Ball bounced off rim and is descending
+]

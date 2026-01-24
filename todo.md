@@ -5,6 +5,7 @@
 ## Active Work (Prioritized)
 
 ### 0. Immediately
+- [x] **Fix ball platform display on level 1** - fixed spawn_balls to spawn only one ball on floor
 - the steps are all fucked up
 - [ ] **Immediate** Run training binary to verify nav graph fix for corner steps
   - Check debug logs show corner ramp nodes with proper Jump edges
@@ -15,12 +16,12 @@
   - Enable skipping intermediate steps when a single jump can reach a higher platform
   - Avoid inefficient step-by-step climbing when direct jump is possible
 - more ball options: more s60 star alts, yin yang, 3D rotated S11 "volleyball", 3D rotated basketball, striped balls, croquet balls, pool balls. full analysis after wards to see patternable "types" to combine
-- the ball spawning from our previous work isnt working
-- [ ] **Scenario Testing System** - see `notes/testing-plan.md` for full plan
-  - Create `src/testing/` module (parser, runner, assertions, input injection)
-  - Create `assets/test_levels.txt` with minimal test arenas
-  - Create `src/bin/test_scenarios.rs` CLI
-  - Write initial 20 test scenarios covering core mechanics
+- [x] **Scenario Testing System** - see `notes/testing-plan.md` for full plan
+  - [x] Create `src/testing/` module (parser, runner, assertions, input injection)
+  - [x] Create `assets/test_levels.txt` with minimal test arenas
+  - [x] Create `src/bin/test_scenarios.rs` CLI
+  - [x] Write initial 9 test scenarios (movement, ball, shooting, collision)
+  - [ ] Expand to 20 tests (add scoring, stealing scenarios)
 
 
 ### 1. D-Pad Menu UX

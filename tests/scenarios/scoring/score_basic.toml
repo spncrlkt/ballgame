@@ -1,0 +1,41 @@
+# Test: Basic scoring
+# Verifies ball entering basket scores a goal
+
+name = "Basic score"
+description = "Ball enters basket and scores a goal"
+
+[setup]
+level = "test_shooting_range"
+
+# Shooting range has low baskets at height=150, push_in=40
+# Arena width 1600, half=800, wall=20, so right wall inner at 780
+# Right basket at x = 780 - 40 = 740
+# Position player very close to basket for reliable scoring
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = 680.0
+y = -350.0
+facing = 1.0
+holding_ball = true
+
+# Full charge shot for minimum variance (2%)
+[[input]]
+frame = 10
+p1 = { throw_held = true }
+
+[[input]]
+frame = 70
+p1 = { throw_held = false }
+
+[[expect.sequence]]
+event = "Goal"
+frame_min = 60
+frame_max = 200
+
+[expect.state]
+after_frame = 200
+checks = [
+    "score.left = 1",
+]

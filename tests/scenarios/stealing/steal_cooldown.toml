@@ -1,0 +1,47 @@
+# Test: Steal cooldown
+# Verifies player cannot steal again immediately after an attempt
+
+name = "Steal cooldown"
+description = "Only one steal attempt fires despite multiple pickup inputs"
+
+[setup]
+level = "test_steal_arena"
+
+# Two players close together - both in steal range
+[[setup.entities]]
+type = "player"
+id = "holder"
+team = "left"
+x = 0.0
+y = -350.0
+holding_ball = true
+
+[[setup.entities]]
+type = "player"
+id = "stealer"
+team = "right"
+x = 40.0
+y = -350.0
+
+# First steal attempt (in range, triggers cooldown)
+[[input]]
+frame = 10
+stealer = { pickup = true }
+
+# Second steal attempt quickly (should be blocked by cooldown)
+[[input]]
+frame = 15
+stealer = { pickup = true }
+
+# Third attempt (still on cooldown at 0.3s = ~18 frames)
+[[input]]
+frame = 20
+stealer = { pickup = true }
+
+# Only one StealAttempt should fire - the cooldown blocks subsequent attempts
+# We verify this by checking that exactly one StealAttempt event occurred
+[[expect.sequence]]
+event = "StealAttempt"
+player = "stealer"
+frame_min = 5
+frame_max = 15

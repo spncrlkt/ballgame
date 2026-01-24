@@ -1,0 +1,29 @@
+# Test: Ball stays with player when jumping
+# Verifies player keeps ball while airborne
+
+name = "Ball stays held when jumping"
+description = "Player keeps the ball while jumping - no automatic drop"
+
+[setup]
+level = "test_flat_floor"
+
+# Floor is at y=-450, spawn at -350 (100 above floor)
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = 0.0
+y = -350.0
+holding_ball = true
+
+[[input]]
+frame = 10
+p1 = { jump = true }
+
+[expect.state]
+after_frame = 40
+checks = [
+    "p1.holding_ball = true",  # Should still hold ball while airborne
+    "p1.grounded = false",     # Should be in the air
+    "ball.state = Held",       # Ball should still be held
+]

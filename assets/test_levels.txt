@@ -1,0 +1,37 @@
+# Test Levels - Minimal arenas for scenario testing
+# These are separate from game levels and use debug mode.
+# Loaded by test runner from assets/test_levels.txt
+
+# FLAT FLOOR - Just floor, walls, baskets. No platforms.
+# Use for: movement, basic ball physics, pickup, basic shooting
+level: test_flat_floor
+basket_height: 250
+basket_push_in: 60
+steps: 0
+debug: true
+
+# SINGLE PLATFORM - One center platform at jumpable height
+# Use for: platform collision, landing, jumping onto platforms
+# Jump height is ~215 units, so platform at 180 is reachable
+level: test_single_platform
+basket_height: 250
+basket_push_in: 60
+steps: 0
+center: 150 180
+debug: true
+
+# SHOOTING RANGE - Low, close baskets for easy scoring
+# Use for: scoring tests, shot trajectory validation
+level: test_shooting_range
+basket_height: 150
+basket_push_in: 40
+steps: 0
+debug: true
+
+# STEAL ARENA - Flat floor, wide spacing
+# Use for: steal mechanics, player-to-player interactions
+level: test_steal_arena
+basket_height: 300
+basket_push_in: 80
+steps: 0
+debug: true

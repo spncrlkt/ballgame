@@ -68,7 +68,7 @@ pub fn ball_collisions(
     >,
     platform_query: Query<
         (
-            &Transform,
+            &GlobalTransform,
             &Sprite,
             Option<&BasketRim>,
             Option<&CornerRamp>,
@@ -95,7 +95,7 @@ pub fn ball_collisions(
         let was_rolling = rolling.0;
         let mut has_ground_contact = false;
 
-        for (platform_transform, platform_sprite, maybe_rim, maybe_step) in &platform_query {
+        for (platform_global_transform, platform_sprite, maybe_rim, maybe_step) in &platform_query {
             // Skip rim collisions for non-thrown balls (though held is already filtered above)
             if maybe_rim.is_some() && !is_thrown_or_free {
                 continue;
@@ -107,7 +107,7 @@ pub fn ball_collisions(
             let platform_half = platform_size / 2.0;
 
             let ball_pos = ball_transform.translation.truncate();
-            let platform_pos = platform_transform.translation.truncate();
+            let platform_pos = platform_global_transform.translation().truncate();
 
             let diff = ball_pos - platform_pos;
             let overlap_x = ball_half.x + platform_half.x - diff.x.abs();
@@ -284,60 +284,40 @@ pub fn ball_spin(
     }
 }
 
-/// Animate display balls with independent wave pulse effects
+/// Animate display balls with row-based wave effects
+/// One row activates at a time, cycling every 5 seconds
 pub fn display_ball_wave(
     time: Res<Time>,
     mut wave: ResMut<DisplayBallWave>,
     mut query: Query<(&DisplayBall, &mut Transform, &mut DisplayBallSpin)>,
 ) {
     let dt = time.delta_secs();
-    let wave_width = 0.12;
 
-    // Update scale wave timer
-    wave.scale_wave.timer += dt;
-    let scale_active = wave.scale_wave.timer < wave.scale_wave.duration;
-    if wave.scale_wave.timer > wave.scale_wave.period {
-        wave.scale_wave.timer -= wave.scale_wave.period;
-        wave.scale_wave.pattern = wave.scale_wave.pattern.next();
-    }
-
-    // Update spin wave timer
-    wave.spin_wave.timer += dt;
-    let spin_active = wave.spin_wave.timer < wave.spin_wave.duration;
-    if wave.spin_wave.timer > wave.spin_wave.period {
-        wave.spin_wave.timer -= wave.spin_wave.period;
-        wave.spin_wave.pattern = wave.spin_wave.pattern.next();
+    // Update timer
+    wave.timer += dt;
+    if wave.timer > wave.cycle_period {
+        wave.timer -= wave.cycle_period;
     }
 
     for (display, mut transform, mut spin) in &mut query {
-        if display.total == 0 {
-            continue;
-        }
+        // Get intensity for this ball's row
+        let intensity = wave.row_intensity(display.row);
 
-        let ball_pos = display.index as f32 / display.total as f32;
-
-        // Scale wave effect
-        if scale_active {
-            let progress = wave.scale_wave.timer / wave.scale_wave.duration;
-            let intensity = wave.scale_wave.pattern.intensity(ball_pos, progress, wave_width);
-            transform.scale = Vec3::splat(1.0 + intensity * 0.3);
+        // Scale effect - all balls in active row pulse together
+        if intensity > 0.01 {
+            transform.scale = Vec3::splat(1.0 + intensity * 0.25);
+            // Start spin when row becomes active
+            if spin.velocity.abs() < 0.1 {
+                spin.velocity = 6.0 * intensity;
+            }
         } else {
             transform.scale = Vec3::ONE;
-        }
-
-        // Spin wave effect
-        if spin_active {
-            let progress = wave.spin_wave.timer / wave.spin_wave.duration;
-            let intensity = wave.spin_wave.pattern.intensity(ball_pos, progress, wave_width);
-            if intensity > 0.1 {
-                spin.velocity = 8.0 * intensity;
-            }
         }
 
         // Apply spin and decay
         if spin.velocity.abs() > 0.01 {
             transform.rotate_z(spin.velocity * dt);
-            spin.velocity *= 0.94_f32.powf(dt * 60.0);
+            spin.velocity *= 0.92_f32.powf(dt * 60.0);
         } else {
             spin.velocity = 0.0;
         }

@@ -135,89 +135,61 @@ pub struct BallShotGrace(pub f32);
 pub struct BallSpin(pub f32);
 
 /// Marker for display-only balls in debug level (not playable)
-/// Stores the index for wave animation timing
+/// Stores row and column for wave animation timing
 #[derive(Component)]
 pub struct DisplayBall {
-    pub index: usize,
-    pub total: usize,
+    pub row: usize,    // Which shelf (0-4)
+    pub col: usize,    // Position in row
+    pub total_rows: usize,
 }
 
-/// Wave pattern types for display ball animations
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WavePattern {
-    LeftToRight,
-    RightToLeft,
-    CenterOut,
-    EdgesIn,
-}
-
-impl WavePattern {
-    /// Get the wave intensity for a ball at given position
-    pub fn intensity(&self, ball_pos: f32, wave_progress: f32, wave_width: f32) -> f32 {
-        let target_pos = match self {
-            WavePattern::LeftToRight => wave_progress,
-            WavePattern::RightToLeft => 1.0 - wave_progress,
-            WavePattern::CenterOut => {
-                // Wave expands from center (0.5) outward
-                let dist_from_center = (ball_pos - 0.5).abs();
-                let wave_radius = wave_progress * 0.5;
-                let dist_from_wave = (dist_from_center - wave_radius).abs();
-                return (-dist_from_wave * dist_from_wave / (2.0 * wave_width * wave_width)).exp();
-            }
-            WavePattern::EdgesIn => {
-                // Wave contracts from edges toward center
-                let dist_from_center = (ball_pos - 0.5).abs();
-                let wave_radius = (1.0 - wave_progress) * 0.5;
-                let dist_from_wave = (dist_from_center - wave_radius).abs();
-                return (-dist_from_wave * dist_from_wave / (2.0 * wave_width * wave_width)).exp();
-            }
-        };
-        let dist_from_wave = (ball_pos - target_pos).abs();
-        (-dist_from_wave * dist_from_wave / (2.0 * wave_width * wave_width)).exp()
-    }
-
-    /// Cycle to next pattern
-    pub fn next(&self) -> Self {
-        match self {
-            WavePattern::LeftToRight => WavePattern::RightToLeft,
-            WavePattern::RightToLeft => WavePattern::CenterOut,
-            WavePattern::CenterOut => WavePattern::EdgesIn,
-            WavePattern::EdgesIn => WavePattern::LeftToRight,
-        }
-    }
-}
-
-/// Individual wave state
-#[derive(Clone)]
-pub struct WaveState {
-    pub timer: f32,
-    pub period: f32,
-    pub duration: f32,
-    pub pattern: WavePattern,
-}
-
-/// Timer for display ball wave pulse animations
+/// Timer for display ball row-based wave animations
+/// Activates one row at a time, cycling through all rows
 #[derive(Resource)]
 pub struct DisplayBallWave {
-    pub scale_wave: WaveState,
-    pub spin_wave: WaveState,
+    pub timer: f32,
+    pub row_duration: f32,  // How long each row is active
+    pub cycle_period: f32,  // Total time to cycle through all rows
+    pub num_rows: usize,
 }
 
 impl Default for DisplayBallWave {
     fn default() -> Self {
         Self {
-            scale_wave: WaveState {
-                timer: 0.0,
-                period: 5.0,
-                duration: 1.5,
-                pattern: WavePattern::LeftToRight,
-            },
-            spin_wave: WaveState {
-                timer: 2.5, // Offset from scale wave
-                period: 7.0, // Different period for variety
-                duration: 1.2,
-                pattern: WavePattern::CenterOut,
-            },
+            timer: 0.0,
+            row_duration: 1.0,   // Each row active for 1 second
+            cycle_period: 5.0,   // Full cycle every 5 seconds
+            num_rows: 5,
+        }
+    }
+}
+
+impl DisplayBallWave {
+    /// Get the currently active row (0-indexed from bottom)
+    pub fn active_row(&self) -> usize {
+        let time_per_row = self.cycle_period / self.num_rows as f32;
+        let row = (self.timer / time_per_row) as usize;
+        row % self.num_rows
+    }
+
+    /// Get intensity for a row (1.0 if active, 0.0 otherwise with smooth fade)
+    pub fn row_intensity(&self, row: usize) -> f32 {
+        let time_per_row = self.cycle_period / self.num_rows as f32;
+        let row_start = row as f32 * time_per_row;
+        let time_in_row = self.timer - row_start;
+
+        if time_in_row < 0.0 || time_in_row > self.row_duration {
+            0.0
+        } else {
+            // Smooth fade in/out
+            let progress = time_in_row / self.row_duration;
+            if progress < 0.2 {
+                progress / 0.2  // Fade in
+            } else if progress > 0.8 {
+                (1.0 - progress) / 0.2  // Fade out
+            } else {
+                1.0  // Full intensity
+            }
         }
     }
 }

@@ -224,12 +224,12 @@ fn main() {
             )
                 .chain(),
         )
-        // Core Update systems
+        // Core Update systems - split to avoid tuple issues
+        .add_systems(Update, player::respawn_player)
+        .add_systems(Update, steal::steal_cooldown_update)
         .add_systems(
             Update,
             (
-                player::respawn_player,
-                steal::steal_cooldown_update,
                 ballgame::ui::animate_pickable_ball,
                 ballgame::ui::update_charge_gauge,
                 ballgame::ui::update_steal_indicators,

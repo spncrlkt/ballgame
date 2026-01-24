@@ -1,0 +1,43 @@
+# Test: Pickup ball while moving
+# Verifies player can pick up ball while walking
+
+name = "Pickup while moving"
+description = "Player walks toward ball and picks it up without stopping"
+
+[setup]
+level = "test_flat_floor"
+
+# Floor is at y=-450, spawn at -350 (100 above floor)
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = -100.0
+y = -350.0
+
+[[setup.entities]]
+type = "ball"
+x = 0.0
+y = -350.0
+
+# Walk right continuously and press pickup when near ball
+[[input]]
+frame = 0
+p1 = { move_right = true }
+
+[[input]]
+frame = 30
+p1 = { move_right = true, pickup = true }
+
+[[expect.sequence]]
+event = "Pickup"
+player = "p1"
+frame_min = 25
+frame_max = 45
+
+[expect.state]
+after_frame = 50
+checks = [
+    "p1.holding_ball = true",
+    "ball.state = Held",
+]

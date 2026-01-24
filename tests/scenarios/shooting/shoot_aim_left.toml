@@ -1,0 +1,40 @@
+# Test: Shoot toward left basket
+# Verifies player can aim and shoot toward left basket
+
+name = "Shoot aim left"
+description = "Player shoots toward left basket, ball moves left"
+
+[setup]
+level = "test_flat_floor"
+
+# Position player on right side, facing left
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "right"
+x = 200.0
+y = -350.0
+facing = -1.0
+holding_ball = true
+
+# Charge and release shot
+[[input]]
+frame = 10
+p1 = { throw_held = true }
+
+[[input]]
+frame = 40
+p1 = { throw_held = false }
+
+[[expect.sequence]]
+event = "ShotRelease"
+player = "p1"
+frame_min = 35
+frame_max = 50
+
+[expect.state]
+after_frame = 60
+checks = [
+    "ball.x < 200",  # Ball should have moved left from start position
+    "ball.state = InFlight",
+]

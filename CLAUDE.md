@@ -16,7 +16,13 @@ cargo fmt             # Format code
 cargo clippy          # Lint code
 ```
 
-No tests exist yet. Dynamic linking is disabled in `.cargo/config.toml` to avoid macOS dyld issues.
+```bash
+cargo run --bin test-scenarios           # Run all scenario tests
+cargo run --bin test-scenarios -- ball/  # Run category
+cargo run --bin test-scenarios -- -v     # Verbose mode (shows failures)
+```
+
+Dynamic linking is disabled in `.cargo/config.toml` to avoid macOS dyld issues.
 
 **User Preference:** Do not add or commit code automatically. The user handles git operations.
 
@@ -62,6 +68,33 @@ Run at the end of each working session (or after ~10 changes):
 - [ ] **Check for regressions** - Did anything else break?
 - [ ] **Update constants** - Move magic numbers to `src/constants.rs`
 - [ ] **Update documentation** - Add new components/resources to CLAUDE.md if needed
+
+### Fixing a Bug (Test-Verified)
+
+When fixing a bug, follow this pattern to ensure the fix is properly verified:
+
+1. **Write or strengthen a test** that exposes the bug
+   - Test should FAIL when bug is present
+   - Test should PASS when bug is fixed
+   - Make assertions specific enough that they can't pass accidentally
+
+2. **Verify the test fails** with the bug still in place
+   - Run `cargo run --bin test-scenarios -- <test_name> -v`
+   - Confirm failure message matches expected behavior
+
+3. **Apply the fix**
+
+4. **Verify the test passes** with the fix applied
+   - Run the same test command
+   - Confirm the test now passes
+
+5. **Run full test suite** to check for regressions
+   - `cargo run --bin test-scenarios`
+
+This pattern ensures:
+- The test actually catches the bug (not a false positive)
+- The fix actually resolves the issue (not a coincidence)
+- Future regressions will be caught
 
 ## Todo Management
 

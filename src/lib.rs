@@ -6,12 +6,14 @@
 pub mod analytics;
 pub mod config_watcher;
 pub mod constants;
+pub mod countdown;
 pub mod events;
 pub mod helpers;
 pub mod replay;
 pub mod settings;
 pub mod simulation;
 pub mod snapshot;
+pub mod testing;
 pub mod training;
 
 // Game logic modules
@@ -39,6 +41,10 @@ pub use ball::{
     StyleTextures, display_ball_wave,
 };
 pub use config_watcher::ConfigWatcher;
+pub use countdown::{
+    CountdownText, MatchCountdown, in_countdown, not_in_countdown, spawn_countdown_text,
+    trigger_countdown_on_level_change, update_countdown,
+};
 pub use events::{EventBuffer, EventLogConfig, EventLogger, GameConfig, GameEvent, PlayerId};
 pub use settings::{CurrentSettings, InitSettings, save_settings_system};
 pub use constants::*;

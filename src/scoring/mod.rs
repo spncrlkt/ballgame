@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use crate::ai::{AiNavState, AiState, AiGoal};
+use crate::ai::{AiNavState, AiState, AiGoal, InputState};
 use crate::ball::{Ball, BallState, CurrentPalette, Velocity};
 use crate::constants::*;
 use crate::palettes::PaletteDatabase;
@@ -36,7 +36,7 @@ pub fn check_scoring(
     mut ball_query: Query<(&mut Transform, &mut Velocity, &mut BallState, &Sprite), With<Ball>>,
     basket_query: Query<(Entity, &Transform, &Basket, &Sprite), Without<Ball>>,
     player_query: Query<(Entity, &Sprite, &Team), With<Player>>,
-    mut ai_query: Query<(&mut AiState, &mut AiNavState), With<Player>>,
+    mut ai_query: Query<(&mut AiState, &mut AiNavState, &mut InputState), With<Player>>,
 ) {
     let palette = palette_db
         .get(current_palette.0)
@@ -106,16 +106,23 @@ pub fn check_scoring(
                 ball_velocity.0 = Vec2::ZERO;
                 *ball_state = BallState::Free;
 
-                // Reset AI state for all players - this prevents AI from getting stuck
-                // in corners or with stale navigation after a score
-                for (mut ai_state, mut nav_state) in &mut ai_query {
+                // Reset ALL AI state for all players - complete reset to chase ball
+                for (mut ai_state, mut nav_state, mut input_state) in &mut ai_query {
+                    // Reset AI decision state
                     ai_state.current_goal = AiGoal::ChaseBall;
+                    ai_state.shot_charge_target = 0.0;
                     ai_state.jump_shot_active = false;
                     ai_state.jump_shot_timer = 0.0;
                     ai_state.nav_target = None;
                     ai_state.last_position = None;
                     ai_state.stuck_timer = 0.0;
+                    // Note: profile_index is NOT reset - it's the AI's personality
+
+                    // Reset navigation state
                     nav_state.clear();
+
+                    // Reset input state to prevent stale inputs
+                    *input_state = InputState::default();
                 }
 
                 info!(

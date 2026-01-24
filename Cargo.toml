@@ -28,7 +28,12 @@ path = "src/bin/simulate.rs"
 name = "analyze"
 path = "src/bin/analyze.rs"
 
+[[bin]]
+name = "test-scenarios"
+path = "src/bin/test_scenarios.rs"
+
 [dependencies]
+toml = "0.8"
 rand = "0.8"
 image = "0.25"
 imageproc = "0.25"

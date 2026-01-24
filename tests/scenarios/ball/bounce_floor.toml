@@ -1,0 +1,22 @@
+# Test: Ball bounces on floor
+# Verifies ball physics - dropped ball bounces
+
+name = "Ball bounces on floor"
+description = "Ball dropped from height bounces on the floor"
+
+[setup]
+level = "test_flat_floor"
+
+# Ball starts high, will fall and bounce
+# Floor is at y=-450
+[[setup.entities]]
+type = "ball"
+x = 0.0
+y = -200.0
+
+[expect.state]
+after_frame = 180
+checks = [
+    "ball.y > -440",  # Ball should be above floor (bounced)
+    "ball.state = Free",
+]
