@@ -126,7 +126,7 @@ pub fn apply_gravity(
 pub fn check_collisions(
     mut player_query: Query<(&mut Transform, &mut Velocity, &mut Grounded, &Sprite), With<Player>>,
     platform_query: Query<
-        (&GlobalTransform, &Sprite),
+        (&Transform, &Sprite),
         (With<Platform>, Without<Player>, Without<BasketRim>),
     >,
 ) {
@@ -139,14 +139,14 @@ pub fn check_collisions(
         // Assume not grounded until we find a floor beneath us
         grounded.0 = false;
 
-        for (platform_global, platform_sprite) in &platform_query {
+        for (platform_transform, platform_sprite) in &platform_query {
             let platform_size = platform_sprite
                 .custom_size
                 .unwrap_or(Vec2::new(100.0, 20.0));
             let platform_half = platform_size / 2.0;
 
             let player_pos = player_transform.translation.truncate();
-            let platform_pos = platform_global.translation().truncate();
+            let platform_pos = platform_transform.translation.truncate();
 
             // Calculate overlap
             let diff = player_pos - platform_pos;

@@ -68,7 +68,7 @@ pub fn ball_collisions(
     >,
     platform_query: Query<
         (
-            &GlobalTransform,
+            &Transform,
             &Sprite,
             Option<&BasketRim>,
             Option<&CornerRamp>,
@@ -95,7 +95,7 @@ pub fn ball_collisions(
         let was_rolling = rolling.0;
         let mut has_ground_contact = false;
 
-        for (platform_global, platform_sprite, maybe_rim, maybe_step) in &platform_query {
+        for (platform_transform, platform_sprite, maybe_rim, maybe_step) in &platform_query {
             // Skip rim collisions for non-thrown balls (though held is already filtered above)
             if maybe_rim.is_some() && !is_thrown_or_free {
                 continue;
@@ -107,7 +107,7 @@ pub fn ball_collisions(
             let platform_half = platform_size / 2.0;
 
             let ball_pos = ball_transform.translation.truncate();
-            let platform_pos = platform_global.translation().truncate();
+            let platform_pos = platform_transform.translation.truncate();
 
             let diff = ball_pos - platform_pos;
             let overlap_x = ball_half.x + platform_half.x - diff.x.abs();

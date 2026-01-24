@@ -16,8 +16,12 @@
   - Avoid inefficient step-by-step climbing when direct jump is possible
 - more ball options: more s60 star alts, yin yang, 3D rotated S11 "volleyball", 3D rotated basketball, striped balls, croquet balls, pool balls. full analysis after wards to see patternable "types" to combine
 - the ball spawning from our previous work isnt working
-- create another set of debug levels for programmatic access for testing. to test basic interactions like shooting, platforming, stealing etc. create a series of tests that use the headless simulation and event logging to confirm that all our basic features don't regress. create a set of input scripts that perform the desired actions and check event log for testing.
-- 
+- [ ] **Scenario Testing System** - see `notes/testing-plan.md` for full plan
+  - Create `src/testing/` module (parser, runner, assertions, input injection)
+  - Create `assets/test_levels.txt` with minimal test arenas
+  - Create `src/bin/test_scenarios.rs` CLI
+  - Write initial 20 test scenarios covering core mechanics
+
 
 ### 1. D-Pad Menu UX
 - [ ] **P0** Improve D-pad menu display - see `notes/dpad-menu-ux.md`
