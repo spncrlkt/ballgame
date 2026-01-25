@@ -17,7 +17,10 @@
     - `test_steal_reaction_timer_delays_first_attempt` - verifies delay
     - `test_profile_button_timing_in_human_range` - validates profile values
     - `test_all_pickup_pressed_assignments_have_cooldown` - **catches missing cooldowns on new code**
-- check shooting heatmap methodology and re-run.
+- [x] check shooting heatmap methodology and re-run.
+  - Synced heatmap with game physics (speed randomness ±10%, distance multiplier 1.0→1.05)
+  - Created `notes/balance-testing-workflow.md` with iterative workflow
+  - Updated CLAUDE.md and testing-plan.md with references
 - in training bin start button should wipe all logs and status and start over.if args were used on the command line keep them but cycle through the default options otherwise
 - [x] **Fix ball platform display on level 1** - fixed spawn_balls to spawn only one ball on floor
 - the steps are all fucked up
@@ -51,20 +54,18 @@
 - [ ] **P1** Fix AI shooting - takes bad shots, misses easy ones
 - [ ] **P2** Fix AI positioning - stands in wrong places, doesn't cover basket well
 
-### 2a. Shot Accuracy Testing (Partial - Needs Overhaul)
+### 2a. Shot Accuracy Testing (Tools Synced - Trajectory V1 Pending)
 - [x] **Reduce upward bias** - Removed angle variance bias entirely (was +0.05)
 - [x] **Distance-based speed multiplier** - Simple linear 1.0→1.05 in throw.rs
 - [x] **Shot test mode** - `cargo run --bin simulate -- --shot-test [shots] --level [n]`
 - [x] **Test level** - Added `test_shot_accuracy` to `assets/test_levels.txt`
-- [ ] **Shot System Overhaul** (V1) - Current band-aid multiplier doesn't properly balance:
-  - Similar distances (dx=440 vs dx=540) produce wildly different overshoot ratios
-  - Piecewise tuning fights symptoms, not root cause
-  - **Root cause investigation needed:**
-    1. Review minimum-energy trajectory formula - may not suit game feel
-    2. Check if angle/direction affects trajectory differently than expected
-    3. Consider simpler trajectory system (fixed arc heights, predictable curves)
-    4. Analyze interaction between: angle variance, speed randomness, player velocity
-  - **Test methodology is solid** - keep shot test mode for validating any fix
+- [x] **Sync heatmap with game physics** - Added speed randomness, distance multiplier
+- [x] **Balance testing workflow** - See `notes/balance-testing-workflow.md` (updated for sim refactor: SQLite, parallel)
+- [ ] **Verify shot_quality.rs against heatmap** - Sample 5+ positions, flag >10% discrepancy
+- [ ] **V1: Trajectory Overhaul** - Distance-dependent launch angles, aim point tuning
+  - Research shows: 72° close, 51° mid, 45° far (not fixed angle)
+  - Current ±10% variance may be too high (real: 0.05-0.13 m/s SD)
+  - Tracked in milestones.md under "Physics/Shooting Overhaul"
 
 ### 3. Movement/Physics Tuning
 - [ ] **P3** Tune player movement - speed, acceleration, air control
@@ -79,6 +80,64 @@
 
 ### 6. Debug
 - [ ] Add AI vs AI debug level for Level 2 (both players AI-controlled for testing)
+
+---
+
+## Simulation Infrastructure Consolidation
+
+*Plan file: `~/.claude/plans/synchronous-churning-wreath.md`*
+*Total estimated effort: 18-26 hours*
+
+### Sprint 1: Core Consolidation (5-7 hrs, no new deps)
+- [x] **Phase 2** Event emission consolidation (1-2 hrs)
+  - Created `src/events/emitter.rs` with shared `emit_game_events()` function
+  - Updated `runner.rs` and `training.rs` to use shared emitter
+  - Reduced ~420 lines of duplicated code to ~150 shared lines
+- [x] **Phase 1** Headless App Builder (2-3 hrs)
+  - Created `src/simulation/app_builder.rs` with `HeadlessAppBuilder`
+  - Supports `with_minimal_threads()` for parallel execution (sets task pools = 1)
+  - Common resources setup (Score, CurrentLevel, PhysicsTweaks, etc.)
+- [x] **Phase 6** Shot test refactor (1-2 hrs)
+  - Refactored to create one app per position instead of per shot
+  - Added reset system to reuse entities between shots
+  - 10x fewer app creations (4 apps vs 40 for default test)
+
+### Sprint 2: Runner Modularization (3-4 hrs)
+- [x] **Phase 3** Break up runner.rs into focused modules
+  - Created `control.rs` (48 lines) - SimControl, SimEventBuffer resources
+  - Created `setup.rs` (310 lines) - sim_setup, spawn_corner_steps
+  - Created `shot_test.rs` (500 lines) - shot accuracy testing
+  - Slimmed runner.rs from 1472 → 713 lines (52% reduction)
+  - All 33 scenario tests passing
+
+### Sprint 3: Major Features (6-9 hrs)
+- [x] **Phase 4** Parallel simulation (2-3 hrs)
+  - Added Rayon dependency
+  - Created `src/simulation/parallel.rs` with parallel execution functions
+  - Added `--parallel N` CLI flag to config
+  - Parallel support for MultiMatch, Tournament, and LevelSweep modes
+- [x] **Phase 5** SQLite database (4-6 hrs)
+  - Added rusqlite dependency with bundled SQLite
+  - Created `src/simulation/db.rs` with `SimDatabase` API
+  - Schema: sessions, matches, player_stats tables with indexes
+  - WAL mode enabled for concurrent reads
+  - Added `--db <FILE>` CLI option
+  - Automatic storage of results for MultiMatch, Tournament, LevelSweep modes
+
+### Sprint 4: Evlog + Analytics Integration (4-6 hrs)
+- [x] **Phase 7** Unified evlog parser (2-3 hrs)
+  - Created `src/events/evlog_parser.rs` with `ParsedEvlog` struct
+  - Shared parsing logic for replay and analytics modules
+  - Updated `src/replay/loader.rs` to use unified parser
+  - Updated `src/analytics/parser.rs` to use unified parser
+  - 6 unit tests for parser functionality
+- [x] **Phase 8** Analytics + SQLite integration (2-3 hrs)
+  - Created `src/analytics/db_analytics.rs` module
+  - `analyze_profile(db, profile)` - query and analyze profile stats
+  - `compare_profiles(db, profiles)` - side-by-side comparison
+  - `summarize_all_profiles(db)` - leaderboard of all profiles
+  - `format_leaderboard(analyses)` - formatted table output
+  - 3 unit tests for database analytics
 
 ---
 

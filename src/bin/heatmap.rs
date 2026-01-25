@@ -185,6 +185,13 @@ fn simulate_ball_flight(
 // =============================================================================
 
 /// Simulate scoring percentage from a position using Monte Carlo
+///
+/// This simulates "ideal" fully-charged stationary shots to represent the AI
+/// decision quality baseline. The heatmap now includes factors that affect
+/// actual shots in throw.rs:
+/// - Speed randomness (±10%)
+/// - Distance multiplier (1.0→1.05 linear)
+/// - Angle variance (based on SHOT_MIN_VARIANCE for ideal shots)
 fn simulate_scoring(shooter_x: f32, shooter_y: f32, basket_x: f32, basket_y: f32) -> f32 {
     let mut rng = rand::thread_rng();
 
@@ -197,7 +204,7 @@ fn simulate_scoring(shooter_x: f32, shooter_y: f32, basket_x: f32, basket_y: f32
     let mut makes = 0;
 
     for _ in 0..MONTE_CARLO_TRIALS {
-        // Apply variance: base + distance penalty
+        // Apply variance: base + distance penalty (matching throw.rs)
         let distance = ((basket_x - shooter_x).powi(2) + (basket_y - shooter_y).powi(2)).sqrt();
         let distance_variance = distance * SHOT_DISTANCE_VARIANCE;
         let total_variance = SHOT_MIN_VARIANCE + distance_variance;
@@ -206,11 +213,23 @@ fn simulate_scoring(shooter_x: f32, shooter_y: f32, basket_x: f32, basket_y: f32
         let angle_offset = rng.gen_range(-total_variance..total_variance) * 30f32.to_radians();
         let final_angle = traj.angle + angle_offset;
 
+        // Speed randomness (±10%) - matching throw.rs line 173
+        let speed_randomness = rng.gen_range(0.9..1.1);
+
+        // Distance-based speed multiplier - matching throw.rs lines 163-167
+        // Simple linear: 1.0 at close range (dx=200), 1.05 at far range (dx=800)
+        let dx = (basket_x - shooter_x).abs();
+        let t = ((dx - 200.0) / 600.0).clamp(0.0, 1.0);
+        let distance_multiplier = 1.0 + 0.05 * t;
+
+        // Final speed with both factors applied
+        let final_speed = traj.required_speed * distance_multiplier * speed_randomness;
+
         if simulate_ball_flight(
             shooter_x,
             shooter_y,
             final_angle,
-            traj.required_speed,
+            final_speed,
             basket_x,
             basket_y,
         ) {

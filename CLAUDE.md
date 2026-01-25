@@ -511,6 +511,10 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 11. **Visual verification** - Review the regression screenshot to verify UI looks correct
 12. **Balance simulations** - Run statistical balance tests to catch regressions:
     - `cargo run --bin simulate -- --shot-test 30 --level 3` (target: 40-60% over/under ratio)
+    - `cargo run --bin simulate -- --shot-test 100 --parallel 8 --db sim_results.db` (fast parallel + persist)
+    - `cargo run --bin heatmap -- score` (generates scoring probability heatmap)
+    - `cargo run --bin analyze -- --db sim_results.db --trend shot_accuracy` (historical trends)
+    - See `notes/balance-testing-workflow.md` for full iterative workflow
 
 **After auditing:**
 - Run the code review prompt from `code_review_prompt.md` and log results to `code_review_audits.md`

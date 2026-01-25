@@ -47,6 +47,10 @@ pub struct SimConfig {
     pub log_events: bool,
     /// Directory for event log files (default: "logs")
     pub log_dir: String,
+    /// Number of parallel threads (0 = sequential, N = N threads)
+    pub parallel: usize,
+    /// Path to SQLite database for storing results
+    pub db_path: Option<String>,
 }
 
 impl Default for SimConfig {
@@ -64,6 +68,8 @@ impl Default for SimConfig {
             quiet: false,
             log_events: true, // Always log events for analytics
             log_dir: "logs".to_string(),
+            parallel: 0, // Sequential by default
+            db_path: None,
         }
     }
 }
@@ -174,6 +180,18 @@ impl SimConfig {
                         i += 1;
                     }
                 }
+                "--parallel" => {
+                    if i + 1 < args.len() {
+                        config.parallel = args[i + 1].parse().unwrap_or(0);
+                        i += 1;
+                    }
+                }
+                "--db" => {
+                    if i + 1 < args.len() {
+                        config.db_path = Some(args[i + 1].clone());
+                        i += 1;
+                    }
+                }
                 "--help" | "-h" => {
                     print_help();
                     std::process::exit(0);
@@ -210,6 +228,8 @@ OPTIONS:
     --quiet, -q         Suppress progress output
     --log-events        Enable event logging to .evlog files
     --log-dir <DIR>     Directory for event logs (default: logs)
+    --parallel <N>      Run simulations in parallel with N threads
+    --db <FILE>         Store results in SQLite database
     --help, -h          Show this help
 
 EXAMPLES:

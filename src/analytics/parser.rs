@@ -1,9 +1,10 @@
 //! Event log parser for analytics
+//!
+//! Uses the unified evlog parser and provides analytics-specific types and helpers.
 
-use std::fs;
 use std::path::Path;
 
-use crate::events::{parse_event, GameEvent, PlayerId};
+use crate::events::{parse_evlog, parse_all_evlogs, PlayerId};
 
 /// Parsed match data from an event log
 #[derive(Debug, Clone, Default)]
@@ -99,103 +100,104 @@ impl ParsedMatch {
 
 /// Parse a single event log file
 pub fn parse_event_log(path: &Path) -> Option<ParsedMatch> {
-    let content = fs::read_to_string(path).ok()?;
-    let mut parsed = ParsedMatch::default();
+    let parsed = parse_evlog(path).ok()?;
 
-    for line in content.lines() {
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        if let Some((time_ms, event)) = parse_event(line) {
-            let time = time_ms as f32 / 1000.0;
-
-            match event {
-                GameEvent::SessionStart { session_id, .. } => {
-                    parsed.session_id = session_id;
-                }
-                GameEvent::MatchStart {
-                    level,
-                    level_name,
-                    left_profile,
-                    right_profile,
-                    seed,
-                } => {
-                    parsed.level = level;
-                    parsed.level_name = level_name;
-                    parsed.left_profile = left_profile;
-                    parsed.right_profile = right_profile;
-                    parsed.seed = seed;
-                }
-                GameEvent::MatchEnd {
-                    score_left,
-                    score_right,
-                    duration,
-                } => {
-                    parsed.score_left = score_left;
-                    parsed.score_right = score_right;
-                    parsed.duration = duration;
-                }
-                GameEvent::Goal {
-                    player,
-                    score_left,
-                    score_right,
-                } => {
-                    parsed.goals.push((time, player, score_left, score_right));
-                }
-                GameEvent::ShotStart { player, .. } => {
-                    parsed.shot_starts.push((time, player));
-                }
-                GameEvent::ShotRelease {
-                    player,
-                    charge,
-                    angle,
-                    power,
-                } => {
-                    parsed.shots.push((time, player, charge, angle, power));
-                }
-                GameEvent::Pickup { player } => {
-                    parsed.pickups.push((time, player));
-                }
-                GameEvent::Drop { player } => {
-                    parsed.drops.push((time, player));
-                }
-                GameEvent::StealAttempt { attacker } => {
-                    parsed.steal_attempts.push((time, attacker));
-                }
-                GameEvent::StealSuccess { attacker } => {
-                    parsed.steal_successes.push((time, attacker));
-                }
-                GameEvent::StealFail { attacker } => {
-                    parsed.steal_failures.push((time, attacker));
-                }
-                _ => {}
-            }
-        }
+    if !parsed.is_valid() {
+        return None;
     }
 
-    // Only return if we have a valid match
-    if parsed.duration > 0.0 {
-        Some(parsed)
-    } else {
-        None
-    }
+    // Convert unified format to analytics format
+    let goals: Vec<_> = parsed
+        .goals
+        .iter()
+        .map(|g| (g.time, g.player, g.score_left, g.score_right))
+        .collect();
+
+    let shots: Vec<_> = parsed
+        .shots
+        .iter()
+        .map(|s| (s.time, s.player, s.charge, s.angle, s.power))
+        .collect();
+
+    let shot_starts: Vec<_> = parsed
+        .shot_starts
+        .iter()
+        .map(|s| (s.time, s.player))
+        .collect();
+
+    let pickups: Vec<_> = parsed
+        .pickups
+        .iter()
+        .map(|p| (p.time, p.player))
+        .collect();
+
+    let drops: Vec<_> = parsed
+        .drops
+        .iter()
+        .map(|d| (d.time, d.player))
+        .collect();
+
+    let steal_attempts: Vec<_> = parsed
+        .steal_attempts
+        .iter()
+        .map(|s| (s.time, s.attacker))
+        .collect();
+
+    let steal_successes: Vec<_> = parsed
+        .steal_successes
+        .iter()
+        .map(|s| (s.time, s.attacker))
+        .collect();
+
+    let steal_failures: Vec<_> = parsed
+        .steal_failures
+        .iter()
+        .map(|s| (s.time, s.attacker))
+        .collect();
+
+    Some(ParsedMatch {
+        session_id: parsed.metadata.session_id,
+        level: parsed.metadata.level,
+        level_name: parsed.metadata.level_name,
+        left_profile: parsed.metadata.left_profile,
+        right_profile: parsed.metadata.right_profile,
+        seed: parsed.metadata.seed,
+        duration: parsed.metadata.duration,
+        score_left: parsed.metadata.score_left,
+        score_right: parsed.metadata.score_right,
+        goals,
+        shots,
+        shot_starts,
+        pickups,
+        drops,
+        steal_attempts,
+        steal_successes,
+        steal_failures,
+    })
 }
 
 /// Parse all event logs in a directory
 pub fn parse_all_logs(dir: &Path) -> Vec<ParsedMatch> {
-    let mut matches = Vec::new();
-
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "evlog")
-                && let Some(parsed) = parse_event_log(&path)
-            {
-                matches.push(parsed);
-            }
-        }
-    }
-
-    matches
+    parse_all_evlogs(dir)
+        .into_iter()
+        .map(|parsed| ParsedMatch {
+            session_id: parsed.metadata.session_id,
+            level: parsed.metadata.level,
+            level_name: parsed.metadata.level_name,
+            left_profile: parsed.metadata.left_profile,
+            right_profile: parsed.metadata.right_profile,
+            seed: parsed.metadata.seed,
+            duration: parsed.metadata.duration,
+            score_left: parsed.metadata.score_left,
+            score_right: parsed.metadata.score_right,
+            goals: parsed.goals.iter().map(|g| (g.time, g.player, g.score_left, g.score_right)).collect(),
+            shots: parsed.shots.iter().map(|s| (s.time, s.player, s.charge, s.angle, s.power)).collect(),
+            shot_starts: parsed.shot_starts.iter().map(|s| (s.time, s.player)).collect(),
+            pickups: parsed.pickups.iter().map(|p| (p.time, p.player)).collect(),
+            drops: parsed.drops.iter().map(|d| (d.time, d.player)).collect(),
+            steal_attempts: parsed.steal_attempts.iter().map(|s| (s.time, s.attacker)).collect(),
+            steal_successes: parsed.steal_successes.iter().map(|s| (s.time, s.attacker)).collect(),
+            steal_failures: parsed.steal_failures.iter().map(|s| (s.time, s.attacker)).collect(),
+        })
+        .collect()
 }

@@ -444,6 +444,8 @@ Target: 40-60% overshoot/undershoot ratio for balanced feel.
 
 Statistical simulations for game balance testing. These tests run many iterations to detect bias and regressions in game mechanics.
 
+**See `notes/balance-testing-workflow.md` for the full iterative workflow (Modify → Test → Analyze → Refine).**
+
 **Pattern:**
 1. Run headless simulation with controlled inputs
 2. Collect outcome statistics (goals, misses, steals, etc.)
@@ -455,6 +457,9 @@ Statistical simulations for game balance testing. These tests run many iteration
 | Test | Command | Target | Measures |
 |------|---------|--------|----------|
 | Shot accuracy | `--shot-test 30 --level 3` | 40-60% over/under | Overshoot vs undershoot ratio |
+| Score heatmap | `cargo run --bin heatmap -- score` | Visual verification | Monte Carlo scoring probability |
+
+**Heatmap verification:** The heatmap now matches game physics from throw.rs (speed randomness ±10%, distance multiplier 1.0→1.05). Use it to verify `shot_quality.rs` values align with actual success rates.
 
 **Planned simulations:**
 
@@ -469,8 +474,20 @@ Statistical simulations for game balance testing. These tests run many iteration
 # Quick balance check (in audit checklist)
 cargo run --bin simulate -- --shot-test 30 --level 3
 
+# Visualize scoring probability
+cargo run --bin heatmap -- score
+
 # Full tournament for AI balance
 cargo run --bin simulate -- --tournament 5
+
+# Parallel testing (faster)
+cargo run --bin simulate -- --shot-test 100 --parallel 8
+
+# Store results in database for trend analysis
+cargo run --bin simulate -- --shot-test 50 --level 3 --db sim_results.db
+
+# Analyze historical trends
+cargo run --bin analyze -- --db sim_results.db --trend shot_accuracy
 ```
 
 **Adding new simulations:**

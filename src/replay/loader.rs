@@ -1,10 +1,11 @@
 //! Loader for parsing .evlog files into ReplayData
+//!
+//! Uses the unified evlog parser and converts to replay-specific types.
 
 use bevy::prelude::*;
-use std::fs;
 use std::path::Path;
 
-use crate::events::{parse_event, GameEvent};
+use crate::events::{parse_evlog, GameEvent, PlayerId, TimestampedEvent};
 use super::MatchInfo;
 
 /// A single tick frame with positions and velocities for interpolation
@@ -37,6 +38,15 @@ pub struct TimedEvent {
     pub time_ms: u32,
     /// The actual event
     pub event: GameEvent,
+}
+
+impl From<&TimestampedEvent> for TimedEvent {
+    fn from(e: &TimestampedEvent) -> Self {
+        Self {
+            time_ms: e.time_ms,
+            event: e.event.clone(),
+        }
+    }
 }
 
 /// Complete replay data loaded from an .evlog file
@@ -98,7 +108,7 @@ impl ReplayData {
     }
 
     /// Get the most recent AI goal for a player at a given time
-    pub fn current_ai_goal(&self, time_ms: u32, player: crate::events::PlayerId) -> Option<&str> {
+    pub fn current_ai_goal(&self, time_ms: u32, player: PlayerId) -> Option<&str> {
         self.events
             .iter()
             .filter(|e| e.time_ms <= time_ms)
@@ -116,98 +126,45 @@ impl ReplayData {
 
 /// Load a replay from an .evlog file
 pub fn load_replay<P: AsRef<Path>>(path: P) -> Result<ReplayData, String> {
-    let content = fs::read_to_string(path.as_ref())
-        .map_err(|e| format!("Failed to read replay file: {}", e))?;
+    let parsed = parse_evlog(path.as_ref())?;
 
-    let mut data = ReplayData::default();
-    let mut max_time_ms: u32 = 0;
+    // Convert unified format to replay-specific format
+    let ticks: Vec<TickFrame> = parsed
+        .ticks
+        .iter()
+        .map(|t| TickFrame {
+            time_ms: t.time_ms,
+            frame: t.frame,
+            left_pos: Vec2::new(t.left_pos.0, t.left_pos.1),
+            left_vel: Vec2::new(t.left_vel.0, t.left_vel.1),
+            right_pos: Vec2::new(t.right_pos.0, t.right_pos.1),
+            right_vel: Vec2::new(t.right_vel.0, t.right_vel.1),
+            ball_pos: Vec2::new(t.ball_pos.0, t.ball_pos.1),
+            ball_vel: Vec2::new(t.ball_vel.0, t.ball_vel.1),
+            ball_state: t.ball_state,
+        })
+        .collect();
 
-    for line in content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
+    let events: Vec<TimedEvent> = parsed
+        .raw_events
+        .iter()
+        .map(TimedEvent::from)
+        .collect();
 
-        if let Some((time_ms, event)) = parse_event(line) {
-            max_time_ms = max_time_ms.max(time_ms);
-
-            match &event {
-                GameEvent::SessionStart { session_id, .. } => {
-                    data.session_id = session_id.clone();
-                }
-                GameEvent::MatchStart {
-                    level,
-                    level_name,
-                    left_profile,
-                    right_profile,
-                    seed,
-                } => {
-                    data.match_info = MatchInfo {
-                        level: *level,
-                        level_name: level_name.clone(),
-                        left_profile: left_profile.clone(),
-                        right_profile: right_profile.clone(),
-                        seed: *seed,
-                    };
-                }
-                GameEvent::Tick {
-                    frame,
-                    left_pos,
-                    left_vel,
-                    right_pos,
-                    right_vel,
-                    ball_pos,
-                    ball_vel,
-                    ball_state,
-                } => {
-                    data.ticks.push(TickFrame {
-                        time_ms,
-                        frame: *frame,
-                        left_pos: Vec2::new(left_pos.0, left_pos.1),
-                        left_vel: Vec2::new(left_vel.0, left_vel.1),
-                        right_pos: Vec2::new(right_pos.0, right_pos.1),
-                        right_vel: Vec2::new(right_vel.0, right_vel.1),
-                        ball_pos: Vec2::new(ball_pos.0, ball_pos.1),
-                        ball_vel: Vec2::new(ball_vel.0, ball_vel.1),
-                        ball_state: *ball_state,
-                    });
-                }
-                GameEvent::MatchEnd { duration, .. } => {
-                    // Use duration from MatchEnd if available
-                    data.duration_ms = (*duration * 1000.0) as u32;
-                }
-                // Store other events for timeline display
-                GameEvent::Goal { .. }
-                | GameEvent::Pickup { .. }
-                | GameEvent::Drop { .. }
-                | GameEvent::ShotStart { .. }
-                | GameEvent::ShotRelease { .. }
-                | GameEvent::StealAttempt { .. }
-                | GameEvent::StealSuccess { .. }
-                | GameEvent::StealFail { .. }
-                | GameEvent::AiGoal { .. } => {
-                    data.events.push(TimedEvent {
-                        time_ms,
-                        event: event.clone(),
-                    });
-                }
-                _ => {
-                    // Ignore other events (Config, etc.)
-                }
-            }
-        }
-    }
-
-    // Use max observed time if MatchEnd wasn't present
-    if data.duration_ms == 0 {
-        data.duration_ms = max_time_ms;
-    }
-
-    // Sort ticks by time (should already be sorted, but ensure)
-    data.ticks.sort_by_key(|t| t.time_ms);
-
-    // Sort events by time
-    data.events.sort_by_key(|e| e.time_ms);
+    let duration_ms = parsed.duration_ms();
+    let data = ReplayData {
+        session_id: parsed.metadata.session_id,
+        match_info: MatchInfo {
+            level: parsed.metadata.level,
+            level_name: parsed.metadata.level_name,
+            left_profile: parsed.metadata.left_profile,
+            right_profile: parsed.metadata.right_profile,
+            seed: parsed.metadata.seed,
+        },
+        ticks,
+        events,
+        duration_ms,
+    };
 
     info!(
         "Loaded replay: {} ticks, {} events, duration {}ms",

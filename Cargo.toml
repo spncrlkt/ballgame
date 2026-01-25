@@ -42,6 +42,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = "0.4"
 uuid = { version = "1.0", features = ["v4"] }
+rayon = "1.10"
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 [dependencies.bevy]
 version = "0.17.3"
