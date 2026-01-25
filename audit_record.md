@@ -4,7 +4,44 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Session: 2026-01-25 - Cleanup & 2v2 Planning
+
+**Last Commit Analyzed:** `045d8c2` (simulation updates and AI tweaking)
+
+### Summary
+
+Cleaned up todo/todone structure, added commit references to all archived work, created 2v2.md for future multiplayer planning.
+
+### Changes Made
+
+**Todo/Todone Cleanup:**
+- Archived all completed steal system items to `todone.md` with commit references
+- Cleaned `todo.md` to show only active work (P0-P4 priorities)
+- Added "Known Issues" section for tracked bugs
+- All archive entries now have commit range references
+
+**2v2 Planning:**
+- Created `2v2.md` consolidating all multiplayer planning info
+- Documented current state (1v1 with AI)
+- Listed technical considerations for 4-player support
+- Added open questions for future decisions
+
+**Audit Record Update:**
+- Added commit hashes to all session entries going forward
+- Previous sessions now have approximate commit ranges
+
+### Files Modified
+
+- `todo.md` - Cleaned up, active work only
+- `todone.md` - Full archive with commit references
+- `2v2.md` - Created for multiplayer planning
+- `audit_record.md` - This entry
+
+---
+
 ## Session: 2026-01-25 Evening - Steal System Fix
+
+**Commits:** `8f26e36` → `045d8c2`
 
 ### Summary
 
@@ -13,6 +50,8 @@ Fixed critical steal system bug where out-of-range attempts had no feedback. Pla
 ### Root Cause
 
 AI waits `steal_reaction_time` (0.18s) before pressing steal, moving closer during the wait. By the time AI presses, they're always inside the 60px `STEAL_RANGE`. Humans press immediately when they think they're close, often at 61-80px, getting zero feedback.
+
+**Note:** This session's work is included in commits `8f26e36` → `045d8c2`.
 
 ### Fix Applied
 
@@ -65,6 +104,8 @@ Created `notes/tomorrow_plan.md` with 20 improvements focused on:
 ---
 
 ## Session: 2026-01-25 - Full Audit & Planning Cleanup
+
+**Commits:** `6a3c6ab` → `9f6ee23`
 
 ### Summary
 
@@ -123,6 +164,8 @@ Training Tools → AI Quality → MVP → V0 → V1
 
 ## Session: 2026-01-24 - Code Review Guidelines
 
+**Commits:** `f610bba` → `03a5651`
+
 ### Summary
 
 Created comprehensive code review guidelines document based on research into Bevy-specific performance pitfalls, general game development anti-patterns, and analysis of existing codebase patterns.
@@ -168,6 +211,8 @@ Created comprehensive code review guidelines document based on research into Bev
 ---
 
 ## Audit: 2026-01-24 - Full Audit
+
+**Commit:** `f610bba`
 
 ### Session Summary
 
@@ -228,6 +273,8 @@ Full audit per CLAUDE.md checklist. Fixed compilation errors and updated documen
 ---
 
 ## Audit: 2026-01-23 (Session 3) - Snapshot & Regression Testing
+
+**Commit:** `64b797c`
 
 ### Session Summary
 
@@ -300,6 +347,8 @@ Added automated screenshot capture and visual regression testing infrastructure.
 ---
 
 ## Audit: 2026-01-23 (Session 2) - Steal Simplification & Presets Complete
+
+**Commits:** `81ae58f` → `64b797c`
 
 ### Session Summary
 
@@ -386,6 +435,8 @@ Major system overhaul: simplified steal mechanics, completed game presets system
 ---
 
 ## Audit: 2026-01-23 (Session 1) - AI Enhancement Plan Complete
+
+**Commits:** `5fd2d3e` → `81ae58f`
 
 ### Session Summary
 
@@ -483,6 +534,8 @@ Implemented the complete AI enhancement plan (4 phases):
 ---
 
 ## Audit: 2026-01-22 (Session 3)
+
+**Commit:** `35ea1a7`
 
 ### Session Summary
 

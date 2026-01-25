@@ -261,16 +261,19 @@ impl NavGraph {
     }
 
     /// Estimate cost to reach a node from current position.
-    /// Simple heuristic: horizontal distance + vertical distance * 2 (height costs more due to jumping).
+    /// Weights: horizontal + going up (moderate cost) + going down (cheap).
+    /// Going up requires jumping, going down is just dropping.
     pub fn estimate_path_cost(&self, from: Vec2, to_node: usize) -> f32 {
         if to_node >= self.nodes.len() {
             return f32::MAX;
         }
         let target = self.nodes[to_node].center;
         let dx = (from.x - target.x).abs();
-        let dy = (from.y - target.y).abs();
-        // Height costs more (jumping is slow/risky)
-        dx + dy * 2.0
+        let dy = target.y - from.y; // Positive = going up, negative = going down
+        let dy_up = dy.max(0.0);
+        let dy_down = (-dy).max(0.0);
+        // Going up costs more (jumping), going down is cheap (just drop)
+        dx + dy_up * 1.2 + dy_down * 0.3
     }
 
     /// Find a platform suitable for defending against an elevated opponent.

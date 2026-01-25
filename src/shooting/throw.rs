@@ -149,9 +149,10 @@ pub fn throw_ball(
         let angle_variance = rng.gen_range(-variance..variance) * max_angle_variance;
         let final_angle = base_angle + angle_variance;
 
-        // Half power for quick shots (< 400ms charge)
-        let power_multiplier = if charging.charge_time < SHOT_QUICK_THRESHOLD {
-            0.5
+        // Reduced power for very quick shots (< 250ms charge)
+        // Changed from 0.5 at 400ms to 0.7 at 250ms to make AI quick shots more viable
+        let power_multiplier = if charging.charge_time < 0.25 {
+            0.7
         } else {
             1.0
         };

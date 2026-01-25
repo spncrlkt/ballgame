@@ -369,6 +369,13 @@ pub fn ai_decision_update(
         // Check if AI is holding the ball
         let ai_has_ball = holding.is_some();
 
+        // Track ball hold time for desperation shots
+        if ai_has_ball {
+            ai_state.ball_hold_time += dt;
+        } else {
+            ai_state.ball_hold_time = 0.0;
+        }
+
         // Check if opponent (any other player) has ball
         let opponent_has_ball = all_players
             .iter()
@@ -415,6 +422,10 @@ pub fn ai_decision_update(
 
         // Decide current goal (using profile values)
         let new_goal = if ai_has_ball {
+            // Force shot after holding ball for 6+ seconds (prevents stalling)
+            if ai_state.ball_hold_time > 6.0 {
+                AiGoal::ChargeShot
+            } else {
             let horizontal_distance = (ai_pos.x - target_basket_pos.x).abs();
             let basket_is_elevated = target_basket_pos.y > ai_pos.y + PLAYER_SIZE.y;
 
@@ -429,7 +440,15 @@ pub fn ai_decision_update(
 
             // Evaluate shot quality based on position (heatmap-derived)
             let shot_quality = evaluate_shot_quality(ai_pos, target_basket_pos);
-            let quality_acceptable = shot_quality >= profile.min_shot_quality;
+
+            // Desperation factor: after 8 seconds holding ball, lower threshold (max 50% reduction)
+            let desperation_factor = if ai_state.ball_hold_time > 8.0 {
+                1.0 - ((ai_state.ball_hold_time - 8.0) * 0.03).min(0.5)
+            } else {
+                1.0
+            };
+            let effective_min_quality = profile.min_shot_quality * desperation_factor;
+            let quality_acceptable = shot_quality >= effective_min_quality;
 
             // Shoot if within range OR if we've reached our nav target (best position)
             let at_nav_target = nav_state
@@ -453,6 +472,7 @@ pub fn ai_decision_update(
             // Only consider seeking if current position meets basic shooting criteria
             let should_seek = if quality_acceptable && in_shoot_range && !already_charging {
                 if let Some(best_node_idx) = nav_graph.find_best_shot_position(target_basket_pos) {
+                    let best_node = &nav_graph.nodes[best_node_idx];
                     let best_quality = nav_graph.get_shot_quality(best_node_idx, target_basket_pos);
                     let quality_gain = best_quality - shot_quality;
 
@@ -461,16 +481,21 @@ pub fn ai_decision_update(
                         // Opportunity cost factors:
                         // 1. Path cost (time/risk to reach better position)
                         let path_cost = nav_graph.estimate_path_cost(ai_pos, best_node_idx);
-                        let path_cost_normalized = (path_cost / 500.0).min(1.0);
+                        let path_cost_normalized = (path_cost / 400.0).min(1.0);
 
                         // 2. Opponent pressure (closer opponent = higher cost to seek)
                         let opponent_pressure = opponent_pos
                             .map(|opp| 1.0 - (ai_pos.distance(opp) / 300.0).min(1.0))
                             .unwrap_or(0.0);
 
-                        // Utility = quality_gain - opportunity_costs, scaled by patience
+                        // 3. Height bonus - reward seeking elevated platforms
+                        let height_above_floor = (best_node.top_y - ARENA_FLOOR_Y - 50.0).max(0.0);
+                        let height_bonus = (height_above_floor / 300.0).min(0.3) * 0.5; // Up to +0.15
+
+                        // Utility = quality_gain + height_bonus - opportunity_costs, scaled by patience
                         let raw_utility = quality_gain
-                            - (path_cost_normalized * 0.3)
+                            + height_bonus
+                            - (path_cost_normalized * 0.15) // Reduced from 0.3
                             - (opponent_pressure * 0.2);
                         let seek_utility = raw_utility * profile.position_patience;
 
@@ -497,6 +522,7 @@ pub fn ai_decision_update(
             } else {
                 AiGoal::AttackWithBall
             }
+            } // End of else block for forced shot after 12s
         } else if opponent_has_ball {
             if let Some(opp_pos) = opponent_pos {
                 let distance_to_opponent = ai_pos.distance(opp_pos);
@@ -671,9 +697,21 @@ pub fn ai_decision_update(
                             }
                         }
 
-                        // Drift toward basket while airborne
-                        let dx = target_basket_pos.x - ai_pos.x;
-                        input.move_x = dx.signum() * 0.3;
+                        // Drift toward optimal shooting position (not basket wall)
+                        // Optimal is ~200px in front of basket
+                        let basket_is_left = target_basket_pos.x < 0.0;
+                        let optimal_x = if basket_is_left {
+                            target_basket_pos.x + 200.0 // Right of left basket
+                        } else {
+                            target_basket_pos.x - 200.0 // Left of right basket
+                        };
+                        // Only drift if significantly mispositioned
+                        let dx = optimal_x - ai_pos.x;
+                        if dx.abs() > 50.0 {
+                            input.move_x = dx.signum() * 0.2;
+                        } else {
+                            input.move_x = 0.0; // Stay put
+                        }
 
                         // Reset if landed without shooting (give more time like player has)
                         if grounded.0 && ai_state.jump_shot_timer > 1.0 {
