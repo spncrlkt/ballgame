@@ -216,6 +216,7 @@ pub fn pickup_ball(
         }
 
         // If no free ball nearby, check for steal opportunity
+        let mut nearest_defender_distance = f32::MAX;
         for (
             defender_entity,
             defender_transform,
@@ -226,6 +227,7 @@ pub fn pickup_ball(
         ) in &mut holding_players
         {
             let distance = player_pos.distance(defender_transform.translation.truncate());
+            nearest_defender_distance = nearest_defender_distance.min(distance);
 
             if distance < STEAL_RANGE {
                 // Record the attempt BEFORE rolling for success
@@ -302,6 +304,19 @@ pub fn pickup_ball(
 
                 return;
             }
+        }
+
+        // Check for "near miss" - defender nearby but outside steal range
+        // This gives feedback to players who pressed steal too early
+        if nearest_defender_distance < STEAL_NEAR_MISS_RANGE {
+            steal_contest.out_of_range_timer = STEAL_OUT_OF_RANGE_FLASH_DURATION;
+            steal_contest.out_of_range_entity = Some(player_entity);
+            // Short cooldown to prevent spam, but less punishing than actual failed steal
+            cooldown.0 = STEAL_OUT_OF_RANGE_COOLDOWN;
+            info!(
+                "STEAL OUT OF RANGE: {:?} at {:.1}px (need <{:.1}px)",
+                team, nearest_defender_distance, STEAL_RANGE
+            );
         }
     }
 }

@@ -520,7 +520,19 @@ fn event_capture(
         let current_cooldown = steal_cooldown.0;
         let prev_cooldown = capture.prev_steal_cooldowns.get(&entity).copied().unwrap_or(0.0);
 
-        if current_cooldown > prev_cooldown + 0.15 && current_cooldown >= 0.25 {
+        // Detect out-of-range attempts (shorter cooldown ~0.2s)
+        if steal_contest.out_of_range_timer > 0.0
+            && steal_contest.out_of_range_entity == Some(entity)
+            && current_cooldown > prev_cooldown + 0.1
+        {
+            capture.events.push(CapturedEvent {
+                frame,
+                event_type: "StealOutOfRange".to_string(),
+                player: player_id.clone(),
+            });
+        }
+        // Detect actual steal attempts (longer cooldown >= 0.25s)
+        else if current_cooldown > prev_cooldown + 0.15 && current_cooldown >= 0.25 {
             capture.events.push(CapturedEvent {
                 frame,
                 event_type: "StealAttempt".to_string(),

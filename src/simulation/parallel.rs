@@ -50,7 +50,7 @@ pub fn run_matches_parallel(
         .par_iter()
         .map(|cfg| {
             let mut sim_config = cfg.base_config.clone();
-            sim_config.level = cfg.level;
+            sim_config.level = Some(cfg.level);
             sim_config.left_profile = cfg.left_profile.clone();
             sim_config.right_profile = cfg.right_profile.clone();
             run_match(&sim_config, cfg.seed, level_db, profile_db)
@@ -89,6 +89,17 @@ pub fn run_tournament_parallel(
         .map(|p| p.name.clone())
         .collect();
 
+    // Build list of valid levels for random selection (exclude debug levels and Pit)
+    let valid_levels: Vec<u32> = (1..=level_db.len() as u32)
+        .filter(|&level| {
+            if let Some(lvl) = level_db.get((level - 1) as usize) {
+                !lvl.debug && lvl.name != "Pit"
+            } else {
+                false
+            }
+        })
+        .collect();
+
     // Build all match configurations
     let mut configs = Vec::new();
     let mut match_num = 0u64;
@@ -100,12 +111,18 @@ pub fn run_tournament_parallel(
             }
             for _ in 0..matches_per_pair {
                 match_num += 1;
+                let seed = base_seed.wrapping_add(match_num);
+                // Use specified level or pick random based on seed
+                let level = base_config.level.unwrap_or_else(|| {
+                    let idx = (seed as usize) % valid_levels.len();
+                    valid_levels[idx]
+                });
                 configs.push(MatchConfig {
                     base_config: base_config.clone(),
-                    level: base_config.level,
+                    level,
                     left_profile: left.clone(),
                     right_profile: right.clone(),
-                    seed: base_seed.wrapping_add(match_num),
+                    seed,
                 });
             }
         }
@@ -124,13 +141,31 @@ pub fn run_multi_match_parallel(
     level_db: &LevelDatabase,
     profile_db: &AiProfileDatabase,
 ) -> Vec<MatchResult> {
+    // Build list of valid levels for random selection (exclude debug levels and Pit)
+    let valid_levels: Vec<u32> = (1..=level_db.len() as u32)
+        .filter(|&level| {
+            if let Some(lvl) = level_db.get((level - 1) as usize) {
+                !lvl.debug && lvl.name != "Pit"
+            } else {
+                false
+            }
+        })
+        .collect();
+
     let configs: Vec<_> = (0..count)
-        .map(|i| MatchConfig {
-            base_config: base_config.clone(),
-            level: base_config.level,
-            left_profile: base_config.left_profile.clone(),
-            right_profile: base_config.right_profile.clone(),
-            seed: base_seed.wrapping_add(i as u64),
+        .map(|i| {
+            let seed = base_seed.wrapping_add(i as u64);
+            let level = base_config.level.unwrap_or_else(|| {
+                let idx = (seed as usize) % valid_levels.len();
+                valid_levels[idx]
+            });
+            MatchConfig {
+                base_config: base_config.clone(),
+                level,
+                left_profile: base_config.left_profile.clone(),
+                right_profile: base_config.right_profile.clone(),
+                seed,
+            }
         })
         .collect();
 

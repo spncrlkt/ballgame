@@ -70,7 +70,7 @@ pub use steal::{StealContest, StealCooldown, StealTracker};
 pub use ui::{
     ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleIndicator, CycleSelection,
     DebugSettings, DebugText, DownOption, PhysicsTweaks, RightOption, ScoreFlash, ScoreLevelText,
-    StealCooldownIndicator, StealFailFlash, TweakPanel, TweakRow, ViewportScale,
+    StealCooldownIndicator, StealFailFlash, StealOutOfRangeFlash, TweakPanel, TweakRow, ViewportScale,
     VulnerableIndicator,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};

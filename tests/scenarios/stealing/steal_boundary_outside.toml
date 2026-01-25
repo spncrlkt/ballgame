@@ -1,0 +1,49 @@
+# Test: Steal attempt at boundary (just outside range)
+# This tests the edge case at STEAL_RANGE boundary (60px)
+#
+# With the fix: Players at 65px apart should trigger StealOutOfRange
+# (which gives feedback that they're close but not close enough)
+#
+# Distance: 65px (5px outside STEAL_RANGE of 60px, but inside STEAL_NEAR_MISS_RANGE of 100px)
+
+name = "Steal boundary - just outside range"
+description = "Steal attempt at 65px should trigger StealOutOfRange feedback"
+
+[setup]
+level = "test_steal_arena"
+
+# Floor at y=-450, floor top at -430, player center at -398
+[[setup.entities]]
+type = "player"
+id = "holder"
+team = "left"
+x = 0.0
+y = -398.0
+holding_ball = true
+
+[[setup.entities]]
+type = "player"
+id = "stealer"
+team = "right"
+x = 65.0  # 65px away - outside STEAL_RANGE (60px) but inside STEAL_NEAR_MISS_RANGE (100px)
+y = -398.0
+
+# Stealer tries to steal
+[[input]]
+frame = 10
+stealer = { pickup = true }
+
+# Should get "out of range" feedback (not a real steal attempt)
+[[expect.sequence]]
+event = "StealOutOfRange"
+player = "stealer"
+frame_min = 5
+frame_max = 20
+
+# Verify holder still has ball (no steal occurred)
+[[expect.state]]
+after_frame = 30
+checks = [
+    "holder.holding_ball = true",
+    "stealer.holding_ball = false",
+]

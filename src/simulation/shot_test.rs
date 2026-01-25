@@ -97,8 +97,9 @@ pub fn run_shot_test(config: &SimConfig, shots_per_position: u32, level_db: &Lev
     // Shooting positions (X coordinates) - from close to far
     let positions = vec![500.0, 300.0, 0.0, -200.0];
 
-    // Get basket height from level
-    let level_idx = (config.level - 1) as usize;
+    // Use specified level or default to 3 (Islands)
+    let level = config.level.unwrap_or(3);
+    let level_idx = (level - 1) as usize;
     let basket_y = level_db
         .get(level_idx)
         .map(|l| ARENA_FLOOR_Y + l.basket_height)
@@ -129,7 +130,7 @@ pub fn run_shot_test(config: &SimConfig, shots_per_position: u32, level_db: &Lev
             basket_y,
             shots_per_position,
             level_db,
-            config.level,
+            level,
         );
 
         println!(

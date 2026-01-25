@@ -19,6 +19,10 @@ pub struct StealCooldownIndicator;
 #[derive(Component)]
 pub struct StealFailFlash;
 
+/// Marker for out-of-range flash indicator (orange flash when steal attempt is too far)
+#[derive(Component)]
+pub struct StealOutOfRangeFlash;
+
 /// Marker for vulnerable indicator (shows when player is charging and exposed)
 #[derive(Component)]
 pub struct VulnerableIndicator;
@@ -28,7 +32,8 @@ pub struct VulnerableIndicator;
 // =============================================================================
 
 const COOLDOWN_COLOR: Color = Color::srgba(0.4, 0.4, 0.5, 0.8);
-const FAIL_FLASH_COLOR: Color = Color::srgba(0.9, 0.2, 0.2, 0.7);
+const FAIL_FLASH_COLOR: Color = Color::srgba(0.9, 0.2, 0.2, 0.7); // Red - steal failed
+const OUT_OF_RANGE_COLOR: Color = Color::srgba(1.0, 0.5, 0.0, 0.6); // Orange - too far
 const VULNERABLE_COLOR: Color = Color::srgba(1.0, 0.8, 0.0, 0.6); // Yellow warning
 
 // =============================================================================
@@ -62,6 +67,20 @@ pub fn spawn_steal_indicators(commands: &mut Commands, player_entity: Entity, _f
         .id();
     commands.entity(player_entity).add_child(fail_flash);
 
+    // Out-of-range flash: orange outline when steal attempted but too far
+    let out_of_range = commands
+        .spawn((
+            Sprite::from_color(
+                OUT_OF_RANGE_COLOR,
+                Vec2::new(PLAYER_SIZE.x + 10.0, PLAYER_SIZE.y + 10.0),
+            ),
+            Transform::from_xyz(0.0, 0.0, -0.15),
+            Visibility::Hidden,
+            StealOutOfRangeFlash,
+        ))
+        .id();
+    commands.entity(player_entity).add_child(out_of_range);
+
     // Vulnerable indicator: outline around player when charging and exposed
     let vulnerable = commands
         .spawn((
@@ -91,6 +110,7 @@ pub fn update_steal_indicators(
         (
             With<StealCooldownIndicator>,
             Without<StealFailFlash>,
+            Without<StealOutOfRangeFlash>,
             Without<VulnerableIndicator>,
         ),
     >,
@@ -99,6 +119,16 @@ pub fn update_steal_indicators(
         (
             With<StealFailFlash>,
             Without<StealCooldownIndicator>,
+            Without<StealOutOfRangeFlash>,
+            Without<VulnerableIndicator>,
+        ),
+    >,
+    mut out_of_range_query: Query<
+        &mut Visibility,
+        (
+            With<StealOutOfRangeFlash>,
+            Without<StealCooldownIndicator>,
+            Without<StealFailFlash>,
             Without<VulnerableIndicator>,
         ),
     >,
@@ -108,6 +138,7 @@ pub fn update_steal_indicators(
             With<VulnerableIndicator>,
             Without<StealCooldownIndicator>,
             Without<StealFailFlash>,
+            Without<StealOutOfRangeFlash>,
         ),
     >,
 ) {
@@ -132,6 +163,18 @@ pub fn update_steal_indicators(
                 // Show when this player just failed a steal
                 if steal_contest.last_attempt_failed
                     && steal_contest.fail_flash_entity == Some(player_entity)
+                {
+                    *visibility = Visibility::Inherited;
+                } else {
+                    *visibility = Visibility::Hidden;
+                }
+            }
+
+            // Update out-of-range flash indicator
+            if let Ok(mut visibility) = out_of_range_query.get_mut(child) {
+                // Show when this player attempted steal but was too far
+                if steal_contest.out_of_range_timer > 0.0
+                    && steal_contest.out_of_range_entity == Some(player_entity)
                 {
                     *visibility = Visibility::Inherited;
                 } else {

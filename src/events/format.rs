@@ -88,6 +88,7 @@ pub fn serialize_event(time_ms: u32, event: &GameEvent) -> String {
         GameEvent::StealAttempt { attacker } => attacker.to_string(),
         GameEvent::StealSuccess { attacker } => attacker.to_string(),
         GameEvent::StealFail { attacker } => attacker.to_string(),
+        GameEvent::StealOutOfRange { attacker } => attacker.to_string(),
         GameEvent::Jump { player } => player.to_string(),
         GameEvent::Land { player } => player.to_string(),
         GameEvent::AiGoal { player, goal } => {
@@ -214,6 +215,9 @@ pub fn parse_event(line: &str) -> Option<(u32, GameEvent)> {
             attacker: parse_player(data[0])?,
         },
         "S-" if !data.is_empty() => GameEvent::StealFail {
+            attacker: parse_player(data[0])?,
+        },
+        "SO" if !data.is_empty() => GameEvent::StealOutOfRange {
             attacker: parse_player(data[0])?,
         },
         "J" if !data.is_empty() => GameEvent::Jump {

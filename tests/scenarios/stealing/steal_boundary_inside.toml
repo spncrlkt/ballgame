@@ -1,0 +1,39 @@
+# Test: Steal attempt at boundary (just inside range)
+# This tests the edge case at STEAL_RANGE boundary (60px)
+#
+# Distance: 55px (5px inside STEAL_RANGE of 60px)
+# Expected: StealAttempt event SHOULD fire
+
+name = "Steal boundary - just inside range"
+description = "Steal attempt at 55px should trigger (inside 60px range)"
+
+[setup]
+level = "test_steal_arena"
+
+# Floor at y=-450, floor top at -430, player center at -398
+[[setup.entities]]
+type = "player"
+id = "holder"
+team = "left"
+x = 0.0
+y = -398.0
+holding_ball = true
+
+[[setup.entities]]
+type = "player"
+id = "stealer"
+team = "right"
+x = 55.0  # 55px away - inside STEAL_RANGE (60px)
+y = -398.0
+
+# Stealer tries to steal
+[[input]]
+frame = 10
+stealer = { pickup = true }
+
+# This should trigger a steal attempt (success or fail based on RNG)
+[[expect.sequence]]
+event = "StealAttempt"
+player = "stealer"
+frame_min = 5
+frame_max = 20

@@ -18,6 +18,10 @@ pub struct StealContest {
     pub fail_flash_timer: f32,
     /// Entity that last failed a steal (for positioning flash)
     pub fail_flash_entity: Option<Entity>,
+    /// Timer for "out of range" feedback (counts down)
+    pub out_of_range_timer: f32,
+    /// Entity that attempted steal while out of range
+    pub out_of_range_entity: Option<Entity>,
 }
 
 /// Resource tracking steal attempts and successes per team for differential enforcement
@@ -117,6 +121,14 @@ pub fn steal_cooldown_update(
         if steal_contest.fail_flash_timer <= 0.0 {
             steal_contest.last_attempt_failed = false;
             steal_contest.fail_flash_entity = None;
+        }
+    }
+
+    // Tick down out-of-range timer
+    if steal_contest.out_of_range_timer > 0.0 {
+        steal_contest.out_of_range_timer -= dt;
+        if steal_contest.out_of_range_timer <= 0.0 {
+            steal_contest.out_of_range_entity = None;
         }
     }
 }

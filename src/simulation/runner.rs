@@ -41,8 +41,38 @@ use super::metrics::{MatchResult, SimMetrics};
 use super::setup::sim_setup;
 use super::shot_test::run_shot_test;
 
+/// Get the effective level for a match.
+/// If config.level is None, picks a random non-debug level (excluding Pit).
+fn get_effective_level(config: &SimConfig, level_db: &LevelDatabase, seed: u64) -> u32 {
+    if let Some(level) = config.level {
+        return level;
+    }
+
+    // Build list of valid levels (exclude debug levels and "Pit")
+    let valid_levels: Vec<u32> = (1..=level_db.len() as u32)
+        .filter(|&level| {
+            if let Some(lvl) = level_db.get((level - 1) as usize) {
+                !lvl.debug && lvl.name != "Pit"
+            } else {
+                false
+            }
+        })
+        .collect();
+
+    if valid_levels.is_empty() {
+        return 3; // Fallback to Islands
+    }
+
+    // Use seed to pick a level deterministically
+    let idx = (seed as usize) % valid_levels.len();
+    valid_levels[idx]
+}
+
 /// Run a single match and return the result
 pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profile_db: &AiProfileDatabase) -> MatchResult {
+    // Determine effective level (random if not specified)
+    let level = get_effective_level(config, level_db, seed);
+
     // Create a minimal Bevy app
     let mut app = App::new();
 
@@ -60,7 +90,7 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
     app.insert_resource((*level_db).clone());
     app.insert_resource((*profile_db).clone());
     app.init_resource::<Score>();
-    app.insert_resource(CurrentLevel(config.level));
+    app.insert_resource(CurrentLevel(level));
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
@@ -86,11 +116,11 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
 
         // Log match start event
         let level_name = level_db
-            .get((config.level - 1) as usize)
+            .get((level - 1) as usize)
             .map(|l| l.name.clone())
-            .unwrap_or_else(|| format!("Level {}", config.level));
+            .unwrap_or_else(|| format!("Level {}", level));
         event_buffer.buffer.log(0.0, GameEvent::MatchStart {
-            level: config.level,
+            level,
             level_name,
             left_profile: config.left_profile.clone(),
             right_profile: config.right_profile.clone(),
@@ -235,7 +265,7 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
         eprintln!(
             "WARNING: 0-0 game on level {} ({} vs {}, seed {}). \
              AI is not scoring. Left shots: {}, Right shots: {}",
-            config.level, config.left_profile, config.right_profile, seed,
+            level, config.left_profile, config.right_profile, seed,
             left_stats.shots_attempted, right_stats.shots_attempted
         );
     }
@@ -244,7 +274,7 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
         eprintln!(
             "WARNING: Only {} shots in 60s on level {} ({} vs {}, seed {}). \
              AI is not shooting enough. Left: {}, Right: {}",
-            total_shots, config.level, config.left_profile, config.right_profile, seed,
+            total_shots, level, config.left_profile, config.right_profile, seed,
             left_stats.shots_attempted, right_stats.shots_attempted
         );
     }
@@ -253,12 +283,12 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
     // if total_steals == 0 { ... }
 
     let level_name = level_db
-        .get((config.level - 1) as usize)
+        .get((level - 1) as usize)
         .map(|l| l.name.clone())
-        .unwrap_or_else(|| format!("Level {}", config.level));
+        .unwrap_or_else(|| format!("Level {}", level));
 
     let mut result = MatchResult {
-        level: config.level,
+        level,
         level_name,
         left_profile: config.left_profile.clone(),
         right_profile: config.right_profile.clone(),
@@ -627,6 +657,14 @@ pub fn run_simulation(config: SimConfig) {
         }
     }
 
+    // Helper to format level name for display
+    let level_display = |level: Option<u32>| -> String {
+        match level {
+            Some(l) => level_names.get(&l).cloned().unwrap_or_else(|| format!("Level {}", l)),
+            None => "Random".to_string(),
+        }
+    };
+
     match &config.mode {
         super::config::SimMode::Single => {
             let seed = config.seed.unwrap_or_else(|| rand::thread_rng().r#gen());
@@ -635,7 +673,7 @@ pub fn run_simulation(config: SimConfig) {
                     "Running single match: {} vs {} on {} (seed: {})",
                     config.left_profile,
                     config.right_profile,
-                    level_names.get(&config.level).unwrap_or(&"?".to_string()),
+                    level_display(config.level),
                     seed
                 );
             }
@@ -653,7 +691,7 @@ pub fn run_simulation(config: SimConfig) {
                     if parallel_mode { format!(" (parallel, {} threads)", config.parallel) } else { String::new() },
                     config.left_profile,
                     config.right_profile,
-                    level_names.get(&config.level).unwrap_or(&"?".to_string())
+                    level_display(config.level)
                 );
             }
 
@@ -834,7 +872,7 @@ pub fn run_simulation(config: SimConfig) {
                         }
 
                         let mut match_config = config.clone();
-                        match_config.level = level as u32;
+                        match_config.level = Some(level as u32);
 
                         let seed = base_seed.wrapping_add(match_num as u64);
                         let result = run_match(&match_config, seed, &level_db, &profile_db);
@@ -1054,7 +1092,7 @@ pub fn run_ghost_trial(
 
     // Simulation control - use a modified config for ghost trial
     let mut ghost_config = config.clone();
-    ghost_config.level = level;
+    ghost_config.level = Some(level);
     ghost_config.left_profile = "Ghost".to_string(); // Ghost player (not AI)
 
     app.insert_resource(SimControl {

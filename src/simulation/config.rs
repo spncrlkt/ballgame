@@ -30,8 +30,8 @@ pub enum SimMode {
 pub struct SimConfig {
     /// Simulation mode
     pub mode: SimMode,
-    /// Level index (1-based)
-    pub level: u32,
+    /// Level index (1-based), None = random per match (excludes debug levels and Pit)
+    pub level: Option<u32>,
     /// Left player AI profile name
     pub left_profile: String,
     /// Right player AI profile name
@@ -62,7 +62,7 @@ impl Default for SimConfig {
     fn default() -> Self {
         Self {
             mode: SimMode::Single,
-            level: 2, // Open Floor (first non-debug level)
+            level: None, // Random per match, excludes debug levels and Pit
             left_profile: "Balanced".to_string(),
             right_profile: "Balanced".to_string(),
             duration_limit: 60.0,
@@ -90,7 +90,7 @@ impl SimConfig {
             match args[i].as_str() {
                 "--level" => {
                     if i + 1 < args.len() {
-                        config.level = args[i + 1].parse().unwrap_or(2);
+                        config.level = args[i + 1].parse().ok();
                         i += 1;
                     }
                 }
@@ -226,7 +226,7 @@ USAGE:
     cargo run --bin simulate -- [OPTIONS]
 
 OPTIONS:
-    --level <N>         Level number (1-12, default: 2)
+    --level <N>         Level number (1-12, default: random per match)
     --left <PROFILE>    Left player AI profile (default: Balanced)
     --right <PROFILE>   Right player AI profile (default: Balanced)
     --duration <SECS>   Match duration limit in seconds (default: 60)

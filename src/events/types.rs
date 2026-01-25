@@ -113,6 +113,8 @@ pub enum GameEvent {
     StealSuccess { attacker: PlayerId },
     /// Steal failed
     StealFail { attacker: PlayerId },
+    /// Steal attempted but out of range
+    StealOutOfRange { attacker: PlayerId },
 
     // === Movement Events ===
     /// Player jumped
@@ -174,6 +176,7 @@ impl GameEvent {
             GameEvent::StealAttempt { .. } => "SA",
             GameEvent::StealSuccess { .. } => "S+",
             GameEvent::StealFail { .. } => "S-",
+            GameEvent::StealOutOfRange { .. } => "SO",
             GameEvent::Jump { .. } => "J",
             GameEvent::Land { .. } => "LD",
             GameEvent::AiGoal { .. } => "AG",

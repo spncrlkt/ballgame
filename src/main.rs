@@ -54,6 +54,11 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let screenshot_and_quit = args.iter().any(|a| a == "--screenshot-and-quit");
 
+    // Check for --level <num> override (1-indexed)
+    let level_override = args.iter()
+        .position(|a| a == "--level")
+        .and_then(|i| args.get(i + 1).and_then(|s| s.parse::<u32>().ok()));
+
     // Check for replay mode: --replay <path>
     let replay_file = args.iter()
         .position(|a| a == "--replay")
@@ -70,7 +75,8 @@ fn main() {
     // Extract values from loaded settings for resource initialization
     let loaded_viewport_index = current_settings.settings.viewport_index;
     let loaded_palette_index = current_settings.settings.palette_index;
-    let loaded_level = current_settings.settings.level;
+    // Use command-line level override if provided, otherwise use saved settings
+    let loaded_level = level_override.unwrap_or(current_settings.settings.level);
     let loaded_active_direction = current_settings.settings.active_direction.clone();
     let loaded_down_option = current_settings.settings.down_option.clone();
     let loaded_right_option = current_settings.settings.right_option.clone();

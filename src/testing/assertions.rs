@@ -35,6 +35,7 @@ impl CapturedEvent {
             GameEvent::StealAttempt { attacker } => ("StealAttempt".to_string(), Some(attacker)),
             GameEvent::StealSuccess { attacker } => ("StealSuccess".to_string(), Some(attacker)),
             GameEvent::StealFail { attacker } => ("StealFail".to_string(), Some(attacker)),
+            GameEvent::StealOutOfRange { attacker } => ("StealOutOfRange".to_string(), Some(attacker)),
             GameEvent::Goal { player, .. } => ("Goal".to_string(), Some(player)),
             _ => return None,
         };

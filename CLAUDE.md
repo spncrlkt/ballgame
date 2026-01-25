@@ -184,7 +184,7 @@ src/
 
 **Resources:**
 - `PlayerInput` - Buffered input state (movement, jump, pickup, throw)
-- `StealContest` - Steal feedback (fail flash timer for visual feedback)
+- `StealContest` - Steal feedback (fail_flash_timer, out_of_range_timer, entities)
 - `Score` - Left/right team scores
 - `DebugSettings` - Debug UI visibility
 - `CurrentLevel` - Current level number (1-10)

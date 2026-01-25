@@ -4,6 +4,66 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Session: 2026-01-25 Evening - Steal System Fix
+
+### Summary
+
+Fixed critical steal system bug where out-of-range attempts had no feedback. Players pressing steal at 61-100px were experiencing "silent failures" - input consumed but no event fired, no cooldown, no visual feedback.
+
+### Root Cause
+
+AI waits `steal_reaction_time` (0.18s) before pressing steal, moving closer during the wait. By the time AI presses, they're always inside the 60px `STEAL_RANGE`. Humans press immediately when they think they're close, often at 61-80px, getting zero feedback.
+
+### Fix Applied
+
+1. Added `STEAL_NEAR_MISS_RANGE` constant (100px) - triggers feedback if close but not close enough
+2. Added `STEAL_OUT_OF_RANGE_COOLDOWN` (0.2s) - short cooldown, less punishing than failed steal
+3. Added `STEAL_OUT_OF_RANGE_FLASH_DURATION` (0.2s) - visual feedback duration
+4. Added `out_of_range_timer` and `out_of_range_entity` to `StealContest` resource
+5. Added `StealOutOfRange` event type for logging/testing
+6. Modified `pickup_ball()` to detect near-miss and set feedback
+
+### Test-Driven Verification
+
+| Test | Purpose | Result |
+|------|---------|--------|
+| `steal_boundary_outside.toml` | At 65px, expect StealOutOfRange | PASS |
+| `steal_boundary_inside.toml` | At 55px, expect StealAttempt | PASS |
+| Rollback test | Disable fix, verify test fails | PASS (failed as expected) |
+| Re-enable test | Enable fix, verify test passes | PASS |
+
+### Files Changed
+
+- `src/constants.rs` - Added 3 new steal constants
+- `src/steal.rs` - Added out_of_range fields to StealContest
+- `src/ball/interaction.rs` - Added near-miss detection logic
+- `src/events/types.rs` - Added StealOutOfRange event
+- `src/events/format.rs` - Added SO type code
+- `src/testing/assertions.rs` - Added StealOutOfRange mapping
+- `src/testing/runner.rs` - Added out-of-range event detection
+- `src/ui/steal_indicators.rs` - Added StealOutOfRangeFlash (orange) visual indicator
+- `tests/scenarios/stealing/steal_boundary_outside.toml` - New test
+- `tests/scenarios/stealing/steal_boundary_inside.toml` - New test
+
+### Audit Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| Compilation | PASS | 3 warnings (generate_ball.rs unused params) |
+| Clippy | PASS | ~7 warnings (existing, not new) |
+| All tests | PASS | 35/35 scenario tests |
+| Visual regression | REVIEW | Minor diff (-139 bytes, timing variance) |
+
+### Tomorrow Plan
+
+Created `notes/tomorrow_plan.md` with 20 improvements focused on:
+- Steal system visual verification
+- AI decision making analysis
+- Movement and physics polish
+- Test coverage expansion
+
+---
+
 ## Session: 2026-01-25 - Full Audit & Planning Cleanup
 
 ### Summary
