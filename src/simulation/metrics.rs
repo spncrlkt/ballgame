@@ -33,6 +33,21 @@ pub struct PlayerStats {
     pub nav_paths_completed: u32,
     /// Navigation paths failed/aborted
     pub nav_paths_failed: u32,
+    /// Average shot X position (finalized after match)
+    pub avg_shot_x: f32,
+    /// Average shot Y position (finalized after match)
+    pub avg_shot_y: f32,
+    /// Average shot quality at release (finalized after match)
+    pub avg_shot_quality: f32,
+    /// Internal: Sum of shot X positions (for computing average)
+    #[serde(skip)]
+    pub shot_positions_sum_x: f32,
+    /// Internal: Sum of shot Y positions (for computing average)
+    #[serde(skip)]
+    pub shot_positions_sum_y: f32,
+    /// Internal: Sum of shot qualities (for computing average)
+    #[serde(skip)]
+    pub shot_quality_sum: f32,
 }
 
 impl PlayerStats {
@@ -44,6 +59,9 @@ impl PlayerStats {
     pub fn finalize(&mut self) {
         if self.shots_attempted > 0 {
             self.accuracy = self.shots_made as f32 / self.shots_attempted as f32;
+            self.avg_shot_x = self.shot_positions_sum_x / self.shots_attempted as f32;
+            self.avg_shot_y = self.shot_positions_sum_y / self.shots_attempted as f32;
+            self.avg_shot_quality = self.shot_quality_sum / self.shots_attempted as f32;
         }
     }
 }
@@ -258,6 +276,8 @@ pub struct SimMetrics {
     pub prev_nav_active: [bool; 2],
     /// Previous nav path length (to detect completion vs clear) [left, right]
     pub prev_nav_path_len: [usize; 2],
+    /// Previous ball holder entity (for detecting shot release)
+    pub prev_ball_holder: Option<Entity>,
 }
 
 impl Default for SimMetrics {
@@ -278,6 +298,7 @@ impl Default for SimMetrics {
             prev_jumping: [false, false],
             prev_nav_active: [false, false],
             prev_nav_path_len: [0, 0],
+            prev_ball_holder: None,
         }
     }
 }

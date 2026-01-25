@@ -279,6 +279,7 @@ pub fn ai_navigation_update(
 pub fn ai_decision_update(
     time: Res<Time>,
     profile_db: Res<AiProfileDatabase>,
+    nav_graph: Res<NavGraph>,
     mut ai_query: Query<
         (
             Entity,
@@ -425,9 +426,47 @@ pub fn ai_decision_update(
                 .map(|opp| ai_pos.distance(opp) < profile.steal_range * 1.2)
                 .unwrap_or(false);
 
+            // Calculate utility of seeking a better position vs shooting now
+            // Only consider seeking if current position meets basic shooting criteria
+            let should_seek = if quality_acceptable && in_shoot_range && !already_charging {
+                if let Some(best_node_idx) = nav_graph.find_best_shot_position(target_basket_pos) {
+                    let best_quality = nav_graph.get_shot_quality(best_node_idx, target_basket_pos);
+                    let quality_gain = best_quality - shot_quality;
+
+                    // Only seek if there's meaningful quality to gain
+                    if quality_gain > 0.01 {
+                        // Opportunity cost factors:
+                        // 1. Path cost (time/risk to reach better position)
+                        let path_cost = nav_graph.estimate_path_cost(ai_pos, best_node_idx);
+                        let path_cost_normalized = (path_cost / 500.0).min(1.0);
+
+                        // 2. Opponent pressure (closer opponent = higher cost to seek)
+                        let opponent_pressure = opponent_pos
+                            .map(|opp| 1.0 - (ai_pos.distance(opp) / 300.0).min(1.0))
+                            .unwrap_or(0.0);
+
+                        // Utility = quality_gain - opportunity_costs, scaled by patience
+                        let raw_utility = quality_gain
+                            - (path_cost_normalized * 0.3)
+                            - (opponent_pressure * 0.2);
+                        let seek_utility = raw_utility * profile.position_patience;
+
+                        // Seek if utility exceeds threshold
+                        seek_utility > profile.seek_threshold
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
             // Only shoot if shot quality is acceptable AND position conditions are met
             // AND opponent isn't too close (or we're already committed to the shot)
-            if quality_acceptable && (in_shoot_range || reached_target) && !opponent_too_close {
+            // AND we're not deciding to seek a better position
+            if quality_acceptable && (in_shoot_range || reached_target) && !opponent_too_close && !should_seek {
                 AiGoal::ChargeShot
             } else if already_charging {
                 // Commit to the shot once started

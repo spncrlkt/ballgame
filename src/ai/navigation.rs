@@ -221,6 +221,56 @@ impl NavGraph {
             .map(|(i, _)| i)
     }
 
+    /// Find the node with the best shot quality for a given target basket.
+    /// Excludes DeadZone nodes.
+    pub fn find_best_shot_position(&self, target: Vec2) -> Option<usize> {
+        let shooting_at_left = target.x < 0.0;
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| node.platform_role != PlatformRole::DeadZone)
+            .max_by(|(_, a), (_, b)| {
+                let qa = if shooting_at_left {
+                    a.shot_quality_left
+                } else {
+                    a.shot_quality_right
+                };
+                let qb = if shooting_at_left {
+                    b.shot_quality_left
+                } else {
+                    b.shot_quality_right
+                };
+                qa.partial_cmp(&qb).unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(i, _)| i)
+    }
+
+    /// Get the shot quality for a specific node shooting at a target basket.
+    pub fn get_shot_quality(&self, node_idx: usize, target: Vec2) -> f32 {
+        if node_idx >= self.nodes.len() {
+            return 0.0;
+        }
+        let shooting_at_left = target.x < 0.0;
+        if shooting_at_left {
+            self.nodes[node_idx].shot_quality_left
+        } else {
+            self.nodes[node_idx].shot_quality_right
+        }
+    }
+
+    /// Estimate cost to reach a node from current position.
+    /// Simple heuristic: horizontal distance + vertical distance * 2 (height costs more due to jumping).
+    pub fn estimate_path_cost(&self, from: Vec2, to_node: usize) -> f32 {
+        if to_node >= self.nodes.len() {
+            return f32::MAX;
+        }
+        let target = self.nodes[to_node].center;
+        let dx = (from.x - target.x).abs();
+        let dy = (from.y - target.y).abs();
+        // Height costs more (jumping is slow/risky)
+        dx + dy * 2.0
+    }
+
     /// Find the best elevated platform for the AI to navigate to when no good
     /// shooting position is found. Returns the highest reachable platform with
     /// decent shot quality.

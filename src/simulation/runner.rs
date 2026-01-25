@@ -11,6 +11,7 @@ use std::time::Duration;
 use crate::ai::{
     AiNavState, AiProfileDatabase, AiState, NavGraph, ai_decision_update,
     ai_navigation_update, mark_nav_dirty_on_level_change, rebuild_nav_graph,
+    shot_quality::evaluate_shot_quality,
 };
 use crate::ball::{
     Ball, BallState, CurrentPalette, Velocity, ball_collisions, ball_follow_holder,
@@ -27,6 +28,8 @@ use crate::player::{
     HoldingBall, JumpState, Player, Team, apply_gravity, apply_input, check_collisions,
 };
 use crate::scoring::{CurrentLevel, Score, check_scoring};
+use crate::world::Basket;
+use crate::player::TargetBasket;
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
 use crate::ui::PhysicsTweaks;
 use crate::steal::{StealContest, StealCooldown, steal_cooldown_update};
@@ -244,15 +247,63 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
 fn metrics_update(
     time: Res<Time>,
     mut metrics: ResMut<SimMetrics>,
-    players: Query<(&Transform, &Team, &AiState, &JumpState, &AiNavState, Option<&HoldingBall>), With<Player>>,
+    players: Query<(Entity, &Transform, &Team, &AiState, &JumpState, &AiNavState, Option<&HoldingBall>, &TargetBasket), With<Player>>,
+    balls: Query<(&Transform, &BallState), With<Ball>>,
+    baskets: Query<(&Transform, &Basket)>,
     score: Res<Score>,
 ) {
     let dt = time.delta_secs();
     metrics.elapsed += dt;
     metrics.time_since_score += dt;
 
+    // Detect shot release (ball transitions from Held to InFlight)
+    for (_ball_transform, ball_state) in &balls {
+        match ball_state {
+            BallState::InFlight { shooter, .. } => {
+                // Ball is in flight - check if it was just released
+                if metrics.prev_ball_holder.is_some() {
+                    // Shot was just released - record position and quality
+                    if let Ok((_, shooter_transform, shooter_team, _, _, _, _, target_basket)) = players.get(*shooter) {
+                        let pos = shooter_transform.translation.truncate();
+
+                        // Find target basket position
+                        let basket_pos = baskets
+                            .iter()
+                            .find(|(_, b)| **b == target_basket.0)
+                            .map(|(t, _)| t.translation.truncate())
+                            .unwrap_or_default();
+
+                        let quality = evaluate_shot_quality(pos, basket_pos);
+
+                        match shooter_team {
+                            Team::Left => {
+                                metrics.left.shots_attempted += 1;
+                                metrics.left.shot_positions_sum_x += pos.x;
+                                metrics.left.shot_positions_sum_y += pos.y;
+                                metrics.left.shot_quality_sum += quality;
+                            }
+                            Team::Right => {
+                                metrics.right.shots_attempted += 1;
+                                metrics.right.shot_positions_sum_x += pos.x;
+                                metrics.right.shot_positions_sum_y += pos.y;
+                                metrics.right.shot_quality_sum += quality;
+                            }
+                        }
+                    }
+                    metrics.prev_ball_holder = None;
+                }
+            }
+            BallState::Held(holder) => {
+                metrics.prev_ball_holder = Some(*holder);
+            }
+            BallState::Free => {
+                metrics.prev_ball_holder = None;
+            }
+        }
+    }
+
     // Track player stats
-    for (transform, team, ai_state, jump_state, nav_state, holding) in &players {
+    for (_entity, transform, team, ai_state, jump_state, nav_state, holding, _target_basket) in &players {
         let pos = transform.translation.truncate();
         let goal_name = format!("{:?}", ai_state.current_goal);
         let has_ball = holding.is_some();

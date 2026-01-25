@@ -43,6 +43,12 @@ pub struct AiProfile {
     /// Maximum button presses per second
     /// Simulates human mashing speed - higher = faster mashing (typical human: 8-15)
     pub button_presses_per_sec: f32,
+    /// Multiplier for seek utility calculation (0.3-2.0)
+    /// Higher = more willing to seek better positions before shooting
+    pub position_patience: f32,
+    /// Minimum utility required to seek better position (0.05-0.20)
+    /// Higher = shoots more quickly from current position
+    pub seek_threshold: f32,
 }
 
 impl Default for AiProfile {
@@ -61,6 +67,8 @@ impl Default for AiProfile {
             defensive_iq: 0.5,
             steal_reaction_time: 0.2, // ~200ms like typical human reaction
             button_presses_per_sec: 12.0, // ~12 presses/sec (typical human mashing)
+            position_patience: 1.0, // Moderate willingness to seek better positions
+            seek_threshold: 0.10, // Moderate threshold for seeking
         }
     }
 }
@@ -224,6 +232,16 @@ fn parse_profiles(content: &str) -> Vec<AiProfile> {
                 "button_presses_per_sec" => {
                     if let Ok(v) = value.parse() {
                         profile.button_presses_per_sec = v;
+                    }
+                }
+                "position_patience" => {
+                    if let Ok(v) = value.parse() {
+                        profile.position_patience = v;
+                    }
+                }
+                "seek_threshold" => {
+                    if let Ok(v) = value.parse() {
+                        profile.seek_threshold = v;
                     }
                 }
                 _ => {}

@@ -75,7 +75,10 @@ impl SimDatabase {
                 distance_traveled REAL NOT NULL,
                 jumps INTEGER NOT NULL,
                 nav_paths_completed INTEGER NOT NULL,
-                nav_paths_failed INTEGER NOT NULL
+                nav_paths_failed INTEGER NOT NULL,
+                avg_shot_x REAL NOT NULL DEFAULT 0.0,
+                avg_shot_y REAL NOT NULL DEFAULT 0.0,
+                avg_shot_quality REAL NOT NULL DEFAULT 0.0
             );
 
             CREATE INDEX IF NOT EXISTS idx_matches_session ON matches(session_id);
@@ -136,8 +139,8 @@ impl SimDatabase {
             r#"INSERT INTO player_stats
                (match_id, side, goals, shots_attempted, shots_made, steals_attempted,
                 steals_successful, possession_time, distance_traveled, jumps,
-                nav_paths_completed, nav_paths_failed)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"#,
+                nav_paths_completed, nav_paths_failed, avg_shot_x, avg_shot_y, avg_shot_quality)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"#,
             params![
                 match_id,
                 side,
@@ -151,6 +154,9 @@ impl SimDatabase {
                 stats.jumps,
                 stats.nav_paths_completed,
                 stats.nav_paths_failed,
+                stats.avg_shot_x,
+                stats.avg_shot_y,
+                stats.avg_shot_quality,
             ],
         )?;
         Ok(())
