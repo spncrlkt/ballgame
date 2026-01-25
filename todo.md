@@ -4,6 +4,22 @@
 
 ---
 
+## CRITICAL: Fix Steal System
+
+**The current steal system is broken and unfair. AI cheats and steal mechanics are not equitable.**
+
+- [ ] **Root cause analysis** - Figure out why steals are imbalanced
+- [ ] **Investigate AI steal behavior** - Is AI getting more steal opportunities? Better timing?
+- [ ] **Review steal RNG** - Is the random roll actually fair?
+- [ ] **Fix the underlying problem** - Whatever is causing steal inequity
+
+**TEMPORARY MEASURE:** Steal differential enforcement is active (max 2 steal difference).
+- Do NOT remove this until the root cause is fixed and verified by user.
+- The differential enforcement is in `src/ball/interaction.rs:pickup_ball()`
+- It uses `StealTracker` resource to track steals per team
+
+---
+
 ## P0: Training Binary UX
 
 *Top priority - enables faster AI iteration*

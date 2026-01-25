@@ -32,7 +32,7 @@ use crate::world::Basket;
 use crate::player::TargetBasket;
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
 use crate::ui::PhysicsTweaks;
-use crate::steal::{StealContest, StealCooldown, steal_cooldown_update};
+use crate::steal::{StealContest, StealCooldown, StealTracker, steal_cooldown_update};
 
 use super::config::SimConfig;
 use super::control::{SimControl, SimEventBuffer};
@@ -62,6 +62,7 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
     app.init_resource::<Score>();
     app.insert_resource(CurrentLevel(config.level));
     app.init_resource::<StealContest>();
+    app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
     app.init_resource::<PhysicsTweaks>();
     app.init_resource::<LastShotInfo>();
@@ -1040,6 +1041,7 @@ pub fn run_ghost_trial(
     app.init_resource::<Score>();
     app.insert_resource(CurrentLevel(level));
     app.init_resource::<StealContest>();
+    app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
     app.init_resource::<PhysicsTweaks>();
     app.init_resource::<LastShotInfo>();

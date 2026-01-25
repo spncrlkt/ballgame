@@ -334,6 +334,7 @@ mod tests {
             edges,
             dirty: false,
             built_for_level: 0,
+            rebuild_delay: 0,
         }
     }
 

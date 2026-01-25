@@ -6,9 +6,9 @@ use rand::Rng;
 use crate::ai::{decision::defender_in_shot_path, InputState};
 use crate::ball::components::*;
 use crate::constants::*;
-use crate::player::{Facing, HoldingBall, Player, Velocity};
+use crate::player::{Facing, HoldingBall, Player, Team, Velocity};
 use crate::shooting::ChargingShot;
-use crate::steal::{StealContest, StealCooldown};
+use crate::steal::{StealContest, StealCooldown, StealTracker, MAX_STEAL_DIFFERENTIAL};
 
 /// Handle ball-player collision physics
 pub fn ball_player_collision(
@@ -131,13 +131,16 @@ pub fn ball_follow_holder(
 
 /// Handle ball pickup and instant steal attempts.
 /// All players read from their InputState component.
+/// Enforces steal differential: no team can have more than MAX_STEAL_DIFFERENTIAL more steals.
 pub fn pickup_ball(
     mut commands: Commands,
     mut steal_contest: ResMut<StealContest>,
+    mut steal_tracker: ResMut<StealTracker>,
     mut non_holding_players: Query<
         (
             Entity,
             &Transform,
+            &Team,
             &mut ChargingShot,
             &mut InputState,
             &mut StealCooldown,
@@ -158,7 +161,7 @@ pub fn pickup_ball(
     mut ball_query: Query<(Entity, &Transform, &mut BallState), With<Ball>>,
 ) {
     // Check each non-holding player for pickup/steal attempts
-    for (player_entity, player_transform, mut charging, mut input, mut cooldown) in
+    for (player_entity, player_transform, team, mut charging, mut input, mut cooldown) in
         &mut non_holding_players
     {
         if !input.pickup_pressed {
@@ -200,6 +203,18 @@ pub fn pickup_ball(
             continue;
         }
 
+        // STRICT STEAL SUCCESS DIFFERENTIAL ENFORCEMENT
+        // Check if this team is allowed to attempt based on successful steal differential
+        if !steal_tracker.can_attempt_steal(*team) {
+            let diff = steal_tracker.success_differential();
+            warn!(
+                "STEAL BLOCKED: {:?} has {} more successful steals (L{}/R{} diff={})",
+                team, MAX_STEAL_DIFFERENTIAL,
+                steal_tracker.left_steals, steal_tracker.right_steals, diff
+            );
+            continue;
+        }
+
         // If no free ball nearby, check for steal opportunity
         for (
             defender_entity,
@@ -213,6 +228,9 @@ pub fn pickup_ball(
             let distance = player_pos.distance(defender_transform.translation.truncate());
 
             if distance < STEAL_RANGE {
+                // Record the attempt BEFORE rolling for success
+                steal_tracker.record_attempt(*team);
+
                 // Instant steal attempt - calculate success chance
                 let mut success_chance = STEAL_SUCCESS_CHANCE;
 
@@ -225,6 +243,13 @@ pub fn pickup_ball(
                 let mut rng = rand::thread_rng();
                 let roll: f32 = rng.gen_range(0.0..1.0);
 
+                // Log the attempt with roll details
+                info!(
+                    "STEAL ATTEMPT: {:?} roll={:.2} vs chance={:.2} (attempts: L{}/R{})",
+                    team, roll, success_chance,
+                    steal_tracker.left_attempts, steal_tracker.right_attempts
+                );
+
                 if roll < success_chance {
                     // Steal succeeded! Transfer ball
                     let ball_entity = holding.0;
@@ -234,6 +259,19 @@ pub fn pickup_ball(
                         commands
                             .entity(player_entity)
                             .insert(HoldingBall(ball_entity));
+
+                        // Record the success for tracking
+                        steal_tracker.record_success(*team);
+                        steal_tracker.log_state("SUCCESS");
+
+                        // HARD ERROR if success differential exceeds limit
+                        let diff = steal_tracker.success_differential();
+                        assert!(
+                            diff.abs() <= MAX_STEAL_DIFFERENTIAL,
+                            "STEAL SUCCESS DIFFERENTIAL VIOLATION: {} exceeds max of {}",
+                            diff,
+                            MAX_STEAL_DIFFERENTIAL
+                        );
 
                         // Apply pushback to defender (away from attacker)
                         let pushback_dir = if defender_transform.translation.x >= player_pos.x {
@@ -255,6 +293,8 @@ pub fn pickup_ball(
                     steal_contest.last_attempt_failed = true;
                     steal_contest.fail_flash_timer = STEAL_FAIL_FLASH_DURATION;
                     steal_contest.fail_flash_entity = Some(player_entity);
+
+                    steal_tracker.log_state("FAIL");
 
                     // Longer cooldown after failed steal (penalty for spam)
                     cooldown.0 = STEAL_FAIL_COOLDOWN;

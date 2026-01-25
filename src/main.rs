@@ -11,7 +11,7 @@ use ballgame::{
     DisplayBallWave, Facing, Grounded, HumanControlled, InputState,
     JumpState, LastShotInfo, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PRESETS_FILE,
     PaletteDatabase, PhysicsTweaks, Player, PlayerInput, PresetDatabase, Score, ScoreLevelText,
-    SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown, StyleTextures, TargetBasket,
+    SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown, StealTracker, StyleTextures, TargetBasket,
     Team, TweakPanel, TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball,
     config_watcher, constants::*, countdown, display_ball_wave, input, levels, player,
     replay, save_settings_system, scoring, shooting, snapshot, spawn_countdown_text, steal, ui,
@@ -121,6 +121,7 @@ fn main() {
         .init_resource::<PlayerInput>()
         .init_resource::<DebugSettings>()
         .init_resource::<StealContest>()
+        .init_resource::<StealTracker>()
         .init_resource::<Score>()
         .insert_resource(CurrentLevel(loaded_level))
         .insert_resource(CurrentPalette(loaded_palette_index))

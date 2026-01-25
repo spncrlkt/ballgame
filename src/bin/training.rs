@@ -14,7 +14,7 @@ use ballgame::{
     ChargeGaugeFill, ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette, DebugSettings,
     EventBuffer, Facing, GameConfig, GameEvent, Grounded, HoldingBall, HumanControlled, InputState,
     JumpState, LastShotInfo, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase,
-    PhysicsTweaks, Player, PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown,
+    PhysicsTweaks, Player, PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown, StealTracker,
     StyleTextures, TargetBasket, Team, Velocity, ai, ball, constants::*, countdown, helpers::*, input,
     levels, player, scoring, shooting, spawn_countdown_text, steal, world,
 };
@@ -191,6 +191,7 @@ fn main() {
         .init_resource::<PlayerInput>()
         .init_resource::<DebugSettings>()
         .init_resource::<StealContest>()
+        .init_resource::<StealTracker>()
         .init_resource::<Score>()
         .insert_resource(CurrentLevel(1)) // Will be set from training state
         .insert_resource(CurrentPalette(0))
@@ -662,6 +663,7 @@ fn training_setup(
 fn training_state_machine(
     mut training_state: ResMut<TrainingState>,
     mut score: ResMut<Score>,
+    mut steal_tracker: ResMut<StealTracker>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
     mut countdown: ResMut<MatchCountdown>,
     balls: Query<&BallState, With<Ball>>,
@@ -776,9 +778,10 @@ fn training_state_machine(
 
                 training_state.next_game();
 
-                // Reset score
+                // Reset score and steal tracker for new game
                 score.left = 0;
                 score.right = 0;
+                steal_tracker.reset();
 
                 // Start countdown for new game
                 countdown.start();
@@ -951,6 +954,7 @@ fn check_pause_restart(
     gamepads: Query<&Gamepad>,
     mut training_state: ResMut<TrainingState>,
     mut score: ResMut<Score>,
+    mut steal_tracker: ResMut<StealTracker>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
     mut countdown: ResMut<MatchCountdown>,
     level_db: Res<LevelDatabase>,
@@ -1008,9 +1012,10 @@ fn check_pause_restart(
         current_level.0 = level;
     }
 
-    // Reset score
+    // Reset score and steal tracker
     score.left = 0;
     score.right = 0;
+    steal_tracker.reset();
 
     // Reset players to spawn positions
     for mut transform in &mut players {

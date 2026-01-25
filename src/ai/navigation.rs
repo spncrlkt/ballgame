@@ -104,6 +104,8 @@ pub struct NavGraph {
     pub dirty: bool,
     /// Level index this graph was built for
     pub built_for_level: usize,
+    /// Frames to wait before rebuilding (allows platform spawning)
+    pub rebuild_delay: u8,
 }
 
 impl NavGraph {
@@ -271,6 +273,67 @@ impl NavGraph {
         dx + dy * 2.0
     }
 
+    /// Find a platform suitable for defending against an elevated opponent.
+    /// Returns a platform that:
+    /// 1. Is at or above the opponent's height (within tolerance)
+    /// 2. Is horizontally positioned to intercept between opponent and basket
+    /// 3. Is reachable (has edges from floor)
+    pub fn find_defensive_platform(
+        &self,
+        opponent_pos: Vec2,
+        basket_pos: Vec2,
+        min_height: f32,
+    ) -> Option<usize> {
+        // Direction from opponent to basket determines which side we want to be on
+        let intercept_x = if basket_pos.x < opponent_pos.x {
+            // Basket is to the left - we want to be between opponent and basket (left of opponent)
+            opponent_pos.x - 100.0
+        } else {
+            // Basket is to the right - we want to be right of opponent
+            opponent_pos.x + 100.0
+        };
+
+        // Find platforms at or above opponent height
+        let mut candidates: Vec<(usize, f32)> = self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, node)| {
+                // Skip floor - we want elevated positions
+                if node.is_floor {
+                    return None;
+                }
+
+                // Platform must be at or above min_height (opponent's position minus some tolerance)
+                if node.top_y < min_height - PLAYER_SIZE.y {
+                    return None;
+                }
+
+                // Calculate how good this platform is for interception
+                // Prefer platforms that are:
+                // 1. Close to the intercept X position
+                // 2. At similar height to opponent (not too high above)
+                let x_dist = (node.center.x - intercept_x).abs();
+                let height_above = (node.top_y - opponent_pos.y).max(0.0);
+
+                // Score: lower is better
+                let score = x_dist + height_above * 0.5;
+
+                Some((i, score))
+            })
+            .collect();
+
+        // Sort by score (lower is better)
+        candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        candidates.first().map(|(i, _)| *i)
+    }
+
+    /// Find the floor node (main arena floor).
+    pub fn find_floor_node(&self) -> Option<usize> {
+        self.nodes.iter().position(|n| n.is_floor)
+    }
+
     /// Find the best elevated platform for the AI to navigate to when no good
     /// shooting position is found. Returns the highest reachable platform with
     /// decent shot quality.
@@ -408,6 +471,21 @@ pub fn rebuild_nav_graph(
     // CurrentLevel uses 1-based numbering, convert to 0-based index
     let level_idx = (current_level.0.saturating_sub(1)) as usize;
     if !nav_graph.dirty && nav_graph.built_for_level == level_idx && !nav_graph.nodes.is_empty() {
+        return;
+    }
+
+    // Wait for rebuild delay (allows platforms to spawn/despawn after level change)
+    if nav_graph.rebuild_delay > 0 {
+        nav_graph.rebuild_delay -= 1;
+        return;
+    }
+
+    // Check if level platforms have spawned yet
+    // Levels 2+ should have platforms; if none found, wait for next frame
+    let level_platform_count = level_platform_query.iter().count();
+    if level_idx >= 1 && level_platform_count == 0 {
+        // Level platforms haven't spawned yet - keep graph dirty and wait
+        nav_graph.dirty = true;
         return;
     }
 
@@ -782,5 +860,7 @@ pub fn mark_nav_dirty_on_level_change(
 ) {
     if current_level.is_changed() {
         nav_graph.dirty = true;
+        // Add delay to allow platforms to spawn/despawn
+        nav_graph.rebuild_delay = 3;
     }
 }

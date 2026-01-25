@@ -218,14 +218,21 @@ pub fn ai_navigation_update(
 
             AiGoal::InterceptDefense | AiGoal::PressureDefense => {
                 // Navigate to intercept position on the shot line
-                // If opponent is elevated, prioritize getting to their height level
+                // If opponent is elevated, find a platform at their height to defend from
                 if let Some(opp_pos) = opponent_pos {
                     let height_diff = opp_pos.y - ai_pos.y;
                     if height_diff > PLAYER_SIZE.y {
-                        // Opponent is elevated - find nearest platform at similar height
-                        // and position between opponent and basket
-                        let target_x = intercept_pos.x;
-                        Some(Vec2::new(target_x, opp_pos.y))
+                        // Opponent is elevated - find a defensive platform at their height
+                        if let Some(def_node) = nav_graph.find_defensive_platform(
+                            opp_pos,
+                            own_basket_pos.unwrap_or(Vec2::ZERO),
+                            opp_pos.y - PLAYER_SIZE.y, // min height threshold
+                        ) {
+                            Some(nav_graph.nodes[def_node].center)
+                        } else {
+                            // No elevated platform found - fall back to intercept position
+                            Some(intercept_pos)
+                        }
                     } else {
                         Some(intercept_pos)
                     }

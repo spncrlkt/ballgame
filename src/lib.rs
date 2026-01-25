@@ -66,7 +66,7 @@ pub use snapshot::{
     BallSnapshot, GameSnapshot, PlayerSnapshot, ScoreSnapshot, ShotSnapshot, SnapshotConfig,
     SnapshotTriggerState,
 };
-pub use steal::{StealContest, StealCooldown};
+pub use steal::{StealContest, StealCooldown, StealTracker};
 pub use ui::{
     ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleIndicator, CycleSelection,
     DebugSettings, DebugText, DownOption, PhysicsTweaks, RightOption, ScoreFlash, ScoreLevelText,
