@@ -480,14 +480,14 @@ cargo run --bin heatmap -- score
 # Full tournament for AI balance
 cargo run --bin simulate -- --tournament 5
 
-# Parallel testing (faster)
-cargo run --bin simulate -- --shot-test 100 --parallel 8
+# Parallel tournament (faster)
+cargo run --bin simulate -- --tournament 5 --parallel 8
 
-# Store results in database for trend analysis
-cargo run --bin simulate -- --shot-test 50 --level 3 --db sim_results.db
+# Store match results in database
+cargo run --bin simulate -- --tournament 5 --db sim_results.db --parallel 8
 
-# Analyze historical trends
-cargo run --bin analyze -- --db sim_results.db --trend shot_accuracy
+# Analyze event logs
+cargo run --bin analyze -- logs/
 ```
 
 **Adding new simulations:**

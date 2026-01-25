@@ -31,14 +31,12 @@ The workflow follows an iterative cycle: **Modify → Test → Analyze → Refin
 │  3. STATISTICAL TESTING                                     │
 │     cargo run --bin simulate -- --shot-test 50 --level 3    │
 │     Target: 40-60% overshoot/undershoot ratio               │
-│     - Results stored in SQLite for trend analysis           │
-│     - Use --parallel N for faster batch testing             │
 ├─────────────────────────────────────────────────────────────┤
-│  4. TREND ANALYSIS                                          │
-│     cargo run --bin analyze -- --db sim_results.db --trend  │
-│     - Compare current results to historical baseline        │
-│     - Detect regressions early                              │
-│     - Track improvement over tuning iterations              │
+│  4. AI MATCH ANALYSIS (optional)                            │
+│     cargo run --bin simulate -- --tournament 5              │
+│     cargo run --bin analyze -- logs/                        │
+│     - Run AI vs AI matches and analyze outcomes             │
+│     - Identify profile balance issues                       │
 ├─────────────────────────────────────────────────────────────┤
 │  5. HUMAN FEEL TESTING                                      │
 │     Play the game manually and note:                        │
@@ -70,9 +68,10 @@ Run the full workflow after any change to:
 cargo run --bin simulate -- --shot-test 30 --level 3
 ```
 
-**Fast parallel testing** for comprehensive coverage:
+**Tournament testing** for AI balance coverage:
 ```bash
-cargo run --bin simulate -- --shot-test 100 --level 3 --parallel 8 --db sim_results.db
+cargo run --bin simulate -- --tournament 5 --parallel 8
+cargo run --bin analyze -- logs/
 ```
 
 ---
@@ -81,22 +80,26 @@ cargo run --bin simulate -- --shot-test 100 --level 3 --parallel 8 --db sim_resu
 
 The AI uses `src/ai/shot_quality.rs` to decide when to shoot. These quality values should align with actual heatmap success rates.
 
-### Key Test Positions (Right Basket)
+### Key Test Positions (Right Basket at 624, 150)
 
-| Position | Description | Expected Quality | Heatmap Target |
-|----------|-------------|------------------|----------------|
-| Above basket (y+150, x-300) | Elevated, good angle | 0.75+ (EXCELLENT) | 60-80% |
-| Floor shot (y=-418, x=-200) | Common shot | 0.35-0.50 | 30-50% |
-| Directly under basket | Very difficult | < 0.40 (ACCEPTABLE) | < 30% |
-| Behind basket (wall side) | Bad angle | < 0.55 (GOOD) | < 40% |
-| Mid-range (y=0, x=-350) | Medium distance | 0.45-0.60 | 40-55% |
+| Position | World Coords | Quality Value | Label | Heatmap |
+|----------|--------------|---------------|-------|---------|
+| Above basket | (324, 360) | 0.936 | EXCELLENT | Green |
+| Floor shot | (-200, -418) | 0.394 | DESPERATE | Orange-red |
+| Directly under | (624, -200) | 0.184 | TERRIBLE | Dark red |
+| Behind basket | (750, 150) | 0.240 | TERRIBLE | Red-orange |
+| Mid-range | (0, -418) | 0.394 | DESPERATE | Orange |
+
+### Last Verified: 2026-01-24
+
+**Summary:** The shot_quality.rs values align well with heatmap visual zones. The function is slightly conservative (lower values than raw success rates), which is appropriate for AI decision-making since it encourages seeking better positions.
 
 ### Verification Process
 
 1. Run `cargo run --bin heatmap -- score`
-2. Open `heatmap_score.png` and note success rates at test positions
-3. Compare to `shot_quality.rs` values at same positions
-4. If discrepancy > 10%, update the quality formulas
+2. Open `heatmap_score.png` and visually check the color zones
+3. Run quality analysis on test positions (see test positions above)
+4. If discrepancy > 10% in zone classification, update the quality formulas
 
 ---
 
@@ -118,44 +121,50 @@ The heatmap now matches actual game physics from `throw.rs`:
 
 ---
 
-## SQLite Integration
+## SQLite Integration (Match Results Only)
 
-Balance test results are stored in SQLite for historical analysis:
+Match results from tournament/multi-match modes can be stored in SQLite:
 
 ```bash
-# Run tests and store results
-cargo run --bin simulate -- --shot-test 50 --level 3 --db sim_results.db
+# Run tournament and store results in database
+cargo run --bin simulate -- --tournament 5 --db sim_results.db --parallel 8
 
-# Query historical data
-sqlite3 sim_results.db "SELECT * FROM shot_tests ORDER BY created_at DESC LIMIT 10"
-
-# Analyze trends
-cargo run --bin analyze -- --db sim_results.db --trend shot_accuracy --days 7
+# Query match results
+sqlite3 sim_results.db "SELECT * FROM matches ORDER BY created_at DESC LIMIT 10"
 ```
 
+**Note:** Shot test results are printed to stdout only and not stored in the database. The `--db` flag only works with match-based modes (tournament, multi-match, level-sweep).
+
 **Benefits:**
-- Track balance metrics over time
-- Detect regressions automatically
-- Compare before/after physics changes
-- Build historical baseline for "known good" state
+- Track AI match outcomes over time
+- Compare profile performance across sessions
+- Build historical baseline for AI balance
 
 ---
 
 ## Parallel Testing
 
-For comprehensive balance testing, use parallel execution:
+Parallel execution is available for match-based modes (not shot tests):
 
 ```bash
-# Fast: 8 parallel workers
-cargo run --bin simulate -- --shot-test 100 --parallel 8
+# Fast tournament: 8 parallel workers
+cargo run --bin simulate -- --tournament 5 --parallel 8
 
-# Full regression: all levels
-for level in 1 2 3 4 5; do
-  cargo run --bin simulate -- --shot-test 50 --level $level --parallel 8 --db sim_results.db
-done
+# Multi-match with parallelism
+cargo run --bin simulate -- --matches 20 --parallel 8
+
+# Level sweep with parallelism
+cargo run --bin simulate -- --level-sweep 5 --left Sniper --parallel 8
 ```
 
-The simulation infrastructure uses `HeadlessAppBuilder` with minimal thread pools, allowing many parallel simulations without hitting OS thread limits.
+**Note:** Shot tests (`--shot-test`) run sequentially. The `--parallel` flag is ignored for shot tests.
+
+For comprehensive shot accuracy testing across levels, run separately:
+```bash
+for level in 2 3 4 5 6; do
+  cargo run --bin simulate -- --shot-test 30 --level $level
+done
+```
 
 ---
 
