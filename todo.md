@@ -5,6 +5,7 @@
 ## Active Work (Prioritized)
 
 ### 0. Immediately
+- take init_settings out of vc, make a default copy in VC and have that be the source of truth when cloning and hard-resetting the settings w/ start(double-click)
 - [x] ai steals too easy, why is it hard for player to steal?
   - Fixed: Added two tunable AI profile parameters for realistic human timing:
     - `steal_reaction_time` - delay before first steal attempt (0.10-0.30s)
