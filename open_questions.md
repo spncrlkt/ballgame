@@ -1,55 +1,39 @@
-# Open Questions & Stray Thoughts
+# Open Questions & Decisions
 
-A collection of questions, ideas, and considerations to evaluate periodically.
-
----
-
-## Analytics System (NEW)
-
-- [ ] Event emission in simulation only tracks Goal, Shot, Pickup events - should we add Steal events (StealAttempt/Success/Fail)?
-- [ ] Shot events use placeholder values (pos 0,0, quality 0.5) - should we track actual shooter position and shot quality?
-- [ ] Turnover counting is currently 0 - need to wire up steal tracking in the simulation
-- [ ] `--update-defaults` writes to `src/constants.rs` - should it also update a runtime config file?
-- [ ] Leaderboard ranks by win rate only - should we add weighted composite scoring?
-- [ ] Default targets (avg_score=14, duration=180s) are placeholders - need real tuning runs to calibrate
-- [ ] Should `analyze` output JSON in addition to text report for programmatic consumption?
-
-## Logging System Refactor (FUTURE)
-
-**Input-First Logging Architecture:** The logging system should be refactored to treat inputs as the primary data source. If we log all inputs (from human controllers and AI decisions), everything else (positions, scores, events) can be deterministically replayed. This enables:
-- **Scripted replay tests**: Use recorded human inputs to test AI defense
-- **Deterministic reproduction**: Replay any game state from seed + inputs
-- **Lighter evlogs**: Only log inputs + events, derive positions on replay
-- **AI training data**: Input sequences become training examples
-
-Current implementation logs inputs alongside ticks (I events at 20Hz). Future refactor could make inputs the sole state record.
+*Questions that need answers before proceeding with certain work.*
 
 ---
 
-## UI/UX
+## Training Pipeline (P0-P2)
 
-- [ ] D-pad menu: Should there be visual arrows (↑↓←→) to indicate which direction maps to which row?
-- [ ] D-pad menu: Is the `>` marker for active direction visible enough?
-- [ ] AI display: Is `[L* Balanced] R Balanced` easy to parse quickly?
-- [ ] Should there be key hints showing LT/RT controls?
+- [ ] **Ghost segmentation** - How to detect "drive" boundaries in evlogs?
+  - By goal events? By possession changes? By time windows?
+- [ ] **Defense success metric** - What counts as "AI stopped the play"?
+  - Steal? Block? Shot miss? Any non-score outcome?
+- [ ] **Input format** - Store raw inputs or preprocessed actions?
 
-## Regression Testing
+## AI Behavior (P3)
 
-- [ ] Should we use a non-debug level for regression baseline (more deterministic)?
-- [ ] Should we add multiple baseline screenshots (different levels, viewports)?
-- [ ] Worth installing ImageMagick for proper pixel diff comparison?
-
-## AI Behavior (from todo.md P1-P2)
-
-- [ ] What makes the AI take "bad shots"? Distance? Angle? Timing?
-- [ ] What defines "good positioning" for the AI? Near basket? Between ball and basket?
-- [ ] Should AI profiles affect positioning strategy or just shooting parameters?
+- [ ] **Bad shot definition** - What makes a shot "bad"?
+  - Distance? Angle? Defender proximity? Shot quality score?
+- [ ] **Good positioning** - What defines correct positioning?
+  - Near basket? Between ball and basket? Based on ball holder?
+- [ ] **Profile tuning** - Should profiles affect positioning or just timing?
 
 ## Code Quality
 
-- [ ] 53 clippy warnings - worth fixing collapsible_if patterns or leave as-is?
-- [ ] type_complexity warnings in Bevy queries - worth creating type aliases?
+- [ ] **Clippy warnings** - ~7 warnings remain (type_complexity, collapsible_if)
+  - Worth fixing or leave as standard Bevy patterns?
+- [ ] **ghost-visual.rs** - Fix or delete? (Currently broken)
 
 ---
 
-*Last reviewed: 2026-01-23*
+## Resolved
+
+- [x] **MVP definition** - Both AI + Movement need to feel good
+- [x] **Training relation to MVP** - Training tools ARE MVP blockers (how we make AI good)
+- [x] **Done item verification** - All 63 tests pass, items verified
+
+---
+
+*Last reviewed: 2026-01-25*

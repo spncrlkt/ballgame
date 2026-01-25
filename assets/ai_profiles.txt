@@ -45,10 +45,10 @@ charge_min: 0.3
 charge_max: 0.7
 steal_range: 110
 defense_offset: 250
-min_shot_quality: 0.30
+min_shot_quality: 0.38
 pressure_distance: 80
 aggression: 0.85
-defensive_iq: 0.55
+defensive_iq: 0.60
 steal_reaction_time: 0.12
 button_presses_per_sec: 13
 position_patience: 0.4

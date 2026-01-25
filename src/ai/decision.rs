@@ -218,7 +218,20 @@ pub fn ai_navigation_update(
 
             AiGoal::InterceptDefense | AiGoal::PressureDefense => {
                 // Navigate to intercept position on the shot line
-                Some(intercept_pos)
+                // If opponent is elevated, prioritize getting to their height level
+                if let Some(opp_pos) = opponent_pos {
+                    let height_diff = opp_pos.y - ai_pos.y;
+                    if height_diff > PLAYER_SIZE.y {
+                        // Opponent is elevated - find nearest platform at similar height
+                        // and position between opponent and basket
+                        let target_x = intercept_pos.x;
+                        Some(Vec2::new(target_x, opp_pos.y))
+                    } else {
+                        Some(intercept_pos)
+                    }
+                } else {
+                    Some(intercept_pos)
+                }
             }
         };
 
@@ -306,6 +319,7 @@ pub fn ai_decision_update(
     ball_query: Query<(&Transform, &BallState), With<Ball>>,
     basket_query: Query<(&Transform, &Basket)>,
 ) {
+
     for (
         ai_entity,
         ai_transform,
@@ -332,7 +346,9 @@ pub fn ai_decision_update(
         let profile = profile_db.get(ai_state.profile_index);
 
         // Decrement button press cooldown (simulates human mashing speed limit)
-        ai_state.button_press_cooldown = (ai_state.button_press_cooldown - time.delta_secs()).max(0.0);
+        // Use a minimum dt of 1/60 to handle headless mode where delta can be tiny
+        let dt = time.delta_secs().max(1.0 / 60.0);
+        ai_state.button_press_cooldown = (ai_state.button_press_cooldown - dt).max(0.0);
 
         let ai_pos = ai_transform.translation.truncate();
 
@@ -568,8 +584,13 @@ pub fn ai_decision_update(
 
                     // Jump if ball is above us and we're close horizontally
                     let dy = ball_pos.y - ai_pos.y;
-                    if dy > PLAYER_SIZE.y && dx.abs() < BALL_PICKUP_RADIUS * 2.0 {
+                    if dy > PLAYER_SIZE.y && dx.abs() < BALL_PICKUP_RADIUS * 2.0 && grounded.0 {
                         input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                        input.jump_held = true;
+                    }
+
+                    // Keep holding jump while airborne to reach elevated balls
+                    if !grounded.0 && dy > PLAYER_SIZE.y {
                         input.jump_held = true;
                     }
 
@@ -617,7 +638,7 @@ pub fn ai_decision_update(
                         }
                     } else if ai_state.jump_shot_active {
                         // Jump shot in progress
-                        ai_state.jump_shot_timer += time.delta_secs();
+                        ai_state.jump_shot_timer += dt;
 
                         // Hold jump for height (same as player capability)
                         if ai_state.jump_shot_timer < 0.25 {
@@ -634,7 +655,7 @@ pub fn ai_decision_update(
                                     .gen_range(profile.charge_min..profile.charge_max);
                                 // No cap - AI uses full charge range like player
                             } else if input.throw_held {
-                                ai_state.shot_charge_target -= time.delta_secs();
+                                ai_state.shot_charge_target -= dt;
                                 if ai_state.shot_charge_target <= 0.0 {
                                     input.throw_held = false;
                                     input.throw_released = true;
@@ -660,7 +681,7 @@ pub fn ai_decision_update(
                             ai_state.shot_charge_target =
                                 rand::thread_rng().gen_range(profile.charge_min..profile.charge_max);
                         } else if input.throw_held {
-                            ai_state.shot_charge_target -= time.delta_secs();
+                            ai_state.shot_charge_target -= dt;
                             if ai_state.shot_charge_target <= 0.0 {
                                 input.throw_held = false;
                                 input.throw_released = true;
@@ -688,7 +709,7 @@ pub fn ai_decision_update(
                                 ai_state.steal_reaction_timer = 0.0;
                             }
                             // Increment timer
-                            ai_state.steal_reaction_timer += time.delta_secs();
+                            ai_state.steal_reaction_timer += dt;
 
                             // Only attempt steal after reaction delay AND button cooldown
                             if ai_state.steal_reaction_timer >= profile.steal_reaction_time
@@ -709,15 +730,33 @@ pub fn ai_decision_update(
 
                 AiGoal::InterceptDefense => {
                     // Navigate to intercept position on shot line
-                    let dx = intercept_pos.x - ai_pos.x;
+                    // If opponent is elevated, prioritize matching their height
+                    let target_pos = if let Some(opp_pos) = opponent_pos {
+                        let height_diff = opp_pos.y - ai_pos.y;
+                        if height_diff > PLAYER_SIZE.y {
+                            // Opponent elevated - aim for their Y level
+                            Vec2::new(intercept_pos.x, opp_pos.y)
+                        } else {
+                            intercept_pos
+                        }
+                    } else {
+                        intercept_pos
+                    };
+
+                    let dx = target_pos.x - ai_pos.x;
                     if dx.abs() > profile.position_tolerance {
                         input.move_x = dx.signum();
                     }
 
-                    // Jump up to platform if needed (simple case when nav not active)
-                    let dy = intercept_pos.y - ai_pos.y;
+                    // Jump up to platform if needed - be more aggressive when opponent elevated
+                    let dy = target_pos.y - ai_pos.y;
                     if dy > PLAYER_SIZE.y * 0.5 && grounded.0 {
                         input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                        input.jump_held = true;
+                    }
+
+                    // If we're airborne and need to go higher, keep holding jump
+                    if !grounded.0 && dy > PLAYER_SIZE.y {
                         input.jump_held = true;
                     }
 
@@ -741,6 +780,11 @@ pub fn ai_decision_update(
                             input.jump_held = true;
                         }
 
+                        // Keep holding jump while airborne to reach elevated opponents
+                        if !grounded.0 && dy > PLAYER_SIZE.y {
+                            input.jump_held = true;
+                        }
+
                         // Check if in steal range and update reaction timer
                         // Use profile's steal_range (with 1.2x for pressure defense)
                         let distance = ai_pos.distance(opp_pos);
@@ -752,7 +796,7 @@ pub fn ai_decision_update(
                                 ai_state.steal_reaction_timer = 0.0;
                             }
                             // Increment timer
-                            ai_state.steal_reaction_timer += time.delta_secs();
+                            ai_state.steal_reaction_timer += dt;
 
                             // Only attempt steal after reaction delay AND button cooldown
                             if ai_state.steal_reaction_timer >= profile.steal_reaction_time
@@ -782,7 +826,7 @@ pub fn ai_decision_update(
                 ai_state.shot_charge_target =
                     rand::thread_rng().gen_range(profile.charge_min..profile.charge_max);
             } else if input.throw_held {
-                ai_state.shot_charge_target -= time.delta_secs();
+                ai_state.shot_charge_target -= dt;
                 if ai_state.shot_charge_target <= 0.0 {
                     input.throw_held = false;
                     input.throw_released = true;
@@ -809,7 +853,7 @@ pub fn ai_decision_update(
 
         if input.move_x.abs() > 0.1 && !position_changed && grounded.0 {
             // AI is trying to move but stuck
-            ai_state.stuck_timer += time.delta_secs();
+            ai_state.stuck_timer += dt;
 
             // After being stuck for a bit, try to jump to get unstuck
             if ai_state.stuck_timer > 0.5 {
@@ -830,7 +874,7 @@ pub fn ai_decision_update(
         ai_state.last_position = Some(ai_pos);
 
         // Decay jump buffer timer
-        input.jump_buffer_timer = (input.jump_buffer_timer - time.delta_secs()).max(0.0);
+        input.jump_buffer_timer = (input.jump_buffer_timer - dt).max(0.0);
     }
 }
 
@@ -842,6 +886,9 @@ fn execute_nav_action(
     grounded: bool,
     time: &Time,
 ) {
+    // Use minimum dt for headless mode compatibility
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
     let Some(action) = nav_state.current_action().cloned() else {
         return;
     };
@@ -872,7 +919,7 @@ fn execute_nav_action(
                 }
             } else {
                 // Jumping - hold for duration
-                nav_state.jump_timer += time.delta_secs();
+                nav_state.jump_timer += dt;
                 let target_hold_time = hold_duration * SHOT_CHARGE_TIME; // Scale to actual time
 
                 if nav_state.jump_timer < target_hold_time {
@@ -931,7 +978,7 @@ fn execute_nav_action(
                 nav_state.advance();
             } else if !grounded {
                 // Falling
-                nav_state.jump_timer += time.delta_secs();
+                nav_state.jump_timer += dt;
             }
         }
     }

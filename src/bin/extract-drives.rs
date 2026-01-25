@@ -203,6 +203,10 @@ fn parse_evlog(path: &Path) -> Vec<Drive> {
     drives
 }
 
+/// Delay before starting ghost input capture (ms)
+/// This gives the ghost time to get into position from spawn
+const GHOST_START_DELAY_MS: u32 = 1000;
+
 /// Output a drive as a ghost trial file
 fn write_ghost_trial(drive: &Drive, output_dir: &Path) -> std::io::Result<PathBuf> {
     let filename = format!(
@@ -216,12 +220,16 @@ fn write_ghost_trial(drive: &Drive, output_dir: &Path) -> std::io::Result<PathBu
     let path = output_dir.join(&filename);
     let mut file = File::create(&path)?;
 
+    // Effective start is 1 second after possession
+    let effective_start = drive.start_tick + GHOST_START_DELAY_MS;
+
     // Write header
     writeln!(file, "# Ghost Trial")?;
     writeln!(file, "# Source: {}", drive.source_file)?;
     writeln!(file, "# Drive: {}", drive.drive_num)?;
     writeln!(file, "# Level: {} ({})", drive.level, drive.level_name)?;
-    writeln!(file, "# Ticks: {} -> {}", drive.start_tick, drive.end_tick)?;
+    writeln!(file, "# Original ticks: {} -> {}", drive.start_tick, drive.end_tick)?;
+    writeln!(file, "# Effective start: {} (+{}ms delay)", effective_start, GHOST_START_DELAY_MS)?;
     writeln!(file, "# End: {}", drive.end_reason)?;
     writeln!(file, "# L scored: {}", drive.l_scored)?;
     writeln!(file, "#")?;
@@ -233,8 +241,13 @@ fn write_ghost_trial(drive: &Drive, output_dir: &Path) -> std::io::Result<PathBu
     writeln!(file, "level_name:{}", drive.level_name)?;
     writeln!(file)?;
 
-    // Write L's inputs (the human player)
+    // Write L's inputs (the human player), skipping first second
     for sample in &drive.l_inputs {
+        // Skip inputs before the delay period
+        if sample.tick < effective_start {
+            continue;
+        }
+
         let mut flags = String::new();
         if sample.jump {
             flags.push('J');
@@ -249,8 +262,8 @@ fn write_ghost_trial(drive: &Drive, output_dir: &Path) -> std::io::Result<PathBu
             flags.push('-');
         }
 
-        // Normalize tick to start from 0
-        let rel_tick = sample.tick.saturating_sub(drive.start_tick);
+        // Normalize tick to start from 0 (after the delay)
+        let rel_tick = sample.tick.saturating_sub(effective_start);
         writeln!(file, "{}|{:.2}|{}", rel_tick, sample.move_x, flags)?;
     }
 

@@ -31,9 +31,12 @@ pub fn update_shot_charge(
     time: Res<Time>,
     mut player_query: Query<(&mut ChargingShot, &InputState), With<Player>>,
 ) {
+    // Use minimum dt for headless mode compatibility
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
     for (mut charging, input) in &mut player_query {
         if input.throw_held {
-            charging.charge_time += time.delta_secs();
+            charging.charge_time += dt;
         }
         // Don't reset here - let throw_ball reset after using the charge
         // Otherwise charge resets to 0 before throw_ball can read it

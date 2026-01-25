@@ -11,9 +11,12 @@ use crate::world::{BasketRim, CornerRamp, Platform};
 
 /// Apply velocity to all entities with Velocity component
 pub fn apply_velocity(mut query: Query<(&mut Transform, &Velocity)>, time: Res<Time>) {
+    // Use minimum dt for headless mode compatibility
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
     for (mut transform, velocity) in &mut query {
-        transform.translation.x += velocity.0.x * time.delta_secs();
-        transform.translation.y += velocity.0.y * time.delta_secs();
+        transform.translation.x += velocity.0.x * dt;
+        transform.translation.y += velocity.0.y * dt;
     }
 }
 
@@ -23,10 +26,13 @@ pub fn ball_gravity(
     mut query: Query<(&mut Velocity, &BallState, &BallRolling, &mut BallShotGrace), With<Ball>>,
     time: Res<Time>,
 ) {
+    // Use minimum dt for headless mode compatibility
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
     for (mut velocity, state, rolling, mut grace) in &mut query {
         // Decrement grace timer
         if grace.0 > 0.0 {
-            grace.0 = (grace.0 - time.delta_secs()).max(0.0);
+            grace.0 = (grace.0 - dt).max(0.0);
         }
 
         match state {
@@ -35,13 +41,13 @@ pub fn ball_gravity(
                     // Rolling on ground - no gravity, apply rolling friction (skip if grace active)
                     velocity.0.y = 0.0;
                     if grace.0 <= 0.0 {
-                        velocity.0.x *= tweaks.ball_roll_friction.powf(time.delta_secs());
+                        velocity.0.x *= tweaks.ball_roll_friction.powf(dt);
                     }
                 } else {
                     // In air - apply gravity, apply air friction only if no grace
-                    velocity.0.y -= tweaks.ball_gravity * time.delta_secs();
+                    velocity.0.y -= tweaks.ball_gravity * dt;
                     if grace.0 <= 0.0 {
-                        velocity.0.x *= tweaks.ball_air_friction.powf(time.delta_secs());
+                        velocity.0.x *= tweaks.ball_air_friction.powf(dt);
                     }
                 }
             }
@@ -259,6 +265,9 @@ pub fn ball_spin(
         With<Ball>,
     >,
 ) {
+    // Use minimum dt for headless mode compatibility
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
     for (mut transform, mut spin, velocity, state, rolling) in &mut query {
         // When ball is held, reset rotation to upright
         if matches!(state, BallState::Held(_)) {
@@ -276,11 +285,11 @@ pub fn ball_spin(
         } else {
             // In flight: spin based on velocity with decay
             spin.0 = -velocity.0.x * BALL_SPIN_FACTOR;
-            spin.0 *= BALL_SPIN_DECAY.powf(time.delta_secs());
+            spin.0 *= BALL_SPIN_DECAY.powf(dt);
         }
 
         // Apply rotation
-        transform.rotate_z(spin.0 * time.delta_secs());
+        transform.rotate_z(spin.0 * dt);
     }
 }
 

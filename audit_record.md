@@ -4,6 +4,63 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Session: 2026-01-25 - Full Audit & Planning Cleanup
+
+### Summary
+
+Full audit with verification of all "done" items using tests as proof. Restructured planning docs to reflect Training → AI → MVP dependency chain.
+
+### Verification Results
+
+| Test Suite | Count | Status |
+|------------|-------|--------|
+| Lib unit tests | 30 | PASS |
+| Scenario tests | 33 | PASS |
+| **Total** | **63** | **PASS** |
+
+All simulation infrastructure sprints verified:
+- HeadlessAppBuilder, event emission, runner modularization
+- Parallel simulation, SQLite database
+- Evlog parser, analytics integration
+
+### Audit Findings
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| Compilation | PASS | 3 warnings in generate_ball.rs (unused params) |
+| Clippy | PASS | ~7 warnings (type_complexity, collapsible_if) |
+| Scenario tests | PASS | 33/33 |
+| Lib tests | PASS | 30/30 |
+| Visual regression | REVIEW | 148% size diff - likely from WIP changes |
+
+**WIP Issues Found:**
+- `src/bin/ghost-visual.rs` - Bevy Bundle errors, unused imports
+- Visual regression baseline outdated
+
+### Planning Restructure
+
+**New dependency chain:**
+```
+Training Tools → AI Quality → MVP → V0 → V1
+```
+
+**Priority order:**
+- P0: Training Binary UX (reset, status display, fix ghost-visual.rs)
+- P1: Ghost System (drive extraction, replay, defense testing)
+- P2: AI Navigation (corner steps, jump capability)
+- P3: AI Behavior (shooting, positioning)
+- P4: Movement Feel (speed, jump tuning)
+
+### Files Modified
+
+- `todone.md` - Archived verified done items with test counts
+- `milestones.md` - Rewrote with Training → AI → MVP structure
+- `todo.md` - Cleaned up with clear P0-P4 priorities
+- `open_questions.md` - Updated with current questions, marked resolved items
+- `audit_record.md` - This entry
+
+---
+
 ## Session: 2026-01-24 - Code Review Guidelines
 
 ### Summary

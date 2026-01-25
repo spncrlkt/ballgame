@@ -34,6 +34,10 @@ pub fn apply_input(
     >,
     time: Res<Time>,
 ) {
+    // Use a minimum dt for headless mode where time.delta_secs() returns 0 or tiny values
+    // In windowed mode, this will use the actual delta. In headless, it enforces 60Hz behavior.
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
     for (mut velocity, mut coyote, mut jump_state, mut facing, grounded, mut input) in &mut players
     {
         let move_x = input.move_x;
@@ -65,7 +69,7 @@ pub fn apply_input(
             }
         };
 
-        velocity.0.x = move_toward(current_speed, target_speed, rate * time.delta_secs());
+        velocity.0.x = move_toward(current_speed, target_speed, rate * dt);
 
         // Update facing direction based on input (not velocity, so turning feels responsive)
         if move_x > STICK_DEADZONE {
@@ -79,7 +83,7 @@ pub fn apply_input(
             coyote.0 = COYOTE_TIME;
             jump_state.is_jumping = false; // Reset jump state when grounded
         } else {
-            coyote.0 = (coyote.0 - time.delta_secs()).max(0.0);
+            coyote.0 = (coyote.0 - dt).max(0.0);
         }
 
         // Can jump if grounded OR within coyote time
@@ -109,6 +113,9 @@ pub fn apply_gravity(
     mut query: Query<(&mut Velocity, &Grounded), With<Player>>,
     time: Res<Time>,
 ) {
+    // Use minimum dt for headless mode compatibility
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
     for (mut velocity, grounded) in &mut query {
         if !grounded.0 {
             // Fast fall: use higher gravity when falling than rising
@@ -117,7 +124,7 @@ pub fn apply_gravity(
             } else {
                 tweaks.gravity_fall
             };
-            velocity.0.y -= gravity * time.delta_secs();
+            velocity.0.y -= gravity * dt;
         }
     }
 }

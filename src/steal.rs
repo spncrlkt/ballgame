@@ -23,15 +23,18 @@ pub fn steal_cooldown_update(
     mut cooldowns: Query<&mut StealCooldown>,
     mut steal_contest: ResMut<StealContest>,
 ) {
+    // Use minimum dt for headless mode compatibility
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
     for mut cooldown in &mut cooldowns {
         if cooldown.0 > 0.0 {
-            cooldown.0 -= time.delta_secs();
+            cooldown.0 -= dt;
         }
     }
 
     // Tick down fail flash timer
     if steal_contest.fail_flash_timer > 0.0 {
-        steal_contest.fail_flash_timer -= time.delta_secs();
+        steal_contest.fail_flash_timer -= dt;
         if steal_contest.fail_flash_timer <= 0.0 {
             steal_contest.last_attempt_failed = false;
             steal_contest.fail_flash_entity = None;

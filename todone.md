@@ -1,5 +1,31 @@
 # Ballgame Done Archive
 
+## Archived 2026-01-25 (Full Audit & Verification)
+
+**Simulation Infrastructure Complete (63 tests verify)**
+- [x] Sprint 1: HeadlessAppBuilder - shared app setup for all simulation modes
+- [x] Sprint 1: Event emission consolidation - `emit_game_events()` shared function
+- [x] Sprint 2: Runner modularization - control.rs, setup.rs, shot_test.rs (52% reduction)
+- [x] Sprint 3: Parallel simulation - Rayon + `--parallel N` CLI flag
+- [x] Sprint 3: SQLite database - `SimDatabase` with WAL mode, `--db` option
+- [x] Sprint 4: Unified evlog parser - `ParsedEvlog` struct, 6 unit tests
+- [x] Sprint 4: Analytics + SQLite - `analyze_profile()`, `compare_profiles()`, leaderboard
+
+**AI Steal Timing (4 unit tests + 6 scenario tests)**
+- [x] `steal_reaction_time` parameter (0.10-0.30s delay before first attempt)
+- [x] `button_presses_per_sec` parameter (6-15 presses/sec limit)
+- [x] All 10 AI profiles have human-realistic timing values
+
+**Shot Accuracy Testing**
+- [x] Distance-based speed multiplier (1.0→1.05)
+- [x] `--shot-test` mode in simulate binary
+- [x] Synced heatmap with game physics
+
+**Documentation**
+- [x] `code_review_guidelines.md` - 18KB comprehensive reference
+- [x] `notes/balance-testing-workflow.md` - Iterative tuning workflow
+- [x] `notes/testing-plan.md` - 33 scenario test coverage map
+
 ## Archived 2026-01-24 (Scenario Testing Session)
 - [x] **Scenario Testing System** - 33 tests passing across 6 categories
   - Movement: 8 tests (walk, jump, coyote time, jump buffer, air control)
