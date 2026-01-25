@@ -1,0 +1,53 @@
+# Test: Player lands on platform
+# Verifies player falling onto a platform becomes grounded
+#
+# FAIL conditions this test catches:
+# - Player falls through platform
+# - Grounded state not set after landing
+# - Platform collision detection broken
+# - Collision epsilon positioning incorrect
+
+name = "Platform landing"
+description = "Player falls onto platform and becomes grounded"
+
+[setup]
+level = "test_single_platform"
+# test_single_platform has a center platform at y=180 above floor
+
+# Spawn player above the platform so they fall onto it
+# Platform at y=180 (relative to floor at -450), so platform center at -270
+# Platform is 20 units tall, top at -260
+# Player spawns at y=-200 (above platform, will fall)
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = 0.0
+y = -200.0
+
+# No input - just let physics handle the fall
+
+# Check at frame 10 - should still be falling (not yet landed)
+[[expect.state]]
+after_frame = 10
+checks = [
+    "p1.grounded = false",    # Still in the air
+    "p1.velocity_y < 0",      # Falling downward
+]
+
+# Check at frame 30 - should have landed on platform
+[[expect.state]]
+after_frame = 30
+checks = [
+    "p1.grounded = true",     # Landed on platform
+    "p1.y > -280",            # Above the platform height (not fallen through)
+    "p1.y < -200",            # Below starting position (did fall)
+]
+
+# Check at frame 60 - should still be on platform, stable
+[[expect.state]]
+after_frame = 60
+checks = [
+    "p1.grounded = true",     # Still grounded
+    "p1.velocity_y <= 0",     # Not bouncing (may be slightly negative due to gravity)
+]

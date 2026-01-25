@@ -1,0 +1,54 @@
+# Test: Player head bonk on platform from below
+# Verifies that jumping into a platform from below stops upward movement
+#
+# FAIL conditions this test catches:
+# - Player passes through platform from below
+# - Upward velocity not stopped by collision
+# - Collision only works from above
+
+name = "Platform head bonk"
+description = "Jumping into platform from below stops player"
+
+[setup]
+level = "test_single_platform"
+# Platform at y=180 above floor, centered at x=0
+
+# Spawn player on the floor, directly below platform
+# Floor at y=-450, player center at -398
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = 0.0
+y = -398.0
+
+# Jump straight up (into platform above)
+[[input]]
+frame = 5
+p1 = { jump = true }
+
+# Check at frame 20 - should be rising toward platform
+[[expect.state]]
+after_frame = 20
+checks = [
+    "p1.grounded = false",    # In the air
+    "p1.y > -380",            # Has jumped up
+]
+
+# Check at frame 30 - should have hit platform underside
+# Platform bottom is at -270, player top when at -280 is -280+32 = -248
+# Player should stop when head hits platform (or bounce back down)
+[[expect.state]]
+after_frame = 30
+checks = [
+    "p1.y < -200",            # Didn't pass through platform (platform at -260)
+    "p1.velocity_y <= 0",     # Stopped rising or falling back down
+]
+
+# Check at frame 60 - should have fallen back to ground
+[[expect.state]]
+after_frame = 60
+checks = [
+    "p1.grounded = true",     # Back on ground
+    "p1.y < -380",            # Near floor level
+]

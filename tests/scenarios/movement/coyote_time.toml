@@ -1,0 +1,71 @@
+# Test: Coyote time - jump after leaving platform edge
+# Verifies player can still jump for a brief time after walking off a platform
+# Coyote time is 0.1s = 6 frames at 60 FPS
+#
+# FAIL conditions this test catches:
+# - Coyote time not working: can't jump after leaving platform
+# - Coyote time too short: jump fails immediately after edge
+# - Grounded state incorrect during coyote period
+
+name = "Coyote time"
+description = "Player can jump briefly after walking off platform edge"
+
+[setup]
+level = "test_single_platform"
+# Platform at center, y=180 above floor
+
+# Spawn player ON the platform (not above it)
+# Platform top at y=-260 (floor at -450, platform 180 above, platform is 20 tall)
+# Player half-height is 32, so center at -260 + 32 = -228
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = -50.0
+y = -228.0
+
+# Let player settle on platform first
+[[input]]
+frame = 5
+p1 = { }
+
+# Walk right off the platform edge
+# Platform is 150 wide centered at x=0, so edges at x=-75 and x=75
+# Player starts at x=-50, needs to walk ~30 units to reach edge
+[[input]]
+frame = 10
+p1 = { move_right = true }
+
+# Continue walking to go off edge
+[[input]]
+frame = 30
+p1 = { move_right = true }
+
+# Stop walking and jump immediately after leaving platform
+# Player should be off the edge by now, but coyote time should allow jump
+[[input]]
+frame = 35
+p1 = { move_right = false, jump = true }
+
+# Check at frame 33 - should be on platform or just leaving
+[[expect.state]]
+after_frame = 33
+checks = [
+    "p1.x > -20",            # Has moved right significantly
+]
+
+# Check at frame 45 - if coyote jump worked, should be rising
+[[expect.state]]
+after_frame = 45
+checks = [
+    "p1.velocity_y > 0",      # Should be jumping upward (coyote worked!)
+    "p1.y > -300",            # Shouldn't have fallen far
+]
+
+# Check at frame 80 - should be in the air or landed on floor
+# (The jump takes player above their starting position, that's success!)
+[[expect.state]]
+after_frame = 80
+checks = [
+    "p1.y > -500",            # Hasn't fallen through floor
+]

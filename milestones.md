@@ -91,6 +91,14 @@
 **Controller Feel:**
 - [ ] Haptics/rumble for shots, scores, steals
 
+**Physics/Shooting Overhaul:**
+- [ ] Shot trajectory system rework - current minimum-energy formula produces inconsistent results
+  - Similar distances give wildly different overshoot/undershoot ratios
+  - Band-aid multipliers can't properly balance all positions
+  - Consider: fixed arc heights, simpler parabolas, or entirely different approach
+- [ ] Investigate angle/direction asymmetry in trajectory calculations
+- [ ] Shot test mode exists (`--shot-test`) - use it to validate any changes
+
 **Multiplayer:**
 - [ ] Add 1v1 multiplayer
 - [ ] Add 4-player multiplayer support

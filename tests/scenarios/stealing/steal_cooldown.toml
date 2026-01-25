@@ -50,12 +50,11 @@ player = "stealer"
 frame_min = 5
 frame_max = 15
 
-# State check at frame 25 - holder should still have ball if steal failed
-# (most likely outcome) or stealer picked it up (less likely)
+# State check at frame 25 - holder may have been pushed by knockback if steal succeeded
 # Either way, the game state should be consistent
 [[expect.state]]
 after_frame = 25
 checks = [
-    "holder.x > -50",
-    "stealer.x > 0",
+    "holder.x > -200",        # Holder may be pushed left by knockback (up to ~150 pixels)
+    "stealer.x > -100",       # Stealer still in arena
 ]

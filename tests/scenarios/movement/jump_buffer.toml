@@ -1,0 +1,59 @@
+# Test: Jump buffer - jump input before landing
+# Verifies that pressing jump while airborne (just before landing)
+# causes the player to jump immediately upon landing.
+# Jump buffer time is 0.1s = 6 frames at 60 FPS
+#
+# FAIL conditions this test catches:
+# - Jump buffer not working: player lands without jumping
+# - Jump buffer too short: input not remembered long enough
+# - Jump buffer timer not decaying: always triggers regardless of timing
+
+name = "Jump buffer"
+description = "Press jump while falling, player jumps on landing"
+
+[setup]
+level = "test_flat_floor"
+
+# Spawn player high in the air so they fall to ground
+# Floor top at y=-430, player will land there
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = 0.0
+y = -200.0
+
+# Wait for player to start falling
+[[input]]
+frame = 5
+p1 = { }
+
+# Press jump while still in the air (before landing)
+# Player should land around frame 25-30, so press at frame 22
+[[input]]
+frame = 22
+p1 = { jump = true }
+
+# Check at frame 20 - should still be falling
+[[expect.state]]
+after_frame = 20
+checks = [
+    "p1.grounded = false",    # Still in the air
+    "p1.velocity_y < 0",      # Falling downward
+]
+
+# Check at frame 35 - should have landed and immediately jumped
+# The jump buffer should have triggered a jump on landing
+[[expect.state]]
+after_frame = 35
+checks = [
+    "p1.velocity_y > 0",      # Should be rising (jumped from landing!)
+    "p1.y > -400",            # Should be above landing position
+]
+
+# Check at frame 50 - still in the air from the buffered jump
+[[expect.state]]
+after_frame = 50
+checks = [
+    "p1.grounded = false",    # Should be airborne from buffered jump
+]

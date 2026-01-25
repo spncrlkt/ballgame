@@ -330,6 +330,9 @@ pub fn ai_decision_update(
         // Get AI profile for this player
         let profile = profile_db.get(ai_state.profile_index);
 
+        // Decrement button press cooldown (simulates human mashing speed limit)
+        ai_state.button_press_cooldown = (ai_state.button_press_cooldown - time.delta_secs()).max(0.0);
+
         let ai_pos = ai_transform.translation.truncate();
 
         // Get ball info
@@ -531,10 +534,15 @@ pub fn ai_decision_update(
                         input.jump_held = true;
                     }
 
-                    // Try to pick up ball when close
+                    // Try to pick up ball when close (respecting button cooldown)
                     let distance_to_ball = ai_pos.distance(ball_pos);
-                    input.pickup_pressed = distance_to_ball < BALL_PICKUP_RADIUS
-                        && matches!(ball_state, BallState::Free);
+                    if distance_to_ball < BALL_PICKUP_RADIUS
+                        && matches!(ball_state, BallState::Free)
+                        && ai_state.button_press_cooldown <= 0.0
+                    {
+                        input.pickup_pressed = true;
+                        ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
+                    }
 
                     input.throw_held = false;
                 }
@@ -572,8 +580,8 @@ pub fn ai_decision_update(
                         // Jump shot in progress
                         ai_state.jump_shot_timer += time.delta_secs();
 
-                        // Hold jump briefly for height
-                        if ai_state.jump_shot_timer < 0.15 {
+                        // Hold jump for height (same as player capability)
+                        if ai_state.jump_shot_timer < 0.25 {
                             input.jump_held = true;
                         } else {
                             input.jump_held = false;
@@ -584,8 +592,8 @@ pub fn ai_decision_update(
                             if !input.throw_held && !input.throw_released {
                                 input.throw_held = true;
                                 ai_state.shot_charge_target = rand::thread_rng()
-                                    .gen_range(profile.charge_min..profile.charge_max)
-                                    .min(0.4); // Shorter charge for jump shots
+                                    .gen_range(profile.charge_min..profile.charge_max);
+                                // No cap - AI uses full charge range like player
                             } else if input.throw_held {
                                 ai_state.shot_charge_target -= time.delta_secs();
                                 if ai_state.shot_charge_target <= 0.0 {
@@ -600,8 +608,8 @@ pub fn ai_decision_update(
                         let dx = target_basket_pos.x - ai_pos.x;
                         input.move_x = dx.signum() * 0.3;
 
-                        // Reset if landed without shooting (failed attempt)
-                        if grounded.0 && ai_state.jump_shot_timer > 0.3 {
+                        // Reset if landed without shooting (give more time like player has)
+                        if grounded.0 && ai_state.jump_shot_timer > 1.0 {
                             ai_state.jump_shot_active = false;
                         }
                     } else {
@@ -630,9 +638,31 @@ pub fn ai_decision_update(
                             input.move_x = dx.signum();
                         }
 
-                        // Attempt steal when close
+                        // Check if in steal range and update reaction timer
+                        // Use profile's steal_range, not global constant
                         let distance = ai_pos.distance(opp_pos);
-                        input.pickup_pressed = distance < STEAL_RANGE;
+                        let in_steal_range = distance < profile.steal_range;
+
+                        if in_steal_range {
+                            // Reset timer if just entered range
+                            if !ai_state.was_in_steal_range {
+                                ai_state.steal_reaction_timer = 0.0;
+                            }
+                            // Increment timer
+                            ai_state.steal_reaction_timer += time.delta_secs();
+
+                            // Only attempt steal after reaction delay AND button cooldown
+                            if ai_state.steal_reaction_timer >= profile.steal_reaction_time
+                                && ai_state.button_press_cooldown <= 0.0
+                            {
+                                input.pickup_pressed = true;
+                                // Convert presses/sec to interval
+                                ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
+                            }
+                        } else {
+                            ai_state.steal_reaction_timer = 0.0;
+                        }
+                        ai_state.was_in_steal_range = in_steal_range;
                     }
 
                     input.throw_held = false;
@@ -672,12 +702,30 @@ pub fn ai_decision_update(
                             input.jump_held = true;
                         }
 
-                        // Attempt steal opportunistically when close enough
+                        // Check if in steal range and update reaction timer
+                        // Use profile's steal_range (with 1.2x for pressure defense)
                         let distance = ai_pos.distance(opp_pos);
-                        if distance < STEAL_RANGE * 1.2 {
-                            // Slightly extended range for pressure attempts
-                            input.pickup_pressed = true;
+                        let in_steal_range = distance < profile.steal_range * 1.2;
+
+                        if in_steal_range {
+                            // Reset timer if just entered range
+                            if !ai_state.was_in_steal_range {
+                                ai_state.steal_reaction_timer = 0.0;
+                            }
+                            // Increment timer
+                            ai_state.steal_reaction_timer += time.delta_secs();
+
+                            // Only attempt steal after reaction delay AND button cooldown
+                            if ai_state.steal_reaction_timer >= profile.steal_reaction_time
+                                && ai_state.button_press_cooldown <= 0.0
+                            {
+                                input.pickup_pressed = true;
+                                ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
+                            }
+                        } else {
+                            ai_state.steal_reaction_timer = 0.0;
                         }
+                        ai_state.was_in_steal_range = in_steal_range;
                     }
 
                     input.throw_held = false;
@@ -703,10 +751,14 @@ pub fn ai_decision_update(
             }
         }
 
-        // Always allow pickup when near a free ball
+        // Always allow pickup when near a free ball (respecting button cooldown)
         let distance_to_ball = ai_pos.distance(ball_pos);
-        if distance_to_ball < BALL_PICKUP_RADIUS && matches!(ball_state, BallState::Free) {
+        if distance_to_ball < BALL_PICKUP_RADIUS
+            && matches!(ball_state, BallState::Free)
+            && ai_state.button_press_cooldown <= 0.0
+        {
             input.pickup_pressed = true;
+            ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
         }
 
         // Stuck detection: if AI is trying to move but position doesn't change, try to unstick
@@ -784,8 +836,8 @@ fn execute_nav_action(
                 nav_state.jump_timer += time.delta_secs();
                 let target_hold_time = hold_duration * SHOT_CHARGE_TIME; // Scale to actual time
 
-                if nav_state.jump_timer < target_hold_time.min(0.5) {
-                    // Still holding jump (allow up to 0.5s for tall platforms)
+                if nav_state.jump_timer < target_hold_time {
+                    // No cap - physics determines max useful hold time
                     input.jump_held = true;
                 } else {
                     // Release and continue moving toward landing
@@ -842,6 +894,171 @@ fn execute_nav_action(
                 // Falling
                 nav_state.jump_timer += time.delta_secs();
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    /// Test that button press cooldown correctly limits press rate.
+    /// At 10 presses/sec, interval is 0.1s, so 5 frames at 60fps (0.0833s) shouldn't allow a second press.
+    #[test]
+    fn test_button_press_cooldown_limits_rate() {
+        let presses_per_sec: f32 = 10.0;
+        let interval: f32 = 1.0 / presses_per_sec; // 0.1 seconds
+
+        let mut cooldown: f32 = 0.0;
+        let mut presses = 0;
+        let dt: f32 = 1.0 / 60.0; // 60 fps
+
+        // Simulate 30 frames (0.5 seconds) of wanting to press
+        for _ in 0..30 {
+            cooldown = (cooldown - dt).max(0.0);
+            if cooldown <= 0.0 {
+                // Would press
+                presses += 1;
+                cooldown = interval;
+            }
+        }
+
+        // At 10 presses/sec over 0.5s, should get ~5 presses (not 30!)
+        assert!(
+            presses >= 4 && presses <= 6,
+            "Expected ~5 presses at 10/sec over 0.5s, got {}",
+            presses
+        );
+    }
+
+    /// Test that reaction timer delays first steal attempt.
+    #[test]
+    fn test_steal_reaction_timer_delays_first_attempt() {
+        let reaction_time: f32 = 0.2; // 200ms
+        let dt: f32 = 1.0 / 60.0; // 60 fps
+
+        let mut timer: f32 = 0.0;
+        let mut frames_until_first_attempt: usize = 0;
+
+        // Simulate entering steal range and waiting
+        for frame in 0..60 {
+            timer += dt;
+            if timer >= reaction_time {
+                frames_until_first_attempt = frame;
+                break;
+            }
+        }
+
+        // At 60fps, 0.2s = 12 frames
+        assert!(
+            frames_until_first_attempt >= 11 && frames_until_first_attempt <= 13,
+            "Expected ~12 frames for 0.2s reaction at 60fps, got {}",
+            frames_until_first_attempt
+        );
+    }
+
+    /// IMPORTANT: This test catches when new button actions are added without cooldown limits.
+    ///
+    /// Every `input.pickup_pressed = true` in AI decision code MUST:
+    /// 1. Check `button_press_cooldown <= 0.0` before pressing
+    /// 2. Reset cooldown after pressing: `button_press_cooldown = 1.0 / profile.button_presses_per_sec`
+    ///
+    /// This prevents the AI from having frame-perfect button timing.
+    #[test]
+    fn test_all_pickup_pressed_assignments_have_cooldown() {
+        let source = fs::read_to_string("src/ai/decision.rs")
+            .expect("Should be able to read decision.rs");
+
+        // Only analyze code BEFORE the test module (exclude #[cfg(test)] section)
+        let code_to_analyze = source
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap_or(&source);
+
+        // Find all lines with `input.pickup_pressed = true`
+        let violations: Vec<(usize, &str)> = code_to_analyze
+            .lines()
+            .enumerate()
+            .filter(|(_, line)| {
+                let trimmed = line.trim();
+                // Match actual assignments to input.pickup_pressed, not comments
+                trimmed.contains("input.pickup_pressed = true")
+                    && !trimmed.starts_with("//")
+                    && !trimmed.starts_with("*")
+            })
+            .filter(|(line_num, _)| {
+                // Check if this assignment is properly guarded
+                // Look at the surrounding context (10 lines before, 3 after)
+                let start = line_num.saturating_sub(10);
+                let context: String = code_to_analyze
+                    .lines()
+                    .skip(start)
+                    .take(line_num - start + 4)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                // Must have BOTH:
+                // 1. A cooldown check before the assignment
+                // 2. A cooldown reset after the assignment
+                let has_cooldown_check = context.contains("button_press_cooldown <= 0.0")
+                    || context.contains("button_press_cooldown == 0.0");
+                let has_cooldown_reset = context.contains("button_press_cooldown =")
+                    && context.contains("button_presses_per_sec");
+
+                // Violation if missing either check or reset
+                !has_cooldown_check || !has_cooldown_reset
+            })
+            .collect();
+
+        if !violations.is_empty() {
+            let msg = violations
+                .iter()
+                .map(|(line, content)| format!("  Line {}: {}", line + 1, content.trim()))
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            panic!(
+                "\n\nFOUND UNGUARDED pickup_pressed ASSIGNMENTS!\n\
+                 \n\
+                 The following lines set `input.pickup_pressed = true` without proper cooldown:\n\
+                 {}\n\
+                 \n\
+                 REQUIRED PATTERN:\n\
+                 ```\n\
+                 if <condition> && ai_state.button_press_cooldown <= 0.0 {{\n\
+                     input.pickup_pressed = true;\n\
+                     ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;\n\
+                 }}\n\
+                 ```\n\
+                 \n\
+                 This prevents AI from having frame-perfect button timing.\n",
+                msg
+            );
+        }
+    }
+
+    /// Test profile values are in reasonable human ranges.
+    #[test]
+    fn test_profile_button_timing_in_human_range() {
+        // Human button mashing is typically 6-15 presses per second
+        // Reaction time is typically 150-400ms
+        let profiles = crate::ai::AiProfileDatabase::default();
+
+        for profile in profiles.profiles() {
+            assert!(
+                profile.button_presses_per_sec >= 5.0 && profile.button_presses_per_sec <= 20.0,
+                "Profile '{}' has unrealistic button_presses_per_sec: {} (expected 5-20)",
+                profile.name,
+                profile.button_presses_per_sec
+            );
+
+            assert!(
+                profile.steal_reaction_time >= 0.05 && profile.steal_reaction_time <= 0.5,
+                "Profile '{}' has unrealistic steal_reaction_time: {} (expected 0.05-0.5s)",
+                profile.name,
+                profile.steal_reaction_time
+            );
         }
     }
 }

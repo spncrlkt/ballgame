@@ -1,5 +1,19 @@
 # Ballgame Done Archive
 
+## Archived 2026-01-24 (Scenario Testing Session)
+- [x] **Scenario Testing System** - 33 tests passing across 6 categories
+  - Movement: 8 tests (walk, jump, coyote time, jump buffer, air control)
+  - Ball: 7 tests (pickup, bounce, rolling, near basket)
+  - Shooting: 5 tests (basic, max charge, aim, elevation, jumping)
+  - Scoring: 4 tests (basic, increments, respawn, own goal)
+  - Stealing: 6 tests (range, cooldown, charging, knockback, immunity)
+  - Collision: 3 tests (wall, platform landing, head bonk)
+- [x] Shot Accuracy Testing - Implemented distance-based speed multiplier
+  - 45.8% over/under ratio (PASS: within 40-60%)
+  - `cargo run --bin simulate -- --shot-test` for testing
+- [x] AI Steal Timing - Added reaction time + button mashing limits
+  - `steal_reaction_time` (0.10-0.30s) and `button_presses_per_sec` (6-15/sec)
+
 ## Archived 2026-01-23 (Session 3)
 - [x] Simplified steal system - removed button mashing, instant steal attempts (33% base, 50% if charging)
 - [x] Added 1-second no-stealback cooldown for steal victims

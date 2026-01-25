@@ -1,0 +1,58 @@
+# Test: Ball respawns at center after goal
+# Verifies that after scoring, the ball resets to center position
+#
+# FAIL conditions this test catches:
+# - Ball stays in basket after score
+# - Ball position not reset to center
+# - Ball velocity not zeroed after score
+
+name = "Ball respawn after goal"
+description = "After scoring, ball returns to center of arena"
+
+[setup]
+level = "test_shooting_range"
+# Shooting range has low baskets (150) for easy scoring
+
+# Player holding ball, positioned close to basket for reliable shot
+[[setup.entities]]
+type = "player"
+id = "scorer"
+team = "left"
+x = 550.0
+y = -398.0
+holding_ball = true
+facing = 1.0
+
+# Charge a shot aimed at right basket (long charge for max power)
+[[input]]
+frame = 5
+scorer = { throw_held = true }
+
+# Release at high charge for reliable trajectory
+[[input]]
+frame = 60
+scorer = { throw_held = false }
+
+# Should see shot release
+[[expect.sequence]]
+event = "ShotRelease"
+player = "scorer"
+frame_min = 55
+frame_max = 70
+
+# Should score a goal (ball enters basket)
+[[expect.sequence]]
+event = "Goal"
+frame_min = 65
+frame_max = 150
+
+# Check ball position after score
+# Ball should be at center (BALL_SPAWN = 0, -330)
+[[expect.state]]
+after_frame = 160
+checks = [
+    "ball.x > -150",          # Ball should be near center (not in basket)
+    "ball.x < 150",           # Ball should be near center
+    "ball.state = Free",      # Ball should be free
+    "scorer.holding_ball = false", # Scorer no longer has ball
+]

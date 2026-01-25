@@ -358,6 +358,242 @@ Query world state after simulation:
 - `ball.x`, `ball.y` - ball position
 - `score.left`, `score.right` - team scores
 
+## Physics Testing Strategies
+
+For testing physics interactions, we have two complementary approaches:
+
+### 1. High-Level (Player Actions)
+
+Use scenario tests with scripted player inputs for end-to-end verification:
+
+```toml
+# Example: Player shoots, ball should score
+[[input]]
+frame = 10
+shooter = { throw_held = true }
+
+[[input]]
+frame = 100
+shooter = { throw_held = false }  # Release shot
+
+[[expect.state]]
+after_frame = 200
+checks = ["score.left = 1"]
+```
+
+Best for:
+- Complete player actions (shooting, stealing, pickup)
+- Testing the full stack from input → physics → outcome
+- Shot accuracy testing (`cargo run --bin simulate -- --shot-test`)
+
+### 2. Low-Level (Direct Physics)
+
+Spawn objects with specific positions and velocities, then verify physics behavior:
+
+```toml
+# Example: Ball bounces off rim correctly
+[[setup.entities]]
+type = "ball"
+x = 740.0
+y = -200.0
+velocity_x = -50.0
+velocity_y = -100.0
+
+[[expect.state]]
+after_frame = 60
+checks = [
+    "ball.velocity_y > 0",  # Should bounce upward
+    "ball.x < 740.0",       # Should deflect left
+]
+```
+
+Best for:
+- Testing 2+ body physics interactions (ball-rim, ball-wall, player-platform)
+- Isolating specific collision behaviors
+- Verifying bounce coefficients, friction, gravity
+- Rim rejection/acceptance scenarios
+- Testing edge cases without complex input sequences
+
+### Statistical Shot Testing
+
+For shot accuracy tuning, use the simulate binary:
+
+```bash
+cargo run --bin simulate -- --shot-test 30 --level 3
+```
+
+This fires shots from multiple positions and tracks:
+- **Goal**: Ball enters basket
+- **Overshoot**: Ball's peak height exceeds basket Y (missed high)
+- **Undershoot**: Ball's peak height below basket Y (missed low)
+
+Target: 40-60% overshoot/undershoot ratio for balanced feel.
+
+### Physics Parameters to Test
+
+| Interaction | Direct Test Approach |
+|-------------|---------------------|
+| Ball-rim bounce | Set ball velocity toward rim, check deflection angle |
+| Ball-floor friction | Set ball rolling, measure deceleration |
+| Ball gravity | Set ball at height, measure fall time |
+| Player-wall collision | Move player into wall, verify position clamped |
+| Platform landing | Drop player onto platform, verify grounded state |
+| Shot trajectory | Use `--shot-test` for statistical coverage |
+
+## Balance Simulation Suite
+
+Statistical simulations for game balance testing. These tests run many iterations to detect bias and regressions in game mechanics.
+
+**Pattern:**
+1. Run headless simulation with controlled inputs
+2. Collect outcome statistics (goals, misses, steals, etc.)
+3. Compare ratios against target thresholds
+4. Report PASS/FAIL for automated checking
+
+**Current simulations:**
+
+| Test | Command | Target | Measures |
+|------|---------|--------|----------|
+| Shot accuracy | `--shot-test 30 --level 3` | 40-60% over/under | Overshoot vs undershoot ratio |
+
+**Planned simulations:**
+
+| Test | Target | Measures |
+|------|--------|----------|
+| Steal success rate | ~33% base | Successful steals / attempts |
+| AI profile balance | <60% win rate | Any profile dominating |
+| Ball physics consistency | Low variance | Bounce heights, friction |
+
+**Usage:**
+```bash
+# Quick balance check (in audit checklist)
+cargo run --bin simulate -- --shot-test 30 --level 3
+
+# Full tournament for AI balance
+cargo run --bin simulate -- --tournament 5
+```
+
+**Adding new simulations:**
+1. Add `SimMode` variant in `src/simulation/config.rs`
+2. Add CLI flag parsing
+3. Implement test runner in `src/simulation/runner.rs`
+4. Define pass/fail thresholds
+5. Add to audit checklist in CLAUDE.md
+
+## Feature Coverage Map
+
+*Last updated: 2026-01-24*
+*Current tests: 33 passing*
+
+### Legend
+- ✅ = Has test(s)
+- ⚠️ = Partial coverage
+- ❌ = No test coverage
+
+---
+
+### Movement (8 tests)
+| Feature | Status | Test(s) | Notes |
+|---------|--------|---------|-------|
+| Walk left | ✅ | `movement/walk_left` | |
+| Walk right | ✅ | `movement/walk_right` | |
+| Basic jump | ✅ | `movement/jump_basic` | |
+| Max jump height | ✅ | `movement/jump_max_height` | |
+| Air control | ✅ | `movement/air_control` | |
+| Coyote time | ✅ | `movement/coyote_time` | Jump after leaving platform edge |
+| Jump buffer | ✅ | `movement/jump_buffer` | Jump pressed while airborne before landing |
+| Jump while moving | ✅ | `movement/jump_while_moving` | Horizontal movement during jump |
+| Variable jump height | ❌ | - | Hold vs tap jump |
+| Acceleration curve | ❌ | - | Movement ramp-up speed |
+
+### Ball Physics (7 tests)
+| Feature | Status | Test(s) | Notes |
+|---------|--------|---------|-------|
+| Pickup stationary | ✅ | `ball/pickup_stationary` | |
+| Pickup while moving | ✅ | `ball/pickup_while_moving` | |
+| Drop on jump | ✅ | `ball/drop_on_jump` | Ball doesn't stick during jump |
+| Bounce floor | ✅ | `ball/bounce_floor` | |
+| Bounce rim | ✅ | `ball/bounce_rim` | |
+| Rolling stops | ✅ | `ball/rolling_stops` | Friction slows ball |
+| Ball near own basket | ✅ | `ball/pass_through_own_basket` | Ball behaves correctly near defensive basket |
+| Ball follow holder | ❌ | - | Ball position relative to player |
+| Ball shot grace | ❌ | - | 100ms no-friction after shot |
+| Ball spin visual | ❌ | - | Angular velocity/rotation |
+| Ball-wall bounce | ❌ | - | Side wall collision |
+| Ball gravity | ❌ | - | Isolated gravity test |
+
+### Shooting (5 tests)
+| Feature | Status | Test(s) | Notes |
+|---------|--------|---------|-------|
+| Basic shot | ✅ | `shooting/shoot_basic` | Charge and release |
+| Max charge | ✅ | `shooting/shoot_max_charge` | Full power shot |
+| Aim left | ✅ | `shooting/shoot_aim_left` | Target basket switching |
+| Shoot while jumping | ✅ | `shooting/shoot_while_jumping` | |
+| Shot from elevation | ✅ | `shooting/shoot_from_elevation` | Shooting from platform |
+| Shot variance | ❌ | - | RNG spread on shots |
+| Minimum charge threshold | ❌ | - | Shot requires min charge |
+| Shot accuracy (statistical) | ⚠️ | `--shot-test` flag | Separate binary, not scenario test |
+
+### Scoring (4 tests)
+| Feature | Status | Test(s) | Notes |
+|---------|--------|---------|-------|
+| Basic score | ✅ | `scoring/score_basic` | Ball enters basket |
+| Score increments | ✅ | `scoring/score_increments` | Multiple goals counted |
+| Ball respawn after score | ✅ | `scoring/ball_respawn` | Ball resets to center |
+| Own goal | ✅ | `scoring/own_goal` | Shooting toward own basket |
+| Score attribution | ❌ | - | Verify correct team gets point |
+
+### Stealing (6 tests)
+| Feature | Status | Test(s) | Notes |
+|---------|--------|---------|-------|
+| Steal in range | ✅ | `stealing/steal_in_range` | Attempt when close |
+| Steal out of range | ✅ | `stealing/steal_out_of_range` | No attempt when far |
+| Steal cooldown | ✅ | `stealing/steal_cooldown` | Can't spam steal |
+| Steal while charging | ✅ | `stealing/steal_while_charging` | Attempt triggers during victim charge |
+| Steal knockback | ✅ | `stealing/steal_knockback` | Multiple attempts, verifies no crash |
+| No-stealback cooldown | ✅ | `stealing/no_stealback_cooldown` | Victim gets 1s cooldown |
+| Steal success/fail ratio | ❌ | - | Statistical test (33% base) |
+
+### Collision (3 tests)
+| Feature | Status | Test(s) | Notes |
+|---------|--------|---------|-------|
+| Wall stops player | ✅ | `collision/wall_stops_player` | |
+| Platform collision | ✅ | `collision/platform_landing` | Player lands on platform |
+| Platform head bonk | ✅ | `collision/platform_head_bonk` | Hit platform from below |
+| Player-basket collision | ❌ | - | Can't walk through baskets |
+| Ball-basket rim collision | ⚠️ | `ball/bounce_rim` | Basic bounce only |
+| Corner step collision | ❌ | - | Step platform shape |
+
+### AI Behavior (0 tests)
+| Feature | Status | Test(s) | Notes |
+|---------|--------|---------|-------|
+| AI navigation | ❌ | - | Pathfinding to targets |
+| AI decision making | ❌ | - | Goal state machine |
+| AI shooting | ❌ | - | When/where AI shoots |
+| AI defending | ❌ | - | Positioning, stealing |
+| AI jump capability | ❌ | - | Knows what it can reach |
+
+### Input System (0 tests)
+| Feature | Status | Test(s) | Notes |
+|---------|--------|---------|-------|
+| Input buffering | ❌ | - | Buffered press inputs |
+| Gamepad support | ❌ | - | Not testable in headless |
+
+---
+
+### Priority Test Gaps
+
+**High Priority (MVP blockers):** All done!
+**Medium Priority (Quality):** All done!
+**Low Priority (mostly done):** Most done!
+
+**Remaining gaps:**
+1. `movement/variable_jump_height` - Hold vs tap jump
+2. `scoring/score_attribution` - Verify correct team gets point
+3. Statistical tests (steal ratio, shot variance) - Requires seeded RNG
+
+---
+
 ## Milestone Todo
 
 Add to `milestones.md` under V1/Beyond:

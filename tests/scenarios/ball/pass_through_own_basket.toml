@@ -1,0 +1,56 @@
+# Test: Ball interaction with own basket
+# Verifies ball physics near the player's defensive basket
+# (The basket they're NOT trying to score in)
+#
+# Note: In current game rules, ANY basket entry counts as a score
+# for the opposing team. This test verifies the ball doesn't get stuck
+# or behave oddly when near the basket.
+#
+# FAIL conditions this test catches:
+# - Ball gets stuck in basket area
+# - Ball physics break near basket zone
+# - Game crashes on basket proximity
+
+name = "Ball near own basket"
+description = "Ball behaves correctly when thrown toward own basket"
+
+[setup]
+level = "test_flat_floor"
+
+# Left team player shooting toward LEFT basket (their defensive basket)
+[[setup.entities]]
+type = "player"
+id = "shooter"
+team = "left"
+x = -400.0
+y = -398.0
+holding_ball = true
+facing = -1.0
+
+# Throw toward left (own basket direction)
+[[input]]
+frame = 5
+shooter = { throw_held = true }
+
+[[input]]
+frame = 30
+shooter = { throw_held = false }
+
+# Ball should be released
+[[expect.sequence]]
+event = "ShotRelease"
+player = "shooter"
+frame_min = 25
+frame_max = 40
+
+# After some time, ball should either:
+# - Score (if it went in basket) - ball resets to center
+# - Miss and bounce/roll - ball is somewhere in arena
+# Either way, game state should be consistent
+[[expect.state]]
+after_frame = 120
+checks = [
+    "ball.x > -850",          # Ball didn't leave arena left
+    "ball.x < 850",           # Ball didn't leave arena right
+    "shooter.holding_ball = false",
+]

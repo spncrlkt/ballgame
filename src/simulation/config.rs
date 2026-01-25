@@ -16,6 +16,8 @@ pub enum SimMode {
     LevelSweep { matches_per_level: u32 },
     /// Compare to baseline metrics
     Regression,
+    /// Shot accuracy test - fire shots from fixed positions
+    ShotTest { shots_per_position: u32 },
 }
 
 /// Configuration for a simulation run
@@ -137,6 +139,17 @@ impl SimConfig {
                 "--regression" => {
                     config.mode = SimMode::Regression;
                 }
+                "--shot-test" => {
+                    let shots = if i + 1 < args.len() && !args[i + 1].starts_with('-') {
+                        i += 1;
+                        args[i].parse().unwrap_or(30)
+                    } else {
+                        30
+                    };
+                    config.mode = SimMode::ShotTest {
+                        shots_per_position: shots,
+                    };
+                }
                 "--seed" => {
                     if i + 1 < args.len() {
                         config.seed = args[i + 1].parse().ok();
@@ -191,6 +204,7 @@ OPTIONS:
     --tournament [N]    Run all profile combinations (N matches each, default: 5)
     --level-sweep [N]   Test profile across all levels (N matches each, default: 3)
     --regression        Compare to baseline metrics
+    --shot-test [N]     Shot accuracy test (N shots per position, default: 30)
     --seed <N>          RNG seed for reproducibility
     --output <FILE>     Output JSON to file (default: stdout)
     --quiet, -q         Suppress progress output

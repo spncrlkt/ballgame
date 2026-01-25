@@ -1,0 +1,63 @@
+# Test: Steal attempt when victim is charging
+# Verifies steal attempts happen when defender is charging a shot
+# (The +17% bonus is applied internally - we verify the attempt triggers)
+#
+# FAIL conditions this test catches:
+# - Steal attempt not recognized when victim is charging
+# - Input not propagating to steal system during charge state
+
+name = "Steal while victim charging"
+description = "Steal attempt triggers when ball holder is charging a shot"
+
+[setup]
+level = "test_steal_arena"
+
+# Two players close together - both in steal range
+# Floor at y=-450, floor top at -430, player center at -398
+[[setup.entities]]
+type = "player"
+id = "holder"
+team = "left"
+x = 0.0
+y = -398.0
+holding_ball = true
+
+[[setup.entities]]
+type = "player"
+id = "stealer"
+team = "right"
+x = 40.0
+y = -398.0
+
+# Holder starts charging shot
+[[input]]
+frame = 5
+holder = { throw_held = true }
+
+# Stealer attempts steal while holder is charging
+[[input]]
+frame = 15
+stealer = { pickup = true }
+
+# Should see ShotStart event from holder
+[[expect.sequence]]
+event = "ShotStart"
+player = "holder"
+frame_min = 1
+frame_max = 10
+
+# Should see StealAttempt event from stealer
+[[expect.sequence]]
+event = "StealAttempt"
+player = "stealer"
+frame_min = 10
+frame_max = 20
+
+# State check - verify both players exist and game state is consistent
+# (Outcome is RNG-based - if steal succeeded, knockback may push holder left)
+[[expect.state]]
+after_frame = 30
+checks = [
+    "holder.x > -200",        # Holder didn't go through left wall (knockback bounded)
+    "stealer.x > -100",       # Stealer still in arena
+]

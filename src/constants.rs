@@ -104,10 +104,11 @@ pub const BALL_KICK_THRESHOLD: f32 = 30.0; // Ball speed below this counts as "s
 // =============================================================================
 
 pub const STEAL_RANGE: f32 = 60.0; // How close to initiate steal
-pub const STEAL_SUCCESS_CHANCE: f32 = 0.33; // Base success chance (1/3)
-pub const STEAL_CHARGING_BONUS: f32 = 0.17; // +17% if defender is charging (total 50%)
+pub const STEAL_SUCCESS_CHANCE: f32 = 0.25; // Base success chance (1/4, was 1/3)
+pub const STEAL_CHARGING_BONUS: f32 = 0.15; // +15% if defender is charging (total 40%)
 pub const STEAL_PUSHBACK_STRENGTH: f32 = 400.0; // Knockback velocity on successful steal
-pub const STEAL_COOLDOWN: f32 = 0.3; // Seconds between steal attempts
+pub const STEAL_COOLDOWN: f32 = 0.3; // Seconds cooldown after successful steal
+pub const STEAL_FAIL_COOLDOWN: f32 = 0.5; // Seconds cooldown after failed steal (longer penalty)
 pub const STEAL_VICTIM_COOLDOWN: f32 = 1.0; // Seconds before victim can steal back
 pub const STEAL_INDICATOR_SIZE: f32 = 16.0; // Size of cooldown/fail indicators
 pub const STEAL_FAIL_FLASH_DURATION: f32 = 0.15; // Duration of fail flash

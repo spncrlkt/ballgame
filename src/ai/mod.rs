@@ -52,6 +52,12 @@ pub struct AiState {
     pub stuck_timer: f32,
     /// Elapsed time at last defensive goal switch (for hysteresis)
     pub last_defense_switch: f32,
+    /// Timer for steal reaction delay (simulates human reaction time)
+    pub steal_reaction_timer: f32,
+    /// Whether AI was in steal range last frame (for reset detection)
+    pub was_in_steal_range: bool,
+    /// Cooldown timer for button presses (simulates human mashing speed)
+    pub button_press_cooldown: f32,
 }
 
 /// Goals the AI can pursue

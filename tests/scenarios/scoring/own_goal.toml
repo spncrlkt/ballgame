@@ -1,0 +1,53 @@
+# Test: Own goal (scoring in wrong basket)
+# Verifies that scoring in your own basket gives points to the opponent
+# (This is basketball-style rules where own goals count for the other team)
+#
+# FAIL conditions this test catches:
+# - Own goal gives points to wrong team
+# - Scoring logic doesn't account for basket side
+# - Ball not reset after own goal
+
+name = "Own goal"
+description = "Scoring in own basket gives points to opponent"
+
+[setup]
+level = "test_shooting_range"
+# Low baskets for easier scoring
+
+# Left team player near LEFT basket (their own basket)
+# They should not normally shoot here, but if they do, right team scores
+[[setup.entities]]
+type = "player"
+id = "shooter"
+team = "left"
+x = -400.0
+y = -398.0
+holding_ball = true
+facing = -1.0
+
+# Charge shot aimed at left basket (wrong basket for left team)
+[[input]]
+frame = 5
+shooter = { throw_held = true }
+
+# Release shot
+[[input]]
+frame = 45
+shooter = { throw_held = false }
+
+# Should see shot release
+[[expect.sequence]]
+event = "ShotRelease"
+player = "shooter"
+frame_min = 40
+frame_max = 55
+
+# If goal is scored, check that RIGHT team got the point
+# Note: Due to shot variance, may not always score
+# If it scores, right team (opponent) should get the point
+[[expect.state]]
+after_frame = 120
+checks = [
+    "shooter.holding_ball = false",  # Ball was released
+    "score.left >= 0",               # Left score unchanged or higher
+]

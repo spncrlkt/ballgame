@@ -35,3 +35,12 @@ basket_height: 300
 basket_push_in: 80
 steps: 0
 debug: true
+
+# SHOT ACCURACY - For testing overshoot/undershoot ratios
+# Use for: cargo run --bin simulate -- --shot-test
+# Basket at moderate height, pushed in for clear trajectories
+level: test_shot_accuracy
+basket_height: 200
+basket_push_in: 50
+steps: 0
+debug: true

@@ -1,0 +1,56 @@
+# Test: Shooting from elevated platform
+# Verifies player can shoot successfully from an elevated position
+#
+# FAIL conditions this test catches:
+# - Shot angle incorrect from elevation
+# - Ball physics broken when starting higher
+# - Shooting system not working from non-floor positions
+
+name = "Shoot from elevation"
+description = "Player shoots from elevated platform toward basket"
+
+[setup]
+level = "test_single_platform"
+# Platform at y=180 above floor
+
+# Spawn player ON the platform (not above it)
+# Platform top at y=-260, player center at -228
+[[setup.entities]]
+type = "player"
+id = "shooter"
+team = "left"
+x = 0.0
+y = -228.0
+holding_ball = true
+facing = 1.0
+
+# Charge shot
+[[input]]
+frame = 5
+shooter = { throw_held = true }
+
+# Release after good charge
+[[input]]
+frame = 50
+shooter = { throw_held = false }
+
+# Should see shot events
+[[expect.sequence]]
+event = "ShotStart"
+player = "shooter"
+frame_min = 1
+frame_max = 10
+
+[[expect.sequence]]
+event = "ShotRelease"
+player = "shooter"
+frame_min = 45
+frame_max = 55
+
+# Check that ball is in flight after release
+[[expect.state]]
+after_frame = 60
+checks = [
+    "ball.state = InFlight",
+    "shooter.holding_ball = false",
+]

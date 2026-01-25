@@ -509,6 +509,8 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 9. **Compilation** - Run `cargo check` and `cargo clippy`
 10. **Visual regression** - Run `./scripts/regression.sh` to capture and compare against baseline
 11. **Visual verification** - Review the regression screenshot to verify UI looks correct
+12. **Balance simulations** - Run statistical balance tests to catch regressions:
+    - `cargo run --bin simulate -- --shot-test 30 --level 3` (target: 40-60% over/under ratio)
 
 **After auditing:**
 - Run the code review prompt from `code_review_prompt.md` and log results to `code_review_audits.md`

@@ -144,9 +144,9 @@ pub fn throw_ball(
         // Add distance variance to total
         variance += distance_variance;
 
-        // Apply variance to angle (max ±30° at full variance), slight upward bias
+        // Apply variance to angle (max ±30° at full variance), no bias
         let max_angle_variance = 30.0_f32.to_radians();
-        let angle_variance = (rng.gen_range(-variance..variance) + 0.01) * max_angle_variance;
+        let angle_variance = rng.gen_range(-variance..variance) * max_angle_variance;
         let final_angle = base_angle + angle_variance;
 
         // Half power for quick shots (< 400ms charge)
@@ -156,9 +156,22 @@ pub fn throw_ball(
             1.0
         };
 
-        // Boost speed by 10% to compensate for undershoot, then apply ±10% randomness
+        // Distance-based speed multiplier - simple linear interpolation
+        // NOTE: This is a band-aid. See todo.md "Shot System Overhaul" for proper fix.
+        // Current issues: similar distances produce wildly different results,
+        // suggesting the minimum-energy trajectory formula needs rethinking.
+        let distance_multiplier = if let Some(basket_pos) = target_basket_pos {
+            let dx = (basket_pos.x - player_pos.x).abs();
+            // Simple linear: 1.0 at close range, 1.05 at far range
+            let t = ((dx - 200.0) / 600.0).clamp(0.0, 1.0);
+            1.0 + 0.05 * t
+        } else {
+            1.0
+        };
+
+        // Apply distance multiplier and ±10% randomness
         let speed_randomness = rng.gen_range(0.9..1.1);
-        let uncapped_speed = required_speed * 1.10 * speed_randomness * power_multiplier;
+        let uncapped_speed = required_speed * distance_multiplier * speed_randomness * power_multiplier;
 
         // Hard cap at SHOT_HARD_CAP
         let final_speed = uncapped_speed.min(SHOT_HARD_CAP);

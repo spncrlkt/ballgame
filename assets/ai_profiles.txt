@@ -13,6 +13,10 @@
 #   pressure_distance - How close AI stays to ball carrier (lower = more pressure)
 #   aggression - How aggressively AI pursues (0.0=passive, 1.0=relentless)
 #   defensive_iq - How well AI positions on shot line (0.0-1.0)
+#   steal_reaction_time - Seconds before AI attempts steal after entering range
+#                         Lower = faster reflexes (0.10-0.30, human average ~0.20)
+#   button_presses_per_sec - Max button presses per second (human range: 6-15)
+#                            Limits how fast AI can mash pickup/steal
 
 profile: Balanced
 position_tolerance: 30
@@ -25,6 +29,8 @@ min_shot_quality: 0.50
 pressure_distance: 150
 aggression: 0.5
 defensive_iq: 0.6
+steal_reaction_time: 0.20
+button_presses_per_sec: 10
 
 profile: Aggressive
 position_tolerance: 20
@@ -37,6 +43,8 @@ min_shot_quality: 0.25
 pressure_distance: 80
 aggression: 0.9
 defensive_iq: 0.6
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
 
 profile: Defensive
 position_tolerance: 40
@@ -49,6 +57,8 @@ min_shot_quality: 0.5
 pressure_distance: 150
 aggression: 0.4
 defensive_iq: 0.7
+steal_reaction_time: 0.25
+button_presses_per_sec: 8
 
 profile: Sniper
 position_tolerance: 15
@@ -61,6 +71,8 @@ min_shot_quality: 0.6
 pressure_distance: 180
 aggression: 0.3
 defensive_iq: 0.8
+steal_reaction_time: 0.22
+button_presses_per_sec: 7
 
 profile: Rusher
 position_tolerance: 25
@@ -73,6 +85,8 @@ min_shot_quality: 0.2
 pressure_distance: 60
 aggression: 1.0
 defensive_iq: 0.4
+steal_reaction_time: 0.10
+button_presses_per_sec: 15
 
 profile: Turtle
 position_tolerance: 50
@@ -85,6 +99,8 @@ min_shot_quality: 0.55
 pressure_distance: 200
 aggression: 0.2
 defensive_iq: 0.6
+steal_reaction_time: 0.30
+button_presses_per_sec: 6
 
 profile: Chaotic
 position_tolerance: 10
@@ -97,6 +113,8 @@ min_shot_quality: 0.15
 pressure_distance: 100
 aggression: 0.7
 defensive_iq: 0.3
+steal_reaction_time: 0.15
+button_presses_per_sec: 12
 
 profile: Patient
 position_tolerance: 35
@@ -109,6 +127,8 @@ min_shot_quality: 0.5
 pressure_distance: 140
 aggression: 0.35
 defensive_iq: 0.65
+steal_reaction_time: 0.25
+button_presses_per_sec: 8
 
 profile: Hunter
 position_tolerance: 18
@@ -121,6 +141,8 @@ min_shot_quality: 0.35
 pressure_distance: 70
 aggression: 0.85
 defensive_iq: 0.55
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
 
 profile: Goalie
 position_tolerance: 45
@@ -133,3 +155,5 @@ min_shot_quality: 0.45
 pressure_distance: 160
 aggression: 0.3
 defensive_iq: 0.75
+steal_reaction_time: 0.20
+button_presses_per_sec: 9

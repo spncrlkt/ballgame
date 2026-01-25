@@ -246,16 +246,20 @@ pub fn pickup_ball(
 
                         // Apply no-stealback cooldown to victim
                         defender_cooldown.0 = STEAL_VICTIM_COOLDOWN;
+
+                        // Short cooldown after successful steal
+                        cooldown.0 = STEAL_COOLDOWN;
                     }
                 } else {
                     // Steal failed - set fail flash
                     steal_contest.last_attempt_failed = true;
                     steal_contest.fail_flash_timer = STEAL_FAIL_FLASH_DURATION;
                     steal_contest.fail_flash_entity = Some(player_entity);
+
+                    // Longer cooldown after failed steal (penalty for spam)
+                    cooldown.0 = STEAL_FAIL_COOLDOWN;
                 }
 
-                // Apply cooldown to attacker regardless of success
-                cooldown.0 = STEAL_COOLDOWN;
                 return;
             }
         }

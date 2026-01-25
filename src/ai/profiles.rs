@@ -37,6 +37,12 @@ pub struct AiProfile {
     /// How well AI positions on shot line (0.0-1.0)
     /// Higher = better interception angles
     pub defensive_iq: f32,
+    /// Reaction delay before attempting steal (seconds)
+    /// Simulates human reaction time - lower = faster reflexes
+    pub steal_reaction_time: f32,
+    /// Maximum button presses per second
+    /// Simulates human mashing speed - higher = faster mashing (typical human: 8-15)
+    pub button_presses_per_sec: f32,
 }
 
 impl Default for AiProfile {
@@ -53,6 +59,8 @@ impl Default for AiProfile {
             pressure_distance: 120.0,
             aggression: 0.5,
             defensive_iq: 0.5,
+            steal_reaction_time: 0.2, // ~200ms like typical human reaction
+            button_presses_per_sec: 12.0, // ~12 presses/sec (typical human mashing)
         }
     }
 }
@@ -206,6 +214,16 @@ fn parse_profiles(content: &str) -> Vec<AiProfile> {
                 "defensive_iq" => {
                     if let Ok(v) = value.parse() {
                         profile.defensive_iq = v;
+                    }
+                }
+                "steal_reaction_time" => {
+                    if let Ok(v) = value.parse() {
+                        profile.steal_reaction_time = v;
+                    }
+                }
+                "button_presses_per_sec" => {
+                    if let Ok(v) = value.parse() {
+                        profile.button_presses_per_sec = v;
                     }
                 }
                 _ => {}

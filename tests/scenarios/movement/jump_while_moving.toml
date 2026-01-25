@@ -1,0 +1,68 @@
+# Test: Jump while moving
+# Verifies player can jump while also moving horizontally
+# Combined with platform landing and coyote time tests, this covers
+# the jump-onto-platform scenario
+#
+# FAIL conditions this test catches:
+# - Jump doesn't work while moving
+# - Horizontal movement stops during jump
+# - Jump height reduced when moving
+
+name = "Jump while moving"
+description = "Player can jump and move simultaneously"
+
+[setup]
+level = "test_flat_floor"
+
+# Spawn on floor
+[[setup.entities]]
+type = "player"
+id = "p1"
+team = "left"
+x = 0.0
+y = -398.0
+
+# Start moving right
+[[input]]
+frame = 5
+p1 = { move_right = true }
+
+# Jump while moving
+[[input]]
+frame = 10
+p1 = { jump = true, move_right = true }
+
+# Continue moving in air
+[[input]]
+frame = 20
+p1 = { move_right = true }
+
+# Stop at frame 50
+[[input]]
+frame = 50
+p1 = { }
+
+# Check at frame 8 - moving right on ground
+[[expect.state]]
+after_frame = 8
+checks = [
+    "p1.grounded = true",     # On floor
+    "p1.velocity_x > 0",      # Moving right
+]
+
+# Check at frame 18 - in air, still moving right
+[[expect.state]]
+after_frame = 18
+checks = [
+    "p1.grounded = false",    # In the air
+    "p1.y > -370",            # Has jumped up
+    "p1.x > 40",              # Has moved right
+]
+
+# Check at frame 90 - landed, moved far right
+[[expect.state]]
+after_frame = 90
+checks = [
+    "p1.grounded = true",     # Back on ground
+    "p1.x > 100",             # Has moved right significantly
+]
