@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::ai::{
-    AiNavState, AiProfileDatabase, AiState, NavGraph, ai_decision_update,
+    AiNavState, AiProfileDatabase, AiState, InputState, NavGraph, ai_decision_update,
     ai_navigation_update, mark_nav_dirty_on_level_change, rebuild_nav_graph,
     shot_quality::evaluate_shot_quality,
 };
@@ -200,6 +200,36 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
             metrics.right.clone(),
         )
     };
+
+    // Fail fast on broken AI behavior
+    let total_shots = left_stats.shots_attempted + right_stats.shots_attempted;
+    let total_steals = left_stats.steals_attempted + right_stats.steals_attempted;
+
+    if score_left == 0 && score_right == 0 {
+        panic!(
+            "SIMULATION FAILED: 0-0 game on level {} ({} vs {}, seed {}). \
+             AI is not scoring. Left shots: {}, Right shots: {}",
+            config.level, config.left_profile, config.right_profile, seed,
+            left_stats.shots_attempted, right_stats.shots_attempted
+        );
+    }
+
+    if total_shots < 10 {
+        panic!(
+            "SIMULATION FAILED: Only {} shots in 60s on level {} ({} vs {}, seed {}). \
+             AI is not shooting enough. Left: {}, Right: {}",
+            total_shots, config.level, config.left_profile, config.right_profile, seed,
+            left_stats.shots_attempted, right_stats.shots_attempted
+        );
+    }
+
+    if total_steals == 0 {
+        panic!(
+            "SIMULATION FAILED: 0 steal attempts on level {} ({} vs {}, seed {}). \
+             AI is not attempting steals.",
+            config.level, config.left_profile, config.right_profile, seed
+        );
+    }
 
     let level_name = level_db
         .get((config.level - 1) as usize)
@@ -447,6 +477,7 @@ fn emit_simulation_events(
             &AiState,
             &StealCooldown,
             Option<&HoldingBall>,
+            &InputState,
         ),
         With<Player>,
     >,
@@ -461,7 +492,7 @@ fn emit_simulation_events(
     // Convert query results to snapshots
     let player_snapshots: Vec<_> = players
         .iter()
-        .map(|(entity, team, transform, velocity, charging, ai_state, steal_cooldown, holding)| {
+        .map(|(entity, team, transform, velocity, charging, ai_state, steal_cooldown, holding, input_state)| {
             snapshot_player(
                 entity,
                 team,
@@ -471,6 +502,7 @@ fn emit_simulation_events(
                 ai_state,
                 steal_cooldown,
                 holding,
+                input_state,
             )
         })
         .collect();
@@ -823,6 +855,10 @@ pub fn run_simulation(config: SimConfig) {
         super::config::SimMode::ShotTest { shots_per_position } => {
             run_shot_test(&config, *shots_per_position, &level_db);
         }
+
+        super::config::SimMode::GhostTrial { path } => {
+            run_ghost_trials(&config, path, &level_db, &profile_db);
+        }
     }
 }
 
@@ -863,3 +899,431 @@ fn store_results_in_db(db: &SimDatabase, session_type: &str, results: &[MatchRes
     }
 }
 
+/// Run ghost trials from a file or directory
+fn run_ghost_trials(
+    config: &SimConfig,
+    path: &str,
+    level_db: &LevelDatabase,
+    profile_db: &AiProfileDatabase,
+) {
+    let path = std::path::Path::new(path);
+
+    // Collect ghost files
+    let ghost_files: Vec<std::path::PathBuf> = if path.is_dir() {
+        std::fs::read_dir(path)
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.path())
+                    .filter(|p| p.extension().map_or(false, |ext| ext == "ghost"))
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else if path.extension().map_or(false, |ext| ext == "ghost") {
+        vec![path.to_path_buf()]
+    } else {
+        eprintln!("Error: {} is not a .ghost file or directory", path.display());
+        return;
+    };
+
+    if ghost_files.is_empty() {
+        eprintln!("No .ghost files found in {}", path.display());
+        return;
+    }
+
+    if !config.quiet {
+        println!("Running {} ghost trials against {}", ghost_files.len(), config.right_profile);
+        println!();
+    }
+
+    let mut results = Vec::new();
+    let mut defended = 0;
+    let mut scored = 0;
+
+    for ghost_path in &ghost_files {
+        let trial = match super::ghost::load_ghost_trial(ghost_path) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("Failed to load {}: {}", ghost_path.display(), e);
+                continue;
+            }
+        };
+
+        let seed = config.seed.unwrap_or_else(|| rand::thread_rng().r#gen());
+        let result = run_ghost_trial(config, &trial, seed, level_db, profile_db);
+
+        if !config.quiet {
+            let status = if result.ai_defended() { "DEFENDED" } else { "SCORED" };
+            println!(
+                "  {} [{}]: {} ({:.1}s, {:.0}% survival)",
+                trial.source_file,
+                status,
+                result.outcome,
+                result.duration,
+                result.survival_ratio() * 100.0
+            );
+        }
+
+        if result.ai_defended() {
+            defended += 1;
+        } else {
+            scored += 1;
+        }
+
+        results.push(result);
+    }
+
+    // Summary
+    println!();
+    println!("=== Ghost Trial Summary ===");
+    println!("AI Profile: {}", config.right_profile);
+    println!("Total trials: {}", results.len());
+    println!("AI defended: {} ({:.0}%)", defended, defended as f32 / results.len() as f32 * 100.0);
+    println!("Ghost scored: {} ({:.0}%)", scored, scored as f32 / results.len() as f32 * 100.0);
+
+    // Output JSON if requested
+    if let Some(output_file) = &config.output_file {
+        let json = serde_json::to_string_pretty(&results).unwrap();
+        std::fs::write(output_file, json).expect("Failed to write output");
+        println!("Results written to {}", output_file);
+    }
+}
+
+/// Run a single ghost trial
+pub fn run_ghost_trial(
+    config: &SimConfig,
+    trial: &super::ghost::GhostTrial,
+    seed: u64,
+    level_db: &LevelDatabase,
+    profile_db: &AiProfileDatabase,
+) -> super::ghost::GhostTrialResult {
+    use bevy::app::ScheduleRunnerPlugin;
+    use super::ghost::{GhostOutcome, GhostPlaybackState, GhostTrialResult, max_tick};
+
+    // Create a minimal Bevy app
+    let mut app = App::new();
+
+    // Minimal plugins for headless operation
+    app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(
+        Duration::from_secs_f32(1.0 / 60.0),
+    )));
+    app.add_plugins(bevy::transform::TransformPlugin);
+
+    // Use the trial's level
+    let level = trial.level;
+
+    // Game resources
+    app.insert_resource((*level_db).clone());
+    app.insert_resource((*profile_db).clone());
+    app.init_resource::<Score>();
+    app.insert_resource(CurrentLevel(level));
+    app.init_resource::<StealContest>();
+    app.init_resource::<NavGraph>();
+    app.init_resource::<PhysicsTweaks>();
+    app.init_resource::<LastShotInfo>();
+    app.insert_resource(CurrentPalette(0));
+    app.init_resource::<PaletteDatabase>();
+
+    // Ghost trial resources
+    app.insert_resource(trial.clone());
+    app.insert_resource(GhostPlaybackState::default());
+
+    // Simulation control - use a modified config for ghost trial
+    let mut ghost_config = config.clone();
+    ghost_config.level = level;
+    ghost_config.left_profile = "Ghost".to_string(); // Ghost player (not AI)
+
+    app.insert_resource(SimControl {
+        config: ghost_config,
+        should_exit: false,
+        current_seed: seed,
+    });
+    app.insert_resource(SimMetrics::new());
+
+    // Startup system - custom setup for ghost trials
+    app.add_systems(Startup, ghost_trial_setup);
+    app.add_systems(PostStartup, |mut nav_graph: ResMut<NavGraph>| {
+        nav_graph.dirty = true;
+    });
+
+    // AI systems in Update
+    app.add_systems(
+        Update,
+        (
+            mark_nav_dirty_on_level_change,
+            rebuild_nav_graph,
+            ai_navigation_update,
+            ai_decision_update,
+        )
+            .chain(),
+    );
+
+    app.add_systems(Update, (steal_cooldown_update, super::ghost::ghost_check_end_conditions));
+
+    // Ghost input and physics in FixedUpdate for consistent timing
+    app.add_systems(
+        FixedUpdate,
+        (
+            super::ghost::ghost_input_system, // Apply ghost inputs first
+            apply_input,
+            apply_gravity,
+            ball_gravity,
+            ball_spin,
+            apply_velocity,
+            check_collisions,
+            ball_collisions,
+            ball_state_update,
+            ball_player_collision,
+            ball_follow_holder,
+            pickup_ball,
+            steal_cooldown_update,
+            update_shot_charge,
+            throw_ball,
+            check_scoring,
+        )
+            .chain(),
+    );
+
+    // Run until trial ends
+    loop {
+        app.update();
+
+        let control = app.world().resource::<SimControl>();
+        if control.should_exit {
+            break;
+        }
+    }
+
+    // Extract results
+    let playback = app.world().resource::<GhostPlaybackState>();
+    let outcome = playback.outcome.unwrap_or(GhostOutcome::TimeLimit);
+    let end_tick = playback.end_tick;
+    let total_ticks = max_tick(trial);
+    let duration = end_tick as f32 / 1000.0;
+
+    GhostTrialResult {
+        source_file: trial.source_file.clone(),
+        level: trial.level,
+        level_name: trial.level_name.clone(),
+        ai_profile: config.right_profile.clone(),
+        outcome,
+        duration,
+        end_tick,
+        total_ticks,
+        originally_scored: trial.originally_scored,
+    }
+}
+
+/// Setup system for ghost trials
+/// Left player is ghost-controlled, right player is AI-controlled
+/// Ball starts with left player (ghost)
+fn ghost_trial_setup(
+    mut commands: Commands,
+    level_db: Res<LevelDatabase>,
+    profile_db: Res<AiProfileDatabase>,
+    control: Res<SimControl>,
+    current_level: Res<CurrentLevel>,
+    _trial: Res<super::ghost::GhostTrial>,
+) {
+    use crate::ai::{AiGoal, AiNavState, AiState};
+    use crate::ball::{
+        Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
+    };
+    use crate::player::{CoyoteTimer, Facing, Grounded, TargetBasket};
+    use crate::shooting::ChargingShot;
+    use crate::world::{Basket, Collider, Platform};
+
+    let config = &control.config;
+
+    // Find AI profile index for right player
+    let right_idx = profile_db
+        .profiles()
+        .iter()
+        .position(|p| p.name == config.right_profile)
+        .unwrap_or(0);
+
+    // Spawn left player (Ghost controlled - no AI)
+    let left_player = commands
+        .spawn((
+            Transform::from_translation(PLAYER_SPAWN_LEFT),
+            Sprite {
+                custom_size: Some(PLAYER_SIZE),
+                ..default()
+            },
+            Player,
+            Velocity::default(),
+            Grounded(false),
+            CoyoteTimer::default(),
+            JumpState::default(),
+            Facing::default(),
+            ChargingShot::default(),
+            TargetBasket(Basket::Right),
+            Collider,
+            Team::Left,
+            InputState::default(), // Ghost inputs will be written here
+            StealCooldown::default(),
+        ))
+        .id();
+
+    // Spawn right player (AI controlled)
+    commands
+        .spawn((
+            Transform::from_translation(PLAYER_SPAWN_RIGHT),
+            Sprite {
+                custom_size: Some(PLAYER_SIZE),
+                ..default()
+            },
+            Player,
+            Velocity::default(),
+            Grounded(false),
+            CoyoteTimer::default(),
+            JumpState::default(),
+            Facing(-1.0),
+            ChargingShot::default(),
+            TargetBasket(Basket::Left),
+            Collider,
+            Team::Right,
+        ))
+        .insert((
+            InputState::default(),
+            AiState {
+                current_goal: AiGoal::ChaseBall,
+                profile_index: right_idx,
+                ..default()
+            },
+            AiNavState::default(),
+            StealCooldown::default(),
+        ));
+
+    // Spawn ball - give it to the ghost (left player)
+    let ball_entity = commands.spawn((
+        Transform::from_translation(PLAYER_SPAWN_LEFT + Vec3::new(10.0, 0.0, 0.0)),
+        Sprite {
+            custom_size: Some(BALL_SIZE),
+            ..default()
+        },
+        Ball,
+        BallState::Held(left_player), // Ghost starts with the ball
+        Velocity::default(),
+        BallSpin::default(),
+        BallPlayerContact::default(),
+        BallPulse { timer: 0.0 },
+        BallRolling(false),
+        BallShotGrace::default(),
+        BallStyle("wedges".to_string()),
+        Collider,
+    )).id();
+
+    // Add HoldingBall to the ghost player so they can throw
+    commands.entity(left_player).insert(HoldingBall(ball_entity));
+
+    // Spawn floor
+    commands.spawn((
+        Sprite {
+            custom_size: Some(Vec2::new(ARENA_WIDTH + 200.0, 40.0)),
+            ..default()
+        },
+        Transform::from_xyz(0.0, ARENA_FLOOR_Y - 20.0, 0.0),
+        Platform,
+        Collider,
+    ));
+
+    // Spawn walls
+    commands.spawn((
+        Sprite {
+            custom_size: Some(Vec2::new(WALL_THICKNESS, 5000.0)),
+            ..default()
+        },
+        Transform::from_xyz(-ARENA_WIDTH / 2.0 + WALL_THICKNESS / 2.0, 2000.0, 0.0),
+        Platform,
+        Collider,
+    ));
+    commands.spawn((
+        Sprite {
+            custom_size: Some(Vec2::new(WALL_THICKNESS, 5000.0)),
+            ..default()
+        },
+        Transform::from_xyz(ARENA_WIDTH / 2.0 - WALL_THICKNESS / 2.0, 2000.0, 0.0),
+        Platform,
+        Collider,
+    ));
+
+    // Spawn level platforms
+    let level_idx = (current_level.0 - 1) as usize;
+    if let Some(level) = level_db.get(level_idx) {
+        for platform in &level.platforms {
+            match platform {
+                crate::levels::PlatformDef::Mirror { x, y, width } => {
+                    // Left
+                    commands.spawn((
+                        Sprite {
+                            custom_size: Some(Vec2::new(*width, 20.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(-x, ARENA_FLOOR_Y + y, 0.0),
+                        Platform,
+                        Collider,
+                        crate::world::LevelPlatform,
+                    ));
+                    // Right
+                    commands.spawn((
+                        Sprite {
+                            custom_size: Some(Vec2::new(*width, 20.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(*x, ARENA_FLOOR_Y + y, 0.0),
+                        Platform,
+                        Collider,
+                        crate::world::LevelPlatform,
+                    ));
+                }
+                crate::levels::PlatformDef::Center { y, width } => {
+                    commands.spawn((
+                        Sprite {
+                            custom_size: Some(Vec2::new(*width, 20.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(0.0, ARENA_FLOOR_Y + y, 0.0),
+                        Platform,
+                        Collider,
+                        crate::world::LevelPlatform,
+                    ));
+                }
+            }
+        }
+
+        // Spawn corner steps if level has them
+        if level.step_count > 0 {
+            super::setup::spawn_corner_steps(
+                &mut commands,
+                level.step_count,
+                level.corner_height,
+                level.corner_width,
+                level.step_push_in,
+            );
+        }
+
+        // Spawn baskets (baskets need Sprite for scoring check)
+        let basket_y = ARENA_FLOOR_Y + level.basket_height;
+        let wall_inner = ARENA_WIDTH / 2.0 - WALL_THICKNESS;
+        let left_basket_x = -wall_inner + level.basket_push_in;
+        let right_basket_x = wall_inner - level.basket_push_in;
+
+        commands.spawn((
+            Sprite {
+                custom_size: Some(BASKET_SIZE),
+                ..default()
+            },
+            Transform::from_xyz(left_basket_x, basket_y, 0.0),
+            Basket::Left,
+        ));
+        commands.spawn((
+            Sprite {
+                custom_size: Some(BASKET_SIZE),
+                ..default()
+            },
+            Transform::from_xyz(right_basket_x, basket_y, 0.0),
+            Basket::Right,
+        ));
+    }
+}

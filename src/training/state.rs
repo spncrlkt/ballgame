@@ -13,6 +13,8 @@ pub enum TrainingPhase {
     WaitingToStart,
     /// Game is actively being played
     Playing,
+    /// Game is paused (Start button to resume)
+    Paused,
     /// Game ended, recording result
     GameEnded,
     /// Awaiting player notes input
@@ -83,6 +85,10 @@ pub struct TrainingState {
     pub win_score: u32,
     /// Time spent in between-game transition
     pub transition_timer: f32,
+    /// Time limit per game in seconds (None = no limit)
+    pub time_limit_secs: Option<f32>,
+    /// Timeout if no score within this many seconds (None = no timeout)
+    pub first_point_timeout_secs: Option<f32>,
 }
 
 impl Default for TrainingState {
@@ -104,6 +110,8 @@ impl Default for TrainingState {
             ai_profile: "Balanced".to_string(),
             win_score: 5,
             transition_timer: 0.0,
+            time_limit_secs: None,
+            first_point_timeout_secs: None,
         }
     }
 }

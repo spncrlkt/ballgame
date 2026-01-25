@@ -20,6 +20,13 @@
 - [ ] Fix AI positioning - stands in wrong places, doesn't cover basket well
 - [ ] Fix AI shooting - takes bad shots, misses easy ones
 
+**AI Defense Testing (Scripted Replay):**
+- [ ] Drive extractor - parse evlog, segment by goals, output input sequences
+- [ ] Scripted player mode - simulation where one player follows recorded inputs
+- [ ] Defense test runner - `cargo run --bin simulate -- --defense-test <evlog>`
+- [ ] Success metric - percentage of drives where AI prevents the scripted score
+- [ ] Use training sessions as benchmarks: if AI can't stop recorded human, it needs improvement
+
 **Movement/Physics:**
 - [ ] Tune player movement - speed, acceleration, air control
 - [ ] Tune jump feel - height, coyote time, responsiveness
@@ -121,7 +128,19 @@
 - [ ] Unlockable ball skins through achievements
 - [ ] Ball "lineage" tracking across games
 
-**Interaction Logging & Analytics:**
+**Interaction Logging & Analytics (Input-First Architecture):**
+The logging system should treat inputs as the primary data source. With seed + inputs, everything else is deterministically derivable.
+
+*Current state:* Logs inputs (I events) alongside position ticks (T events) and game events.
+
+*Root cause refactor:*
+- [ ] Input-only evlog format - log only: seed, config, inputs, and non-deterministic events
+- [ ] Replay engine - reconstruct full game state from inputs
+- [ ] Remove redundant position logging (T events) - derive on replay
+- [ ] Scripted player system - feed recorded inputs to player instead of AI/human
+- [ ] Training data export - input sequences as ML training examples
+
+*Legacy logging (keep for now):*
 - [ ] Event logging system - structured JSON/CSV output for all game events
 - [ ] Player actions: movement inputs, jumps, shots (charge time, angle, result)
 - [ ] Ball events: pickups, drops, bounces, basket entries, steals (success/fail)

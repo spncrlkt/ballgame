@@ -6,8 +6,8 @@
 use bevy::prelude::*;
 
 use crate::{
-    AiState, BallState, ChargingShot, HoldingBall, Score, StealContest, StealCooldown, Team,
-    Velocity,
+    AiState, BallState, ChargingShot, HoldingBall, InputState, Score, StealContest, StealCooldown,
+    Team, Velocity,
 };
 use super::{EventBuffer, GameEvent, PlayerId};
 
@@ -100,6 +100,11 @@ pub struct PlayerSnapshot {
     pub ai_goal: String,
     pub steal_cooldown: f32,
     pub is_holding_ball: bool,
+    /// Input state for replay/analysis
+    pub input_move_x: f32,
+    pub input_jump: bool,
+    pub input_throw: bool,
+    pub input_pickup: bool,
 }
 
 /// Ball data extracted from queries for event emission
@@ -202,6 +207,24 @@ fn emit_tick_events(
             ball_state: ball_state_char,
         },
     );
+
+    // Log input state for each player at the same rate as ticks
+    for player in players {
+        let player_id = match player.team {
+            Team::Left => PlayerId::L,
+            Team::Right => PlayerId::R,
+        };
+        buffer.log(
+            elapsed,
+            GameEvent::Input {
+                player: player_id,
+                move_x: player.input_move_x,
+                jump: player.input_jump,
+                throw: player.input_throw,
+                pickup: player.input_pickup,
+            },
+        );
+    }
 }
 
 fn emit_goal_events(
@@ -405,6 +428,7 @@ pub fn snapshot_player(
     ai_state: &AiState,
     steal_cooldown: &StealCooldown,
     holding: Option<&HoldingBall>,
+    input_state: &InputState,
 ) -> PlayerSnapshot {
     PlayerSnapshot {
         entity,
@@ -415,6 +439,10 @@ pub fn snapshot_player(
         ai_goal: format!("{:?}", ai_state.current_goal),
         steal_cooldown: steal_cooldown.0,
         is_holding_ball: holding.is_some(),
+        input_move_x: input_state.move_x,
+        input_jump: input_state.jump_buffer_timer > 0.0,
+        input_throw: input_state.throw_held,
+        input_pickup: input_state.pickup_pressed,
     }
 }
 

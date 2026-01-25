@@ -22,8 +22,8 @@ use ballgame::events::{
     emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventEmitterState,
 };
 use ballgame::training::{
-    TrainingPhase, TrainingState, ensure_session_dir, evlog_path_for_game, print_session_summary,
-    write_session_summary,
+    TrainingMode, TrainingPhase, TrainingSettings, TrainingState, ensure_session_dir,
+    evlog_path_for_game, print_session_summary, write_session_summary,
 };
 use bevy::{camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
@@ -34,62 +34,6 @@ use world::{Basket, BasketRim, Collider, Platform};
 
 /// Path to ball options file
 const BALL_OPTIONS_FILE: &str = "assets/ball_options.txt";
-
-/// Parse command-line arguments
-struct TrainingArgs {
-    games: u32,
-    profile: String,
-}
-
-impl Default for TrainingArgs {
-    fn default() -> Self {
-        Self {
-            games: 1,
-            profile: "Balanced".to_string(),
-        }
-    }
-}
-
-fn parse_args() -> TrainingArgs {
-    let args: Vec<String> = std::env::args().collect();
-    let mut result = TrainingArgs::default();
-
-    let mut i = 1;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--games" | "-g" => {
-                if let Some(val) = args.get(i + 1) {
-                    result.games = val.parse().unwrap_or(5);
-                    i += 1;
-                }
-            }
-            "--profile" | "-p" => {
-                if let Some(val) = args.get(i + 1) {
-                    result.profile = val.clone();
-                    i += 1;
-                }
-            }
-            "--help" | "-h" => {
-                println!("Training Mode - Play against AI and collect analysis data");
-                println!();
-                println!("Usage: cargo run --bin training [OPTIONS]");
-                println!();
-                println!("Options:");
-                println!("  -g, --games N       Number of games (default: 1)");
-                println!("  -p, --profile NAME  AI profile (default: Balanced)");
-                println!("  -h, --help          Show this help");
-                println!();
-                println!("Available profiles: Balanced, Aggressive, Defensive, Sniper,");
-                println!("                    Rusher, Turtle, Chaotic, Patient, Hunter, Goalie");
-                std::process::exit(0);
-            }
-            _ => {}
-        }
-        i += 1;
-    }
-
-    result
-}
 
 /// Parse ball_options.txt to get list of style names
 fn load_ball_style_names() -> Vec<String> {
@@ -114,24 +58,49 @@ fn load_ball_style_names() -> Vec<String> {
 }
 
 fn main() {
-    let args = parse_args();
+    let settings = TrainingSettings::from_args();
 
     println!("========================================");
     println!("       TRAINING MODE");
     println!("========================================");
     println!();
-    println!("  Games: {}", args.games);
-    println!("  AI Profile: {}", args.profile);
+    let mode_str = match settings.mode {
+        TrainingMode::Goal => "Goal-by-goal",
+        TrainingMode::Game => "Full games",
+    };
+    println!("  Mode: {}", mode_str);
+    println!("  Iterations: {}", settings.iterations);
+    if settings.mode == TrainingMode::Game {
+        println!("  Win Score: {}", settings.win_score);
+    }
+    println!("  AI Profile: {}", settings.ai_profile);
+    if let Some(level) = settings.level {
+        println!("  Level: {} (fixed)", level);
+    } else {
+        println!("  Level: random");
+    }
+    if let Some(seed) = settings.seed {
+        println!("  Seed: {} (deterministic)", seed);
+    }
+    if let Some(t) = settings.time_limit_secs {
+        println!("  Time Limit: {}s", t);
+    }
+    if let Some(t) = settings.first_point_timeout_secs {
+        println!("  First Point Timeout: {}s", t);
+    }
     println!();
     println!("  Controls:");
     println!("    A/D or Left Stick: Move");
     println!("    Space/W or South: Jump");
     println!("    E or West: Pickup/Steal");
     println!("    F or RB: Throw (hold to charge)");
-    println!("    R or Start: Restart with new level");
+    println!("    P or Start: Pause/Resume");
     println!("    Escape: Quit training session");
     println!();
-    println!("  First to 5 points wins each game.");
+    match settings.mode {
+        TrainingMode::Goal => println!("  Score a goal to complete each iteration."),
+        TrainingMode::Game => println!("  First to {} points wins each game.", settings.win_score),
+    }
     println!("========================================");
     println!();
 
@@ -141,33 +110,50 @@ fn main() {
     // Load palette database
     let palette_db = PaletteDatabase::load_or_create(PALETTES_FILE);
 
-    // Get initial background color from first palette
+    // Get initial background color from selected palette
     let initial_bg = palette_db
-        .get(0)
+        .get(settings.palette_index)
         .map(|p| p.background)
         .unwrap_or(DEFAULT_BACKGROUND_COLOR);
 
-    // Create training state
-    let mut training_state = TrainingState::new(args.games, &args.profile);
+    // Create training state with settings
+    let mut training_state = TrainingState::new(settings.iterations, &settings.ai_profile);
+    training_state.win_score = if settings.mode == TrainingMode::Game {
+        settings.win_score
+    } else {
+        1 // Goal mode: end after first goal
+    };
+    training_state.time_limit_secs = settings.time_limit_secs;
+    training_state.first_point_timeout_secs = settings.first_point_timeout_secs;
 
-    // Pick initial random non-debug level
-    // Filter out debug levels and Pit (too hard for training)
-    let training_levels: Vec<u32> = (0..level_db.len())
-        .filter(|&i| {
-            let level = level_db.get(i);
-            let is_debug = level.map(|l| l.debug).unwrap_or(true);
-            let is_pit = level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
-            !is_debug && !is_pit
-        })
-        .map(|i| (i + 1) as u32)
-        .collect();
-
-    if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
-        training_state.current_level = level;
+    // Pick level - either fixed from settings or random
+    if let Some(fixed_level) = settings.level {
+        training_state.current_level = fixed_level;
         training_state.current_level_name = level_db
-            .get((level - 1) as usize)
+            .get((fixed_level - 1) as usize)
             .map(|l| l.name.clone())
-            .unwrap_or_else(|| format!("Level {}", level));
+            .unwrap_or_else(|| format!("Level {}", fixed_level));
+    } else {
+        // Filter out debug levels and excluded levels
+        let training_levels: Vec<u32> = (0..level_db.len())
+            .filter(|&i| {
+                let level = level_db.get(i);
+                let is_debug = level.map(|l| l.debug).unwrap_or(true);
+                let level_name = level.map(|l| l.name.clone()).unwrap_or_default();
+                let is_excluded = settings.exclude_levels.iter()
+                    .any(|exc| level_name.to_lowercase() == exc.to_lowercase());
+                !is_debug && !is_excluded
+            })
+            .map(|i| (i + 1) as u32)
+            .collect();
+
+        if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
+            training_state.current_level = level;
+            training_state.current_level_name = level_db
+                .get((level - 1) as usize)
+                .map(|l| l.name.clone())
+                .unwrap_or_else(|| format!("Level {}", level));
+        }
     }
 
     // Ensure session directory exists
@@ -176,11 +162,12 @@ fn main() {
         return;
     }
 
-    println!("Starting Game 1/{} on {}", args.games, training_state.current_level_name);
+    println!("Starting iteration 1/{} on {}", settings.iterations, training_state.current_level_name);
     println!();
 
-    // Viewport setup
-    let (viewport_width, viewport_height, _) = VIEWPORT_PRESETS[0];
+    // Viewport setup from settings
+    let viewport_index = settings.viewport_index.min(VIEWPORT_PRESETS.len() - 1);
+    let (viewport_width, viewport_height, _) = VIEWPORT_PRESETS[viewport_index];
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -199,6 +186,7 @@ fn main() {
         .insert_resource(ClearColor(initial_bg))
         .insert_resource(palette_db)
         .insert_resource(level_db)
+        .insert_resource(settings)
         .insert_resource(training_state)
         .init_resource::<PlayerInput>()
         .init_resource::<DebugSettings>()
@@ -215,7 +203,7 @@ fn main() {
         .init_resource::<MatchCountdown>()
         // Startup systems
         .add_systems(Startup, training_setup)
-        // Input systems chain
+        // Input systems chain - paused when game is paused
         .add_systems(
             Update,
             (
@@ -226,7 +214,8 @@ fn main() {
                 ai::ai_navigation_update,
                 ai::ai_decision_update,
             )
-                .chain(),
+                .chain()
+                .run_if(not_paused),
         )
         // Core Update systems - split to avoid tuple issues
         .add_systems(Update, player::respawn_player)
@@ -249,7 +238,7 @@ fn main() {
                 update_training_hud,
                 emit_training_events,
                 check_escape_quit,
-                check_restart,
+                check_pause_restart,
             ),
         )
         // Fixed update physics chain - only runs when countdown is finished
@@ -273,9 +262,15 @@ fn main() {
                 scoring::check_scoring,
             )
                 .chain()
-                .run_if(countdown::not_in_countdown),
+                .run_if(countdown::not_in_countdown)
+                .run_if(not_paused),
         )
         .run();
+}
+
+/// Run condition: game is not paused
+fn not_paused(training_state: Res<TrainingState>) -> bool {
+    training_state.phase != TrainingPhase::Paused
 }
 
 /// Event buffer for training mode logging
@@ -690,7 +685,7 @@ fn training_state_machine(
             training_state.update_elapsed();
             event_buffer.elapsed = training_state.game_elapsed;
 
-            // Check win condition (first to 5)
+            // Check win condition
             if score.left >= training_state.win_score || score.right >= training_state.win_score {
                 // Log match end
                 event_buffer.buffer.log(
@@ -720,6 +715,10 @@ fn training_state_machine(
                     score.right
                 );
             }
+        }
+
+        TrainingPhase::Paused => {
+            // Do nothing - game is paused, waiting for Start to resume
         }
 
         TrainingPhase::GameEnded => {
@@ -834,6 +833,7 @@ fn update_training_hud(
     for mut text in &mut hud_query {
         let phase_indicator = match training_state.phase {
             TrainingPhase::WaitingToStart => " [Pick up the ball to start]",
+            TrainingPhase::Paused => " [PAUSED - Press Start to resume]",
             TrainingPhase::GameEnded => " [Game Over - Press Start to retry]",
             TrainingPhase::SessionComplete => " [Session Complete]",
             _ => "",
@@ -870,6 +870,7 @@ fn emit_training_events(
             &AiState,
             &StealCooldown,
             Option<&HoldingBall>,
+            &InputState,
         ),
         With<Player>,
     >,
@@ -884,7 +885,7 @@ fn emit_training_events(
     // Convert query results to snapshots
     let player_snapshots: Vec<_> = players
         .iter()
-        .map(|(entity, team, transform, velocity, charging, ai_state, steal_cooldown, holding)| {
+        .map(|(entity, team, transform, velocity, charging, ai_state, steal_cooldown, holding, input_state)| {
             snapshot_player(
                 entity,
                 team,
@@ -894,6 +895,7 @@ fn emit_training_events(
                 ai_state,
                 steal_cooldown,
                 holding,
+                input_state,
             )
         })
         .collect();
@@ -943,8 +945,8 @@ fn check_escape_quit(
     }
 }
 
-/// Check for Start button to restart game (during GameEnded phase)
-fn check_restart(
+/// Check for Start button to pause/unpause or restart
+fn check_pause_restart(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut training_state: ResMut<TrainingState>,
@@ -952,20 +954,35 @@ fn check_restart(
     mut event_buffer: ResMut<TrainingEventBuffer>,
     mut countdown: ResMut<MatchCountdown>,
     level_db: Res<LevelDatabase>,
+    _settings: Res<TrainingSettings>,
     mut current_level: ResMut<CurrentLevel>,
     mut players: Query<&mut Transform, With<Player>>,
     mut balls: Query<(&mut Transform, &mut BallState, &mut Velocity), (With<Ball>, Without<Player>)>,
 ) {
-    // Only allow restart during GameEnded phase
-    if training_state.phase != TrainingPhase::GameEnded {
-        return;
-    }
-
-    // Check for Start button (keyboard R or gamepad Start)
-    let start_pressed = keyboard.just_pressed(KeyCode::KeyR)
+    // Check for Start button (keyboard P or gamepad Start)
+    let start_pressed = keyboard.just_pressed(KeyCode::KeyP)
         || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::Start));
 
     if !start_pressed {
+        return;
+    }
+
+    // Toggle pause during Playing
+    if training_state.phase == TrainingPhase::Playing {
+        training_state.phase = TrainingPhase::Paused;
+        println!("\n[PAUSED] Press Start to resume");
+        return;
+    }
+
+    // Unpause
+    if training_state.phase == TrainingPhase::Paused {
+        training_state.phase = TrainingPhase::Playing;
+        println!("[RESUMED]");
+        return;
+    }
+
+    // Restart during GameEnded phase
+    if training_state.phase != TrainingPhase::GameEnded {
         return;
     }
 

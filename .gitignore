@@ -16,3 +16,6 @@ Cargo.lock
 /training_logs/
 /sim_logs/
 *_logs/
+
+# Local training settings (use template for defaults)
+assets/training_settings.json

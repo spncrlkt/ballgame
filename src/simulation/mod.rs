@@ -7,6 +7,7 @@ pub mod app_builder;
 pub mod config;
 pub mod control;
 pub mod db;
+pub mod ghost;
 pub mod metrics;
 pub mod parallel;
 pub mod runner;
@@ -16,6 +17,10 @@ pub mod shot_test;
 pub use app_builder::HeadlessAppBuilder;
 pub use config::{SimConfig, SimMode};
 pub use control::{SimControl, SimEventBuffer};
+pub use ghost::{
+    GhostOutcome, GhostPlaybackState, GhostTrial, GhostTrialResult, InputSample,
+    ghost_check_end_conditions, ghost_input_system, load_ghost_trial, max_tick,
+};
 pub use metrics::{MatchResult, PlayerStats, SimMetrics, TournamentResult};
 pub use runner::{run_match, run_simulation};
 pub use setup::{sim_setup, spawn_corner_steps};

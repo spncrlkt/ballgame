@@ -14,6 +14,16 @@ A collection of questions, ideas, and considerations to evaluate periodically.
 - [ ] Default targets (avg_score=14, duration=180s) are placeholders - need real tuning runs to calibrate
 - [ ] Should `analyze` output JSON in addition to text report for programmatic consumption?
 
+## Logging System Refactor (FUTURE)
+
+**Input-First Logging Architecture:** The logging system should be refactored to treat inputs as the primary data source. If we log all inputs (from human controllers and AI decisions), everything else (positions, scores, events) can be deterministically replayed. This enables:
+- **Scripted replay tests**: Use recorded human inputs to test AI defense
+- **Deterministic reproduction**: Replay any game state from seed + inputs
+- **Lighter evlogs**: Only log inputs + events, derive positions on replay
+- **AI training data**: Input sequences become training examples
+
+Current implementation logs inputs alongside ticks (I events at 20Hz). Future refactor could make inputs the sole state record.
+
 ---
 
 ## UI/UX

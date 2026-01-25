@@ -186,6 +186,23 @@ pub struct AiGoalData {
     pub goal: String,
 }
 
+/// Input state snapshot data
+#[derive(Debug, Clone)]
+pub struct InputData {
+    /// Time in milliseconds
+    pub time_ms: u32,
+    /// Player this input belongs to
+    pub player: PlayerId,
+    /// Horizontal movement (-1.0 to 1.0)
+    pub move_x: f32,
+    /// Jump button pressed
+    pub jump: bool,
+    /// Throw button held
+    pub throw: bool,
+    /// Pickup button pressed
+    pub pickup: bool,
+}
+
 /// Parsed event log with all data accessible
 #[derive(Debug, Clone, Default)]
 pub struct ParsedEvlog {

@@ -18,6 +18,11 @@ pub enum SimMode {
     Regression,
     /// Shot accuracy test - fire shots from fixed positions
     ShotTest { shots_per_position: u32 },
+    /// Ghost trial - play back recorded inputs against AI
+    GhostTrial {
+        /// Path to ghost trial file or directory
+        path: String,
+    },
 }
 
 /// Configuration for a simulation run
@@ -156,6 +161,14 @@ impl SimConfig {
                         shots_per_position: shots,
                     };
                 }
+                "--ghost" => {
+                    if i + 1 < args.len() {
+                        config.mode = SimMode::GhostTrial {
+                            path: args[i + 1].clone(),
+                        };
+                        i += 1;
+                    }
+                }
                 "--seed" => {
                     if i + 1 < args.len() {
                         config.seed = args[i + 1].parse().ok();
@@ -223,6 +236,7 @@ OPTIONS:
     --level-sweep [N]   Test profile across all levels (N matches each, default: 3)
     --regression        Compare to baseline metrics
     --shot-test [N]     Shot accuracy test (N shots per position, default: 30)
+    --ghost <PATH>      Run ghost trials from file or directory
     --seed <N>          RNG seed for reproducibility
     --output <FILE>     Output JSON to file (default: stdout)
     --quiet, -q         Suppress progress output
@@ -241,6 +255,9 @@ EXAMPLES:
 
     # Test Sniper profile across all levels
     cargo run --bin simulate -- --level-sweep 5 --left Sniper
+
+    # Run ghost trials against AI
+    cargo run --bin simulate -- --ghost training_logs/session_xxx/ghost_trials/ --right Aggressive
 
     # Run matches with event logging for analytics
     cargo run --bin simulate -- --tournament 5 --log-events --log-dir logs/

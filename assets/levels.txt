@@ -33,6 +33,7 @@ debug: true
 level: Open Floor
 basket_height: 660
 steps: 0
+debug: true
 
 level: Islands
 basket_height: 690
