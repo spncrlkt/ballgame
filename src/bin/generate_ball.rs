@@ -314,7 +314,7 @@ fn draw_wavy_half(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &
 }
 
 /// Wavy Wedges: Sinusoidal edges on wedge sections
-fn draw_wavy_wedges(fx: f32, fy: f32, radius: f32, angle: f32, norm_dist: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+fn draw_wavy_wedges(_fx: f32, _fy: f32, _radius: f32, angle: f32, norm_dist: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
     let sections = style.params.get("sections").copied().unwrap_or(4.0) as i32;
     let frequency = style.params.get("frequency").copied().unwrap_or(3.0);
     let amplitude = style.params.get("amplitude").copied().unwrap_or(0.15);

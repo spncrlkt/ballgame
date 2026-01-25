@@ -12,18 +12,18 @@
   - If CLI args were used, keep them
   - If no args, cycle through default options
 - [ ] **Clear status display** between games
-- [ ] **Fix ghost-visual.rs compilation** - Bevy Bundle errors, unused imports
 
 ---
 
-## P1: Ghost System
+## P1: Ghost System (MVP DONE)
 
 *Scripted replay for AI defense testing*
 
-- [ ] **Drive extractor** - parse evlog, segment by goals, output input sequences
-- [ ] **Ghost replay mode** - one player follows recorded inputs
-- [ ] **`--ghost` integration** - already has CLI flag, needs wiring up
-- [ ] **Defense metric** - % of drives where AI prevents the score
+- [x] **Drive extractor** - `cargo run --bin extract-drives <session_dir>`
+- [x] **Ghost replay mode** - `cargo run --bin run-ghost <trial.ghost>`
+- [x] **Defense metric** - run-ghost shows defense rate and outcome breakdown
+- [ ] **Polish: full AI for ghost defender** - currently simplified AI, wire up full decision system
+- [ ] **Polish: visual ghost mode** - render ghost playback in main game (optional)
 
 ---
 
@@ -67,9 +67,11 @@
 - 54.8% of matches ended 0-0
 - FIX NEEDED: Lower thresholds or add desperation timer
 
-**WIP files with issues:**
-- `src/bin/ghost-visual.rs` - Bundle errors, needs Bevy 0.17 fixes
-- `src/simulation/ghost.rs` - exists but not integrated
+**Ghost system status:**
+- `src/bin/run-ghost.rs` - Working ghost trial runner
+- `src/bin/extract-drives.rs` - Working drive extractor
+- `src/simulation/ghost.rs` - Core ghost types and systems
+- Note: run-ghost uses simplified AI for defender, not full decision system
 
 **Test commands:**
 ```bash
@@ -82,10 +84,10 @@ cargo run --bin training                 # Training mode
 
 ## Done (Last 5)
 
+- [x] Ghost system MVP - extract-drives + run-ghost binaries working (2026-01-25)
+- [x] HOW_TO_PLAY.md - ASCII controller guide with all controls
+- [x] README.md update - All binaries documented, AI profiles section
 - [x] Steal out-of-range visual indicator - Orange flash when too far (2026-01-25)
 - [x] Steal boundary tests - inside/outside range verification
-- [x] StealContest.out_of_range_timer - Tracks near-miss feedback state
-- [x] Full test coverage audit - 60% coverage, gaps documented
-- [x] Tournament analysis - Found profile shooting thresholds issue
 
 *See `todone.md` for full archive with commit references*
