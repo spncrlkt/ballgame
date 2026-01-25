@@ -1,0 +1,57 @@
+  Quick start:
+  # 5 iterations (default) vs Balanced AI on random levels
+  cargo run --bin training
+
+  # Custom session
+  cargo run --bin training -- -n 10 -p v3_Rush_Smart -l 3
+
+  Key options:
+  ┌──────────────────┬────────────────────────────────────────┐
+  │      Option      │              Description               │
+  ├──────────────────┼────────────────────────────────────────┤
+  │ -n 10            │ Number of iterations                   │
+  ├──────────────────┼────────────────────────────────────────┤
+  │ -p v3_Rush_Smart │ AI profile to play against             │
+  ├──────────────────┼────────────────────────────────────────┤
+  │ -l 3             │ Force specific level (omit for random) │
+  ├──────────────────┼────────────────────────────────────────┤
+  │ -m game          │ Full games mode (default: goal mode)   │
+  ├──────────────────┼────────────────────────────────────────┤
+  │ -w 5             │ Win score in game mode                 │
+  └──────────────────┴────────────────────────────────────────┘
+  Output: training_logs/session_YYYYMMDD_HHMMSS/
+
+  ---
+  Update Default Settings
+
+  Settings file: assets/training_settings.json (gitignored, persists your prefs)
+
+  # Create/edit your settings file
+  cat > assets/training_settings.json << 'EOF'
+  {
+    "iterations": 5,
+    "ai_profile": "v3_Rush_Smart",
+    "level": null,
+    "exclude_levels": ["Pit"],
+    "mode": "goal",
+    "win_score": 5
+  }
+  EOF
+  ┌────────────────┬─────────────────────────────────────────────────────────┐
+  │     Field      │                       Description                       │
+  ├────────────────┼─────────────────────────────────────────────────────────┤
+  │ ai_profile     │ Default opponent (e.g., "v2_Balanced", "v3_Rush_Smart") │
+  ├────────────────┼─────────────────────────────────────────────────────────┤
+  │ level          │ null = random, or 3 = force level 3                     │
+  ├────────────────┼─────────────────────────────────────────────────────────┤
+  │ exclude_levels │ Levels to skip in random selection                      │
+  ├────────────────┼─────────────────────────────────────────────────────────┤
+  │ iterations     │ How many rounds per session                             │
+  └────────────────┴─────────────────────────────────────────────────────────┘
+  CLI args override file settings.
+
+  ---
+  After playing, analyze with:
+  cargo run --bin extract-drives training_logs/session_YYYYMMDD_HHMMSS/
+  cargo run --bin analyze -- training_logs/session_YYYYMMDD_HHMMSS/
+

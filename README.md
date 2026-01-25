@@ -9,7 +9,9 @@ cargo run              # Play the game
 cargo run --release    # Play with optimizations
 ```
 
-See `HOW_TO_PLAY.md` for full controls reference.
+**Guides:**
+- `HOW_TO_PLAY.md` - Controls and gameplay
+- `TRAINING.md` - Training mode setup and analysis workflow
 
 ---
 
@@ -75,24 +77,18 @@ cargo run --bin simulate -- --shot-test 30 --level 3
 
 ### Ghost System
 
-Test AI defense against recorded human play.
+Test AI defense against recorded human play. Training sessions are complete drives (you start with the ball).
 
 **Step 1: Record training games**
 ```bash
 cargo run --bin training -- --games 5
 ```
 
-**Step 2: Extract drives to ghost trials**
+**Step 2: Run ghost trials against AI** (no extraction needed)
 ```bash
-cargo run --bin extract-drives training_logs/session_YYYYMMDD_HHMMSS/
-```
-Output: `training_logs/session_.../ghost_trials/*.ghost`
-
-**Step 3: Run ghost trials against AI**
-```bash
-cargo run --bin run-ghost ghost_trials/                    # All trials
-cargo run --bin run-ghost ghost_trials/ --profile v3_Rush_Smart
-cargo run --bin run-ghost ghost_trials/ --summary          # Summary only
+cargo run --bin run-ghost training_logs/session_YYYYMMDD_HHMMSS/
+cargo run --bin run-ghost training_logs/session_*/ --profile v3_Rush_Smart
+cargo run --bin run-ghost training_logs/session_*/ --summary
 ```
 
 ### Analytics
@@ -172,6 +168,7 @@ cargo clippy             # Lint
 | File | Purpose |
 |------|---------|
 | `HOW_TO_PLAY.md` | Controls and gameplay guide |
+| `TRAINING.md` | Training mode setup and analysis |
 | `CLAUDE.md` | Development instructions, architecture docs |
 | `todo.md` | Current sprint tasks |
 | `milestones.md` | Full project plan (MVP -> V0 -> V1) |

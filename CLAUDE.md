@@ -498,30 +498,31 @@ Use these checklists when reviewing any code changes:
 
 When asked to "audit", "review", or "check the repo", perform these checks:
 
-1. **CLAUDE.md accuracy** - Verify architecture section matches actual code (components, resources, systems)
-2. **Input buffering** - All `just_pressed` inputs consumed in FixedUpdate must be buffered
-3. **Constants** - No magic numbers in code; all tunable values in `src/constants.rs`
-4. **System order** - Verify FixedUpdate chain matches documented order
-5. **Unused code** - Look for dead code, unused imports, commented-out blocks
-6. **Pattern violations** - Check for raw input reads in FixedUpdate, unbuffered press inputs
-7. **Collision epsilon** - All entities resting on platforms must use `- COLLISION_EPSILON` positioning
-8. **Frame-rate independent physics** - All continuous physics must use `* time.delta_secs()` or `.powf()`
-9. **Compilation** - Run `cargo check` and `cargo clippy`
-10. **Visual regression** - Run `./scripts/regression.sh` to capture and compare against baseline
-11. **Visual verification** - Review the regression screenshot to verify UI looks correct
-12. **Balance simulations** - Run statistical balance tests to catch regressions:
-    - `cargo run --bin simulate -- --shot-test 30 --level 3` (target: 40-60% over/under ratio)
-    - `cargo run --bin heatmap -- score` (generates scoring probability heatmap)
-    - `cargo run --bin simulate -- --tournament 5 --parallel 8` (AI match testing)
-    - `cargo run --bin analyze -- logs/` (analyze event logs)
-    - See `notes/balance-testing-workflow.md` for full iterative workflow
+**Quick Checks (every audit):**
+1. **Compilation** - Run `cargo check` and `cargo clippy`
+2. **Visual regression** - Run `./scripts/regression.sh` to capture and compare against baseline
+3. **CLAUDE.md accuracy** - Verify architecture section matches actual code
+4. **Pattern violations** - Check for raw input reads in FixedUpdate, unbuffered press inputs, missing collision epsilon
+5. **Constants** - No magic numbers in code; all tunable values in `src/constants.rs`
+
+**Code Review (every audit):**
+Run the full code review process from `code_review_prompt.md`. This includes:
+- Deep investigation of codebase for anti-patterns
+- Research game dev best practices from authoritative sources
+- Grade each area: Physics, Input, ECS, AI, Performance, Game Design
+- Create dated review file: `code_review_YYYY-MM-DD.md`
+- Update `code_review_guidelines.md` with new patterns/resources discovered
+- Log findings to `code_review_audits.md`
+
+**Balance Testing (when relevant):**
+- `cargo run --bin simulate -- --shot-test 30 --level 3` (target: 40-60% over/under ratio)
+- `cargo run --bin simulate -- --tournament 5 --parallel 8` (AI match testing)
+- See `notes/balance-testing-workflow.md` for full iterative workflow
 
 **After auditing:**
-- Run the code review prompt from `code_review_prompt.md` and log results to `code_review_audits.md`
-- Compact the conversation context and get a fresh read of the codebase
-- Write the audit findings and changes since last audit to `audit_record.md`
-- Update `todo.md` - move completed items to Done section, add any new tasks discovered
-- Archive old done records: keep only the last 5 done items in `todo.md`, move older ones to `todone.md` with dated header
+- Write findings to `audit_record.md` with commit reference
+- Update `todo.md` - add improvement tasks from code review, move completed items to Done
+- Archive old done records to `todone.md` with dated header
 
 ### Scaling Concerns to Monitor
 

@@ -22,7 +22,7 @@ use ballgame::events::{
     emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventEmitterState,
 };
 use ballgame::training::{
-    TrainingMode, TrainingPhase, TrainingSettings, TrainingState, ensure_session_dir,
+    LevelSelector, TrainingMode, TrainingPhase, TrainingSettings, TrainingState, ensure_session_dir,
     evlog_path_for_game, print_session_summary, write_session_summary,
 };
 use bevy::{camera::ScalingMode, prelude::*};
@@ -74,10 +74,15 @@ fn main() {
         println!("  Win Score: {}", settings.win_score);
     }
     println!("  AI Profile: {}", settings.ai_profile);
-    if let Some(level) = settings.level {
+    if let Some(ref level) = settings.level {
         println!("  Level: {} (fixed)", level);
     } else {
         println!("  Level: random");
+    }
+    if let Some(ref style) = settings.ball_style {
+        println!("  Ball Style: {}", style);
+    } else {
+        println!("  Ball Style: random");
     }
     if let Some(seed) = settings.seed {
         println!("  Seed: {} (deterministic)", seed);
@@ -127,7 +132,25 @@ fn main() {
     training_state.first_point_timeout_secs = settings.first_point_timeout_secs;
 
     // Pick level - either fixed from settings or random
-    if let Some(fixed_level) = settings.level {
+    if let Some(ref level_selector) = settings.level {
+        // Resolve level selector to number
+        let fixed_level = match level_selector {
+            LevelSelector::Number(n) => *n,
+            LevelSelector::Name(name) => {
+                // Find level by name (case-insensitive)
+                (0..level_db.len())
+                    .find(|&i| {
+                        level_db.get(i)
+                            .map(|l| l.name.to_lowercase() == name.to_lowercase())
+                            .unwrap_or(false)
+                    })
+                    .map(|i| (i + 1) as u32)
+                    .unwrap_or_else(|| {
+                        eprintln!("Warning: Level '{}' not found, using level 3", name);
+                        3
+                    })
+            }
+        };
         training_state.current_level = fixed_level;
         training_state.current_level_name = level_db
             .get((fixed_level - 1) as usize)
@@ -219,7 +242,8 @@ fn main() {
                 .run_if(not_paused),
         )
         // Core Update systems - split to avoid tuple issues
-        .add_systems(Update, player::respawn_player)
+        // Note: respawn_player is NOT used in training mode - we have our own setup
+        // and restart logic via check_pause_restart
         .add_systems(Update, steal::steal_cooldown_update)
         .add_systems(
             Update,
@@ -261,6 +285,7 @@ fn main() {
                 shooting::update_shot_charge,
                 shooting::throw_ball,
                 scoring::check_scoring,
+                give_ball_to_human,
             )
                 .chain()
                 .run_if(countdown::not_in_countdown)
@@ -272,6 +297,33 @@ fn main() {
 /// Run condition: game is not paused
 fn not_paused(training_state: Res<TrainingState>) -> bool {
     training_state.phase != TrainingPhase::Paused
+}
+
+/// Give the ball to the human player (left team) after scoring
+/// This runs after check_scoring to override the default ball reset behavior
+fn give_ball_to_human(
+    mut commands: Commands,
+    mut balls: Query<(Entity, &mut Transform, &mut BallState), With<Ball>>,
+    players: Query<(Entity, &Transform, &Team), (With<Player>, Without<Ball>)>,
+) {
+    for (ball_entity, mut ball_transform, mut ball_state) in &mut balls {
+        // Only act if ball is free (just reset after a score)
+        if !matches!(*ball_state, BallState::Free) {
+            continue;
+        }
+
+        // Find the human player (left team)
+        for (player_entity, player_transform, team) in &players {
+            if *team == Team::Left {
+                // Give ball to human player - keep ball's z for proper rendering
+                ball_transform.translation.x = player_transform.translation.x;
+                ball_transform.translation.y = player_transform.translation.y;
+                *ball_state = BallState::Held(player_entity);
+                commands.entity(player_entity).insert(HoldingBall(ball_entity));
+                break;
+            }
+        }
+    }
 }
 
 /// Event buffer for training mode logging
@@ -309,6 +361,7 @@ fn training_setup(
     asset_server: Res<AssetServer>,
     profile_db: Res<AiProfileDatabase>,
     training_state: Res<TrainingState>,
+    training_settings: Res<TrainingSettings>,
     mut current_level: ResMut<CurrentLevel>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
 ) {
@@ -466,18 +519,30 @@ fn training_setup(
     };
     commands.insert_resource(ball_textures.clone());
 
-    // Spawn ball
-    let ball_style_name = ball_textures.default_style().cloned().unwrap_or_else(|| "wedges".to_string());
+    // Spawn ball - use settings or random
+    // In training mode, give the ball to the human player at start
+    let ball_style_name = if let Some(ref style) = training_settings.ball_style {
+        style.clone()
+    } else {
+        // Random style from available options
+        style_names
+            .choose(&mut rand::thread_rng())
+            .cloned()
+            .unwrap_or_else(|| "wedges".to_string())
+    };
     if let Some(textures) = ball_textures.get(&ball_style_name) {
-        commands.spawn((
+        // Spawn ball held by the human player (left player)
+        // Use player's x/y but ball's z (2.0) so ball renders in front
+        let ball_spawn_pos = Vec3::new(PLAYER_SPAWN_LEFT.x, PLAYER_SPAWN_LEFT.y, BALL_SPAWN.z);
+        let ball_entity = commands.spawn((
             Sprite {
                 image: textures.textures[0].clone(),
                 custom_size: Some(BALL_SIZE),
                 ..default()
             },
-            Transform::from_translation(BALL_SPAWN),
+            Transform::from_translation(ball_spawn_pos),
             Ball,
-            BallState::default(),
+            BallState::Held(left_player),
             Velocity::default(),
             BallPlayerContact::default(),
             BallPulse::default(),
@@ -485,7 +550,10 @@ fn training_setup(
             BallShotGrace::default(),
             BallSpin::default(),
             BallStyle::new(&ball_style_name),
-        ));
+        )).id();
+
+        // Give the human player the ball
+        commands.entity(left_player).insert(HoldingBall(ball_entity));
     }
 
     // Arena floor
@@ -950,6 +1018,7 @@ fn check_escape_quit(
 
 /// Check for Start button to pause/unpause or restart
 fn check_pause_restart(
+    mut commands: Commands,
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut training_state: ResMut<TrainingState>,
@@ -960,8 +1029,8 @@ fn check_pause_restart(
     level_db: Res<LevelDatabase>,
     _settings: Res<TrainingSettings>,
     mut current_level: ResMut<CurrentLevel>,
-    mut players: Query<&mut Transform, With<Player>>,
-    mut balls: Query<(&mut Transform, &mut BallState, &mut Velocity), (With<Ball>, Without<Player>)>,
+    mut players: Query<(Entity, &mut Transform, &Team), With<Player>>,
+    mut balls: Query<(Entity, &mut Transform, &mut BallState, &mut Velocity), (With<Ball>, Without<Player>)>,
 ) {
     // Check for Start button (keyboard P or gamepad Start)
     let start_pressed = keyboard.just_pressed(KeyCode::KeyP)
@@ -1017,20 +1086,29 @@ fn check_pause_restart(
     score.right = 0;
     steal_tracker.reset();
 
-    // Reset players to spawn positions
-    for mut transform in &mut players {
-        if transform.translation.x < 0.0 {
-            transform.translation = PLAYER_SPAWN_LEFT;
-        } else {
-            transform.translation = PLAYER_SPAWN_RIGHT;
+    // Reset players to spawn positions and find human player (left team)
+    let mut left_player_entity = None;
+    for (entity, mut player_transform, team) in &mut players {
+        match team {
+            Team::Left => {
+                player_transform.translation = PLAYER_SPAWN_LEFT;
+                left_player_entity = Some(entity);
+            }
+            Team::Right => {
+                player_transform.translation = PLAYER_SPAWN_RIGHT;
+            }
         }
     }
 
-    // Reset ball
-    for (mut transform, mut ball_state, mut velocity) in &mut balls {
-        transform.translation = BALL_SPAWN;
-        *ball_state = BallState::Free;
-        velocity.0 = Vec2::ZERO;
+    // Reset ball - give it to the human player (keep ball's z for proper rendering)
+    for (ball_entity, mut ball_transform, mut ball_state, mut velocity) in &mut balls {
+        if let Some(left_player) = left_player_entity {
+            ball_transform.translation.x = PLAYER_SPAWN_LEFT.x;
+            ball_transform.translation.y = PLAYER_SPAWN_LEFT.y;
+            *ball_state = BallState::Held(left_player);
+            velocity.0 = Vec2::ZERO;
+            commands.entity(left_player).insert(HoldingBall(ball_entity));
+        }
     }
 
     // Reset training state for new game (keep same game number for retry)

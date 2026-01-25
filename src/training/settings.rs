@@ -23,6 +23,23 @@ pub enum TrainingMode {
     Goal,
 }
 
+/// Level selector - accepts number or name
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum LevelSelector {
+    Number(u32),
+    Name(String),
+}
+
+impl std::fmt::Display for LevelSelector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LevelSelector::Number(n) => write!(f, "{}", n),
+            LevelSelector::Name(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 /// Training session settings
 #[derive(Debug, Clone, Resource, Serialize, Deserialize)]
 pub struct TrainingSettings {
@@ -34,8 +51,8 @@ pub struct TrainingSettings {
     pub win_score: u32,
     /// AI opponent profile name
     pub ai_profile: String,
-    /// Specific level to use (null = randomize)
-    pub level: Option<u32>,
+    /// Specific level to use (null = randomize, number or name)
+    pub level: Option<LevelSelector>,
     /// Levels to exclude from randomization
     pub exclude_levels: Vec<String>,
 
@@ -50,8 +67,8 @@ pub struct TrainingSettings {
     pub viewport_index: usize,
     /// Color palette index
     pub palette_index: usize,
-    /// Ball visual style
-    pub ball_style: String,
+    /// Ball visual style (None = random)
+    pub ball_style: Option<String>,
 }
 
 impl Default for TrainingSettings {
@@ -68,7 +85,7 @@ impl Default for TrainingSettings {
             first_point_timeout_secs: None,
             viewport_index: 2,
             palette_index: 0,
-            ball_style: "wedges".to_string(),
+            ball_style: None,
         }
     }
 }
@@ -159,8 +176,10 @@ impl TrainingSettings {
                 }
                 "--level" | "-l" => {
                     if let Some(val) = args.get(i + 1) {
-                        if let Ok(n) = val.parse() {
-                            self.level = Some(n);
+                        if let Ok(n) = val.parse::<u32>() {
+                            self.level = Some(LevelSelector::Number(n));
+                        } else {
+                            self.level = Some(LevelSelector::Name(val.clone()));
                         }
                         i += 1;
                     }
@@ -207,7 +226,11 @@ impl TrainingSettings {
                 }
                 "--ball-style" => {
                     if let Some(val) = args.get(i + 1) {
-                        self.ball_style = val.clone();
+                        if val.to_lowercase() == "random" {
+                            self.ball_style = None;
+                        } else {
+                            self.ball_style = Some(val.clone());
+                        }
                         i += 1;
                     }
                 }
@@ -252,7 +275,7 @@ OPTIONS:
     --first-point-timeout SECS End if no score within SECS (default: none)
     --viewport N               Viewport preset index (default: 2)
     --palette N                Color palette index (default: 0)
-    --ball-style NAME          Ball visual style (default: wedges)
+    --ball-style NAME          Ball visual style (default: random)
     -h, --help                 Show this help
 
 SETTINGS FILES:

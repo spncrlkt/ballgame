@@ -4,6 +4,86 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Session: 2026-01-25 Night - Deep Code Review & Best Practices Library
+
+**Commit Analyzed:** `7462671` (ghost replay clean up and ai tuning)
+
+### Summary
+
+Comprehensive code review session with deep investigation of codebase patterns, anti-patterns, and game development best practices. Created extensive documentation and resource library.
+
+### Research Conducted
+
+1. **Game Physics** - Fix Your Timestep pattern, deterministic simulation
+2. **AI Systems** - State machines vs behavior trees, goal prioritization
+3. **ECS Architecture** - Bevy-specific patterns, query optimization
+4. **Game Design** - 2D arcade sports fundamentals, balance considerations
+5. **Anti-Patterns** - Academic catalogs, ECS-specific issues
+
+### Findings
+
+**Grades:**
+| Category | Grade | Notes |
+|----------|-------|-------|
+| Physics/Timing | A+ | Excellent frame-rate independence |
+| Input Handling | A+ | Proper buffering throughout |
+| ECS Architecture | A | Good design, some query complexity |
+| AI Decision System | B+ | Works but has scaling concerns |
+| Performance | A- | Some hot-path allocations |
+
+**Key Issues Identified:**
+1. `ai/decision.rs` - 1195-line god function needs splitting
+2. 21+ `thread_rng()` calls should consolidate to seeded resource
+3. `unified_cycle_system` - 300 lines handling 4 different concerns
+4. Complex query signatures (8-tuple) in simulation code
+
+**Strengths Confirmed:**
+- All physics time-based correctly (delta_secs, powf)
+- Input buffering pattern well-implemented
+- Good FixedUpdate/Update separation
+- Comprehensive constants management
+
+### Files Created
+
+- `code_review_2026-01-25.md` - 500+ line comprehensive review with:
+  - Best practices library with authoritative sources
+  - Anti-patterns analysis
+  - Codebase deep dive
+  - Game design fundamentals section
+  - Iterative improvement plan
+  - Resource references
+
+### Files Modified
+
+- `code_review_guidelines.md` - Added 3 new sections:
+  - Section 7: AI Systems (goal review, debugging, FSM vs BT)
+  - Section 8: Game Feel & Balance (juice checklist, tuning guide)
+  - Section 9: Determinism & Multiplayer Prep
+  - Expanded References with 10+ new sources
+
+### Improvement Plan Created
+
+**Short-term (this week):**
+- P0: Consolidate RNG into Resource (determinism, performance)
+- P1: Split ai/decision.rs into modules
+- P2: Extract shared app setup
+- P3: Add AI goal logging events
+
+**Medium-term (this month):**
+- P4: Refactor cycle system to data-driven
+- P5: Add balance testing to CI
+- P6: Implement utility-based goal selection
+
+### Verification
+
+| Check | Status |
+|-------|--------|
+| cargo check | PASS |
+| cargo clippy | ~30 warnings (style, expected) |
+| No new pattern violations | PASS |
+
+---
+
 ## Session: 2026-01-25 - Cleanup & 2v2 Planning
 
 **Last Commit Analyzed:** `045d8c2` (simulation updates and AI tweaking)

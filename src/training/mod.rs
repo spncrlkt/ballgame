@@ -8,5 +8,5 @@ pub use session::{
     GameSummary, SessionSummary, ensure_session_dir, evlog_path_for_game, print_session_summary,
     write_session_summary,
 };
-pub use settings::{TrainingMode, TrainingSettings};
+pub use settings::{LevelSelector, TrainingMode, TrainingSettings};
 pub use state::{GameResult, TrainingPhase, TrainingState, Winner};

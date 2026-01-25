@@ -113,15 +113,104 @@ impl GhostTrialResult {
     }
 }
 
-/// Load a ghost trial from a .ghost file
+/// Load a ghost trial from a .ghost or .evlog file
+///
+/// Supports both formats:
+/// - .ghost: Simple format with tick|move_x|flags
+/// - .evlog: Full event log, extracts left player (human) inputs
 pub fn load_ghost_trial(path: &Path) -> Result<GhostTrial, String> {
     let file = File::open(path).map_err(|e| format!("Failed to open {}: {}", path.display(), e))?;
     let reader = BufReader::new(file);
 
+    let source_file = path.file_name().unwrap().to_string_lossy().to_string();
+    let is_evlog = path.extension().map_or(false, |ext| ext == "evlog");
+
+    if is_evlog {
+        load_from_evlog(reader, source_file)
+    } else {
+        load_from_ghost(reader, source_file)
+    }
+}
+
+/// Load from .evlog format (training sessions)
+fn load_from_evlog<R: BufRead>(reader: R, source_file: String) -> Result<GhostTrial, String> {
     let mut level = 0u32;
     let mut level_name = String::new();
     let mut inputs = Vec::new();
-    let source_file = path.file_name().unwrap().to_string_lossy().to_string();
+    let mut left_scored = false;
+
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split('|').collect();
+        if parts.len() < 2 {
+            continue;
+        }
+
+        // Parse tick from T:XXXXX format
+        let tick = if let Some(tick_str) = parts[0].strip_prefix("T:") {
+            tick_str.parse::<u32>().unwrap_or(0)
+        } else {
+            continue;
+        };
+
+        let event_type = parts[1];
+
+        match event_type {
+            // Match Setup: T:00000|MS|level|name|...
+            "MS" if parts.len() >= 4 => {
+                level = parts[2].parse().unwrap_or(0);
+                level_name = parts[3].to_string();
+            }
+            // Input: T:XXXXX|I|player|move_x|flags
+            "I" if parts.len() >= 5 => {
+                let player = parts[2];
+                // Only capture left player (human) inputs
+                if player == "L" {
+                    let move_x: f32 = parts[3].parse().unwrap_or(0.0);
+                    let flags = parts[4];
+
+                    inputs.push(InputSample {
+                        tick,
+                        move_x,
+                        jump: flags.contains('J'),
+                        throw: flags.contains('T'),
+                        pickup: flags.contains('P'),
+                    });
+                }
+            }
+            // Goal: T:XXXXX|G|scorer|...
+            "G" if parts.len() >= 3 => {
+                if parts[2] == "L" {
+                    left_scored = true;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(GhostTrial {
+        source_file,
+        level,
+        level_name,
+        originally_scored: left_scored,
+        inputs,
+    })
+}
+
+/// Load from .ghost format (extracted drives)
+fn load_from_ghost<R: BufRead>(reader: R, source_file: String) -> Result<GhostTrial, String> {
+    let mut level = 0u32;
+    let mut level_name = String::new();
+    let mut inputs = Vec::new();
 
     // Check if filename contains "_scored" to determine if originally scored
     let originally_scored = source_file.contains("_scored");

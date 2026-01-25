@@ -682,17 +682,143 @@ Run through Quick Reference Checklists at top of document.
 
 ---
 
+## 7. AI Systems
+
+### 7.1 Goal-Based AI Review
+
+When reviewing AI decision code, check:
+
+- [ ] Each goal has clear entry conditions (when to switch TO this goal)
+- [ ] Each goal has clear exit conditions (when to switch AWAY)
+- [ ] No goals with overlapping conditions (causes flickering)
+- [ ] Hysteresis present (stay in goal slightly longer than entry threshold)
+- [ ] Goal transitions logged for debugging
+
+**Hysteresis Example:**
+```rust
+// BAD - flickers when distance hovers around 100
+if distance < 100.0 { goal = Chase; }
+
+// GOOD - hysteresis prevents flickering
+if goal != Chase && distance < 100.0 { goal = Chase; }
+if goal == Chase && distance > 120.0 { goal = Patrol; }  // 20% buffer
+```
+
+### 7.2 AI Debugging Checklist
+
+- [ ] Add `AiGoalChanged` event for logging transitions
+- [ ] Each AI profile tested in isolation (simulation mode)
+- [ ] Goal time distribution checked (no goal dominates >80%)
+- [ ] Edge cases tested (corner positions, empty ball, multiple steals)
+
+### 7.3 State Machine vs Behavior Tree Decision
+
+| Use State Machine When | Use Behavior Tree When |
+|------------------------|------------------------|
+| < 15 distinct states | > 20 states |
+| Reactive gameplay (sports) | Complex sequences |
+| Performance critical | Rich behavior needed |
+| Simple transitions | Parallel behaviors |
+
+---
+
+## 8. Game Feel & Balance
+
+### 8.1 Juice Checklist
+
+For each game event, verify feedback exists:
+
+| Event | Visual | Audio | Haptic |
+|-------|--------|-------|--------|
+| Score | Flash, particles | Sound | Rumble (optional) |
+| Steal success | Color change | Sound | - |
+| Steal fail | Red flash | Fail sound | - |
+| Charge complete | Gauge full + glow | Ding | - |
+| Pickup ball | Pulse stops | Pickup sound | - |
+
+### 8.2 Balance Testing Workflow
+
+```bash
+# Run tournament to check AI profile balance
+cargo run --bin simulate -- --tournament 5 --parallel 8
+
+# Target: All profiles between 40-60% win rate
+# Red flag: Any profile >65% or <35%
+
+# Check shot success rates
+cargo run --bin simulate -- --shot-test 30 --level 3
+# Target: 40-60% over/under ratio
+
+# Generate heatmap for scoring positions
+cargo run --bin heatmap -- score
+```
+
+### 8.3 Movement Feel Tuning
+
+| Parameter | Snappy Feel | Floaty Feel | Realistic |
+|-----------|-------------|-------------|-----------|
+| Ground Accel | 3000+ | 1200 | 2000 |
+| Ground Decel | 2500+ | 800 | 1500 |
+| Air Control | 80%+ of ground | 30% of ground | 50% |
+| Gravity Rise | 800 | 600 | 980 |
+| Gravity Fall | 1600 | 900 | 980 |
+
+---
+
+## 9. Determinism & Multiplayer Prep
+
+### 9.1 Determinism Requirements
+
+For future netcode (rollback/lockstep), verify:
+
+- [ ] All RNG calls use seeded source (not `thread_rng()`)
+- [ ] Physics uses fixed timestep (FixedUpdate)
+- [ ] No floating point order-dependence
+- [ ] Input processed in deterministic order
+
+### 9.2 RNG Consolidation Pattern
+
+```rust
+// AVOID - non-deterministic
+let angle = rand::thread_rng().gen_range(-0.1..0.1);
+
+// PREFER - seeded resource
+#[derive(Resource)]
+pub struct GameRng(pub rand::rngs::StdRng);
+
+fn system(mut rng: ResMut<GameRng>) {
+    let angle = rng.0.gen_range(-0.1..0.1);
+}
+```
+
+---
+
 ## References
 
 ### Bevy Resources
 - [Unofficial Bevy Cheat Book - Performance](https://bevy-cheatbook.github.io/setup/perf.html)
 - [Bevy ECS Best Practices](https://bevy-cheatbook.github.io/programming/ecs-intro.html)
+- [Bevy Best Practices GitHub](https://github.com/tbillington/bevy_best_practices)
 
 ### Game Development
 - [Fix Your Timestep - Gaffer on Games](https://gafferongames.com/post/fix_your_timestep/)
 - [Game Programming Patterns](https://gameprogrammingpatterns.com/)
+- [ECS FAQ](https://github.com/SanderMertens/ecs-faq)
+
+### AI Design
+- [FSM vs Behavior Tree](https://medium.com/@abdullahahmetaskin/finite-state-machine-and-behavior-tree-fusion-3fcce33566)
+- [Behavior Trees Survey](https://www.sciencedirect.com/science/article/pii/S0921889022000513)
+
+### Game Design
+- [Sports Game Design](https://gamedesignskills.com/game-design/sports/)
+- [Arcade Game Design](https://gamedesignskills.com/game-design/arcade/)
+
+### Anti-Patterns
+- [Game-Specific Anti-Patterns Catalog](https://www.researchgate.net/publication/342408679_A_Catalogue_of_Game-Specific_Anti-Patterns)
+- [ECS Design Decisions](https://arielcoppes.dev/2023/07/13/design-decisions-when-building-games-using-ecs.html)
 
 ### This Project
 - `CLAUDE.md` - Architecture and patterns
 - `code_review_audits.md` - Previous audit results
+- `code_review_2026-01-25.md` - Deep analysis with resources
 - `audit_record.md` - Change history

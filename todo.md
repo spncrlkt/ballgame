@@ -4,6 +4,21 @@
 
 ---
 
+## Code Review Available (2026-01-25)
+
+**Deep analysis completed** - see `code_review_2026-01-25.md` for:
+- Best practices library with sources
+- Anti-patterns found in codebase
+- Prioritized improvement plan (P0-P3)
+- Game design fundamentals
+
+**Top findings:**
+- `ai/decision.rs` needs splitting (1195 lines)
+- RNG should consolidate to seeded resource (21 calls)
+- Overall grades: Physics A+, Input A+, AI B+
+
+---
+
 ## P0: Training Binary UX
 
 *Top priority - enables faster AI iteration*
@@ -22,8 +37,20 @@
 - [x] **Drive extractor** - `cargo run --bin extract-drives <session_dir>`
 - [x] **Ghost replay mode** - `cargo run --bin run-ghost <trial.ghost>`
 - [x] **Defense metric** - run-ghost shows defense rate and outcome breakdown
-- [ ] **Polish: full AI for ghost defender** - currently simplified AI, wire up full decision system
 - [ ] **Polish: visual ghost mode** - render ghost playback in main game (optional)
+
+---
+
+## P1.5: AI Plugin Consolidation
+
+*Unify AI decision-making across all contexts - see `notes/ai-plugin-plan.md`*
+
+- [ ] **Create `AiPlugin`** - Single source of truth for AI system registration
+- [ ] **Update main game** - Use AiPlugin instead of inline systems
+- [ ] **Update training/simulation** - Same plugin usage
+- [ ] **Fix ghost mode** - Delete simplified AI, use full decision system with HumanControlled marker
+
+Benefits: ~120 lines deleted, full AI defense in ghost mode, cleaner architecture
 
 ---
 
@@ -71,7 +98,7 @@
 - `src/bin/run-ghost.rs` - Working ghost trial runner
 - `src/bin/extract-drives.rs` - Working drive extractor
 - `src/simulation/ghost.rs` - Core ghost types and systems
-- Note: run-ghost uses simplified AI for defender, not full decision system
+- Note: run-ghost uses simplified AI - will be fixed by AI Plugin consolidation (P1.5)
 
 **Test commands:**
 ```bash
