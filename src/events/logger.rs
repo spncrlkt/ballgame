@@ -230,6 +230,11 @@ impl EventBuffer {
         &self.events
     }
 
+    /// Import events from an external source (like EventBus)
+    pub fn import_events(&mut self, events: Vec<(u32, GameEvent)>) {
+        self.events.extend(events);
+    }
+
     /// Serialize all events to a log string
     pub fn serialize(&self) -> String {
         self.events

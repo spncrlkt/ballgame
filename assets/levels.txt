@@ -12,12 +12,17 @@
 #   mirror: <x> <y> <w>     Platform at (-x, y) and (+x, y) with width w
 #   center: <y> <w>         Centered platform at (0, y) with width w
 #   debug: true             Debug mode: spawns all ball styles, AI idle (default = false)
+#   regression: true        Regression mode: countdown frozen, AI idle, stable for testing
 #
 # Heights are relative to ARENA_FLOOR_Y
-# Player max jump ≈ 215 units above platform
+# Player max jump = 215 units above platform
 # For throw-only: basket_bottom (height-40) > highest_platform + 215
 #
 # Blank lines and # comments are ignored
+
+# =============================================================================
+# DEBUG & TEST LEVELS (1-2)
+# =============================================================================
 
 level: Debug
 basket_height: 300
@@ -30,10 +35,33 @@ center: 680 1200
 center: 780 1200
 debug: true
 
+level: Regression
+basket_height: 400
+basket_push_in: 156
+steps: 3
+corner_height: 120
+corner_width: 100
+step_push_in: 0
+center: 300 400
+regression: true
+
+# =============================================================================
+# PLAYABLE LEVELS (3+)
+# =============================================================================
+
+level: Arena
+basket_height: 780
+steps: 7
+step_push_in: 80
+corner_height: 260
+corner_width: 250
+center: 220 230
+mirror: 380 380 120
+mirror: 200 560 120
+
 level: Open Floor
 basket_height: 660
 steps: 0
-debug: true
 
 level: Islands
 basket_height: 690
@@ -58,16 +86,6 @@ corner_width: 220
 center: 120 340
 center: 240 230
 center: 360 120
-
-level: Arena
-basket_height: 780
-steps: 7
-step_push_in: 80
-corner_height: 260
-corner_width: 250
-center: 220 230
-mirror: 380 380 120
-mirror: 200 560 120
 
 level: Skyway
 basket_height: 700
@@ -115,7 +133,9 @@ mirror: 520 120 100
 mirror: 520 300 160
 mirror: 520 500 60
 
-# Training protocol levels
+# =============================================================================
+# TRAINING PROTOCOL LEVELS
+# =============================================================================
 
 level: Pursuit Arena
 basket_height: 680
@@ -127,14 +147,3 @@ basket_height: 680
 basket_push_in: 180
 steps: 0
 center: 200 200
-
-#   level: <name>           Start a new level
-#   basket_height: <h>      Main basket height above floor (8 dunkable: <560, 2 high: >560)
-#   basket_push_in: <dist>  Distance from wall inner edge to basket center (default = 156)
-#   steps: <count>          Corner steps count (0 = no steps, default = 13)
-#   corner_height: <h>      Total corner ramp height (default = 320)
-#   corner_width: <w>       Total corner ramp width (default = 200)
-#   step_push_in: <dist>    Distance from wall to where stairs start (default = 0)
-#   mirror: <x> <y> <w>     Platform at (-x, y) and (+x, y) with width w
-#   center: <y> <w>         Centered platform at (0, y) with width w
-#   debug: true             Debug mode: spawns all ball styles, AI idle (default = false)

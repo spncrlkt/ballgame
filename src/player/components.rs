@@ -53,6 +53,12 @@ pub enum Team {
 #[derive(Component)]
 pub struct HumanControlled;
 
+/// Resource tracking which player (if any) is under human control.
+/// None = observer mode (both players AI-controlled).
+/// Used by event bus to route controller input events.
+#[derive(Resource, Default)]
+pub struct HumanControlTarget(pub Option<crate::events::PlayerId>);
+
 /// Which basket a player is aiming at (set once based on Team at spawn)
 #[derive(Component)]
 pub struct TargetBasket(pub Basket);

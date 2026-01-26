@@ -21,7 +21,7 @@
 //!          ^frame|left_pos|left_vel|right_pos|right_vel|ball_pos|ball_vel|state
 //! ```
 
-use super::types::{GameConfig, GameEvent, PlayerId};
+use super::types::{ControllerSource, GameConfig, GameEvent, PlayerId};
 
 /// Format a float with fixed precision (1 decimal)
 fn fmt_f1(v: f32) -> String {
@@ -144,6 +144,41 @@ pub fn serialize_event(time_ms: u32, event: &GameEvent) -> String {
                 ball_state
             )
         }
+        GameEvent::ControllerInput {
+            player,
+            source,
+            move_x,
+            jump,
+            jump_pressed,
+            throw,
+            throw_released,
+            pickup,
+        } => {
+            // Compact encoding: player|source|move_x|jump|jump_pressed|throw|throw_released|pickup
+            format!(
+                "{}|{}|{:.2}|{}|{}|{}|{}|{}",
+                player,
+                source,
+                move_x,
+                if *jump { 1 } else { 0 },
+                if *jump_pressed { 1 } else { 0 },
+                if *throw { 1 } else { 0 },
+                if *throw_released { 1 } else { 0 },
+                if *pickup { 1 } else { 0 }
+            )
+        }
+        GameEvent::ControlSwap {
+            from_player,
+            to_player,
+        } => {
+            let from = from_player.map(|p| p.to_string()).unwrap_or_else(|| "_".to_string());
+            let to = to_player.map(|p| p.to_string()).unwrap_or_else(|| "_".to_string());
+            format!("{}|{}", from, to)
+        }
+        GameEvent::ResetAiState { player } => player.to_string(),
+        GameEvent::ResetScores => String::new(),
+        GameEvent::ResetBall => String::new(),
+        GameEvent::LevelChange { level } => level.to_string(),
     };
 
     format!("{}|{}|{}", ts, code, data)
@@ -254,6 +289,28 @@ pub fn parse_event(line: &str) -> Option<(u32, GameEvent)> {
             ball_vel: parse_pos(data[6])?,
             ball_state: data[7].chars().next()?,
         },
+        "CI" if data.len() >= 8 => GameEvent::ControllerInput {
+            player: parse_player(data[0])?,
+            source: parse_source(data[1])?,
+            move_x: data[2].parse().ok()?,
+            jump: data[3] == "1",
+            jump_pressed: data[4] == "1",
+            throw: data[5] == "1",
+            throw_released: data[6] == "1",
+            pickup: data[7] == "1",
+        },
+        "CS" if data.len() >= 2 => GameEvent::ControlSwap {
+            from_player: if data[0] == "_" { None } else { parse_player(data[0]) },
+            to_player: if data[1] == "_" { None } else { parse_player(data[1]) },
+        },
+        "RA" if !data.is_empty() => GameEvent::ResetAiState {
+            player: parse_player(data[0])?,
+        },
+        "RS" => GameEvent::ResetScores,
+        "RB" => GameEvent::ResetBall,
+        "LC" if !data.is_empty() => GameEvent::LevelChange {
+            level: data[0].parse().ok()?,
+        },
         _ => return None,
     };
 
@@ -264,6 +321,15 @@ fn parse_player(s: &str) -> Option<PlayerId> {
     match s {
         "L" => Some(PlayerId::L),
         "R" => Some(PlayerId::R),
+        _ => None,
+    }
+}
+
+fn parse_source(s: &str) -> Option<ControllerSource> {
+    match s {
+        "H" => Some(ControllerSource::Human),
+        "A" => Some(ControllerSource::Ai),
+        "X" => Some(ControllerSource::External),
         _ => None,
     }
 }

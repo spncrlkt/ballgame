@@ -4,6 +4,9 @@
 
 use bevy::prelude::*;
 
+use crate::levels::LevelDatabase;
+use crate::scoring::CurrentLevel;
+
 /// Resource tracking the countdown state
 #[derive(Resource)]
 pub struct MatchCountdown {
@@ -11,6 +14,8 @@ pub struct MatchCountdown {
     pub timer: f32,
     /// Whether countdown is currently active
     pub active: bool,
+    /// Whether countdown is frozen (regression mode)
+    pub frozen: bool,
 }
 
 impl Default for MatchCountdown {
@@ -18,6 +23,7 @@ impl Default for MatchCountdown {
         Self {
             timer: 3.0,
             active: true, // Start active for game start
+            frozen: false,
         }
     }
 }
@@ -27,6 +33,15 @@ impl MatchCountdown {
     pub fn start(&mut self) {
         self.timer = 3.0;
         self.active = true;
+        self.frozen = false;
+    }
+
+    /// Start countdown in frozen mode (for regression testing)
+    /// Freezes at "2" display
+    pub fn start_frozen(&mut self) {
+        self.timer = 1.5; // Frozen at "2" display (between 1.0 and 2.0)
+        self.active = true;
+        self.frozen = true;
     }
 
     /// Check if countdown is finished
@@ -66,8 +81,10 @@ pub fn update_countdown(
         return;
     }
 
-    // Update timer
-    countdown.timer -= time.delta_secs();
+    // Update timer (skip if frozen)
+    if !countdown.frozen {
+        countdown.timer -= time.delta_secs();
+    }
 
     // Update text display
     for (mut text, mut visibility, mut color) in &mut text_query {
@@ -76,18 +93,22 @@ pub fn update_countdown(
         let display = countdown.display_number();
         if display > 0 {
             text.0 = display.to_string();
-            // Pulse effect: scale color intensity with timer phase
-            let phase = countdown.timer.fract();
-            let intensity = 0.7 + 0.3 * (phase * std::f32::consts::PI).sin();
-            *color = TextColor(Color::srgba(1.0, intensity, 0.2, 1.0));
+            // Pulse effect: scale color intensity with timer phase (static if frozen)
+            if countdown.frozen {
+                *color = TextColor(Color::srgba(1.0, 0.8, 0.2, 1.0)); // Static color
+            } else {
+                let phase = countdown.timer.fract();
+                let intensity = 0.7 + 0.3 * (phase * std::f32::consts::PI).sin();
+                *color = TextColor(Color::srgba(1.0, intensity, 0.2, 1.0));
+            }
         } else {
             text.0 = "GO!".to_string();
             *color = TextColor(Color::srgb(0.2, 1.0, 0.2));
         }
     }
 
-    // End countdown after showing "GO!" briefly
-    if countdown.timer < -0.3 {
+    // End countdown after showing "GO!" briefly (skip if frozen)
+    if !countdown.frozen && countdown.timer < -0.3 {
         countdown.active = false;
     }
 }
@@ -105,12 +126,24 @@ pub fn in_countdown(countdown: Res<MatchCountdown>) -> bool {
 /// System to trigger countdown when level changes
 /// Only runs when MatchCountdown resource exists (not in training mode)
 pub fn trigger_countdown_on_level_change(
-    current_level: Res<crate::scoring::CurrentLevel>,
+    current_level: Res<CurrentLevel>,
+    level_db: Res<LevelDatabase>,
     mut countdown: ResMut<MatchCountdown>,
 ) {
     // Trigger countdown when level changes (level resource is marked changed)
     if current_level.is_changed() {
-        countdown.start();
+        // Check if this is a regression level (freeze countdown)
+        let level_index = (current_level.0 as usize).saturating_sub(1);
+        let is_regression = level_db
+            .get(level_index)
+            .map(|l| l.regression)
+            .unwrap_or(false);
+
+        if is_regression {
+            countdown.start_frozen();
+        } else {
+            countdown.start();
+        }
     }
 }
 

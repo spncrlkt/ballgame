@@ -85,6 +85,20 @@ impl SimDatabase {
             CREATE INDEX IF NOT EXISTS idx_matches_profiles ON matches(left_profile, right_profile);
             CREATE INDEX IF NOT EXISTS idx_matches_level ON matches(level);
             CREATE INDEX IF NOT EXISTS idx_player_stats_match ON player_stats(match_id);
+
+            -- Event bus events table for full auditability
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY,
+                match_id INTEGER REFERENCES matches(id),
+                time_ms INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                data TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_events_match ON events(match_id);
+            CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+            CREATE INDEX IF NOT EXISTS idx_events_time ON events(match_id, time_ms);
             "#,
         )?;
         Ok(())
@@ -253,6 +267,82 @@ impl SimDatabase {
             |row| row.get(0),
         )
     }
+
+    /// Insert a batch of events for a match
+    pub fn insert_events(&self, match_id: i64, events: &[(u32, &str, &str)]) -> Result<()> {
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO events (match_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4)"
+        )?;
+
+        for (time_ms, event_type, data) in events {
+            stmt.execute(params![match_id, time_ms, event_type, data])?;
+        }
+
+        Ok(())
+    }
+
+    /// Insert a single event for a match
+    pub fn insert_event(&self, match_id: i64, time_ms: u32, event_type: &str, data: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO events (match_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4)",
+            params![match_id, time_ms, event_type, data],
+        )?;
+        Ok(())
+    }
+
+    /// Get events for a match
+    pub fn get_events(&self, match_id: i64) -> Result<Vec<EventRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, time_ms, event_type, data FROM events WHERE match_id = ?1 ORDER BY time_ms"
+        )?;
+
+        let rows = stmt.query_map(params![match_id], |row| {
+            Ok(EventRecord {
+                id: row.get(0)?,
+                time_ms: row.get(1)?,
+                event_type: row.get(2)?,
+                data: row.get(3)?,
+            })
+        })?;
+
+        rows.collect()
+    }
+
+    /// Get event count for a match
+    pub fn event_count(&self, match_id: i64) -> Result<u64> {
+        self.conn.query_row(
+            "SELECT COUNT(*) FROM events WHERE match_id = ?1",
+            params![match_id],
+            |row| row.get(0),
+        )
+    }
+
+    /// Get events by type for a match
+    pub fn get_events_by_type(&self, match_id: i64, event_type: &str) -> Result<Vec<EventRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, time_ms, event_type, data FROM events WHERE match_id = ?1 AND event_type = ?2 ORDER BY time_ms"
+        )?;
+
+        let rows = stmt.query_map(params![match_id, event_type], |row| {
+            Ok(EventRecord {
+                id: row.get(0)?,
+                time_ms: row.get(1)?,
+                event_type: row.get(2)?,
+                data: row.get(3)?,
+            })
+        })?;
+
+        rows.collect()
+    }
+}
+
+/// A record from the events table
+#[derive(Debug, Clone)]
+pub struct EventRecord {
+    pub id: i64,
+    pub time_ms: u32,
+    pub event_type: String,
+    pub data: String,
 }
 
 /// Aggregate stats for a profile

@@ -188,7 +188,7 @@ src/
 - `Score` - Left/right team scores
 - `DebugSettings` - Debug UI visibility
 - `CurrentLevel` - Current level number (1-10)
-- `CurrentPalette` - Current color palette index (default: 26)
+- `CurrentPalette` - Current color palette index (default: 0)
 - `PhysicsTweaks` - Runtime-adjustable physics values with panel UI
 - `LevelDatabase` - Loaded level definitions from assets/levels.txt
 - `LastShotInfo` - Debug info about the most recent shot (angle, power, variance breakdown)

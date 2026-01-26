@@ -1,0 +1,98 @@
+# Regression Test Scenarios
+# =========================
+#
+# Each scenario defines a specific game configuration for visual regression testing.
+# The regression script runs each scenario, captures a screenshot, and compares to baseline.
+#
+# Format:
+#   scenario: <name>           Unique identifier for this test case
+#   level: <level_name>        Level to load (by name, not index)
+#   palette: <palette_index>   Color palette to use (0-indexed)
+#   viewport: <width> <height> Window size in pixels
+#   wait_frames: <frames>      Frames to wait before capturing screenshot
+#   description: <text>        Human-readable description of what's being tested
+#
+# Notes:
+#   - Scenario names are used for baseline file names (e.g., game_start.png)
+#   - Comments start with # and are ignored
+#   - Blank lines are ignored
+#   - All fields are required for each scenario
+
+# -----------------------------------------------------------------------------
+# Core Game Scenarios
+# -----------------------------------------------------------------------------
+
+scenario: game_start
+level: Arena
+palette: 0
+viewport: 2560 1440
+wait_frames: 60
+description: Default game start - Arena level with standard UI
+
+scenario: ball_styles
+level: Debug
+palette: 0
+viewport: 2560 1440
+wait_frames: 60
+description: Debug level showing all ball styles on shelves
+
+scenario: stable_ui
+level: Regression
+palette: 0
+viewport: 2560 1440
+wait_frames: 60
+description: Regression level - countdown frozen at 2, AI idle, ball centered
+
+# -----------------------------------------------------------------------------
+# Visual Variation Scenarios
+# -----------------------------------------------------------------------------
+
+scenario: palette_aurora
+level: Arena
+palette: 1
+viewport: 2560 1440
+wait_frames: 60
+description: Aurora palette on Arena level
+
+scenario: palette_dark
+level: Arena
+palette: 2
+viewport: 2560 1440
+wait_frames: 60
+description: Dark palette on Arena level
+
+# -----------------------------------------------------------------------------
+# Viewport Scenarios
+# -----------------------------------------------------------------------------
+
+scenario: viewport_1080p
+level: Arena
+palette: 0
+viewport: 1920 1080
+wait_frames: 60
+description: 1080p viewport test on Arena
+
+scenario: viewport_ultrawide
+level: Arena
+palette: 0
+viewport: 3440 1440
+wait_frames: 60
+description: Ultrawide viewport test on Arena
+
+# -----------------------------------------------------------------------------
+# Level Variety Scenarios
+# -----------------------------------------------------------------------------
+
+scenario: level_open_floor
+level: Open Floor
+palette: 0
+viewport: 2560 1440
+wait_frames: 60
+description: Open Floor level - minimal platforms
+
+scenario: level_tower
+level: Tower
+palette: 0
+viewport: 2560 1440
+wait_frames: 60
+description: Tower level - vertical platforms with stairs

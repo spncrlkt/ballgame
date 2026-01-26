@@ -46,7 +46,10 @@ pub use countdown::{
     CountdownText, MatchCountdown, in_countdown, not_in_countdown, spawn_countdown_text,
     trigger_countdown_on_level_change, update_countdown,
 };
-pub use events::{EventBuffer, EventLogConfig, EventLogger, GameConfig, GameEvent, PlayerId};
+pub use events::{
+    BusEvent, ControllerSource, EventBuffer, EventBus, EventLogConfig, EventLogger, GameConfig,
+    GameEvent, LevelChangeTracker, PlayerId, emit_level_change_events, update_event_bus_time,
+};
 pub use settings::{CurrentSettings, InitSettings, save_settings_system};
 pub use constants::*;
 pub use helpers::*;
@@ -54,8 +57,8 @@ pub use input::PlayerInput;
 pub use levels::{LevelData, LevelDatabase, PlatformDef};
 pub use palettes::{PALETTES_FILE, Palette, PaletteDatabase};
 pub use player::{
-    CoyoteTimer, Facing, Grounded, HoldingBall, HumanControlled, JumpState, Player, TargetBasket,
-    Team, Velocity,
+    CoyoteTimer, Facing, Grounded, HoldingBall, HumanControlled, HumanControlTarget, JumpState,
+    Player, TargetBasket, Team, Velocity,
 };
 pub use presets::{
     BallPreset, CompositePreset, CurrentPresets, MovementPreset, PRESETS_FILE, PresetDatabase,

@@ -10,6 +10,28 @@ pub enum PlayerId {
     R,
 }
 
+/// Source of controller input (for auditability)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ControllerSource {
+    /// Human player input (keyboard/gamepad)
+    #[default]
+    Human,
+    /// AI-controlled player
+    Ai,
+    /// External source (replay, tests, network)
+    External,
+}
+
+impl std::fmt::Display for ControllerSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ControllerSource::Human => write!(f, "H"),
+            ControllerSource::Ai => write!(f, "A"),
+            ControllerSource::External => write!(f, "X"),
+        }
+    }
+}
+
 impl std::fmt::Display for PlayerId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -158,6 +180,34 @@ pub enum GameEvent {
         ball_vel: (f32, f32),
         ball_state: char, // F=Free, H=Held, I=InFlight
     },
+
+    // === Controller Events (event bus) ===
+    /// Controller input from any source (human, AI, external)
+    ControllerInput {
+        player: PlayerId,
+        source: ControllerSource,
+        move_x: f32,
+        jump: bool,
+        jump_pressed: bool,
+        throw: bool,
+        throw_released: bool,
+        pickup: bool,
+    },
+    /// Control transferred between players
+    ControlSwap {
+        from_player: Option<PlayerId>,
+        to_player: Option<PlayerId>,
+    },
+
+    // === State Reset Events (event bus) ===
+    /// Reset AI state for a player
+    ResetAiState { player: PlayerId },
+    /// Reset scores to 0-0
+    ResetScores,
+    /// Reset ball to spawn position
+    ResetBall,
+    /// Level changed
+    LevelChange { level: u32 },
 }
 
 impl GameEvent {
@@ -184,6 +234,12 @@ impl GameEvent {
             GameEvent::NavComplete { .. } => "NC",
             GameEvent::Input { .. } => "I",
             GameEvent::Tick { .. } => "T",
+            GameEvent::ControllerInput { .. } => "CI",
+            GameEvent::ControlSwap { .. } => "CS",
+            GameEvent::ResetAiState { .. } => "RA",
+            GameEvent::ResetScores => "RS",
+            GameEvent::ResetBall => "RB",
+            GameEvent::LevelChange { .. } => "LC",
         }
     }
 }

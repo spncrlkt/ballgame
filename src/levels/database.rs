@@ -24,6 +24,7 @@ pub struct LevelData {
     pub corner_width: f32, // Total width of corner ramp
     pub step_push_in: f32, // Distance from wall to where stairs start (top step extends to wall)
     pub debug: bool,       // Debug mode: spawn all ball styles, AI idle
+    pub regression: bool,  // Regression mode: countdown frozen, AI idle, stable for testing
 }
 
 /// Database of all loaded levels
@@ -79,6 +80,7 @@ impl LevelDatabase {
                     corner_width: CORNER_STEP_TOTAL_WIDTH,   // default
                     step_push_in: STEP_PUSH_IN,              // default
                     debug: false,                            // default
+                    regression: false,                       // default
                 });
             } else if let Some(height_str) = line.strip_prefix("basket_height:") {
                 if let Some(level) = &mut current_level {
@@ -142,6 +144,10 @@ impl LevelDatabase {
                 if let Some(level) = &mut current_level {
                     level.debug = val.trim() == "true";
                 }
+            } else if let Some(val) = line.strip_prefix("regression:") {
+                if let Some(level) = &mut current_level {
+                    level.regression = val.trim() == "true";
+                }
             }
         }
 
@@ -177,6 +183,7 @@ impl LevelDatabase {
                     corner_width: CORNER_STEP_TOTAL_WIDTH,
                     step_push_in: STEP_PUSH_IN,
                     debug: false,
+                    regression: false,
                 },
                 LevelData {
                     name: "Default".to_string(),
@@ -198,6 +205,7 @@ impl LevelDatabase {
                     corner_width: CORNER_STEP_TOTAL_WIDTH,
                     step_push_in: STEP_PUSH_IN,
                     debug: false,
+                    regression: false,
                 },
             ],
         }
@@ -206,6 +214,16 @@ impl LevelDatabase {
     /// Get level by index
     pub fn get(&self, index: usize) -> Option<&LevelData> {
         self.levels.get(index)
+    }
+
+    /// Get level by name (case-insensitive)
+    pub fn get_by_name(&self, name: &str) -> Option<&LevelData> {
+        self.levels.iter().find(|l| l.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Get level index by name (case-insensitive)
+    pub fn index_of(&self, name: &str) -> Option<usize> {
+        self.levels.iter().position(|l| l.name.eq_ignore_ascii_case(name))
     }
 
     /// Get number of levels

@@ -11,6 +11,7 @@ use crate::ai::{
 use crate::ai::navigation::{find_escape_x, has_ceiling_above};
 use crate::ball::{Ball, BallState};
 use crate::constants::*;
+use crate::events::{ControllerSource, EventBus, GameEvent, PlayerId};
 use crate::player::{Grounded, HoldingBall, HumanControlled, Player, TargetBasket, Team};
 use crate::world::Basket;
 
@@ -357,6 +358,7 @@ pub fn ai_decision_update(
     capabilities: Res<AiCapabilities>,
     profile_db: Res<AiProfileDatabase>,
     nav_graph: Res<NavGraph>,
+    mut event_bus: ResMut<EventBus>,
     mut ai_query: Query<
         (
             Entity,
@@ -1173,6 +1175,22 @@ pub fn ai_decision_update(
 
         // Decay jump buffer timer
         input.jump_buffer_timer = (input.jump_buffer_timer - dt).max(0.0);
+
+        // Emit ControllerInput event for auditability
+        let player_id = match team {
+            Team::Left => PlayerId::L,
+            Team::Right => PlayerId::R,
+        };
+        event_bus.emit(GameEvent::ControllerInput {
+            player: player_id,
+            source: ControllerSource::Ai,
+            move_x: input.move_x,
+            jump: input.jump_held,
+            jump_pressed: input.jump_buffer_timer > 0.0,
+            throw: input.throw_held,
+            throw_released: input.throw_released,
+            pickup: input.pickup_pressed,
+        });
     }
 }
 

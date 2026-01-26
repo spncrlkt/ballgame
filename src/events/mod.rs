@@ -2,13 +2,18 @@
 //!
 //! Provides a compact text format for logging all game events and inputs.
 //! Used by AI simulation, gameplay sessions, and analytics pipelines.
+//!
+//! The EventBus enables decoupled cross-module communication where all events
+//! are logged to SQLite for full auditability.
 
+mod bus;
 mod emitter;
 pub mod evlog_parser;
 mod format;
 mod logger;
 mod types;
 
+pub use bus::{BusEvent, EventBus, LevelChangeTracker, emit_level_change_events, update_event_bus_time};
 pub use emitter::{
     emit_game_events, snapshot_ball, snapshot_player, BallSnapshot, EmitterConfig,
     EventEmitterState, PlayerSnapshot,
@@ -20,4 +25,4 @@ pub use evlog_parser::{
 };
 pub use format::{parse_event, serialize_event};
 pub use logger::{EventBuffer, EventLogConfig, EventLogger};
-pub use types::{GameConfig, GameEvent, PlayerId};
+pub use types::{ControllerSource, GameConfig, GameEvent, PlayerId};

@@ -12,12 +12,13 @@ use ballgame::{
     AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact,
     BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
     ChargeGaugeBackground, ChargeGaugeFill, ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette,
-    DebugSettings, EventBuffer, Facing, GameConfig, GameEvent, Grounded, HoldingBall,
-    HumanControlled, InputState, JumpState, LastShotInfo, LevelDatabase, MatchCountdown, NavGraph,
-    PALETTES_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, SnapshotConfig,
-    StealContest, StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, Velocity, ai,
-    ball, constants::*, countdown, helpers::*, input, levels, player, scoring, shooting,
-    spawn_countdown_text, steal, world,
+    DebugSettings, EventBuffer, EventBus, Facing, GameConfig, GameEvent, Grounded, HoldingBall,
+    HumanControlled, HumanControlTarget, InputState, JumpState, LastShotInfo, LevelChangeTracker,
+    LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase, PhysicsTweaks,
+    PlayerId, Player, PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown, StealTracker,
+    StyleTextures, TargetBasket, Team, Velocity, ai, ball, constants::*, countdown, helpers::*,
+    emit_level_change_events, input, levels, player, scoring, shooting, spawn_countdown_text,
+    steal, update_event_bus_time, world,
 };
 use ballgame::events::{
     emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventEmitterState,
@@ -231,8 +232,14 @@ fn main() {
         .insert_resource(SnapshotConfig::default())
         .init_resource::<TrainingEventBuffer>()
         .init_resource::<MatchCountdown>()
+        // Event bus resources
+        .insert_resource(EventBus::new())
+        .insert_resource(HumanControlTarget(Some(PlayerId::L))) // Left player is human
+        .init_resource::<LevelChangeTracker>()
         // Startup systems
         .add_systems(Startup, training_setup)
+        // Event bus time update (runs every frame for timestamping)
+        .add_systems(Update, update_event_bus_time)
         // Input systems chain - paused when game is paused
         .add_systems(
             Update,
@@ -251,6 +258,8 @@ fn main() {
         // Note: respawn_player is NOT used in training mode - we have our own setup
         // and restart logic via check_pause_restart
         .add_systems(Update, steal::steal_cooldown_update)
+        // Level change event emission
+        .add_systems(Update, emit_level_change_events)
         .add_systems(
             Update,
             (
@@ -1020,10 +1029,15 @@ fn emit_training_events(
         With<Player>,
     >,
     balls: Query<(&Transform, &Velocity, &BallState), With<Ball>>,
+    mut event_bus: ResMut<EventBus>,
 ) {
     if training_state.phase != TrainingPhase::Playing {
         return;
     }
+
+    // Bridge EventBus → EventBuffer
+    let bus_events = event_bus.export_events();
+    event_buffer.buffer.import_events(bus_events);
 
     let time = training_state.game_elapsed;
 

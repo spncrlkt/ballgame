@@ -3,6 +3,8 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
+use crate::events::{ControllerSource, EventBus, GameEvent};
+use crate::player::HumanControlTarget;
 use crate::ui::PhysicsTweaks;
 
 /// Buffered input state for the human-controlled player
@@ -17,13 +19,16 @@ pub struct PlayerInput {
     pub swap_pressed: bool,     // L shoulder / Q key - swap which player you control
 }
 
-/// Runs in Update to capture input state before it's cleared
+/// Runs in Update to capture input state before it's cleared.
+/// Also emits ControllerInput events to the EventBus for auditability.
 pub fn capture_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut input: ResMut<PlayerInput>,
     tweaks: Res<PhysicsTweaks>,
     time: Res<Time>,
+    mut event_bus: ResMut<EventBus>,
+    human_target: Res<HumanControlTarget>,
 ) {
     // Don't capture game input when tweak panel is open (uses arrow keys)
     if tweaks.panel_visible {
@@ -70,11 +75,11 @@ pub fn capture_input(
     }
 
     // Pickup (West button / E key) - accumulate until consumed
-    if keyboard.just_pressed(KeyCode::KeyE)
+    let pickup_just_pressed = keyboard.just_pressed(KeyCode::KeyE)
         || gamepads
             .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::West))
-    {
+            .any(|gp| gp.just_pressed(GamepadButton::West));
+    if pickup_just_pressed {
         input.pickup_pressed = true;
     }
 
@@ -85,7 +90,8 @@ pub fn capture_input(
             .any(|gp| gp.pressed(GamepadButton::RightTrigger));
 
     // Accumulate throw_released until consumed (like jump buffering)
-    if input.throw_held && !throw_held_now {
+    let throw_just_released = input.throw_held && !throw_held_now;
+    if throw_just_released {
         input.throw_released = true;
     }
     input.throw_held = throw_held_now;
@@ -97,5 +103,20 @@ pub fn capture_input(
             .any(|gp| gp.just_pressed(GamepadButton::LeftTrigger))
     {
         input.swap_pressed = true;
+    }
+
+    // Emit ControllerInput event to EventBus for auditability
+    // Only emit if there's a human-controlled player
+    if let Some(player) = human_target.0 {
+        event_bus.emit(GameEvent::ControllerInput {
+            player,
+            source: ControllerSource::Human,
+            move_x: input.move_x,
+            jump: input.jump_held,
+            jump_pressed,
+            throw: input.throw_held,
+            throw_released: throw_just_released,
+            pickup: pickup_just_pressed,
+        });
     }
 }

@@ -21,8 +21,9 @@ pub use world_model::{extract_platform_data, extract_platforms_from_nav, Platfor
 
 use bevy::prelude::*;
 
+use crate::events::{EventBus, GameEvent, PlayerId};
 use crate::input::PlayerInput;
-use crate::player::{HumanControlled, Player, Team};
+use crate::player::{HumanControlled, HumanControlTarget, Player, Team};
 
 /// Per-entity input buffer used by physics systems.
 /// All players have this component - human input is copied here, AI writes directly.
@@ -132,12 +133,15 @@ pub fn copy_human_input(
 
 /// Swap which player the human controls (Q key / L bumper).
 /// Cycles through: Left player → Right player → Observer (both AI) → Left player
+/// Emits ControlSwap event to EventBus for auditability.
 pub fn swap_control(
     mut commands: Commands,
     mut input: ResMut<PlayerInput>,
     players: Query<(Entity, &Team), With<Player>>,
     human_query: Query<(Entity, &Team), (With<Player>, With<HumanControlled>)>,
     mut input_states: Query<&mut InputState>,
+    mut human_target: ResMut<HumanControlTarget>,
+    mut event_bus: ResMut<EventBus>,
 ) {
     if !input.swap_pressed {
         return;
@@ -160,24 +164,36 @@ pub fn swap_control(
 
     // Determine current state and cycle to next
     // Left → Right → Observer → Left
-    match human_query.iter().next() {
+    let (from_player, to_player) = match human_query.iter().next() {
         Some((_, Team::Left)) => {
             // Currently controlling left, switch to right
             commands.entity(left).remove::<HumanControlled>();
             commands.entity(right).insert(HumanControlled);
+            human_target.0 = Some(PlayerId::R);
             info!("Control: Right player");
+            (Some(PlayerId::L), Some(PlayerId::R))
         }
         Some((_, Team::Right)) => {
             // Currently controlling right, switch to observer mode
             commands.entity(right).remove::<HumanControlled>();
+            human_target.0 = None;
             info!("Control: Observer (both AI)");
+            (Some(PlayerId::R), None)
         }
         None => {
             // Observer mode, switch to left
             commands.entity(left).insert(HumanControlled);
+            human_target.0 = Some(PlayerId::L);
             info!("Control: Left player");
+            (None, Some(PlayerId::L))
         }
-    }
+    };
+
+    // Emit ControlSwap event for auditability
+    event_bus.emit(GameEvent::ControlSwap {
+        from_player,
+        to_player,
+    });
 
     // Reset both players' InputState to prevent stale input
     for mut input_state in &mut input_states {

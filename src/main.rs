@@ -8,14 +8,15 @@ use ballgame::{
     BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
     ChargeGaugeBackground, ChargeGaugeFill, ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel,
     CurrentPalette, CurrentPresets, CurrentSettings, CycleIndicator, CycleSelection, DebugSettings,
-    DebugText, DisplayBallWave, Facing, Grounded, HumanControlled, InputState, JumpState,
-    LastShotInfo, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PRESETS_FILE,
-    PaletteDatabase, PhysicsTweaks, Player, PlayerInput, PresetDatabase, Score, ScoreLevelText,
-    SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown, StealTracker, StyleTextures,
-    TargetBasket, Team, TweakPanel, TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks,
-    ball, config_watcher, constants::*, countdown, display_ball_wave, input, levels, player,
+    DebugText, DisplayBallWave, EventBus, Facing, Grounded, HumanControlled, HumanControlTarget,
+    InputState, JumpState, LastShotInfo, LevelChangeTracker, LevelDatabase, MatchCountdown,
+    NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks, PlayerId, Player,
+    PlayerInput, PresetDatabase, Score, ScoreLevelText, SnapshotConfig, SnapshotTriggerState,
+    StealContest, StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, TweakPanel,
+    TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball, config_watcher,
+    constants::*, countdown, display_ball_wave, emit_level_change_events, input, levels, player,
     replay, save_settings_system, scoring, shooting, snapshot, spawn_countdown_text, steal, ui,
-    world,
+    update_event_bus_time, world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
@@ -54,10 +55,27 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let screenshot_and_quit = args.iter().any(|a| a == "--screenshot-and-quit");
 
-    // Check for --level <num> override (1-indexed)
-    let level_override = args.iter()
+    // Check for --level <name> override (accepts level name, looked up at runtime)
+    let level_name_override = args.iter()
         .position(|a| a == "--level")
-        .and_then(|i| args.get(i + 1).and_then(|s| s.parse::<u32>().ok()));
+        .and_then(|i| args.get(i + 1).cloned());
+
+    // Check for --viewport <width> <height> override
+    let viewport_override = args.iter()
+        .position(|a| a == "--viewport")
+        .and_then(|i| {
+            let width = args.get(i + 1).and_then(|s| s.parse::<f32>().ok())?;
+            let height = args.get(i + 2).and_then(|s| s.parse::<f32>().ok())?;
+            Some((width, height))
+        });
+
+    // Check for --palette <index> override
+    let palette_override = args.iter()
+        .position(|a| a == "--palette")
+        .and_then(|i| args.get(i + 1).and_then(|s| s.parse::<usize>().ok()));
+
+    // Check for --freeze-countdown flag
+    let freeze_countdown = args.iter().any(|a| a == "--freeze-countdown");
 
     // Check for replay mode: --replay <path>
     let replay_file = args.iter()
@@ -72,17 +90,38 @@ fn main() {
         warn!("Failed to save initial settings: {}", e);
     }
 
+    // Load level database from file (needed for level name lookup)
+    let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
+
+    // Resolve level: CLI name override -> saved settings level number
+    let level_override = level_name_override.as_ref().and_then(|name| {
+        // First try parsing as a number (backwards compatibility)
+        if let Ok(num) = name.parse::<u32>() {
+            Some(num)
+        } else {
+            // Look up by name
+            level_db.index_of(name).map(|i| (i + 1) as u32)
+        }
+    });
+
     // Extract values from loaded settings for resource initialization
     let loaded_viewport_index = current_settings.settings.viewport_index;
-    let loaded_palette_index = current_settings.settings.palette_index;
+    let loaded_palette_index = palette_override.unwrap_or(current_settings.settings.palette_index);
     // Use command-line level override if provided, otherwise use saved settings
     let loaded_level = level_override.unwrap_or(current_settings.settings.level);
     let loaded_active_direction = current_settings.settings.active_direction.clone();
     let loaded_down_option = current_settings.settings.down_option.clone();
     let loaded_right_option = current_settings.settings.right_option.clone();
 
-    // Load level database from file
-    let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
+    // Check if initial level is a regression level (for countdown freezing)
+    let initial_level_index = (loaded_level as usize).saturating_sub(1);
+    let is_regression_level = level_db
+        .get(initial_level_index)
+        .map(|l| l.regression)
+        .unwrap_or(false);
+
+    // Check if countdown should be frozen (regression level or explicit flag)
+    let should_freeze_countdown = is_regression_level || freeze_countdown;
 
     // Load palette database (creates default file if missing)
     let palette_db = PaletteDatabase::load_or_create(PALETTES_FILE);
@@ -96,9 +135,14 @@ fn main() {
         .map(|p| p.background)
         .unwrap_or(DEFAULT_BACKGROUND_COLOR);
 
-    // Use loaded viewport preset (clamped to valid range)
-    let viewport_index = loaded_viewport_index.min(VIEWPORT_PRESETS.len() - 1);
-    let (viewport_width, viewport_height, _) = VIEWPORT_PRESETS[viewport_index];
+    // Use viewport override or loaded preset (clamped to valid range)
+    let (viewport_width, viewport_height) = if let Some((w, h)) = viewport_override {
+        (w, h)
+    } else {
+        let viewport_index = loaded_viewport_index.min(VIEWPORT_PRESETS.len() - 1);
+        let (w, h, _) = VIEWPORT_PRESETS[viewport_index];
+        (w, h)
+    };
 
     App::new()
         .add_plugins((
@@ -146,6 +190,12 @@ fn main() {
         .init_resource::<CurrentPresets>()
         .init_resource::<NavGraph>()
         .init_resource::<AiCapabilities>()
+        // Event bus for cross-module communication
+        .insert_resource(EventBus::new())
+        // Human control target (initialized in setup based on settings)
+        .init_resource::<HumanControlTarget>()
+        // Level change tracker for event emission
+        .init_resource::<LevelChangeTracker>()
         .insert_resource(SnapshotConfig {
             // Only enable screenshots when running via screenshot script
             enabled: screenshot_and_quit,
@@ -154,7 +204,14 @@ fn main() {
         })
         .init_resource::<SnapshotTriggerState>()
         .init_resource::<DisplayBallWave>()
-        .init_resource::<MatchCountdown>()
+        // Initialize countdown (frozen if regression level or --freeze-countdown flag)
+        .insert_resource(if should_freeze_countdown {
+            let mut countdown = MatchCountdown::default();
+            countdown.start_frozen();
+            countdown
+        } else {
+            MatchCountdown::default()
+        })
         // Replay mode resources
         .insert_resource(if let Some(ref path) = replay_file {
             replay::ReplayMode::new(path.clone())
@@ -171,6 +228,8 @@ fn main() {
             countdown::update_countdown
                 .run_if(replay::not_replay_active),
         )
+        // Event bus time update (runs every frame for timestamping)
+        .add_systems(Update, update_event_bus_time.run_if(replay::not_replay_active))
         // Input systems must run in order: capture -> copy -> swap -> nav graph -> nav -> AI
         // Only runs when NOT in countdown and NOT in replay mode
         .add_systems(
@@ -191,6 +250,8 @@ fn main() {
         .add_systems(Update, player::check_settings_reset.run_if(replay::not_replay_active))
         // Core Update systems - split to avoid tuple issues with respawn_player
         .add_systems(Update, player::respawn_player.run_if(replay::not_replay_active))
+        // Emit level change events for auditability (runs after systems that change level)
+        .add_systems(Update, emit_level_change_events.run_if(replay::not_replay_active))
         // Countdown trigger on level change (only in manual game mode)
         .add_systems(Update, countdown::trigger_countdown_on_level_change.run_if(replay::not_replay_active))
         .add_systems(
@@ -312,6 +373,7 @@ fn setup(
     current_level: Res<CurrentLevel>,
     current_settings: Res<CurrentSettings>,
     profile_db: Res<AiProfileDatabase>,
+    mut human_target: ResMut<HumanControlTarget>,
 ) {
     // Camera - orthographic, shows entire arena
     // FixedVertical ensures the full arena height is always visible regardless of window size
@@ -343,8 +405,16 @@ fn setup(
     // Determine if left player is human or AI based on settings
     let left_is_human = current_settings.settings.left_ai_profile.is_none();
 
-    // Check if this is a debug level early (for AI goal)
-    let is_debug_level_for_ai = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
+    // Initialize HumanControlTarget based on whether left player is human-controlled
+    human_target.0 = if left_is_human {
+        Some(PlayerId::L)
+    } else {
+        None // Observer mode or all AI
+    };
+
+    // Check if this is a debug or regression level early (for AI goal)
+    let level_data = level_db.get(level_index);
+    let is_special_level = level_data.map(|l| l.debug || l.regression).unwrap_or(false);
 
     // Left team player - spawns on left side
     let left_player = commands
@@ -368,7 +438,7 @@ fn setup(
             (
                 InputState::default(),
                 AiState {
-                    current_goal: if is_debug_level_for_ai {
+                    current_goal: if is_special_level {
                         AiGoal::Idle
                     } else {
                         AiGoal::default()
@@ -406,7 +476,7 @@ fn setup(
                 InputState::default(),
                 AiState {
                     // On debug level, AI stands still (Idle); otherwise normal AI
-                    current_goal: if is_debug_level_for_ai {
+                    current_goal: if is_special_level {
                         AiGoal::Idle
                     } else {
                         AiGoal::default()

@@ -554,7 +554,11 @@ pub fn unified_cycle_system(
                     }
                     current_settings.settings.level = current_level.0;
                     current_settings.mark_dirty();
-                    info!("Level: {}", current_level.0);
+                    let level_name = level_db
+                        .get((current_level.0 as usize).saturating_sub(1))
+                        .map(|l| l.name.as_str())
+                        .unwrap_or("?");
+                    info!("Level: {}/{} {}", current_level.0, num_levels, level_name);
                 }
                 RightOption::Palette => {
                     let num_palettes = palette_db.len();
@@ -672,7 +676,13 @@ pub fn update_cycle_indicator(
     };
 
     let right_value = match cycle_selection.right_option {
-        RightOption::Level => format!("{}/{}", current_level.0, level_db.len()),
+        RightOption::Level => {
+            let level_name = level_db
+                .get((current_level.0 as usize).saturating_sub(1))
+                .map(|l| l.name.as_str())
+                .unwrap_or("?");
+            format!("{}/{} {}", current_level.0, level_db.len(), level_name)
+        }
         RightOption::Palette => format!("{}", current_palette.0),
         RightOption::BallStyle => ball_query
             .iter()

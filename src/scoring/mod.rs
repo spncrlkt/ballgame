@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::ai::{AiNavState, AiState, AiGoal, InputState};
 use crate::ball::{Ball, BallState, CurrentPalette, Velocity};
 use crate::constants::*;
+use crate::events::{EventBus, GameEvent, PlayerId};
 use crate::palettes::PaletteDatabase;
 use crate::player::{HoldingBall, Player, Team};
 use crate::ui::ScoreFlash;
@@ -27,12 +28,14 @@ impl Default for CurrentLevel {
     }
 }
 
-/// Check if ball entered a basket and award points
+/// Check if ball entered a basket and award points.
+/// Emits Goal events to EventBus for auditability.
 pub fn check_scoring(
     mut commands: Commands,
     mut score: ResMut<Score>,
     current_palette: Res<CurrentPalette>,
     palette_db: Res<PaletteDatabase>,
+    mut event_bus: ResMut<EventBus>,
     mut ball_query: Query<(&mut Transform, &mut Velocity, &mut BallState, &Sprite), With<Ball>>,
     basket_query: Query<(Entity, &Transform, &Basket, &Sprite), Without<Ball>>,
     player_query: Query<(Entity, &Sprite, &Team), With<Player>>,
@@ -60,10 +63,24 @@ pub fn check_scoring(
                 // Determine points: 2 for carry-in, 1 for throw
                 let points = if is_held { 2 } else { 1 };
 
-                match basket {
-                    Basket::Left => score.right += points,  // Right team scores in left basket
-                    Basket::Right => score.left += points,  // Left team scores in right basket
-                }
+                // Determine which team scored
+                let scoring_team = match basket {
+                    Basket::Left => {
+                        score.right += points;  // Right team scores in left basket
+                        PlayerId::R
+                    }
+                    Basket::Right => {
+                        score.left += points;  // Left team scores in right basket
+                        PlayerId::L
+                    }
+                };
+
+                // Emit Goal event for auditability
+                event_bus.emit(GameEvent::Goal {
+                    player: scoring_team,
+                    score_left: score.left,
+                    score_right: score.right,
+                });
 
                 // Basket color based on its side (from current palette)
                 let basket_original_color = match basket {
