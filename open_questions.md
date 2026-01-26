@@ -20,6 +20,17 @@
   - Near basket? Between ball and basket? Based on ball holder?
 - [ ] **Profile tuning** - Should profiles affect positioning or just timing?
 
+## AI Navigation (P2)
+
+- [ ] **Ramp-less level handling** - How should AI reach elevated opponents in levels without corner steps?
+  - Option A: Always use NavGraph pathfinding (requires valid edges to platforms)
+  - Option B: Direct jump toward platform if reachable
+  - Option C: Give up and patrol floor (wait for opponent to come down)
+- [ ] **Goal oscillation** - AI rapidly switches goals (7 instances in 23s test). Causes:
+  - Conditions flip-flop near thresholds?
+  - Need longer commitment timers?
+  - Hysteresis (different thresholds for entering vs exiting goal)?
+
 ## Code Quality
 
 - [ ] **Clippy warnings** - ~7 warnings remain (type_complexity, collapsible_if)
@@ -36,4 +47,4 @@
 
 ---
 
-*Last reviewed: 2026-01-25*
+*Last reviewed: 2026-01-25 (AI architecture session)*

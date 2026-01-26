@@ -67,6 +67,8 @@ Benefits: ~120 lines deleted, full AI defense in ghost mode, cleaner architectur
 - [ ] **Verify corner step fix** - run training on levels 7-8, check AI climbs
 - [ ] **Teach AI jump capability** - skip intermediate steps when direct jump possible
 - [ ] **Debug logging** - nav graph already has logging, verify it shows Jump edges
+- [ ] **Fix ramp-less level fallback** - InterceptDefense assumes ramps exist; in `steps: 0` levels, AI targets nonexistent corner ramps instead of using platforms or direct pursuit (see decision.rs:953-974)
+- [ ] **Reduce goal oscillation** - 7 oscillation instances observed in pursuit2 test; may need hysteresis or commitment timers
 
 ---
 
@@ -119,10 +121,10 @@ cargo run --bin training                 # Training mode
 
 ## Done (Last 5)
 
+- [x] **AI architecture refactor** - AiCapabilities + world_model.rs for single source of physics truth (2026-01-25)
+- [x] **Fix JumpAt horizontal movement** - AI now moves toward landing during entire jump arc (was stopping mid-air)
+- [x] **Fix calculate_edge overlap case** - Jump from edge of overlap, not center (avoids ceiling collision)
 - [x] Ghost system MVP - extract-drives + run-ghost binaries working (2026-01-25)
 - [x] HOW_TO_PLAY.md - ASCII controller guide with all controls
-- [x] README.md update - All binaries documented, AI profiles section
-- [x] Steal out-of-range visual indicator - Orange flash when too far (2026-01-25)
-- [x] Steal boundary tests - inside/outside range verification
 
 *See `todone.md` for full archive with commit references*

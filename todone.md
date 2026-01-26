@@ -1,5 +1,27 @@
 # Ballgame Done Archive
 
+## Archived 2026-01-25 (AI Architecture Refactor)
+
+**AI Physics Consolidation:**
+- [x] Created `src/ai/capabilities.rs` - Single source of truth for physics values (max_jump_height, time_to_peak, etc.)
+- [x] Created `src/ai/world_model.rs` - Platform data extraction for ceiling checks
+- [x] Updated `navigation.rs` - Use AiCapabilities, fixed overlap case in calculate_edge()
+- [x] Updated `decision.rs` - Removed 4 duplicated physics formulas, use shared capabilities
+
+**Critical Bug Fixes:**
+- [x] **JumpAt horizontal movement** - AI was stopping horizontal movement during jump hold phase, causing it to fall back down instead of reaching platforms. Fixed by setting move_x toward landing point during entire jump arc.
+- [x] **calculate_edge overlap** - When platforms overlap horizontally, edge calculation now jumps from OUTSIDE the overlap to arc over, not from center (which would hit ceiling).
+
+**Verification:**
+- pursuit2 test: Still time dropped from 47% → 6%
+- AI successfully reaches elevated platforms and catches opponent
+
+**Known remaining issues (see todo.md P2):**
+- InterceptDefense ramp fallback assumes ramps exist in all levels
+- Goal oscillation (7 instances in 23s test)
+
+---
+
 ## Archived 2026-01-25 (Steal System Fix + AI/Simulation Work)
 
 **Commits: 8f26e36 → 045d8c2**

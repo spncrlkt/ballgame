@@ -286,6 +286,7 @@ USAGE:
 PROTOCOLS:
     advanced-platform (default) - Full 1v1 games on random levels
     pursuit                     - Flat level chase test (verifies AI pursues player)
+    pursuit2                    - Platform chase test (pursuit with center obstacle)
 
 MODES:
     goal  (default) - Each iteration ends after one goal, then reset

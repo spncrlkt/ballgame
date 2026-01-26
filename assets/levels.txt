@@ -122,6 +122,12 @@ basket_height: 680
 basket_push_in: 180
 steps: 0
 
+level: Pursuit Arena 2
+basket_height: 680
+basket_push_in: 180
+steps: 0
+center: 200 200
+
 #   level: <name>           Start a new level
 #   basket_height: <h>      Main basket height above floor (8 dunkable: <560, 2 high: >560)
 #   basket_push_in: <dist>  Distance from wall inner edge to basket center (default = 156)

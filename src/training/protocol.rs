@@ -21,6 +21,13 @@ pub enum TrainingProtocol {
     /// - End condition: score or time limit
     /// - Metrics: distance over time, closing rate, stuck detection
     Pursuit,
+
+    /// AI pursuit verification test level 2
+    /// - Fixed level with center platform (Pursuit Arena 2)
+    /// - Player starts with ball, AI must chase
+    /// - End condition: score or time limit
+    /// - Metrics: distance over time, closing rate, stuck detection
+    Pursuit2,
 }
 
 impl TrainingProtocol {
@@ -31,6 +38,7 @@ impl TrainingProtocol {
                 Some(TrainingProtocol::AdvancedPlatform)
             }
             "pursuit" | "chase" => Some(TrainingProtocol::Pursuit),
+            "pursuit2" | "pursuit-2" | "pursuit-level-2" => Some(TrainingProtocol::Pursuit2),
             _ => None,
         }
     }
@@ -40,6 +48,7 @@ impl TrainingProtocol {
         match self {
             TrainingProtocol::AdvancedPlatform => "Advanced Platform",
             TrainingProtocol::Pursuit => "Pursuit Test",
+            TrainingProtocol::Pursuit2 => "Pursuit Test Level 2",
         }
     }
 
@@ -48,6 +57,7 @@ impl TrainingProtocol {
         match self {
             TrainingProtocol::AdvancedPlatform => "advanced-platform",
             TrainingProtocol::Pursuit => "pursuit",
+            TrainingProtocol::Pursuit2 => "pursuit2",
         }
     }
 
@@ -58,6 +68,9 @@ impl TrainingProtocol {
                 "Full 1v1 games on random levels with comprehensive analysis"
             }
             TrainingProtocol::Pursuit => "Flat level chase test - verifies AI pursues the player",
+            TrainingProtocol::Pursuit2 => {
+                "Platform chase test - pursuit with center obstacle"
+            }
         }
     }
 
@@ -66,6 +79,7 @@ impl TrainingProtocol {
         match self {
             TrainingProtocol::AdvancedPlatform => None,
             TrainingProtocol::Pursuit => Some("Pursuit Arena"),
+            TrainingProtocol::Pursuit2 => Some("Pursuit Arena 2"),
         }
     }
 
@@ -74,6 +88,7 @@ impl TrainingProtocol {
         match self {
             TrainingProtocol::AdvancedPlatform => None,
             TrainingProtocol::Pursuit => Some(30.0), // 30 second default for pursuit
+            TrainingProtocol::Pursuit2 => Some(30.0), // 30 second default for pursuit2
         }
     }
 
@@ -81,7 +96,7 @@ impl TrainingProtocol {
     pub fn uses_score_win(&self) -> bool {
         match self {
             TrainingProtocol::AdvancedPlatform => true,
-            TrainingProtocol::Pursuit => true, // Ends on score OR time
+            TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => true, // Ends on score OR time
         }
     }
 
@@ -89,7 +104,7 @@ impl TrainingProtocol {
     pub fn player_starts_with_ball(&self) -> bool {
         match self {
             TrainingProtocol::AdvancedPlatform => true, // Already implemented
-            TrainingProtocol::Pursuit => true, // AI must chase
+            TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => true, // AI must chase
         }
     }
 }
@@ -122,7 +137,7 @@ impl ProtocolConfig {
             time_limit_secs: protocol.default_time_limit(),
             win_score: match protocol {
                 TrainingProtocol::AdvancedPlatform => 5,
-                TrainingProtocol::Pursuit => 1, // End on first score
+                TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => 1, // End on first score
             },
         }
     }
@@ -163,6 +178,19 @@ mod tests {
             Some(TrainingProtocol::AdvancedPlatform)
         );
         assert_eq!(TrainingProtocol::from_str("invalid"), None);
+        // Pursuit2 parsing
+        assert_eq!(
+            TrainingProtocol::from_str("pursuit2"),
+            Some(TrainingProtocol::Pursuit2)
+        );
+        assert_eq!(
+            TrainingProtocol::from_str("pursuit-2"),
+            Some(TrainingProtocol::Pursuit2)
+        );
+        assert_eq!(
+            TrainingProtocol::from_str("pursuit-level-2"),
+            Some(TrainingProtocol::Pursuit2)
+        );
     }
 
     #[test]
@@ -171,6 +199,11 @@ mod tests {
         assert_eq!(pursuit.level_name, Some("Pursuit Arena".to_string()));
         assert_eq!(pursuit.time_limit_secs, Some(30.0));
         assert_eq!(pursuit.win_score, 1);
+
+        let pursuit2 = ProtocolConfig::new(TrainingProtocol::Pursuit2);
+        assert_eq!(pursuit2.level_name, Some("Pursuit Arena 2".to_string()));
+        assert_eq!(pursuit2.time_limit_secs, Some(30.0));
+        assert_eq!(pursuit2.win_score, 1);
 
         let advanced = ProtocolConfig::new(TrainingProtocol::AdvancedPlatform);
         assert_eq!(advanced.level_name, None);

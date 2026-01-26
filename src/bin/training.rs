@@ -9,14 +9,15 @@
 
 use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
-    AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact, BallPulse, BallRolling,
-    BallShotGrace, BallSpin, BallState, BallStyle, BallTextures, ChargeGaugeBackground,
-    ChargeGaugeFill, ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette, DebugSettings,
-    EventBuffer, Facing, GameConfig, GameEvent, Grounded, HoldingBall, HumanControlled, InputState,
-    JumpState, LastShotInfo, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase,
-    PhysicsTweaks, Player, PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown, StealTracker,
-    StyleTextures, TargetBasket, Team, Velocity, ai, ball, constants::*, countdown, helpers::*, input,
-    levels, player, scoring, shooting, spawn_countdown_text, steal, world,
+    AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact,
+    BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
+    ChargeGaugeBackground, ChargeGaugeFill, ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette,
+    DebugSettings, EventBuffer, Facing, GameConfig, GameEvent, Grounded, HoldingBall,
+    HumanControlled, InputState, JumpState, LastShotInfo, LevelDatabase, MatchCountdown, NavGraph,
+    PALETTES_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, SnapshotConfig,
+    StealContest, StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, Velocity, ai,
+    ball, constants::*, countdown, helpers::*, input, levels, player, scoring, shooting,
+    spawn_countdown_text, steal, world,
 };
 use ballgame::events::{
     emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventEmitterState,
@@ -226,6 +227,7 @@ fn main() {
         .init_resource::<LastShotInfo>()
         .init_resource::<AiProfileDatabase>()
         .init_resource::<NavGraph>()
+        .init_resource::<AiCapabilities>()
         .insert_resource(SnapshotConfig::default())
         .init_resource::<TrainingEventBuffer>()
         .init_resource::<MatchCountdown>()
@@ -918,7 +920,7 @@ fn training_state_machine(
 
             // Run protocol-specific analysis (additional output)
             match training_state.protocol {
-                TrainingProtocol::Pursuit => {
+                TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => {
                     // Pursuit-specific analysis (in addition to standard)
                     let pursuit_analysis =
                         analyze_pursuit_session(&training_state.game_results);

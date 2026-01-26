@@ -32,8 +32,9 @@ pub mod world;
 
 // Re-export commonly used types for convenience
 pub use ai::{
-    AI_PROFILES_FILE, AiGoal, AiNavState, AiProfile, AiProfileDatabase, AiState, EdgeType,
-    InputState, NavAction, NavEdge, NavGraph, NavNode, PathResult, find_path, find_path_to_shoot,
+    AI_PROFILES_FILE, AiCapabilities, AiGoal, AiNavState, AiProfile, AiProfileDatabase, AiState,
+    EdgeType, InputState, NavAction, NavEdge, NavGraph, NavNode, PathResult, find_path,
+    find_path_to_shoot,
 };
 pub use ball::{
     Ball, BallLabel, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,

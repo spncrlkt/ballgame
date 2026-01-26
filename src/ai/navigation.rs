@@ -5,6 +5,7 @@
 
 use bevy::prelude::*;
 
+use crate::ai::capabilities::AiCapabilities;
 use crate::ai::shot_quality::evaluate_shot_quality;
 use crate::constants::*;
 use crate::levels::LevelDatabase;
@@ -731,16 +732,29 @@ fn calculate_edge(from: &NavNode, to: &NavNode, all_nodes: &[NavNode]) -> Option
         }
 
         // Calculate jump point and landing point
+        // Use larger margin for landing to ensure AI clears platform edge and lands safely
+        let edge_margin = PLAYER_SIZE.x / 2.0 + NAV_JUMP_TOLERANCE; // ~24px from edge
         let (jump_from_x, land_on_x) = if to.left_x > from.right_x {
-            // Target is to the right
-            (from.right_x - NAV_JUMP_TOLERANCE, to.left_x + NAV_JUMP_TOLERANCE)
+            // Target is to the right - jump from our right edge, land on their left + margin
+            (from.right_x - NAV_JUMP_TOLERANCE, to.left_x + edge_margin)
         } else if from.left_x > to.right_x {
-            // Target is to the left
-            (from.left_x + NAV_JUMP_TOLERANCE, to.right_x - NAV_JUMP_TOLERANCE)
+            // Target is to the left - jump from our left edge, land on their right - margin
+            (from.left_x + NAV_JUMP_TOLERANCE, to.right_x - edge_margin)
         } else {
-            // Platforms overlap - jump from closest point
-            let overlap_center = ((from.left_x.max(to.left_x)) + (from.right_x.min(to.right_x))) / 2.0;
-            (overlap_center, overlap_center)
+            // Platforms overlap - jump from OUTSIDE the overlap, not center
+            // This ensures we arc over the platform rather than jumping straight up into it
+            let overlap_left = from.left_x.max(to.left_x);
+            let overlap_right = from.right_x.min(to.right_x);
+
+            if from.center.x < to.center.x {
+                // Target is to our right - jump from left edge of overlap (outside it)
+                let jump_x = overlap_left - PLAYER_SIZE.x / 2.0 - NAV_JUMP_TOLERANCE;
+                (jump_x.max(from.left_x), overlap_left + edge_margin)
+            } else {
+                // Target is to our left - jump from right edge of overlap (outside it)
+                let jump_x = overlap_right + PLAYER_SIZE.x / 2.0 + NAV_JUMP_TOLERANCE;
+                (jump_x.min(from.right_x), overlap_right - edge_margin)
+            }
         };
 
         // Calculate hold duration (how much of max jump needed)
@@ -866,4 +880,21 @@ pub fn mark_nav_dirty_on_level_change(
         // Add delay to allow platforms to spawn/despawn
         nav_graph.rebuild_delay = 3;
     }
+}
+
+/// Check if there's a platform directly above a position that would block a jump.
+/// Returns true if jumping from this position would bonk the AI's head on a ceiling.
+/// Uses AiCapabilities for physics calculations.
+pub fn has_ceiling_above(pos: Vec2, capabilities: &AiCapabilities, nav_graph: &NavGraph) -> bool {
+    let platforms = crate::ai::world_model::extract_platforms_from_nav(&nav_graph.nodes);
+    !capabilities.has_ceiling_clearance(pos, &platforms)
+}
+
+/// Find the nearest X position to escape from under a blocking platform.
+/// Returns the closest platform edge (left or right) that the AI can move to
+/// in order to clear the ceiling and then jump.
+/// Uses AiCapabilities for physics calculations.
+pub fn find_escape_x(pos: Vec2, target_y: f32, capabilities: &AiCapabilities, nav_graph: &NavGraph) -> Option<f32> {
+    let platforms = crate::ai::world_model::extract_platforms_from_nav(&nav_graph.nodes);
+    capabilities.find_escape_x(pos, target_y, &platforms)
 }

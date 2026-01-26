@@ -4,9 +4,10 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::ai::{
-    AiGoal, AiNavState, AiProfileDatabase, AiState, InputState, NavAction, NavGraph, find_path,
-    find_path_to_shoot, shot_quality::evaluate_shot_quality,
+    AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, InputState, NavAction, NavGraph,
+    find_path, find_path_to_shoot, shot_quality::evaluate_shot_quality,
 };
+use crate::ai::navigation::{find_escape_x, has_ceiling_above};
 use crate::ball::{Ball, BallState};
 use crate::constants::*;
 use crate::player::{Grounded, HoldingBall, HumanControlled, Player, TargetBasket, Team};
@@ -232,7 +233,28 @@ pub fn ai_navigation_update(
                 None
             }
 
-            AiGoal::AttemptSteal => None, // Use simple movement, not navigation
+            AiGoal::AttemptSteal => {
+                // Use navigation when opponent is on elevated platform we can't jump to directly
+                if let Some(opp_pos) = opponent_pos {
+                    let height_diff = opp_pos.y - ai_pos.y;
+                    if height_diff > PLAYER_SIZE.y * 1.5 {
+                        // Opponent is elevated - find path to their platform
+                        if let Some(def_node) = nav_graph.find_defensive_platform(
+                            opp_pos,
+                            own_basket_pos.unwrap_or(Vec2::ZERO),
+                            opp_pos.y - PLAYER_SIZE.y,
+                        ) {
+                            Some(nav_graph.nodes[def_node].center)
+                        } else {
+                            None // No path found, use simple movement
+                        }
+                    } else {
+                        None // Opponent reachable, use simple movement
+                    }
+                } else {
+                    None
+                }
+            }
 
             AiGoal::InterceptDefense | AiGoal::PressureDefense => {
                 // When far from opponent, target them directly to close distance
@@ -326,6 +348,7 @@ pub fn ai_navigation_update(
 /// Runs in Update schedule after capture_input and ai_navigation_update.
 pub fn ai_decision_update(
     time: Res<Time>,
+    capabilities: Res<AiCapabilities>,
     profile_db: Res<AiProfileDatabase>,
     nav_graph: Res<NavGraph>,
     mut ai_query: Query<
@@ -637,7 +660,17 @@ pub fn ai_decision_update(
             // Start steal commitment timer when entering AttemptSteal
             if new_goal == AiGoal::AttemptSteal {
                 ai_state.steal_commit_timer = 0.5; // Commit for 0.5s
-                nav_state.clear(); // Use simple horizontal chase, not navigation
+                // Only clear nav if opponent is at reachable height
+                // Navigation will be set up in ai_navigation_update if opponent is elevated
+                if let Some(opp_pos) = opponent_pos {
+                    let height_diff = opp_pos.y - ai_pos.y;
+                    if height_diff <= PLAYER_SIZE.y * 1.5 {
+                        nav_state.clear(); // Opponent reachable, use simple horizontal chase
+                    }
+                    // If elevated, keep nav active to reach their platform
+                } else {
+                    nav_state.clear();
+                }
             }
             if new_goal == AiGoal::ChargeShot {
                 let mut rng = rand::thread_rng();
@@ -800,31 +833,56 @@ pub fn ai_decision_update(
                 AiGoal::AttemptSteal => {
                     // Chase opponent aggressively during steal attempts
                     if let Some(opp_pos) = opponent_pos {
-                        let dx = opp_pos.x - ai_pos.x;
-                        let distance = ai_pos.distance(opp_pos);
-
-                        // Always move toward opponent unless extremely close (< 10px)
-                        // This prevents oscillation while maintaining aggressive pursuit
-                        if dx.abs() > 10.0 {
-                            input.move_x = dx.signum();
-                        } else if distance > profile.steal_range * 0.5 {
-                            // If within 10px horizontally but still far vertically,
-                            // keep moving to maintain contact
-                            input.move_x = dx.signum();
-                        }
-
-                        // Jump if opponent is above us - maintain jump to reach them
                         let height_diff = opp_pos.y - ai_pos.y;
-                        if height_diff > PLAYER_SIZE.y * 0.5 {
-                            if grounded.0 {
-                                input.jump_buffer_timer = JUMP_BUFFER_TIME;
-                            }
-                            input.jump_held = true; // Maintain jump while stealing
-                        }
 
-                        // Keep holding jump while airborne if still need to gain height
-                        if !grounded.0 && height_diff > PLAYER_SIZE.y {
-                            input.jump_held = true;
+                        // If opponent is elevated and we have a nav path, follow it
+                        if height_diff > PLAYER_SIZE.y * 1.5 && nav_state.active {
+                            execute_nav_action(&mut input, &mut nav_state, ai_pos, grounded.0, &time);
+                            nav_state.update_completion();
+                        } else {
+                            // Direct pursuit logic for reachable opponents
+                            let dx = opp_pos.x - ai_pos.x;
+                            let distance = ai_pos.distance(opp_pos);
+
+                            // Check for ceiling before deciding to jump
+                            let has_ceiling = has_ceiling_above(ai_pos, &capabilities, &nav_graph);
+
+                            if height_diff > PLAYER_SIZE.y * 0.5 && has_ceiling && grounded.0 {
+                                // Ceiling is blocking our jump - move to escape position first
+                                if let Some(escape_x) = find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph) {
+                                    let escape_dx = escape_x - ai_pos.x;
+                                    input.move_x = escape_dx.signum();
+                                    // Don't jump while escaping from under ceiling
+                                } else {
+                                    // No escape found, try moving toward opponent anyway
+                                    if dx.abs() > 10.0 {
+                                        input.move_x = dx.signum();
+                                    }
+                                }
+                            } else {
+                                // No ceiling blocking - use normal pursuit logic
+                                // Always move toward opponent unless extremely close (< 10px)
+                                if dx.abs() > 10.0 {
+                                    input.move_x = dx.signum();
+                                } else if distance > profile.steal_range * 0.5 {
+                                    // If within 10px horizontally but still far vertically,
+                                    // keep moving to maintain contact
+                                    input.move_x = dx.signum();
+                                }
+
+                                // Jump if opponent is above us (and no ceiling blocking)
+                                if height_diff > PLAYER_SIZE.y * 0.5 {
+                                    if grounded.0 {
+                                        input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                                    }
+                                    input.jump_held = true; // Maintain jump while stealing
+                                }
+                            }
+
+                            // Keep holding jump while airborne if still need to gain height
+                            if !grounded.0 && height_diff > PLAYER_SIZE.y {
+                                input.jump_held = true;
+                            }
                         }
 
                         // Attempt steal if timer met and cooldown ready
@@ -853,6 +911,9 @@ pub fn ai_decision_update(
                         let ai_near_floor = ai_pos.y < floor_y + PLAYER_SIZE.y;
                         let opponent_highly_elevated = height_diff > NAV_MAX_JUMP_HEIGHT * 0.5;
 
+                        // Check for ceiling before deciding to jump
+                        let has_ceiling = has_ceiling_above(ai_pos, &capabilities, &nav_graph);
+
                         // When far from opponent (> 300px), always chase directly
                         // to close distance before worrying about intercept positioning
                         // Use 300px to match navigation threshold for consistency
@@ -867,14 +928,27 @@ pub fn ai_decision_update(
                                 profile.steal_range * 0.3 // ~38px - closer than steal range
                             };
                             let dx = opp_pos.x - ai_pos.x;
-                            if dx.abs() > chase_tolerance {
-                                input.move_x = dx.signum();
-                            }
 
-                            // Jump if opponent is above us even when "same level" (small elevation)
-                            if height_diff > PLAYER_SIZE.y * 0.5 && grounded.0 {
-                                input.jump_buffer_timer = JUMP_BUFFER_TIME;
-                                input.jump_held = true;
+                            // Check if we need to escape from under a ceiling first
+                            if height_diff > PLAYER_SIZE.y * 0.5 && has_ceiling && grounded.0 {
+                                // Ceiling blocking - move to escape position
+                                if let Some(escape_x) = find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph) {
+                                    let escape_dx = escape_x - ai_pos.x;
+                                    input.move_x = escape_dx.signum();
+                                    // Don't jump while escaping
+                                } else if dx.abs() > chase_tolerance {
+                                    input.move_x = dx.signum();
+                                }
+                            } else {
+                                if dx.abs() > chase_tolerance {
+                                    input.move_x = dx.signum();
+                                }
+
+                                // Jump if opponent is above us (no ceiling blocking)
+                                if height_diff > PLAYER_SIZE.y * 0.5 && grounded.0 {
+                                    input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                                    input.jump_held = true;
+                                }
                             }
                         } else if ai_near_floor && opponent_highly_elevated {
                             // Opponent is high above and we're at ground level
@@ -892,6 +966,7 @@ pub fn ai_decision_update(
                             }
 
                             // Jump continuously when on the ramp area to climb steps
+                            // (ramps are designed for climbing, ceiling check not needed)
                             let on_ramp_area = ai_pos.x.abs() > ARENA_WIDTH / 2.0 - WALL_THICKNESS - 300.0;
                             if on_ramp_area && grounded.0 {
                                 input.jump_buffer_timer = JUMP_BUFFER_TIME;
@@ -901,14 +976,27 @@ pub fn ai_decision_update(
                             // Different height but not extreme - chase opponent directly
                             // to close horizontal distance, then jump to reach them
                             let dx = opp_pos.x - ai_pos.x;
-                            if dx.abs() > profile.position_tolerance {
-                                input.move_x = dx.signum();
-                            }
 
-                            // Jump when opponent is above and we're close horizontally
-                            if height_diff > PLAYER_SIZE.y * 0.5 && grounded.0 {
-                                input.jump_buffer_timer = JUMP_BUFFER_TIME;
-                                input.jump_held = true;
+                            // Check if we need to escape from under a ceiling first
+                            if height_diff > PLAYER_SIZE.y * 0.5 && has_ceiling && grounded.0 {
+                                // Ceiling blocking - move to escape position
+                                if let Some(escape_x) = find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph) {
+                                    let escape_dx = escape_x - ai_pos.x;
+                                    input.move_x = escape_dx.signum();
+                                    // Don't jump while escaping
+                                } else if dx.abs() > profile.position_tolerance {
+                                    input.move_x = dx.signum();
+                                }
+                            } else {
+                                if dx.abs() > profile.position_tolerance {
+                                    input.move_x = dx.signum();
+                                }
+
+                                // Jump when opponent is above and we're close horizontally
+                                if height_diff > PLAYER_SIZE.y * 0.5 && grounded.0 {
+                                    input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                                    input.jump_held = true;
+                                }
                             }
                         }
 
@@ -932,16 +1020,31 @@ pub fn ai_decision_update(
                     // Close-range: chase opponent aggressively and attempt steals
                     if let Some(opp_pos) = opponent_pos {
                         let dx = opp_pos.x - ai_pos.x;
-                        // Move directly toward opponent
-                        if dx.abs() > profile.position_tolerance * 0.5 {
-                            input.move_x = dx.signum();
-                        }
-
-                        // Jump if opponent is above us
                         let dy = opp_pos.y - ai_pos.y;
-                        if dy > PLAYER_SIZE.y * 0.5 && grounded.0 {
-                            input.jump_buffer_timer = JUMP_BUFFER_TIME;
-                            input.jump_held = true;
+
+                        // Check for ceiling before deciding to jump
+                        let has_ceiling = has_ceiling_above(ai_pos, &capabilities, &nav_graph);
+
+                        if dy > PLAYER_SIZE.y * 0.5 && has_ceiling && grounded.0 {
+                            // Ceiling blocking - move to escape position first
+                            if let Some(escape_x) = find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph) {
+                                let escape_dx = escape_x - ai_pos.x;
+                                input.move_x = escape_dx.signum();
+                                // Don't jump while escaping
+                            } else if dx.abs() > profile.position_tolerance * 0.5 {
+                                input.move_x = dx.signum();
+                            }
+                        } else {
+                            // No ceiling blocking - move directly toward opponent
+                            if dx.abs() > profile.position_tolerance * 0.5 {
+                                input.move_x = dx.signum();
+                            }
+
+                            // Jump if opponent is above us
+                            if dy > PLAYER_SIZE.y * 0.5 && grounded.0 {
+                                input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                                input.jump_held = true;
+                            }
                         }
 
                         // Keep holding jump while airborne to reach elevated opponents
@@ -1103,25 +1206,27 @@ fn execute_nav_action(
                 nav_state.jump_timer += dt;
                 let target_hold_time = hold_duration * SHOT_CHARGE_TIME; // Scale to actual time
 
+                // Always move toward landing point during the jump arc
+                // This is critical - without horizontal movement, the AI falls straight down
+                if let Some(NavAction::WalkTo { x: land_x }) =
+                    nav_state.current_path.get(nav_state.path_index + 1)
+                {
+                    let dx = land_x - ai_pos.x;
+                    input.move_x = dx.signum();
+                }
+
                 if nav_state.jump_timer < target_hold_time {
                     // No cap - physics determines max useful hold time
                     input.jump_held = true;
                 } else {
-                    // Release and continue moving toward landing
+                    // Release jump button
                     input.jump_held = false;
 
                     // Check if we've landed
                     if grounded && nav_state.jump_timer > 0.1 {
                         nav_state.advance();
-                    } else {
-                        // Keep moving toward landing point while in air
-                        if let Some(NavAction::WalkTo { x: land_x }) =
-                            nav_state.current_path.get(nav_state.path_index + 1)
-                        {
-                            let dx = land_x - ai_pos.x;
-                            input.move_x = dx.signum();
-                        }
                     }
+                    // Note: horizontal movement already set above, continues until landing
                 }
             }
         }
