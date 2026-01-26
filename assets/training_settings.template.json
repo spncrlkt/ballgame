@@ -2,17 +2,13 @@
   "_comment": "TEMPLATE - Copy to training_settings.json for local customization",
 
   "mode": "Goal",
-  "iterations": 5,
-  "win_score": 5,
-  "ai_profile": "Balanced",
-  "level": null,
+  "iterations": 1,
+  "win_score": 1,
+  "ai_profile": "v4_Pat_50",
+  "level": "Skyway",
   "exclude_levels": ["Pit", "Bunker"],
 
-  "seed": null,
-  "time_limit_secs": null,
-  "first_point_timeout_secs": null,
-
   "viewport_index": 2,
-  "palette_index": 0,
-  "ball_style": "wedges"
+  "palette_index": 4,
+  "ball_style": null
 }

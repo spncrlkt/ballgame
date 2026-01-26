@@ -153,13 +153,31 @@ pub fn ai_navigation_update(
 
         // Calculate defensive/interception position based on opponent and own basket
         let intercept_pos = if let (Some(opp_pos), Some(own_basket)) = (opponent_pos, own_basket_pos) {
-            // Position on the shot line between opponent and our basket
-            calculate_interception_position(
-                opp_pos,
-                own_basket,
-                profile.pressure_distance,
-                profile.defensive_iq,
-            )
+            // Check if opponent is significantly elevated above floor
+            let floor_y = ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0;
+            let opp_elevated = opp_pos.y > floor_y + PLAYER_SIZE.y * 2.0;
+
+            if opp_elevated {
+                // For elevated opponents, position horizontally between opponent and basket
+                // at the opponent's height level (not on the upward-pointing shot line)
+                let intercept_x = if own_basket.x < opp_pos.x {
+                    opp_pos.x - profile.pressure_distance
+                } else {
+                    opp_pos.x + profile.pressure_distance
+                };
+                Vec2::new(
+                    intercept_x.clamp(-ARENA_WIDTH / 2.0 + 100.0, ARENA_WIDTH / 2.0 - 100.0),
+                    opp_pos.y,
+                )
+            } else {
+                // Ground-level: use standard shot line intercept
+                calculate_interception_position(
+                    opp_pos,
+                    own_basket,
+                    profile.pressure_distance,
+                    profile.defensive_iq,
+                )
+            }
         } else if let Some(opp_pos) = opponent_pos {
             // Fallback: just get close to opponent
             opp_pos
@@ -214,27 +232,35 @@ pub fn ai_navigation_update(
                 None
             }
 
-            AiGoal::AttemptSteal => opponent_pos,
+            AiGoal::AttemptSteal => None, // Use simple movement, not navigation
 
             AiGoal::InterceptDefense | AiGoal::PressureDefense => {
-                // Navigate to intercept position on the shot line
-                // If opponent is elevated, find a platform at their height to defend from
+                // When far from opponent, target them directly to close distance
+                // When close, use intercept positioning
                 if let Some(opp_pos) = opponent_pos {
-                    let height_diff = opp_pos.y - ai_pos.y;
-                    if height_diff > PLAYER_SIZE.y {
-                        // Opponent is elevated - find a defensive platform at their height
-                        if let Some(def_node) = nav_graph.find_defensive_platform(
-                            opp_pos,
-                            own_basket_pos.unwrap_or(Vec2::ZERO),
-                            opp_pos.y - PLAYER_SIZE.y, // min height threshold
-                        ) {
-                            Some(nav_graph.nodes[def_node].center)
+                    let distance_to_opponent = ai_pos.distance(opp_pos);
+
+                    // If far from opponent (> steal_range * 2.5), chase them directly
+                    // Higher multiplier = more aggressive direct pursuit
+                    if distance_to_opponent > profile.steal_range * 2.5 {
+                        Some(opp_pos)
+                    } else {
+                        // Close enough - use intercept positioning
+                        let height_diff = opp_pos.y - ai_pos.y;
+                        if height_diff > PLAYER_SIZE.y {
+                            // Opponent is elevated - find a defensive platform at their height
+                            if let Some(def_node) = nav_graph.find_defensive_platform(
+                                opp_pos,
+                                own_basket_pos.unwrap_or(Vec2::ZERO),
+                                opp_pos.y - PLAYER_SIZE.y, // min height threshold
+                            ) {
+                                Some(nav_graph.nodes[def_node].center)
+                            } else {
+                                Some(intercept_pos)
+                            }
                         } else {
-                            // No elevated platform found - fall back to intercept position
                             Some(intercept_pos)
                         }
-                    } else {
-                        Some(intercept_pos)
                     }
                 } else {
                     Some(intercept_pos)
@@ -356,6 +382,9 @@ pub fn ai_decision_update(
         // Use a minimum dt of 1/60 to handle headless mode where delta can be tiny
         let dt = time.delta_secs().max(1.0 / 60.0);
         ai_state.button_press_cooldown = (ai_state.button_press_cooldown - dt).max(0.0);
+
+        // Decrement steal commitment timer
+        ai_state.steal_commit_timer = (ai_state.steal_commit_timer - dt).max(0.0);
 
         let ai_pos = ai_transform.translation.truncate();
 
@@ -524,6 +553,23 @@ pub fn ai_decision_update(
             }
             } // End of else block for forced shot after 12s
         } else if opponent_has_ball {
+            // Update steal proximity tracking BEFORE goal decision
+            // This ensures timer persists across goal switches
+            if let Some(opp_pos) = opponent_pos {
+                let distance = ai_pos.distance(opp_pos);
+                let in_steal_range = distance < profile.steal_range;
+
+                if in_steal_range {
+                    if !ai_state.was_in_steal_range {
+                        ai_state.steal_reaction_timer = 0.0;
+                    }
+                    ai_state.steal_reaction_timer += dt;
+                } else {
+                    ai_state.steal_reaction_timer = 0.0;
+                }
+                ai_state.was_in_steal_range = in_steal_range;
+            }
+
             if let Some(opp_pos) = opponent_pos {
                 let distance_to_opponent = ai_pos.distance(opp_pos);
                 // Calculate effective pressure threshold based on profile
@@ -548,8 +594,14 @@ pub fn ai_decision_update(
                     AiGoal::InterceptDefense | AiGoal::PressureDefense | AiGoal::AttemptSteal
                 );
 
-                if !is_defensive_goal || time_since_switch > 0.4 || ideal_defense == AiGoal::AttemptSteal {
-                    // Allow switch if: not in defense mode, enough time passed, or steal opportunity
+                // Check if currently committed to a steal attempt
+                let steal_committed = ai_state.current_goal == AiGoal::AttemptSteal
+                    && ai_state.steal_commit_timer > 0.0;
+
+                if steal_committed {
+                    // Stay in AttemptSteal until commitment expires
+                    AiGoal::AttemptSteal
+                } else if !is_defensive_goal || time_since_switch > 0.4 {
                     ideal_defense
                 } else {
                     // Keep current goal to prevent oscillation
@@ -580,6 +632,11 @@ pub fn ai_decision_update(
             // Reset jump shot state when goal changes
             ai_state.jump_shot_active = false;
             ai_state.jump_shot_timer = 0.0;
+            // Start steal commitment timer when entering AttemptSteal
+            if new_goal == AiGoal::AttemptSteal {
+                ai_state.steal_commit_timer = 0.5; // Commit for 0.5s
+                nav_state.clear(); // Use simple horizontal chase, not navigation
+            }
             if new_goal == AiGoal::ChargeShot {
                 let mut rng = rand::thread_rng();
                 ai_state.shot_charge_target = rng.gen_range(profile.charge_min..profile.charge_max);
@@ -743,66 +800,85 @@ pub fn ai_decision_update(
                             input.move_x = dx.signum();
                         }
 
-                        // Check if in steal range and update reaction timer
-                        // Use profile's steal_range, not global constant
-                        let distance = ai_pos.distance(opp_pos);
-                        let in_steal_range = distance < profile.steal_range;
-
-                        if in_steal_range {
-                            // Reset timer if just entered range
-                            if !ai_state.was_in_steal_range {
-                                ai_state.steal_reaction_timer = 0.0;
-                            }
-                            // Increment timer
-                            ai_state.steal_reaction_timer += dt;
-
-                            // Only attempt steal after reaction delay AND button cooldown
-                            if ai_state.steal_reaction_timer >= profile.steal_reaction_time
-                                && ai_state.button_press_cooldown <= 0.0
-                            {
-                                input.pickup_pressed = true;
-                                // Convert presses/sec to interval
-                                ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
-                            }
-                        } else {
-                            ai_state.steal_reaction_timer = 0.0;
+                        // Attempt steal if timer met and cooldown ready
+                        // (steal proximity tracking is centralized before goal decision)
+                        if ai_state.steal_reaction_timer >= profile.steal_reaction_time
+                            && ai_state.button_press_cooldown <= 0.0
+                            && ai_state.was_in_steal_range
+                        {
+                            input.pickup_pressed = true;
+                            ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
                         }
-                        ai_state.was_in_steal_range = in_steal_range;
                     }
-
                     input.throw_held = false;
                 }
 
                 AiGoal::InterceptDefense => {
-                    // Navigate to intercept position on shot line
-                    // If opponent is elevated, prioritize matching their height
-                    let target_pos = if let Some(opp_pos) = opponent_pos {
+                    // When at same height level as opponent, chase them directly
+                    // rather than targeting a static intercept point
+                    if let Some(opp_pos) = opponent_pos {
                         let height_diff = opp_pos.y - ai_pos.y;
-                        if height_diff > PLAYER_SIZE.y {
-                            // Opponent elevated - aim for their Y level
-                            Vec2::new(intercept_pos.x, opp_pos.y)
+                        let same_height_level = height_diff.abs() < PLAYER_SIZE.y * 1.5;
+
+                        // Check if opponent is significantly elevated (needs climbing)
+                        let floor_y = ARENA_FLOOR_Y + PLAYER_SIZE.y;
+                        let ai_near_floor = ai_pos.y < floor_y + PLAYER_SIZE.y;
+                        let opponent_highly_elevated = height_diff > NAV_MAX_JUMP_HEIGHT * 0.5;
+
+                        if same_height_level {
+                            // Same platform level - chase opponent directly
+                            // Use tight tolerance to get within steal range for pressure
+                            let chase_tolerance = profile.steal_range * 0.3; // ~38px - closer than steal range
+                            let dx = opp_pos.x - ai_pos.x;
+                            if dx.abs() > chase_tolerance {
+                                input.move_x = dx.signum();
+                            }
+                        } else if ai_near_floor && opponent_highly_elevated {
+                            // Opponent is high above and we're at ground level
+                            // Move toward the ramp on the OPPONENT'S side to climb and intercept
+                            let arena_edge = ARENA_WIDTH / 2.0 - WALL_THICKNESS - 100.0;
+                            let ramp_target_x = if opp_pos.x > 0.0 {
+                                arena_edge // Opponent on right side, use right ramp
+                            } else {
+                                -arena_edge // Opponent on left side, use left ramp
+                            };
+
+                            let dx = ramp_target_x - ai_pos.x;
+                            if dx.abs() > profile.position_tolerance {
+                                input.move_x = dx.signum();
+                            }
+
+                            // Jump continuously when on the ramp area to climb steps
+                            let on_ramp_area = ai_pos.x.abs() > ARENA_WIDTH / 2.0 - WALL_THICKNESS - 300.0;
+                            if on_ramp_area && grounded.0 {
+                                input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                                input.jump_held = true;
+                            }
                         } else {
-                            intercept_pos
+                            // Different height but not extreme - chase opponent directly
+                            // to close horizontal distance, then jump to reach them
+                            let dx = opp_pos.x - ai_pos.x;
+                            if dx.abs() > profile.position_tolerance {
+                                input.move_x = dx.signum();
+                            }
+
+                            // Jump when opponent is above and we're close horizontally
+                            if height_diff > PLAYER_SIZE.y * 0.5 && grounded.0 {
+                                input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                                input.jump_held = true;
+                            }
+                        }
+
+                        // Hold jump while airborne if still need to gain height
+                        if !grounded.0 && height_diff > PLAYER_SIZE.y {
+                            input.jump_held = true;
                         }
                     } else {
-                        intercept_pos
-                    };
-
-                    let dx = target_pos.x - ai_pos.x;
-                    if dx.abs() > profile.position_tolerance {
-                        input.move_x = dx.signum();
-                    }
-
-                    // Jump up to platform if needed - be more aggressive when opponent elevated
-                    let dy = target_pos.y - ai_pos.y;
-                    if dy > PLAYER_SIZE.y * 0.5 && grounded.0 {
-                        input.jump_buffer_timer = JUMP_BUFFER_TIME;
-                        input.jump_held = true;
-                    }
-
-                    // If we're airborne and need to go higher, keep holding jump
-                    if !grounded.0 && dy > PLAYER_SIZE.y {
-                        input.jump_held = true;
+                        // No opponent visible - use intercept position
+                        let dx = intercept_pos.x - ai_pos.x;
+                        if dx.abs() > profile.position_tolerance {
+                            input.move_x = dx.signum();
+                        }
                     }
 
                     input.pickup_pressed = false;
@@ -830,32 +906,16 @@ pub fn ai_decision_update(
                             input.jump_held = true;
                         }
 
-                        // Check if in steal range and update reaction timer
-                        // Use profile's steal_range (with 1.2x for pressure defense)
-                        let distance = ai_pos.distance(opp_pos);
-                        let in_steal_range = distance < profile.steal_range * 1.2;
-
-                        if in_steal_range {
-                            // Reset timer if just entered range
-                            if !ai_state.was_in_steal_range {
-                                ai_state.steal_reaction_timer = 0.0;
-                            }
-                            // Increment timer
-                            ai_state.steal_reaction_timer += dt;
-
-                            // Only attempt steal after reaction delay AND button cooldown
-                            if ai_state.steal_reaction_timer >= profile.steal_reaction_time
-                                && ai_state.button_press_cooldown <= 0.0
-                            {
-                                input.pickup_pressed = true;
-                                ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
-                            }
-                        } else {
-                            ai_state.steal_reaction_timer = 0.0;
+                        // Attempt steal if timer met and cooldown ready
+                        // (steal proximity tracking is centralized before goal decision)
+                        if ai_state.steal_reaction_timer >= profile.steal_reaction_time
+                            && ai_state.button_press_cooldown <= 0.0
+                            && ai_state.was_in_steal_range
+                        {
+                            input.pickup_pressed = true;
+                            ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
                         }
-                        ai_state.was_in_steal_range = in_steal_range;
                     }
-
                     input.throw_held = false;
                 }
             }
@@ -889,33 +949,58 @@ pub fn ai_decision_update(
             ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
         }
 
-        // Stuck detection: if AI is trying to move but position doesn't change, try to unstick
-        let stuck_threshold = 5.0; // Distance that counts as "not stuck"
-        let position_changed = ai_state
-            .last_position
-            .map(|last| ai_pos.distance(last) > stuck_threshold)
-            .unwrap_or(true);
+        // Stuck detection: track cumulative movement over a time window
+        // This catches cases where micro-jitter prevents frame-to-frame detection
+        let stuck_window_duration = 0.3; // Check movement over 300ms window
+        let stuck_distance_threshold = 15.0; // Must move at least 15px in window to not be stuck
 
-        if input.move_x.abs() > 0.1 && !position_changed && grounded.0 {
-            // AI is trying to move but stuck
-            ai_state.stuck_timer += dt;
+        // Update stuck window tracking
+        if input.move_x.abs() > 0.1 && grounded.0 {
+            // AI is trying to move - track window
+            if ai_state.stuck_window_start.is_none() {
+                // Start new window
+                ai_state.stuck_window_start = Some(ai_pos);
+                ai_state.stuck_window_timer = 0.0;
+            }
 
-            // After being stuck for a bit, try to jump to get unstuck
-            if ai_state.stuck_timer > 0.5 {
-                input.jump_buffer_timer = JUMP_BUFFER_TIME;
-                input.jump_held = true;
-                // Also try moving the opposite direction briefly
-                if ai_state.stuck_timer > 1.0 {
-                    input.move_x = -input.move_x;
-                    ai_state.stuck_timer = 0.0; // Reset after trying opposite direction
+            ai_state.stuck_window_timer += dt;
+
+            // Check if window has elapsed
+            if ai_state.stuck_window_timer >= stuck_window_duration {
+                let start_pos = ai_state.stuck_window_start.unwrap_or(ai_pos);
+                let distance_moved = ai_pos.distance(start_pos);
+
+                if distance_moved < stuck_distance_threshold {
+                    // Stuck! Increment stuck timer
+                    ai_state.stuck_timer += stuck_window_duration;
+
+                    // After being stuck for a bit, try to jump to get unstuck
+                    if ai_state.stuck_timer > 0.3 {
+                        input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                        input.jump_held = true;
+                    }
+                    // After more time, try moving the opposite direction
+                    if ai_state.stuck_timer > 0.8 {
+                        input.move_x = -input.move_x;
+                        ai_state.stuck_timer = 0.0; // Reset after trying opposite direction
+                    }
+                } else {
+                    // Not stuck, reset
+                    ai_state.stuck_timer = 0.0;
                 }
+
+                // Reset window for next check
+                ai_state.stuck_window_start = Some(ai_pos);
+                ai_state.stuck_window_timer = 0.0;
             }
         } else {
-            // Not stuck, reset timer
+            // Not trying to move or airborne - reset stuck tracking
             ai_state.stuck_timer = 0.0;
+            ai_state.stuck_window_start = None;
+            ai_state.stuck_window_timer = 0.0;
         }
 
-        // Update last position for next frame's stuck detection
+        // Update last position (kept for compatibility)
         ai_state.last_position = Some(ai_pos);
 
         // Decay jump buffer timer

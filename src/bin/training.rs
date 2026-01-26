@@ -22,8 +22,9 @@ use ballgame::events::{
     emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventEmitterState,
 };
 use ballgame::training::{
-    LevelSelector, TrainingMode, TrainingPhase, TrainingSettings, TrainingState, ensure_session_dir,
-    evlog_path_for_game, print_session_summary, write_session_summary,
+    LevelSelector, TrainingMode, TrainingPhase, TrainingSettings, TrainingState, analyze_session,
+    ensure_session_dir, evlog_path_for_game, generate_claude_prompt, print_session_summary,
+    write_analysis_files, write_session_summary,
 };
 use bevy::{camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
@@ -794,87 +795,66 @@ fn training_state_machine(
         TrainingPhase::GameEnded => {
             training_state.transition_timer += time.delta_secs();
 
-            // Wait 2 seconds before prompting for notes
+            // Wait 2 seconds before moving to next phase
             if training_state.transition_timer > 2.0 {
-                training_state.phase = TrainingPhase::AwaitingNotes;
-            }
-        }
+                training_state.transition_timer = 0.0;
+                if training_state.game_number >= training_state.games_total {
+                    training_state.phase = TrainingPhase::SessionComplete;
+                } else {
+                    // Pick new random level
+                    // Filter out debug levels and Pit (too hard for training)
+                    let training_levels: Vec<u32> = (0..level_db.len())
+                        .filter(|&i| {
+                            let level = level_db.get(i);
+                            let is_debug = level.map(|l| l.debug).unwrap_or(true);
+                            let is_pit =
+                                level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
+                            !is_debug && !is_pit
+                        })
+                        .map(|i| (i + 1) as u32)
+                        .collect();
 
-        TrainingPhase::AwaitingNotes => {
-            // Prompt for notes (blocking stdin read)
-            println!(
-                "\nEnter notes for Game {} (or press Enter to skip):",
-                training_state.game_number
-            );
-
-            let mut input = String::new();
-            if std::io::stdin().read_line(&mut input).is_ok() {
-                let notes = input.trim();
-                if !notes.is_empty() {
-                    // Store notes in last game result
-                    if let Some(last_result) = training_state.game_results.last_mut() {
-                        last_result.notes = Some(notes.to_string());
+                    if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
+                        training_state.current_level = level;
+                        training_state.current_level_name = level_db
+                            .get((level - 1) as usize)
+                            .map(|l| l.name.clone())
+                            .unwrap_or_else(|| format!("Level {}", level));
+                        current_level.0 = level;
                     }
+
+                    training_state.next_game();
+
+                    // Reset score and steal tracker for new game
+                    score.left = 0;
+                    score.right = 0;
+                    steal_tracker.reset();
+
+                    // Start countdown for new game
+                    countdown.start();
+
+                    // Reset event buffer for new game
+                    *event_buffer = TrainingEventBuffer::default();
+                    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+                    event_buffer.buffer.start_session(&timestamp);
+                    event_buffer.buffer.log(
+                        0.0,
+                        GameEvent::MatchStart {
+                            level: training_state.current_level,
+                            level_name: training_state.current_level_name.clone(),
+                            left_profile: "Player".to_string(),
+                            right_profile: training_state.ai_profile.clone(),
+                            seed: rand::random(),
+                        },
+                    );
+
+                    println!(
+                        "\nStarting Game {}/{} on {}",
+                        training_state.game_number,
+                        training_state.games_total,
+                        training_state.current_level_name
+                    );
                 }
-            }
-
-            // Move to next phase
-            training_state.transition_timer = 0.0;
-            if training_state.game_number >= training_state.games_total {
-                training_state.phase = TrainingPhase::SessionComplete;
-            } else {
-                // Pick new random level
-                // Filter out debug levels and Pit (too hard for training)
-                let training_levels: Vec<u32> = (0..level_db.len())
-                    .filter(|&i| {
-                        let level = level_db.get(i);
-                        let is_debug = level.map(|l| l.debug).unwrap_or(true);
-                        let is_pit = level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
-                        !is_debug && !is_pit
-                    })
-                    .map(|i| (i + 1) as u32)
-                    .collect();
-
-                if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
-                    training_state.current_level = level;
-                    training_state.current_level_name = level_db
-                        .get((level - 1) as usize)
-                        .map(|l| l.name.clone())
-                        .unwrap_or_else(|| format!("Level {}", level));
-                    current_level.0 = level;
-                }
-
-                training_state.next_game();
-
-                // Reset score and steal tracker for new game
-                score.left = 0;
-                score.right = 0;
-                steal_tracker.reset();
-
-                // Start countdown for new game
-                countdown.start();
-
-                // Reset event buffer for new game
-                *event_buffer = TrainingEventBuffer::default();
-                let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
-                event_buffer.buffer.start_session(&timestamp);
-                event_buffer.buffer.log(
-                    0.0,
-                    GameEvent::MatchStart {
-                        level: training_state.current_level,
-                        level_name: training_state.current_level_name.clone(),
-                        left_profile: "Player".to_string(),
-                        right_profile: training_state.ai_profile.clone(),
-                        seed: rand::random(),
-                    },
-                );
-
-                println!(
-                    "\nStarting Game {}/{} on {}",
-                    training_state.game_number,
-                    training_state.games_total,
-                    training_state.current_level_name
-                );
             }
         }
 
@@ -889,6 +869,18 @@ fn training_state_machine(
                 eprintln!("Failed to write session summary: {}", e);
             }
             print_session_summary(&training_state);
+
+            // Run automated analysis
+            println!("\nAnalyzing training session...");
+            let analysis = analyze_session(&training_state.session_dir, &training_state.game_results);
+
+            if let Err(e) = write_analysis_files(&training_state.session_dir, &analysis) {
+                eprintln!("Failed to write analysis: {}", e);
+            } else {
+                // Print prompt to terminal
+                let prompt = generate_claude_prompt(&training_state.session_dir, &analysis);
+                println!("\n{}", prompt);
+            }
 
             app_exit.write(AppExit::Success);
         }

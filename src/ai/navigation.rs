@@ -287,49 +287,49 @@ impl NavGraph {
         basket_pos: Vec2,
         min_height: f32,
     ) -> Option<usize> {
-        // Direction from opponent to basket determines which side we want to be on
-        let intercept_x = if basket_pos.x < opponent_pos.x {
-            // Basket is to the left - we want to be between opponent and basket (left of opponent)
-            opponent_pos.x - 100.0
-        } else {
-            // Basket is to the right - we want to be right of opponent
-            opponent_pos.x + 100.0
-        };
+        // Determine which side we want to defend from
+        let defend_left = basket_pos.x < opponent_pos.x;
+        let mut best_node = None;
+        let mut best_score = f32::MAX;
 
-        // Find platforms at or above opponent height
-        let mut candidates: Vec<(usize, f32)> = self
-            .nodes
-            .iter()
-            .enumerate()
-            .filter_map(|(i, node)| {
-                // Skip floor - we want elevated positions
-                if node.is_floor {
-                    return None;
-                }
+        for (idx, node) in self.nodes.iter().enumerate() {
+            // Skip floor - we want elevated positions
+            if node.is_floor {
+                continue;
+            }
 
-                // Platform must be at or above min_height (opponent's position minus some tolerance)
-                if node.top_y < min_height - PLAYER_SIZE.y {
-                    return None;
-                }
+            // Platform must be at or above min_height (opponent's position minus some tolerance)
+            if node.top_y < min_height - PLAYER_SIZE.y {
+                continue;
+            }
 
-                // Calculate how good this platform is for interception
-                // Prefer platforms that are:
-                // 1. Close to the intercept X position
-                // 2. At similar height to opponent (not too high above)
-                let x_dist = (node.center.x - intercept_x).abs();
-                let height_above = (node.top_y - opponent_pos.y).max(0.0);
+            // Check if platform is on the correct side (between opponent and basket)
+            let on_correct_side = if defend_left {
+                node.center.x < opponent_pos.x
+            } else {
+                node.center.x > opponent_pos.x
+            };
 
-                // Score: lower is better
-                let score = x_dist + height_above * 0.5;
+            let x_dist = (node.center.x - opponent_pos.x).abs();
+            let height_diff = (node.top_y - opponent_pos.y).abs();
 
-                Some((i, score))
-            })
-            .collect();
+            // Scoring: prefer correct side, moderate distance, similar height
+            // Large penalty for being on wrong side
+            let side_penalty = if on_correct_side { 0.0 } else { 500.0 };
+            // Penalize being too close (< 50px) to avoid clustering
+            let dist_penalty = if x_dist < 50.0 { 100.0 } else { x_dist };
+            // Prefer similar height to opponent
+            let height_penalty = height_diff * 0.5;
 
-        // Sort by score (lower is better)
-        candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+            let score = side_penalty + dist_penalty + height_penalty;
 
-        candidates.first().map(|(i, _)| *i)
+            if score < best_score {
+                best_score = score;
+                best_node = Some(idx);
+            }
+        }
+
+        best_node
     }
 
     /// Find the floor node (main arena floor).

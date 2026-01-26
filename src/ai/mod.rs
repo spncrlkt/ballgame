@@ -58,8 +58,14 @@ pub struct AiState {
     pub was_in_steal_range: bool,
     /// Cooldown timer for button presses (simulates human mashing speed)
     pub button_press_cooldown: f32,
+    /// Commitment timer for steal attempts - prevents premature exit from AttemptSteal
+    pub steal_commit_timer: f32,
     /// Time in seconds the AI has been holding the ball (for desperation shots)
     pub ball_hold_time: f32,
+    /// Position at start of stuck detection window (for cumulative movement check)
+    pub stuck_window_start: Option<bevy::prelude::Vec2>,
+    /// Timer for stuck detection window (resets when movement detected)
+    pub stuck_window_timer: f32,
 }
 
 /// Goals the AI can pursue

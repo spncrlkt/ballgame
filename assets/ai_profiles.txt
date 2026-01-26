@@ -1,5 +1,9 @@
 # AI Profiles - Evolution v4 (59 profiles)
 #
+# DEPRECATION POLICY: Never remove profiles from this file.
+# Mark deprecated profiles with "# DEPRECATED" comment instead.
+# This preserves historical data for tournament analysis.
+#
 # Lineage:
 #   v1 = Original 5 profiles
 #   v2 = Top 4 from 25-profile tournament
@@ -12,6 +16,26 @@
 #   - Sniper/high-quality builds consistently fail
 #   - Mathematical interpolation between winners works well
 #   - Rush lineage dominates - lean into it
+
+# =============================================================================
+# DEFAULT PROFILE (first profile = fallback when profile not found)
+# =============================================================================
+
+profile: v4_Pat_50
+position_tolerance: 25
+shoot_range: 555
+charge_min: 0.29
+charge_max: 0.70
+steal_range: 128
+defense_offset: 245
+min_shot_quality: 0.27
+pressure_distance: 82
+aggression: 0.86
+defensive_iq: 0.56
+steal_reaction_time: 0.12
+button_presses_per_sec: 13
+position_patience: 0.50
+seek_threshold: 0.14
 
 # =============================================================================
 # HISTORICAL CHAMPIONS (preserved for comparison)
@@ -737,21 +761,7 @@ button_presses_per_sec: 13
 position_patience: 0.45
 seek_threshold: 0.15
 
-profile: v4_Pat_50
-position_tolerance: 25
-shoot_range: 555
-charge_min: 0.29
-charge_max: 0.70
-steal_range: 128
-defense_offset: 245
-min_shot_quality: 0.27
-pressure_distance: 82
-aggression: 0.86
-defensive_iq: 0.56
-steal_reaction_time: 0.12
-button_presses_per_sec: 13
-position_patience: 0.50
-seek_threshold: 0.14
+# v4_Pat_50 moved to top of file as default profile
 
 profile: v4_Pat_55
 position_tolerance: 26

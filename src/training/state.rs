@@ -17,8 +17,6 @@ pub enum TrainingPhase {
     Paused,
     /// Game ended, recording result
     GameEnded,
-    /// Awaiting player notes input
-    AwaitingNotes,
     /// Transitioning to next game
     StartingNext,
     /// All games complete, showing summary

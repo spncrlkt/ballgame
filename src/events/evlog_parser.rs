@@ -230,6 +230,8 @@ pub struct ParsedEvlog {
     pub steal_failures: Vec<StealFailData>,
     /// AI goal change events
     pub ai_goals: Vec<AiGoalData>,
+    /// Input state snapshots (sorted by time)
+    pub inputs: Vec<InputData>,
     /// Maximum observed timestamp (milliseconds)
     pub max_time_ms: u32,
 }
@@ -280,6 +282,11 @@ impl ParsedEvlog {
     /// Count pickups for a player
     pub fn pickups_for(&self, player: PlayerId) -> usize {
         self.pickups.iter().filter(|p| p.player == player).count()
+    }
+
+    /// Get inputs for a specific player (sorted by time)
+    pub fn inputs_for(&self, player: PlayerId) -> impl Iterator<Item = &InputData> {
+        self.inputs.iter().filter(move |i| i.player == player)
     }
 
     // --- Replay helpers ---
@@ -513,6 +520,22 @@ pub fn parse_evlog_content(content: &str) -> ParsedEvlog {
                         event: event.clone(),
                     });
                 }
+                GameEvent::Input {
+                    player,
+                    move_x,
+                    jump,
+                    throw,
+                    pickup,
+                } => {
+                    parsed.inputs.push(InputData {
+                        time_ms,
+                        player: *player,
+                        move_x: *move_x,
+                        jump: *jump,
+                        throw: *throw,
+                        pickup: *pickup,
+                    });
+                }
                 _ => {
                     // Ignore Config and other events
                 }
@@ -520,9 +543,10 @@ pub fn parse_evlog_content(content: &str) -> ParsedEvlog {
         }
     }
 
-    // Sort ticks and events by time (should already be sorted, but ensure)
+    // Sort ticks, events, and inputs by time (should already be sorted, but ensure)
     parsed.ticks.sort_by_key(|t| t.time_ms);
     parsed.raw_events.sort_by_key(|e| e.time_ms);
+    parsed.inputs.sort_by_key(|i| i.time_ms);
 
     parsed
 }
