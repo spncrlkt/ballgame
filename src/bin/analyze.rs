@@ -1,18 +1,18 @@
 //! Analytics Tool - Analyze simulation results and generate reports
 //!
-//! Parses event logs from simulation runs, computes aggregate metrics,
+//! Reads SQLite event logs from simulation runs, computes aggregate metrics,
 //! generates profile leaderboards, and suggests parameter changes.
 //!
 //! Usage:
-//!   cargo run --bin analyze -- logs/
-//!   cargo run --bin analyze -- logs/ --targets assets/tuning_targets.toml
-//!   cargo run --bin analyze -- logs/ --update-defaults
+//!   cargo run --bin analyze -- training.db
+//!   cargo run --bin analyze -- training.db --targets assets/tuning_targets.toml
+//!   cargo run --bin analyze -- training.db --update-defaults
 
 use std::path::PathBuf;
 
 use ballgame::analytics::{
     AggregateMetrics, Leaderboard, generate_suggestions, format_update_report,
-    load_targets, default_targets, update_default_profiles, parse_all_logs,
+    load_targets, default_targets, update_default_profiles, parse_all_matches_from_db,
     format_suggestions, TuningTargets, ParameterSuggestion,
 };
 
@@ -24,14 +24,14 @@ fn main() {
         return;
     }
 
-    // Parse all event logs
-    println!("Parsing event logs from {}...", config.log_dir.display());
-    let matches = parse_all_logs(&config.log_dir);
+    // Parse all event logs from SQLite
+    println!("Parsing SQLite events from {}...", config.db_path.display());
+    let matches = parse_all_matches_from_db(&config.db_path);
 
     if matches.is_empty() {
-        println!("No valid event logs found in {}", config.log_dir.display());
-        println!("\nTo generate logs, run simulations with --log-events:");
-        println!("  cargo run --bin simulate -- --tournament 5 --log-events --log-dir logs/");
+        println!("No valid matches found in {}", config.db_path.display());
+        println!("\nTo generate logs, run simulations with --db:");
+        println!("  cargo run --bin simulate -- --tournament 5 --db training.db");
         return;
     }
 
@@ -100,7 +100,7 @@ fn main() {
 
 /// Configuration for the analyze tool
 struct AnalyzeConfig {
-    log_dir: PathBuf,
+    db_path: PathBuf,
     targets_file: Option<PathBuf>,
     output_file: Option<PathBuf>,
     update_defaults: bool,
@@ -110,7 +110,7 @@ struct AnalyzeConfig {
 impl Default for AnalyzeConfig {
     fn default() -> Self {
         Self {
-            log_dir: PathBuf::from("logs"),
+            db_path: PathBuf::from("training.db"),
             targets_file: None,
             output_file: None,
             update_defaults: false,
@@ -146,8 +146,8 @@ impl AnalyzeConfig {
                     config.show_help = true;
                 }
                 arg if !arg.starts_with('-') => {
-                    // Positional argument: log directory
-                    config.log_dir = PathBuf::from(arg);
+                    // Positional argument: db path
+                    config.db_path = PathBuf::from(arg);
                 }
                 _ => {}
             }
@@ -166,7 +166,7 @@ USAGE:
     cargo run --bin analyze -- [LOG_DIR] [OPTIONS]
 
 ARGUMENTS:
-    LOG_DIR             Directory containing .evlog files (default: logs/)
+    DB_PATH             SQLite database path (default: training.db)
 
 OPTIONS:
     --targets <FILE>    Load tuning targets from TOML file
@@ -176,13 +176,13 @@ OPTIONS:
 
 EXAMPLES:
     # Analyze logs with default targets
-    cargo run --bin analyze -- logs/
+    cargo run --bin analyze -- training.db
 
     # Use custom tuning targets
-    cargo run --bin analyze -- logs/ --targets assets/tuning_targets.toml
+    cargo run --bin analyze -- training.db --targets assets/tuning_targets.toml
 
     # Update default profiles based on leaderboard
-    cargo run --bin analyze -- logs/ --update-defaults
+    cargo run --bin analyze -- training.db --update-defaults
 
 TARGETS FILE FORMAT (TOML):
     [targets]

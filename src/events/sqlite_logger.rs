@@ -1,6 +1,6 @@
 //! SQLite Event Logger - central hub for event storage
 //!
-//! All game events flow through this logger to SQLite, replacing file-based evlogs.
+//! All game events flow through this logger to SQLite.
 //! This enables SQL-based analysis without file parsing.
 
 use bevy::prelude::*;
@@ -23,6 +23,8 @@ pub struct SqliteEventLogger {
     conn: Mutex<Connection>,
     session_id: String,
     current_match_id: Mutex<Option<i64>>,
+    current_point_id: Mutex<Option<i64>>,
+    current_point_index: Mutex<u32>,
     /// Whether logging is enabled
     enabled: bool,
 }
@@ -53,6 +55,8 @@ impl SqliteEventLogger {
             conn: Mutex::new(conn),
             session_id,
             current_match_id: Mutex::new(None),
+            current_point_id: Mutex::new(None),
+            current_point_index: Mutex::new(0),
             enabled: true,
         })
     }
@@ -65,6 +69,8 @@ impl SqliteEventLogger {
             conn: Mutex::new(conn),
             session_id: String::new(),
             current_match_id: Mutex::new(None),
+            current_point_id: Mutex::new(None),
+            current_point_index: Mutex::new(0),
             enabled: false,
         }
     }
@@ -90,15 +96,17 @@ impl SqliteEventLogger {
         }
 
         let conn = self.conn.lock().ok()?;
+        let display_name = short_uuid();
 
         // Insert match with placeholder score/duration (will be updated at end)
         let result = conn.execute(
             r#"INSERT INTO matches
-               (session_id, seed, level, level_name, left_profile, right_profile,
+               (session_id, display_name, seed, level, level_name, left_profile, right_profile,
                 score_left, score_right, duration_secs, winner)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, 0.0, '')"#,
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 0, 0.0, '')"#,
             params![
                 self.session_id,
+                display_name,
                 seed as i64,
                 level,
                 level_name,
@@ -111,6 +119,10 @@ impl SqliteEventLogger {
             Ok(_) => {
                 let match_id = conn.last_insert_rowid();
                 *self.current_match_id.lock().ok()? = Some(match_id);
+                if let Some(point_id) = insert_point(&conn, match_id, 1, 0).ok() {
+                    *self.current_point_id.lock().ok()? = Some(point_id);
+                    *self.current_point_index.lock().ok()? = 1;
+                }
                 info!("Started match {} (level: {}, profiles: {} vs {})",
                     match_id, level_name, left_profile, right_profile);
                 Some(match_id)
@@ -135,6 +147,7 @@ impl SqliteEventLogger {
             },
             Err(_) => return,
         };
+        let point_id = self.current_point_id.lock().ok().and_then(|g| *g);
 
         let conn = match self.conn.lock() {
             Ok(c) => c,
@@ -146,10 +159,17 @@ impl SqliteEventLogger {
         let event_type = event.type_code();
 
         if let Err(e) = conn.execute(
-            "INSERT INTO events (match_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4)",
-            params![match_id, time_ms, event_type, data],
+            "INSERT INTO events (match_id, point_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![match_id, point_id, time_ms, event_type, data],
         ) {
             warn!("Failed to log event: {}", e);
+            return;
+        }
+
+        if let GameEvent::Goal { player, .. } = event {
+            if let Err(e) = end_point_for_goal(&conn, self, match_id, time_ms, *player) {
+                warn!("Failed to finalize point on goal: {}", e);
+            }
         }
     }
 
@@ -165,6 +185,10 @@ impl SqliteEventLogger {
                 None => return,
             },
             Err(_) => return,
+        };
+        let mut point_id = match self.current_point_id.lock() {
+            Ok(guard) => *guard,
+            Err(_) => None,
         };
 
         let conn = match self.conn.lock() {
@@ -182,11 +206,20 @@ impl SqliteEventLogger {
             let event_type = event.type_code();
 
             if conn.execute(
-                "INSERT INTO events (match_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4)",
-                params![match_id, time_ms, event_type, data],
+                "INSERT INTO events (match_id, point_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![match_id, point_id, time_ms, event_type, data],
             ).is_err() {
                 let _ = conn.execute("ROLLBACK", []);
                 return;
+            }
+
+            if let GameEvent::Goal { player, .. } = event {
+                if let Err(e) = end_point_for_goal(&conn, self, match_id, *time_ms, *player) {
+                    warn!("Failed to finalize point on goal: {}", e);
+                    let _ = conn.execute("ROLLBACK", []);
+                    return;
+                }
+                point_id = self.current_point_id.lock().ok().and_then(|g| *g);
             }
         }
 
@@ -232,9 +265,22 @@ impl SqliteEventLogger {
                 match_id, score_left, score_right, duration_secs);
         }
 
+        if let Some(point_id) = self.current_point_id.lock().ok().and_then(|g| *g) {
+            let end_time_ms = (duration_secs * 1000.0).round() as u32;
+            if let Err(e) = end_point(&conn, point_id, end_time_ms, "none") {
+                warn!("Failed to end final point: {}", e);
+            }
+        }
+
         // Clear current match
         if let Ok(mut guard) = self.current_match_id.lock() {
             *guard = None;
+        }
+        if let Ok(mut guard) = self.current_point_id.lock() {
+            *guard = None;
+        }
+        if let Ok(mut guard) = self.current_point_index.lock() {
+            *guard = 0;
         }
     }
 
@@ -278,12 +324,14 @@ fn init_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
             id TEXT PRIMARY KEY,
             created_at TEXT NOT NULL,
             session_type TEXT NOT NULL,
-            config_json TEXT
+            config_json TEXT,
+            display_name TEXT
         );
 
         CREATE TABLE IF NOT EXISTS matches (
             id INTEGER PRIMARY KEY,
             session_id TEXT REFERENCES sessions(id),
+            display_name TEXT,
             seed INTEGER NOT NULL,
             level INTEGER NOT NULL,
             level_name TEXT NOT NULL,
@@ -293,6 +341,15 @@ fn init_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
             score_right INTEGER NOT NULL,
             duration_secs REAL NOT NULL,
             winner TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS points (
+            id INTEGER PRIMARY KEY,
+            match_id INTEGER REFERENCES matches(id),
+            point_index INTEGER NOT NULL,
+            start_time_ms INTEGER NOT NULL,
+            end_time_ms INTEGER,
+            winner TEXT
         );
 
         CREATE TABLE IF NOT EXISTS player_stats (
@@ -323,6 +380,7 @@ fn init_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY,
             match_id INTEGER REFERENCES matches(id),
+            point_id INTEGER REFERENCES points(id),
             time_ms INTEGER NOT NULL,
             event_type TEXT NOT NULL,
             data TEXT NOT NULL,
@@ -330,24 +388,81 @@ fn init_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         );
 
         CREATE INDEX IF NOT EXISTS idx_events_match ON events(match_id);
+        CREATE INDEX IF NOT EXISTS idx_events_point ON events(point_id);
         CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
         CREATE INDEX IF NOT EXISTS idx_events_time ON events(match_id, time_ms);
+        CREATE INDEX IF NOT EXISTS idx_points_match ON points(match_id);
         "#,
     )?;
+
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);
+    let _ = conn.execute("ALTER TABLE matches ADD COLUMN display_name TEXT", []);
+    let _ = conn.execute("ALTER TABLE events ADD COLUMN point_id INTEGER", []);
     Ok(())
 }
 
 /// Create a new session and return its ID
 fn create_session(conn: &Connection, session_type: &str) -> Result<String, rusqlite::Error> {
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = uuid::Uuid::new_v4();
+    let id_str = id.to_string();
+    let display_name = id.simple().to_string()[..16].to_string();
     let created_at = chrono::Utc::now().to_rfc3339();
 
     conn.execute(
-        "INSERT INTO sessions (id, created_at, session_type, config_json) VALUES (?1, ?2, ?3, ?4)",
-        params![id, created_at, session_type, Option::<String>::None],
+        "INSERT INTO sessions (id, created_at, session_type, config_json, display_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![id_str, created_at, session_type, Option::<String>::None, display_name],
     )?;
 
-    Ok(id)
+    Ok(id_str)
+}
+
+fn short_uuid() -> String {
+    let full = uuid::Uuid::new_v4().simple().to_string();
+    full[..16].to_string()
+}
+
+fn insert_point(conn: &Connection, match_id: i64, point_index: u32, start_time_ms: u32) -> Result<i64, rusqlite::Error> {
+    conn.execute(
+        r#"INSERT INTO points (match_id, point_index, start_time_ms, end_time_ms, winner)
+           VALUES (?1, ?2, ?3, NULL, NULL)"#,
+        params![match_id, point_index, start_time_ms],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+fn end_point(conn: &Connection, point_id: i64, end_time_ms: u32, winner: &str) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE points SET end_time_ms = ?1, winner = ?2 WHERE id = ?3",
+        params![end_time_ms, winner, point_id],
+    )?;
+    Ok(())
+}
+
+fn end_point_for_goal(
+    conn: &Connection,
+    logger: &SqliteEventLogger,
+    match_id: i64,
+    time_ms: u32,
+    player: super::types::PlayerId,
+) -> Result<(), rusqlite::Error> {
+    let winner = match player {
+        super::types::PlayerId::L => "left",
+        super::types::PlayerId::R => "right",
+    };
+    if let Some(point_id) = logger.current_point_id.lock().ok().and_then(|g| *g) {
+        end_point(conn, point_id, time_ms, winner)?;
+    }
+    let next_index = if let Ok(mut guard) = logger.current_point_index.lock() {
+        *guard += 1;
+        *guard
+    } else {
+        return Ok(());
+    };
+    let next_point_id = insert_point(conn, match_id, next_index, time_ms)?;
+    if let Ok(mut guard) = logger.current_point_id.lock() {
+        *guard = Some(next_point_id);
+    }
+    Ok(())
 }
 
 /// System to flush EventBus events to SQLite
@@ -387,6 +502,8 @@ mod tests {
             conn: Mutex::new(conn),
             session_id,
             current_match_id: Mutex::new(None),
+            current_point_id: Mutex::new(None),
+            current_point_index: Mutex::new(0),
             enabled: true,
         }
     }

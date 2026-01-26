@@ -22,14 +22,14 @@
 # =============================================================================
 
 profile: v4_Pat_50
-position_tolerance: 25
+position_tolerance: 15
 shoot_range: 555
 charge_min: 0.29
 charge_max: 0.70
-steal_range: 100
+steal_range: 130
 defense_offset: 245
 min_shot_quality: 0.20
-pressure_distance: 120
+pressure_distance: 170
 aggression: 0.86
 defensive_iq: 0.56
 steal_reaction_time: 0.12

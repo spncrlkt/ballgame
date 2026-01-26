@@ -6,7 +6,7 @@
 
 ## Training Pipeline (P0-P2)
 
-- [ ] **Ghost segmentation** - How to detect "drive" boundaries in evlogs?
+- [ ] **Ghost segmentation** - How to detect "drive" boundaries in the event stream?
   - By goal events? By possession changes? By time windows?
 - [ ] **Defense success metric** - What counts as "AI stopped the play"?
   - Steal? Block? Shot miss? Any non-score outcome?

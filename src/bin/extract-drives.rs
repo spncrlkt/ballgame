@@ -1,15 +1,20 @@
 //! Drive Extractor
 //!
-//! Parses evlog files and extracts player input sequences as "drives" -
-//! sequences from possession start to goal or turnover.
+//! Extracts player input sequences as "drives" from SQLite event logs.
+//! A drive is a sequence from possession start to goal or turnover.
 //!
 //! Usage:
-//!   cargo run --bin extract-drives training_logs/session_20260125_000742/
-//!   cargo run --bin extract-drives training_logs/session_20260125_000742/ --output ghost_trials/
+//!   cargo run --bin extract-drives -- --db training.db --session <SESSION_ID>
+//!   cargo run --bin extract-drives -- --db training.db --match <MATCH_ID> --output ghost_trials/
 
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
+
+use rusqlite::params;
+
+use ballgame::events::{parse_event, GameEvent, PlayerId};
+use ballgame::simulation::SimDatabase;
 
 /// Input sample at a single tick
 #[derive(Debug, Clone)]
@@ -24,9 +29,9 @@ struct InputSample {
 /// A drive is a sequence of inputs from possession start to goal/turnover
 #[derive(Debug, Clone)]
 struct Drive {
-    /// Source file
+    /// Source identifier
     source_file: String,
-    /// Drive number within game
+    /// Drive number within match
     drive_num: u32,
     /// Level number
     level: u32,
@@ -65,55 +70,52 @@ impl std::fmt::Display for DriveEndReason {
     }
 }
 
-/// Parse a single evlog file and extract drives
-fn parse_evlog(path: &Path) -> Vec<Drive> {
-    let file = File::open(path).expect("Failed to open evlog");
-    let reader = BufReader::new(file);
+fn player_char(player: PlayerId) -> char {
+    match player {
+        PlayerId::L => 'L',
+        PlayerId::R => 'R',
+    }
+}
+
+/// Parse a single match from SQLite and extract drives
+fn parse_match_from_db(db: &SimDatabase, match_id: i64) -> Vec<Drive> {
+    let (mut level, mut level_name) = db
+        .conn()
+        .query_row(
+            "SELECT level, level_name FROM matches WHERE id = ?1",
+            params![match_id],
+            |row| Ok((row.get::<_, u32>(0)?, row.get::<_, String>(1)?)),
+        )
+        .unwrap_or((0, String::new()));
 
     let mut drives = Vec::new();
     let mut current_drive: Option<Drive> = None;
-    let mut level = 0u32;
-    let mut level_name = String::new();
     let mut current_possession: Option<char> = None;
     let mut drive_num = 0u32;
+    let source_file = format!("match_{}", match_id);
 
-    let source_file = path.file_name().unwrap().to_string_lossy().to_string();
+    let events = match db.get_events(match_id) {
+        Ok(events) => events,
+        Err(_) => return drives,
+    };
 
-    for line in reader.lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
-
-        let parts: Vec<&str> = line.split('|').collect();
-        if parts.len() < 2 {
-            continue;
-        }
-
-        // Parse tick from T:XXXXX format
-        let tick = if let Some(tick_str) = parts[0].strip_prefix("T:") {
-            tick_str.parse::<u32>().unwrap_or(0)
-        } else {
+    for event in events {
+        let Some((_ts, parsed)) = parse_event(&event.data) else {
             continue;
         };
+        let tick = event.time_ms;
 
-        let event_type = parts[1];
-
-        match event_type {
-            "MS" if parts.len() >= 4 => {
-                // Match Setup: T:00000|MS|level|name|...
-                level = parts[2].parse().unwrap_or(0);
-                level_name = parts[3].to_string();
+        match parsed {
+            GameEvent::MatchStart { level: lvl, level_name: name, .. } => {
+                level = lvl;
+                level_name = name;
             }
-            "PU" if parts.len() >= 3 => {
-                // Pickup: T:XXXXX|PU|player
-                let player = parts[2].chars().next().unwrap_or('?');
+            GameEvent::Pickup { player } => {
+                let player = player_char(player);
 
-                // If we have a current drive and possession changed, end it
                 if let Some(ref mut drive) = current_drive {
                     if let Some(prev_poss) = current_possession {
                         if prev_poss != player {
-                            // Turnover - end current drive
                             drive.end_tick = tick;
                             drive.end_reason = DriveEndReason::Turnover;
                             drives.push(drive.clone());
@@ -122,7 +124,6 @@ fn parse_evlog(path: &Path) -> Vec<Drive> {
                     }
                 }
 
-                // Start new drive if none active
                 if current_drive.is_none() {
                     drive_num += 1;
                     current_drive = Some(Drive {
@@ -142,22 +143,20 @@ fn parse_evlog(path: &Path) -> Vec<Drive> {
 
                 current_possession = Some(player);
             }
-            "S+" if parts.len() >= 3 => {
-                // Steal success: T:XXXXX|S+|player
-                // This causes a possession change, handled by the PU event that follows
-            }
-            "I" if parts.len() >= 5 => {
-                // Input: T:XXXXX|I|player|move_x|flags
-                let player = parts[2].chars().next().unwrap_or('?');
-                let move_x: f32 = parts[3].parse().unwrap_or(0.0);
-                let flags = parts[4];
-
+            GameEvent::Input {
+                player,
+                move_x,
+                jump,
+                throw,
+                pickup,
+            } => {
+                let player = player_char(player);
                 let sample = InputSample {
                     tick,
                     move_x,
-                    jump: flags.contains('J'),
-                    throw: flags.contains('T'),
-                    pickup: flags.contains('P'),
+                    jump,
+                    throw,
+                    pickup,
                 };
 
                 if let Some(ref mut drive) = current_drive {
@@ -168,10 +167,8 @@ fn parse_evlog(path: &Path) -> Vec<Drive> {
                     }
                 }
             }
-            "G" if parts.len() >= 4 => {
-                // Goal: T:XXXXX|G|scorer|score1|score2
-                let scorer = parts[2].chars().next().unwrap_or('?');
-
+            GameEvent::Goal { player, .. } => {
+                let scorer = player_char(player);
                 if let Some(ref mut drive) = current_drive {
                     drive.end_tick = tick;
                     drive.end_reason = DriveEndReason::Goal;
@@ -181,8 +178,7 @@ fn parse_evlog(path: &Path) -> Vec<Drive> {
                     current_possession = None;
                 }
             }
-            "ME" => {
-                // Match End: T:XXXXX|ME|score1|score2|duration
+            GameEvent::MatchEnd { .. } => {
                 if let Some(ref mut drive) = current_drive {
                     drive.end_tick = tick;
                     drive.end_reason = DriveEndReason::MatchEnd;
@@ -194,7 +190,6 @@ fn parse_evlog(path: &Path) -> Vec<Drive> {
         }
     }
 
-    // Handle any remaining drive
     if let Some(mut drive) = current_drive {
         drive.end_reason = DriveEndReason::MatchEnd;
         drives.push(drive);
@@ -211,7 +206,7 @@ const GHOST_START_DELAY_MS: u32 = 1000;
 fn write_ghost_trial(drive: &Drive, output_dir: &Path) -> std::io::Result<PathBuf> {
     let filename = format!(
         "trial_{}_drive{:02}_{}_L{}.ghost",
-        drive.source_file.replace(".evlog", ""),
+        drive.source_file,
         drive.drive_num,
         drive.level_name.to_lowercase().replace(' ', "_"),
         if drive.l_scored { "_scored" } else { "" }
@@ -220,10 +215,8 @@ fn write_ghost_trial(drive: &Drive, output_dir: &Path) -> std::io::Result<PathBu
     let path = output_dir.join(&filename);
     let mut file = File::create(&path)?;
 
-    // Effective start is 1 second after possession
     let effective_start = drive.start_tick + GHOST_START_DELAY_MS;
 
-    // Write header
     writeln!(file, "# Ghost Trial")?;
     writeln!(file, "# Source: {}", drive.source_file)?;
     writeln!(file, "# Drive: {}", drive.drive_num)?;
@@ -236,14 +229,11 @@ fn write_ghost_trial(drive: &Drive, output_dir: &Path) -> std::io::Result<PathBu
     writeln!(file, "# Format: tick|move_x|flags (J=jump T=throw P=pickup)")?;
     writeln!(file)?;
 
-    // Write level info
     writeln!(file, "level:{}", drive.level)?;
     writeln!(file, "level_name:{}", drive.level_name)?;
     writeln!(file)?;
 
-    // Write L's inputs (the human player), skipping first second
     for sample in &drive.l_inputs {
-        // Skip inputs before the delay period
         if sample.tick < effective_start {
             continue;
         }
@@ -262,7 +252,6 @@ fn write_ghost_trial(drive: &Drive, output_dir: &Path) -> std::io::Result<PathBu
             flags.push('-');
         }
 
-        // Normalize tick to start from 0 (after the delay)
         let rel_tick = sample.tick.saturating_sub(effective_start);
         writeln!(file, "{}|{:.2}|{}", rel_tick, sample.move_x, flags)?;
     }
@@ -274,37 +263,71 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
-        eprintln!("Usage: {} <session_dir> [--output <output_dir>]", args[0]);
+        eprintln!("Usage: {} --db <path> [--session <id> | --match <id>] [--output <dir>]", args[0]);
         eprintln!();
-        eprintln!("Extracts player input sequences from evlog files as ghost trials.");
-        eprintln!("Ghost trials end at turnovers or goals.");
+        eprintln!("Extracts player input sequences from SQLite events as ghost trials.");
         std::process::exit(1);
     }
 
-    let session_dir = PathBuf::from(&args[1]);
-    let output_dir = if args.len() >= 4 && args[2] == "--output" {
-        PathBuf::from(&args[3])
-    } else {
-        session_dir.join("ghost_trials")
-    };
+    let mut db_path = PathBuf::from("training.db");
+    let mut session_id: Option<String> = None;
+    let mut match_id: Option<i64> = None;
+    let mut output_dir: Option<PathBuf> = None;
 
-    // Create output directory
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--db" if i + 1 < args.len() => {
+                db_path = PathBuf::from(&args[i + 1]);
+                i += 2;
+            }
+            "--session" if i + 1 < args.len() => {
+                session_id = Some(args[i + 1].clone());
+                i += 2;
+            }
+            "--match" if i + 1 < args.len() => {
+                match_id = args[i + 1].parse::<i64>().ok();
+                i += 2;
+            }
+            "--output" if i + 1 < args.len() => {
+                output_dir = Some(PathBuf::from(&args[i + 1]));
+                i += 2;
+            }
+            _ => {
+                i += 1;
+            }
+        }
+    }
+
+    let output_dir = output_dir.unwrap_or_else(|| PathBuf::from("ghost_trials"));
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");
 
-    // Find all evlog files
-    let evlogs: Vec<PathBuf> = fs::read_dir(&session_dir)
-        .expect("Failed to read session directory")
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.extension().map_or(false, |ext| ext == "evlog"))
-        .collect();
+    let db = SimDatabase::open(&db_path).expect("Failed to open database");
 
-    if evlogs.is_empty() {
-        eprintln!("No .evlog files found in {}", session_dir.display());
+    let match_ids: Vec<i64> = if let Some(match_id) = match_id {
+        vec![match_id]
+    } else if let Some(session_id) = session_id {
+        db.get_session_matches(&session_id)
+            .map(|matches| matches.into_iter().map(|m| m.id).collect())
+            .unwrap_or_default()
+    } else {
+        db.get_latest_session()
+            .ok()
+            .flatten()
+            .and_then(|session_id| {
+                db.get_session_matches(&session_id)
+                    .ok()
+                    .map(|matches| matches.into_iter().map(|m| m.id).collect())
+            })
+            .unwrap_or_default()
+    };
+
+    if match_ids.is_empty() {
+        eprintln!("No matches found in {}", db_path.display());
         std::process::exit(1);
     }
 
-    println!("Found {} evlog files", evlogs.len());
+    println!("Found {} matches", match_ids.len());
     println!("Output directory: {}", output_dir.display());
     println!();
 
@@ -312,14 +335,11 @@ fn main() {
     let mut scoring_drives = 0;
     let mut turnover_drives = 0;
 
-    // Process each evlog
-    for evlog in &evlogs {
-        println!("Processing: {}", evlog.file_name().unwrap().to_string_lossy());
-
-        let drives = parse_evlog(evlog);
+    for match_id in &match_ids {
+        println!("Processing match {}", match_id);
+        let drives = parse_match_from_db(&db, *match_id);
 
         for drive in &drives {
-            // Only save drives where L (human) had possession or L scored
             let l_had_possession = drive.initial_possession == 'L';
             let is_interesting = l_had_possession || drive.l_scored;
 

@@ -360,24 +360,24 @@ impl ShotTestRunner {
 
 ---
 
-## Phase 7: Unified Evlog Parser
+## Phase 7: Unified Event Parsing (Legacy)
 
-**Goal:** Consolidate duplicated .evlog parsing between replay and analytics systems.
+**Note:** This phase was superseded by SQLite event storage; file-based parsing was removed.
 
 ### Event Sourcing Principles Applied:
-- **Append-only log:** .evlog is immutable, chronologically ordered
+- **Append-only log:** events table entries are immutable, chronologically ordered
 - **Complete rebuild:** Replay reconstructs full game state from events
 - **Temporal query:** Analytics queries specific event types across timeline
 - **Single source of truth:** One parser, multiple consumers
 
-### Current duplication:
-- `src/replay/loader.rs` - Parses .evlog for playback (tick events, positions, velocities)
-- `src/analytics/parser.rs` - Parses .evlog for metrics (goals, steals, possession changes)
+### Current duplication (legacy):
+- `src/replay/loader.rs` - Legacy file-based parsing for playback
+- `src/analytics/parser.rs` - Legacy file-based parsing for metrics
 
 Both traverse the same file format independently, duplicating ~40-50% of parsing logic.
 
-### Files to create:
-- `src/events/evlog_parser.rs` - Unified parser module
+### Files to create (legacy plan):
+- Unified parser module (removed)
 
 ### Pattern:
 ```rust
@@ -414,10 +414,10 @@ impl EvlogParser {
 }
 ```
 
-### Files to modify:
-- `src/replay/loader.rs` - Use unified parser instead of custom parsing
-- `src/analytics/parser.rs` - Use unified parser instead of custom parsing
-- `src/events/mod.rs` - Export parser module
+### Files to modify (legacy plan):
+- `src/replay/loader.rs` - Use unified parser instead of custom parsing (removed)
+- `src/analytics/parser.rs` - Use unified parser instead of custom parsing (removed)
+- `src/events/mod.rs` - Export parser module (removed)
 
 ---
 
@@ -425,8 +425,8 @@ impl EvlogParser {
 
 **Goal:** Connect analytics system to SQLite for historical queries across sessions.
 
-### Current state:
-- Analytics reads individual .evlog files
+### Current state (at the time):
+- Analytics read individual match logs
 - No cross-session analysis capability
 - Results computed on-demand, not persisted
 
@@ -439,7 +439,7 @@ Allow analytics to query aggregated data from SQLite database (populated by Phas
 ### New capabilities:
 ```rust
 // Existing: analyze single match
-pub fn analyze_match(evlog_path: &Path) -> MatchAnalysis;
+pub fn analyze_match(db: &SimDatabase, match_id: i64) -> MatchAnalysis;
 
 // New: analyze from database
 pub fn analyze_profile(db: &SimDatabase, profile: &str) -> ProfileAnalysis {
@@ -460,13 +460,11 @@ pub fn trend_analysis(db: &SimDatabase, profile: &str, days: u32) -> TrendReport
 
 ### CLI extension:
 ```bash
-# Existing: single match analysis
-cargo run --bin analyze -- training_logs/session_xyz/game_1.evlog
+# Existing: single match analysis (now via SQLite)
+cargo run --bin analyze -- training.db
 
 # New: database queries
-cargo run --bin analyze -- --db sim_results.db --profile Aggressive
-cargo run --bin analyze -- --db sim_results.db --compare Aggressive,Passive,Balanced
-cargo run --bin analyze -- --db sim_results.db --trend Aggressive --days 7
+cargo run --bin analyze -- sim_results.db
 ```
 
 ---
@@ -481,7 +479,7 @@ cargo run --bin analyze -- --db sim_results.db --trend Aggressive --days 7
 | 6 | Shot test refactor | 1-2 hrs | Fix anti-pattern |
 | 4 | Parallel simulation | 2-3 hrs | New feature, thread management |
 | 5 | SQLite database | 4-6 hrs | New dependency, schema, API |
-| 7 | Unified evlog parser | 2-3 hrs | Consolidate two parsers |
+| 7 | Unified parser (legacy) | 2-3 hrs | Consolidate two parsers |
 | 8 | Analytics + SQLite | 2-3 hrs | Extend analytics with DB queries |
 
 **Total: ~18-26 hours of focused work**
@@ -490,7 +488,7 @@ cargo run --bin analyze -- --db sim_results.db --trend Aggressive --days 7
 - **Sprint 1** (5-7 hrs): Phases 2, 1, 6 — Core consolidation, no new deps
 - **Sprint 2** (3-4 hrs): Phase 3 — Runner modularization cleanup
 - **Sprint 3** (6-9 hrs): Phases 4, 5 — Parallel + SQLite (major features)
-- **Sprint 4** (4-6 hrs): Phases 7, 8 — Evlog + Analytics integration
+- **Sprint 4** (4-6 hrs): Phases 7, 8 — Legacy parsing + analytics integration
 
 ---
 
@@ -502,7 +500,7 @@ cargo run --bin analyze -- --db sim_results.db --trend Aggressive --days 7
 4. **Phase 6** - Shot test refactor (uses app builder)
 5. **Phase 4** - Parallel simulation (uses app builder)
 6. **Phase 5** - SQLite (can be done independently)
-7. **Phase 7** - Unified evlog parser (after Phase 5, before Phase 8)
+7. **Phase 7** - Unified parser (legacy, after Phase 5, before Phase 8)
 8. **Phase 8** - Analytics + SQLite integration (depends on Phase 5 and 7)
 
 ---
@@ -537,22 +535,16 @@ cargo run --bin simulate -- --shot-test 100
 ### After Phase 7:
 ```bash
 # Replay still works (uses unified parser)
-cargo run -- --replay training_logs/session_xyz/game_1.evlog
+cargo run -- --replay-db 1
 
-# Analytics still works (uses unified parser)
-cargo run --bin analyze -- training_logs/session_xyz/game_1.evlog
+# Analytics still works (now via SQLite)
+cargo run --bin analyze -- training.db
 ```
 
 ### After Phase 8:
 ```bash
 # Profile analysis from database
-cargo run --bin analyze -- --db sim_results.db --profile Aggressive
-
-# Compare multiple profiles
-cargo run --bin analyze -- --db sim_results.db --compare Aggressive,Passive
-
-# Trend analysis
-cargo run --bin analyze -- --db sim_results.db --trend Aggressive --days 7
+cargo run --bin analyze -- sim_results.db
 ```
 
 ---
@@ -568,15 +560,14 @@ cargo run --bin analyze -- --db sim_results.db --trend Aggressive --days 7
 - `src/simulation/parallel.rs`
 - `src/simulation/db.rs`
 - `src/events/emitter.rs`
-- `src/events/evlog_parser.rs`
 - `src/bin/migrate_to_db.rs`
 
 ### Modified files:
 - `src/simulation/runner.rs` - Slim down significantly
 - `src/simulation/mod.rs` - Add exports
 - `src/bin/training.rs` - Use shared event emitter
-- `src/events/mod.rs` - Add emitter and parser exports
-- `src/replay/loader.rs` - Use unified evlog parser
-- `src/analytics/parser.rs` - Use unified evlog parser
+- `src/events/mod.rs` - Add emitter exports
+- `src/replay/loader.rs` - Legacy file-based replay loader (removed)
+- `src/analytics/parser.rs` - Legacy file-based parser (removed)
 - `src/analytics/mod.rs` - Add database query functions
 - `Cargo.toml` - Add rayon, rusqlite

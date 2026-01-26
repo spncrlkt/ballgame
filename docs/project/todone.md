@@ -56,7 +56,7 @@
 - [x] Sprint 2: Runner modularization - control.rs, setup.rs, shot_test.rs (52% reduction)
 - [x] Sprint 3: Parallel simulation - Rayon + `--parallel N` CLI flag
 - [x] Sprint 3: SQLite database - `SimDatabase` with WAL mode, `--db` option
-- [x] Sprint 4: Unified evlog parser - `ParsedEvlog` struct, 6 unit tests
+- [x] Sprint 4: Unified parser (legacy) - `ParsedEvlog` struct, 6 unit tests
 - [x] Sprint 4: Analytics + SQLite - `analyze_profile()`, `compare_profiles()`, leaderboard
 
 **AI Steal Timing (4 unit tests + 6 scenario tests)**

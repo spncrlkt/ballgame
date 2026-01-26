@@ -6,10 +6,10 @@ Reference document for AI tournament simulation and profile optimization.
 
 ```bash
 # Run tournament (N rounds, 8 parallel workers, 60s matches)
-rm -f logs/*.evlog && cargo run --release --bin simulate -- --tournament N --parallel 8 --duration 60
+rm -f logs/*.db && cargo run --release --bin simulate -- --tournament N --parallel 8 --duration 60 --db logs/tournament.db
 
 # Analyze results and save to timestamped file
-cargo run --release --bin analyze -- logs/ 2>&1 | tee rankings_vX_$(date +%Y%m%d_%H%M%S).txt
+cargo run --release --bin analyze -- logs/tournament.db 2>&1 | tee rankings_vX_$(date +%Y%m%d_%H%M%S).txt
 ```
 
 ## Evolution History

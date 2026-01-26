@@ -3,9 +3,12 @@
 //! Provides persistent storage and querying of simulation results.
 //! Uses WAL mode for concurrent reads during writes.
 
-use rusqlite::{Connection, Result, params};
+use bevy::prelude::Vec2;
+use rusqlite::{Connection, OptionalExtension, Result, params};
 use std::path::Path;
 
+use crate::events::{GameEvent, parse_event, serialize_event};
+use crate::replay::{MatchInfo, ReplayData, TickFrame, TimedEvent};
 use super::metrics::{MatchResult, PlayerStats};
 
 /// Database wrapper for simulation results
@@ -54,12 +57,14 @@ impl SimDatabase {
                 id TEXT PRIMARY KEY,
                 created_at TEXT NOT NULL,
                 session_type TEXT NOT NULL,
-                config_json TEXT
+                config_json TEXT,
+                display_name TEXT
             );
 
             CREATE TABLE IF NOT EXISTS matches (
                 id INTEGER PRIMARY KEY,
                 session_id TEXT REFERENCES sessions(id),
+                display_name TEXT,
                 seed INTEGER NOT NULL,
                 level INTEGER NOT NULL,
                 level_name TEXT NOT NULL,
@@ -69,6 +74,15 @@ impl SimDatabase {
                 score_right INTEGER NOT NULL,
                 duration_secs REAL NOT NULL,
                 winner TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS points (
+                id INTEGER PRIMARY KEY,
+                match_id INTEGER REFERENCES matches(id),
+                point_index INTEGER NOT NULL,
+                start_time_ms INTEGER NOT NULL,
+                end_time_ms INTEGER,
+                winner TEXT
             );
 
             CREATE TABLE IF NOT EXISTS player_stats (
@@ -99,6 +113,7 @@ impl SimDatabase {
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY,
                 match_id INTEGER REFERENCES matches(id),
+                point_id INTEGER REFERENCES points(id),
                 time_ms INTEGER NOT NULL,
                 event_type TEXT NOT NULL,
                 data TEXT NOT NULL,
@@ -106,35 +121,44 @@ impl SimDatabase {
             );
 
             CREATE INDEX IF NOT EXISTS idx_events_match ON events(match_id);
+            CREATE INDEX IF NOT EXISTS idx_events_point ON events(point_id);
             CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
             CREATE INDEX IF NOT EXISTS idx_events_time ON events(match_id, time_ms);
+            CREATE INDEX IF NOT EXISTS idx_points_match ON points(match_id);
             "#,
         )?;
+        let _ = self.conn.execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE matches ADD COLUMN display_name TEXT", []);
+        let _ = self.conn.execute("ALTER TABLE events ADD COLUMN point_id INTEGER", []);
         Ok(())
     }
 
     /// Create a new session and return its ID
     pub fn create_session(&self, session_type: &str, config_json: Option<&str>) -> Result<String> {
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = uuid::Uuid::new_v4();
+        let id_str = id.to_string();
+        let display_name = id.simple().to_string()[..16].to_string();
         let created_at = chrono::Utc::now().to_rfc3339();
 
         self.conn.execute(
-            "INSERT INTO sessions (id, created_at, session_type, config_json) VALUES (?1, ?2, ?3, ?4)",
-            params![id, created_at, session_type, config_json],
+            "INSERT INTO sessions (id, created_at, session_type, config_json, display_name) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id_str, created_at, session_type, config_json, display_name],
         )?;
 
-        Ok(id)
+        Ok(id_str)
     }
 
     /// Insert a match result and return the match ID
     pub fn insert_match(&self, session_id: &str, result: &MatchResult) -> Result<i64> {
+        let display_name = short_uuid();
         self.conn.execute(
             r#"INSERT INTO matches
-               (session_id, seed, level, level_name, left_profile, right_profile,
+               (session_id, display_name, seed, level, level_name, left_profile, right_profile,
                 score_left, score_right, duration_secs, winner)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"#,
             params![
                 session_id,
+                display_name,
                 result.seed as i64,
                 result.level,
                 result.level_name,
@@ -280,7 +304,7 @@ impl SimDatabase {
     /// Insert a batch of events for a match
     pub fn insert_events(&self, match_id: i64, events: &[(u32, &str, &str)]) -> Result<()> {
         let mut stmt = self.conn.prepare(
-            "INSERT INTO events (match_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4)"
+            "INSERT INTO events (match_id, point_id, time_ms, event_type, data) VALUES (?1, NULL, ?2, ?3, ?4)"
         )?;
 
         for (time_ms, event_type, data) in events {
@@ -293,24 +317,66 @@ impl SimDatabase {
     /// Insert a single event for a match
     pub fn insert_event(&self, match_id: i64, time_ms: u32, event_type: &str, data: &str) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO events (match_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO events (match_id, point_id, time_ms, event_type, data) VALUES (?1, NULL, ?2, ?3, ?4)",
             params![match_id, time_ms, event_type, data],
         )?;
+        Ok(())
+    }
+
+    /// Insert points and events, assigning point_id to each event.
+    pub fn insert_events_with_points(
+        &self,
+        match_id: i64,
+        duration_secs: f32,
+        events: &[(u32, GameEvent)],
+    ) -> Result<()> {
+        if events.is_empty() {
+            return Ok(());
+        }
+
+        self.conn.execute("BEGIN TRANSACTION", [])?;
+
+        let mut point_index = 1u32;
+        let mut point_id = self.insert_point(match_id, point_index, 0)?;
+
+        for (time_ms, event) in events {
+            let data = serialize_event(*time_ms, event);
+            let event_type = event.type_code();
+            self.conn.execute(
+                "INSERT INTO events (match_id, point_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![match_id, point_id, time_ms, event_type, data],
+            )?;
+
+            if let GameEvent::Goal { player, .. } = event {
+                let winner = match player {
+                    crate::events::PlayerId::L => "left",
+                    crate::events::PlayerId::R => "right",
+                };
+                self.end_point(point_id, *time_ms, winner)?;
+                point_index += 1;
+                point_id = self.insert_point(match_id, point_index, *time_ms)?;
+            }
+        }
+
+        let end_time_ms = (duration_secs * 1000.0).round() as u32;
+        self.end_point(point_id, end_time_ms, "none")?;
+        self.conn.execute("COMMIT", [])?;
         Ok(())
     }
 
     /// Get events for a match
     pub fn get_events(&self, match_id: i64) -> Result<Vec<EventRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, time_ms, event_type, data FROM events WHERE match_id = ?1 ORDER BY time_ms"
+            "SELECT id, point_id, time_ms, event_type, data FROM events WHERE match_id = ?1 ORDER BY time_ms"
         )?;
 
         let rows = stmt.query_map(params![match_id], |row| {
             Ok(EventRecord {
                 id: row.get(0)?,
-                time_ms: row.get(1)?,
-                event_type: row.get(2)?,
-                data: row.get(3)?,
+                point_id: row.get(1)?,
+                time_ms: row.get(2)?,
+                event_type: row.get(3)?,
+                data: row.get(4)?,
             })
         })?;
 
@@ -329,19 +395,130 @@ impl SimDatabase {
     /// Get events by type for a match
     pub fn get_events_by_type(&self, match_id: i64, event_type: &str) -> Result<Vec<EventRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, time_ms, event_type, data FROM events WHERE match_id = ?1 AND event_type = ?2 ORDER BY time_ms"
+            "SELECT id, point_id, time_ms, event_type, data FROM events WHERE match_id = ?1 AND event_type = ?2 ORDER BY time_ms"
         )?;
 
         let rows = stmt.query_map(params![match_id, event_type], |row| {
             Ok(EventRecord {
                 id: row.get(0)?,
-                time_ms: row.get(1)?,
-                event_type: row.get(2)?,
-                data: row.get(3)?,
+                point_id: row.get(1)?,
+                time_ms: row.get(2)?,
+                event_type: row.get(3)?,
+                data: row.get(4)?,
             })
         })?;
 
         rows.collect()
+    }
+
+    /// Find a match ID in a session by 1-based game index.
+    pub fn find_match_by_session(&self, session_id: &str, game_num: u32) -> Result<Option<i64>> {
+        if game_num == 0 {
+            return Ok(None);
+        }
+
+        let offset = (game_num - 1) as i64;
+        self.conn
+            .query_row(
+                "SELECT id FROM matches WHERE session_id = ?1 ORDER BY id ASC LIMIT 1 OFFSET ?2",
+                params![session_id, offset],
+                |row| row.get(0),
+            )
+            .optional()
+    }
+
+    /// Load replay data from SQLite for a match.
+    pub fn load_replay_data(&self, match_id: i64) -> std::result::Result<ReplayData, String> {
+        let (session_id, level, level_name, left_profile, right_profile, seed) = self
+            .conn
+            .query_row(
+                "SELECT session_id, level, level_name, left_profile, right_profile, seed FROM matches WHERE id = ?1",
+                params![match_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, u32>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, i64>(5)?,
+                    ))
+                },
+            )
+            .map_err(|e| e.to_string())?;
+
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, time_ms, data FROM events WHERE match_id = ?1 ORDER BY time_ms ASC, id ASC",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let rows = stmt
+            .query_map(params![match_id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, u32>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+
+        let mut ticks = Vec::new();
+        let mut events = Vec::new();
+        let mut max_time_ms = 0u32;
+
+        for row in rows {
+            let (event_id, time_ms, data) = row.map_err(|e| e.to_string())?;
+            let (_, event) = parse_event(&data)
+                .ok_or_else(|| format!("Failed to parse event {} for match {}", event_id, match_id))?;
+
+            if time_ms > max_time_ms {
+                max_time_ms = time_ms;
+            }
+
+            match event {
+                GameEvent::Tick {
+                    frame,
+                    left_pos,
+                    left_vel,
+                    right_pos,
+                    right_vel,
+                    ball_pos,
+                    ball_vel,
+                    ball_state,
+                } => {
+                    ticks.push(TickFrame {
+                        time_ms,
+                        frame,
+                        left_pos: Vec2::new(left_pos.0, left_pos.1),
+                        left_vel: Vec2::new(left_vel.0, left_vel.1),
+                        right_pos: Vec2::new(right_pos.0, right_pos.1),
+                        right_vel: Vec2::new(right_vel.0, right_vel.1),
+                        ball_pos: Vec2::new(ball_pos.0, ball_pos.1),
+                        ball_vel: Vec2::new(ball_vel.0, ball_vel.1),
+                        ball_state,
+                    });
+                }
+                _ => {
+                    events.push(TimedEvent { time_ms, event });
+                }
+            }
+        }
+
+        Ok(ReplayData {
+            session_id,
+            match_info: MatchInfo {
+                level,
+                level_name,
+                left_profile,
+                right_profile,
+                seed: seed as u64,
+            },
+            ticks,
+            events,
+            duration_ms: max_time_ms,
+        })
     }
 }
 
@@ -349,9 +526,34 @@ impl SimDatabase {
 #[derive(Debug, Clone)]
 pub struct EventRecord {
     pub id: i64,
+    pub point_id: Option<i64>,
     pub time_ms: u32,
     pub event_type: String,
     pub data: String,
+}
+
+impl SimDatabase {
+    fn insert_point(&self, match_id: i64, point_index: u32, start_time_ms: u32) -> Result<i64> {
+        self.conn.execute(
+            r#"INSERT INTO points (match_id, point_index, start_time_ms, end_time_ms, winner)
+               VALUES (?1, ?2, ?3, NULL, NULL)"#,
+            params![match_id, point_index, start_time_ms],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    fn end_point(&self, point_id: i64, end_time_ms: u32, winner: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE points SET end_time_ms = ?1, winner = ?2 WHERE id = ?3",
+            params![end_time_ms, winner, point_id],
+        )?;
+        Ok(())
+    }
+}
+
+fn short_uuid() -> String {
+    let full = uuid::Uuid::new_v4().simple().to_string();
+    full[..16].to_string()
 }
 
 /// Aggregate stats for a profile
@@ -833,6 +1035,7 @@ mod tests {
             left_stats: PlayerStats::default(),
             right_stats: PlayerStats::default(),
             seed: 12345,
+            events: Vec::new(),
         }
     }
 

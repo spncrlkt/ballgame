@@ -43,12 +43,12 @@ This document describes all intended behaviors in the game, organized for intera
 | M2.2 | `--games N` flag | Runs N consecutive games |
 | M2.3 | `--profile X` flag | AI uses specified profile |
 | M2.4 | Game ends | Winner determined, moves to next game |
-| M2.5 | Session ends | Writes evlogs + summary.json to `training_logs/session_*/` |
+| M2.5 | Session ends | Writes summary + analysis outputs to `training_logs/session_*/` |
 | M2.6 | Escape key | Quits training session early, still writes summary |
 
 ### 1.3 Replay Mode
 
-**Entry:** `cargo run -- --replay <file.evlog>`
+**Entry:** `cargo run -- --replay-db <match_id>`
 
 | ID | Behavior | Expected Outcome |
 |----|----------|------------------|

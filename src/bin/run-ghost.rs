@@ -3,8 +3,8 @@
 //! Plays back recorded human inputs (ghost trials) against AI to test defensive capability.
 //!
 //! Usage:
-//!   cargo run --bin run-ghost training_logs/session_*/game_1.evlog
-//!   cargo run --bin run-ghost training_logs/session_*/ --profile v3_Rush_Smart
+//!   cargo run --bin run-ghost ghost_trials/trial_*.ghost
+//!   cargo run --bin run-ghost ghost_trials/ --profile v3_Rush_Smart
 //!   cargo run --bin run-ghost ghost_trials/ --summary
 
 use bevy::app::ScheduleRunnerPlugin;
@@ -390,8 +390,8 @@ fn main() {
         eprintln!("Ghost Trial Runner");
         eprintln!();
         eprintln!("Usage:");
-        eprintln!("  {} <file.evlog>                    Run single training session", args[0]);
-        eprintln!("  {} <dir/> [--profile <name>]       Run all .evlog/.ghost files in directory", args[0]);
+        eprintln!("  {} <file.ghost>                    Run single ghost trial", args[0]);
+        eprintln!("  {} <dir/> [--profile <name>]       Run all .ghost files in directory", args[0]);
         eprintln!("  {} <dir/> --summary                Show summary only", args[0]);
         eprintln!();
         eprintln!("Options:");
@@ -450,7 +450,7 @@ fn main() {
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .filter(|p| {
-                p.extension().map_or(false, |ext| ext == "ghost" || ext == "evlog")
+                p.extension().map_or(false, |ext| ext == "ghost")
             })
             .filter_map(|p| load_ghost_trial(&p).ok())
             .collect()

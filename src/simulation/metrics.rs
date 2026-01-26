@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::ai::AiGoal;
+use crate::events::GameEvent;
 
 /// Statistics for a single player during a match
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -90,6 +91,9 @@ pub struct MatchResult {
     pub right_stats: PlayerStats,
     /// RNG seed used
     pub seed: u64,
+    /// Logged events for this match (used for DB persistence)
+    #[serde(skip)]
+    pub events: Vec<(u32, GameEvent)>,
 }
 
 impl MatchResult {

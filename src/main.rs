@@ -21,10 +21,13 @@ use ballgame::{
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 use world::{Basket, Collider};
 
 /// Path to ball options file
 const BALL_OPTIONS_FILE: &str = "config/ball_options.txt";
+const DEFAULT_REPLAY_DB: &str = "training.db";
+const DEFAULT_REPLAY_TIMEOUT_SECS: f32 = 5.0;
 
 /// Parse ball_options.txt to get list of style names
 fn load_ball_style_names() -> Vec<String> {
@@ -77,10 +80,22 @@ fn main() {
     // Check for --freeze-countdown flag
     let freeze_countdown = args.iter().any(|a| a == "--freeze-countdown");
 
-    // Check for replay mode: --replay <path>
-    let replay_file = args.iter()
-        .position(|a| a == "--replay")
-        .and_then(|i| args.get(i + 1).cloned());
+    // Check for replay mode: --replay-db <match_id>
+    let replay_db_match_id = args
+        .iter()
+        .position(|a| a == "--replay-db")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|s| s.parse::<i64>().ok());
+
+    // Check for replay timeout: --replay-timeout <secs>
+    let replay_timeout_secs = args
+        .iter()
+        .position(|a| a == "--replay-timeout")
+        .map(|i| {
+            args.get(i + 1)
+                .and_then(|s| s.parse::<f32>().ok())
+                .unwrap_or(DEFAULT_REPLAY_TIMEOUT_SECS)
+        });
 
     // Load persistent settings (uses defaults if file doesn't exist)
     let current_settings = CurrentSettings::default();
@@ -213,10 +228,14 @@ fn main() {
             MatchCountdown::default()
         })
         // Replay mode resources
-        .insert_resource(if let Some(ref path) = replay_file {
-            replay::ReplayMode::new(path.clone())
+        .insert_resource(if let Some(match_id) = replay_db_match_id {
+            replay::ReplayMode::new_db(match_id)
         } else {
             replay::ReplayMode::default()
+        })
+        .insert_resource(ReplayTimeout {
+            remaining_secs: replay_timeout_secs.unwrap_or(0.0),
+            active: replay_timeout_secs.is_some(),
         })
         .init_resource::<replay::ReplayState>()
         // Startup system - use normal setup only when NOT in replay mode
@@ -317,6 +336,7 @@ fn main() {
         )
         // Settings persistence - save when dirty
         .add_systems(Update, save_settings_system.run_if(replay::not_replay_active))
+        .add_systems(Update, replay_timeout.run_if(replay::replay_active))
         .add_systems(
             FixedUpdate,
             (
@@ -784,26 +804,29 @@ fn setup(
     spawn_countdown_text(&mut commands);
 }
 
-/// Setup system for replay mode - loads replay file
+/// Setup system for replay mode - loads replay data
 fn replay_load_file(
     mut commands: Commands,
     replay_mode: Res<replay::ReplayMode>,
 ) {
-    // Load the replay file
-    let Some(ref file_path) = replay_mode.file_path else {
-        error!("Replay mode active but no file path specified");
-        return;
+    let replay_result = if let Some(match_id) = replay_mode.match_id {
+        replay::load_replay_from_db(Path::new(DEFAULT_REPLAY_DB), match_id)
+            .map_err(|e| format!("Failed to load replay from DB match {}: {}", match_id, e))
+    } else {
+        Err("Replay mode active but no match ID specified".to_string())
     };
 
-    match replay::load_replay(file_path) {
+    match replay_result {
         Ok(replay_data) => {
-            info!("Loaded replay: {} ticks, {} events", replay_data.ticks.len(), replay_data.events.len());
-            // Insert replay data as resource - other systems will use it
+            info!(
+                "Loaded replay: {} ticks, {} events",
+                replay_data.ticks.len(),
+                replay_data.events.len()
+            );
             commands.insert_resource(replay_data);
         }
         Err(e) => {
-            error!("Failed to load replay file '{}': {}", file_path, e);
-            // Insert empty replay data so systems don't crash
+            error!("{}", e);
             commands.insert_resource(replay::ReplayData::default());
         }
     }
@@ -819,4 +842,30 @@ fn replay_load_file(
             ..OrthographicProjection::default_2d()
         }),
     ));
+}
+
+#[derive(Resource)]
+struct ReplayTimeout {
+    remaining_secs: f32,
+    active: bool,
+}
+
+fn replay_timeout(
+    mut timeout: ResMut<ReplayTimeout>,
+    time: Res<Time>,
+    mut app_exit: MessageWriter<AppExit>,
+) {
+    if !timeout.active {
+        return;
+    }
+
+    if timeout.remaining_secs <= 0.0 {
+        app_exit.write(AppExit::Success);
+        return;
+    }
+
+    timeout.remaining_secs -= time.delta_secs();
+    if timeout.remaining_secs <= 0.0 {
+        app_exit.write(AppExit::Success);
+    }
 }

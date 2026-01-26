@@ -146,10 +146,11 @@ pub fn ai_navigation_update(
             .find(|(_, b)| **b == target_basket.0)
             .map(|(t, _)| t.translation.truncate());
 
-        // Find opponent position
+        // Find opponent position (prefer human if present, otherwise any other player)
         let opponent_pos = all_players
             .iter()
             .find(|(e, _, _, human)| *e != ai_entity && human.is_some())
+            .or_else(|| all_players.iter().find(|(e, _, _, _)| *e != ai_entity))
             .map(|(_, t, _, _)| t.translation.truncate());
 
         // Get the AI's own basket (the one they're defending)
@@ -273,7 +274,10 @@ pub fn ai_navigation_update(
                     // Use max of profile-based threshold and fixed minimum (300px)
                     // This ensures aggressive pursuit even with low steal_range profiles
                     let chase_threshold = (profile.steal_range * 3.5).max(300.0);
-                    if distance_to_opponent > chase_threshold {
+                    if distance_to_opponent > chase_threshold
+                        || ai_state.current_goal == AiGoal::InterceptDefense
+                            && distance_to_opponent > profile.pressure_distance * 1.2
+                    {
                         Some(opp_pos)
                     } else {
                         // Close enough - use intercept positioning

@@ -51,7 +51,7 @@ pub struct GameResult {
     pub ai_score: u32,
     pub winner: Winner,
     pub duration_secs: f32,
-    pub evlog_path: PathBuf,
+    pub match_id: Option<i64>,
     /// Optional notes entered by player after the game
     pub notes: Option<String>,
 }
@@ -75,6 +75,10 @@ pub struct TrainingState {
     pub current_level_name: String,
     /// Session output directory
     pub session_dir: PathBuf,
+    /// SQLite session identifier
+    pub sqlite_session_id: Option<String>,
+    /// Current SQLite match ID
+    pub current_match_id: Option<i64>,
     /// Current phase
     pub phase: TrainingPhase,
     /// Time game started (for duration tracking)
@@ -107,6 +111,8 @@ impl Default for TrainingState {
             current_level: 2, // Start with level 2 (skip debug level 1)
             current_level_name: String::new(),
             session_dir,
+            sqlite_session_id: None,
+            current_match_id: None,
             phase: TrainingPhase::WaitingToStart,
             game_start_time: None,
             game_elapsed: 0.0,
@@ -150,7 +156,7 @@ impl TrainingState {
     }
 
     /// Record a game result
-    pub fn record_result(&mut self, human_score: u32, ai_score: u32, evlog_path: PathBuf) {
+    pub fn record_result(&mut self, human_score: u32, ai_score: u32, match_id: Option<i64>) {
         let winner = if human_score >= self.win_score {
             Winner::Human
         } else {
@@ -165,7 +171,7 @@ impl TrainingState {
             ai_score,
             winner,
             duration_secs: self.game_elapsed,
-            evlog_path,
+            match_id,
             notes: None,
         };
 

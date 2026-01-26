@@ -141,9 +141,9 @@ logger.log(time, GameEvent::Pickup { player: PlayerId::L });
 logger.end_session();
 ```
 
-## File Extension
+## Storage
 
-Event log files use `.evlog` extension.
+Events are stored in SQLite (`events` table). The `data` column contains the serialized event format.
 
 ## Analytics Pipeline
 

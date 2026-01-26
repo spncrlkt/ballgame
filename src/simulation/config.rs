@@ -48,10 +48,6 @@ pub struct SimConfig {
     pub output_file: Option<String>,
     /// Suppress progress output
     pub quiet: bool,
-    /// Enable event logging to .evlog files
-    pub log_events: bool,
-    /// Directory for event log files (default: "logs")
-    pub log_dir: String,
     /// Number of parallel threads (0 = sequential, N = N threads)
     pub parallel: usize,
     /// Path to SQLite database for storing results
@@ -71,8 +67,6 @@ impl Default for SimConfig {
             stalemate_timeout: 30.0,
             output_file: None,
             quiet: false,
-            log_events: true, // Always log events for analytics
-            log_dir: "logs".to_string(),
             parallel: 0, // Sequential by default
             db_path: None,
         }
@@ -184,15 +178,6 @@ impl SimConfig {
                 "--quiet" | "-q" => {
                     config.quiet = true;
                 }
-                "--log-events" => {
-                    config.log_events = true;
-                }
-                "--log-dir" => {
-                    if i + 1 < args.len() {
-                        config.log_dir = args[i + 1].clone();
-                        i += 1;
-                    }
-                }
                 "--parallel" => {
                     if i + 1 < args.len() {
                         config.parallel = args[i + 1].parse().unwrap_or(0);
@@ -240,8 +225,6 @@ OPTIONS:
     --seed <N>          RNG seed for reproducibility
     --output <FILE>     Output JSON to file (default: stdout)
     --quiet, -q         Suppress progress output
-    --log-events        Enable event logging to .evlog files
-    --log-dir <DIR>     Directory for event logs (default: logs)
     --parallel <N>      Run simulations in parallel with N threads
     --db <FILE>         Store results in SQLite database
     --help, -h          Show this help
@@ -259,8 +242,8 @@ EXAMPLES:
     # Run ghost trials against AI
     cargo run --bin simulate -- --ghost training_logs/session_xxx/ghost_trials/ --right Aggressive
 
-    # Run matches with event logging for analytics
-    cargo run --bin simulate -- --tournament 5 --log-events --log-dir logs/
+    # Run matches with SQLite logging
+    cargo run --bin simulate -- --tournament 5 --db training.db
 
 PROFILES:
     Balanced, Aggressive, Defensive, Sniper, Rusher, Turtle, Chaotic, Patient, Hunter, Goalie

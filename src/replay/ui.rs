@@ -6,7 +6,7 @@ use crate::constants::*;
 use crate::events::{GameEvent, PlayerId};
 use crate::player::Team;
 
-use super::loader::ReplayData;
+use super::ReplayData;
 use super::state::ReplayState;
 
 /// Timeline bar at the bottom of screen

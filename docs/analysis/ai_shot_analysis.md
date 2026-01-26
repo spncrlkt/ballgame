@@ -122,7 +122,7 @@ Create scenario tests to verify:
 ## Event Log Analysis TODO
 
 To find actual bad shots in gameplay:
-1. Parse evlogs for ShotRelease events
+1. Query SQLite events for ShotRelease events
 2. Calculate shot quality at release position
 3. Flag shots where quality < profile.min_shot_quality
 4. Analyze patterns (which goals, which profiles)

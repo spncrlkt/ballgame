@@ -360,6 +360,7 @@ mod tests {
                 left_stats: PlayerStats::default(),
                 right_stats: PlayerStats::default(),
                 seed: i as u64,
+                events: Vec::new(),
             };
             db.insert_match(&session_id, &result).unwrap();
         }

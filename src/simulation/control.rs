@@ -4,7 +4,6 @@
 //! and event logging.
 
 use bevy::prelude::*;
-use std::path::PathBuf;
 
 use crate::events::{EmitterConfig, EventBuffer, EventEmitterState};
 
@@ -28,8 +27,6 @@ pub struct SimEventBuffer {
     pub buffer: EventBuffer,
     /// Whether event logging is enabled
     pub enabled: bool,
-    /// Directory to write log files
-    pub log_dir: PathBuf,
     /// Shared emitter state for detecting changes
     pub emitter_state: EventEmitterState,
 }
@@ -39,7 +36,6 @@ impl Default for SimEventBuffer {
         Self {
             buffer: EventBuffer::default(),
             enabled: false,
-            log_dir: PathBuf::default(),
             emitter_state: EventEmitterState::with_config(EmitterConfig {
                 track_both_ai_goals: true,
             }),

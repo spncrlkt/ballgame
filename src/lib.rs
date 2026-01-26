@@ -47,7 +47,7 @@ pub use countdown::{
     trigger_countdown_on_level_change, update_countdown,
 };
 pub use events::{
-    BusEvent, ControllerSource, EventBuffer, EventBus, EventLogConfig, EventLogger, GameConfig,
+    BusEvent, ControllerSource, EventBuffer, EventBus, GameConfig,
     GameEvent, LevelChangeTracker, PlayerId, emit_level_change_events, update_event_bus_time,
 };
 pub use settings::{CurrentSettings, InitSettings, save_settings_system};
@@ -79,13 +79,13 @@ pub use ui::{
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 pub use replay::{
-    load_replay, not_replay_active, replay_active, MatchInfo, ReplayData, ReplayMode, ReplayState,
-    TickFrame, TimedEvent, replay_input_handler, replay_playback, replay_setup, setup_replay_ui,
+    not_replay_active, replay_active, MatchInfo, ReplayData, ReplayMode, ReplayState, TickFrame,
+    TimedEvent, replay_input_handler, replay_playback, replay_setup, setup_replay_ui,
     update_replay_ui,
 };
 pub use training::{
     GameResult, GameSummary, SessionSummary, TrainingPhase, TrainingState, Winner,
-    ensure_session_dir, evlog_path_for_game, print_session_summary, write_session_summary,
+    ensure_session_dir, print_session_summary, write_session_summary,
 };
 
 // =============================================================================

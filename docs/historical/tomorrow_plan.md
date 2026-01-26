@@ -30,7 +30,7 @@
 ### 4. AI Steal Timing Analysis
 **Problem:** AI may steal at better moments than humans.
 **Test Plan:**
-- Parse evlogs from training sessions
+- Parse SQLite events from training sessions
 - Extract steal attempt timing relative to player positions
 - Compare AI steal distance vs human steal distance at time of attempt
 
@@ -156,9 +156,9 @@
 - Identify gaps (e.g., ball rolling friction, wall bounces)
 
 ### 20. Event Log Analysis Tools
-**Problem:** Manual evlog reading is slow.
+**Problem:** Manual event-log reading is slow.
 **Test Plan:**
-- Create analysis script that summarizes evlog
+- Create analysis script that summarizes SQLite events
 - Output: steal stats, shot stats, goal times, possession changes
 - Identify "interesting" moments (steal streaks, comeback scores)
 
@@ -176,7 +176,7 @@
 
 ### AI Bug Identification Process:
 1. Run 10 training games with logging
-2. Parse evlogs for anomalies:
+2. Parse SQLite events for anomalies:
    - Steal attempts outside range
    - Shots with quality < 0.3
    - Long possession times without shot

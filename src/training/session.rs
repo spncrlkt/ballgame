@@ -33,7 +33,8 @@ pub struct GameSummary {
     pub ai_score: u32,
     pub winner: String,
     pub duration_secs: f32,
-    pub evlog: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
 }
@@ -54,11 +55,7 @@ impl SessionSummary {
                 ai_score: r.ai_score,
                 winner: r.winner.to_string(),
                 duration_secs: r.duration_secs,
-                evlog: r
-                    .evlog_path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default(),
+                match_id: r.match_id,
                 notes: r.notes.clone(),
             })
             .collect();
@@ -94,14 +91,6 @@ impl SessionSummary {
 /// Ensure session directory exists
 pub fn ensure_session_dir(state: &TrainingState) -> std::io::Result<()> {
     fs::create_dir_all(&state.session_dir)
-}
-
-/// Get evlog path for current game
-pub fn evlog_path_for_game(state: &TrainingState) -> std::path::PathBuf {
-    state.session_dir.join(format!(
-        "game_{}_level{}.evlog",
-        state.game_number, state.current_level
-    ))
 }
 
 /// Write session summary to file
@@ -146,7 +135,10 @@ pub fn print_session_summary(state: &TrainingState) {
             result.ai_score,
             result.level_name,
             result.duration_secs,
-            result.evlog_path.file_name().unwrap_or_default().to_string_lossy()
+            result
+                .match_id
+                .map(|id| format!("match {}", id))
+                .unwrap_or_else(|| "match ?".to_string())
         );
     }
 

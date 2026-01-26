@@ -9,7 +9,7 @@ use crate::player::{Facing, Player, Team};
 use crate::scoring::CurrentLevel;
 use crate::world::{Basket, Collider, Platform};
 
-use super::loader::ReplayData;
+use super::ReplayData;
 use super::state::ReplayState;
 
 /// Hermite interpolation for smooth curves using position + velocity

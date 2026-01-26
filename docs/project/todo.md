@@ -31,13 +31,13 @@
 *See `docs/planning/evlog-elimination-plan.md` for full implementation plan*
 
 - [ ] **Complete evlog elimination** - Migrate fully to SQLite, remove all .evlog infrastructure
-  - Phase 1: Add SQLite replay loading to SimDatabase
-  - Phase 2: Add --replay-db flag to main binary
-  - Phase 3: Update training binary to remove evlog writing
-  - Phase 4: Update analysis to use SQLite only
-  - Phase 5: Update other binaries
-  - Phase 6: Delete evlog code (logger.rs, evlog_parser.rs, Python scripts)
-  - Phase 7: Documentation cleanup
+  - [x] Phase 1: Add SQLite replay loading to SimDatabase
+  - [x] Phase 2: Add --replay-db flag to main binary
+  - [x] Phase 3: Update training binary to remove evlog writing
+  - [x] Phase 4: Update analysis to use SQLite only
+  - [x] Phase 5: Update other binaries (plus sim event persistence)
+  - [ ] Phase 6: Delete evlog code (logger.rs, evlog_parser.rs, Python scripts)
+  - [ ] Phase 7: Documentation cleanup
 
 ---
 

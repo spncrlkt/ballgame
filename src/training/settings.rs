@@ -74,6 +74,9 @@ pub struct TrainingSettings {
     pub palette_index: usize,
     /// Ball visual style (None = random)
     pub ball_style: Option<String>,
+    /// Drive mode (start with ball, regain on loss, first point wins)
+    #[serde(default)]
+    pub drive_mode: bool,
 }
 
 impl Default for TrainingSettings {
@@ -92,6 +95,7 @@ impl Default for TrainingSettings {
             viewport_index: 2,
             palette_index: 0,
             ball_style: None,
+            drive_mode: false,
         }
     }
 }
@@ -256,6 +260,12 @@ impl TrainingSettings {
                         }
                         i += 1;
                     }
+                }
+                "--drive-mode" => {
+                    self.drive_mode = true;
+                    self.mode = TrainingMode::Goal;
+                    self.iterations = 1;
+                    self.win_score = 1;
                 }
                 "--help" | "-h" => {
                     print_help();

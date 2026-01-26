@@ -1,7 +1,6 @@
 //! Training Mode Binary
 //!
 //! Play 5 consecutive 1v1 games against AI with comprehensive logging.
-//! After the session, use Claude Code to analyze the evlogs.
 //!
 //! Usage:
 //!   cargo run --bin training
@@ -22,19 +21,19 @@ use ballgame::{
 };
 use ballgame::events::{
     emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventEmitterState,
-    SqliteEventLogger, flush_events_to_sqlite,
+    SqliteEventLogger,
 };
 use ballgame::training::{
     LevelSelector, TrainingMode, TrainingPhase, TrainingProtocol, TrainingSettings, TrainingState,
-    analyze_pursuit_session, analyze_session, ensure_session_dir, evlog_path_for_game,
+    analyze_pursuit_session_from_db, analyze_session_from_db, ensure_session_dir,
     format_pursuit_analysis_markdown, generate_claude_prompt, print_session_summary,
     write_analysis_files, write_session_summary,
 };
+use ballgame::simulation::SimDatabase;
 use bevy::{camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::Write as IoWrite;
+use std::fs;
 use world::{Basket, BasketRim, Collider, Platform};
 
 /// Path to ball options file
@@ -292,10 +291,10 @@ fn main() {
         .add_systems(
             Update,
             (
+                emit_training_events,
                 training_state_machine,
                 update_training_hud,
-                emit_training_events,
-                flush_events_to_sqlite,
+                flush_training_events_to_sqlite,
                 check_escape_quit,
                 check_pause_restart,
             ),
@@ -339,7 +338,11 @@ fn give_ball_to_human(
     mut commands: Commands,
     mut balls: Query<(Entity, &mut Transform, &mut BallState), With<Ball>>,
     players: Query<(Entity, &Transform, &Team), (With<Player>, Without<Ball>)>,
+    training_settings: Res<TrainingSettings>,
 ) {
+    if !training_settings.drive_mode {
+        return;
+    }
     for (ball_entity, mut ball_transform, mut ball_state) in &mut balls {
         // Only act if ball is free (just reset after a score)
         if !matches!(*ball_state, BallState::Free) {
@@ -394,7 +397,7 @@ fn training_setup(
     palette_db: Res<PaletteDatabase>,
     asset_server: Res<AssetServer>,
     profile_db: Res<AiProfileDatabase>,
-    training_state: Res<TrainingState>,
+    mut training_state: ResMut<TrainingState>,
     training_settings: Res<TrainingSettings>,
     mut current_level: ResMut<CurrentLevel>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
@@ -555,7 +558,6 @@ fn training_setup(
     commands.insert_resource(ball_textures.clone());
 
     // Spawn ball - use settings or random
-    // In training mode, give the ball to the human player at start
     let ball_style_name = if let Some(ref style) = training_settings.ball_style {
         style.clone()
     } else {
@@ -566,9 +568,15 @@ fn training_setup(
             .unwrap_or_else(|| "wedges".to_string())
     };
     if let Some(textures) = ball_textures.get(&ball_style_name) {
-        // Spawn ball held by the human player (left player)
-        // Use player's x/y but ball's z (2.0) so ball renders in front
-        let ball_spawn_pos = Vec3::new(PLAYER_SPAWN_LEFT.x, PLAYER_SPAWN_LEFT.y, BALL_SPAWN.z);
+        let (ball_spawn_pos, ball_state) = if training_settings.drive_mode {
+            (
+                Vec3::new(PLAYER_SPAWN_LEFT.x, PLAYER_SPAWN_LEFT.y, BALL_SPAWN.z),
+                BallState::Held(left_player),
+            )
+        } else {
+            (BALL_SPAWN, BallState::Free)
+        };
+
         let ball_entity = commands.spawn((
             Sprite {
                 image: textures.textures[0].clone(),
@@ -577,7 +585,7 @@ fn training_setup(
             },
             Transform::from_translation(ball_spawn_pos),
             Ball,
-            BallState::Held(left_player),
+            ball_state,
             Velocity::default(),
             BallPlayerContact::default(),
             BallPulse::default(),
@@ -587,8 +595,10 @@ fn training_setup(
             BallStyle::new(&ball_style_name),
         )).id();
 
-        // Give the human player the ball
-        commands.entity(left_player).insert(HoldingBall(ball_entity));
+        if training_settings.drive_mode {
+            // Give the human player the ball
+            commands.entity(left_player).insert(HoldingBall(ball_entity));
+        }
     }
 
     // Arena floor
@@ -722,13 +732,15 @@ fn training_setup(
 
     // Start match in SQLite (events will be flushed to SQLite during gameplay)
     let seed: u64 = rand::random();
-    sqlite_logger.start_match(
+    let match_id = sqlite_logger.start_match(
         training_state.current_level,
         &training_state.current_level_name,
         "Player",
         &training_state.ai_profile,
         seed,
     );
+    training_state.current_match_id = match_id;
+    training_state.sqlite_session_id = Some(sqlite_logger.session_id().to_string());
 
     // Log match start
     event_buffer.buffer.log(
@@ -738,7 +750,7 @@ fn training_setup(
             level_name: training_state.current_level_name.clone(),
             left_profile: "Player".to_string(),
             right_profile: training_state.ai_profile.clone(),
-            seed: rand::random(),
+            seed,
         },
     );
 
@@ -820,17 +832,14 @@ fn training_state_machine(
                     },
                 );
 
-                // Save evlog
-                let evlog_path = evlog_path_for_game(&training_state);
-                if let Err(e) = write_evlog(&event_buffer, &evlog_path) {
-                    eprintln!("Failed to write evlog: {}", e);
-                }
+                let match_id = sqlite_logger.current_match_id();
+                flush_training_events_buffer(&mut event_buffer, &sqlite_logger);
 
                 // End match in SQLite
                 sqlite_logger.end_match(score.left, score.right, training_state.game_elapsed);
 
                 // Record result
-                training_state.record_result(score.left, score.right, evlog_path);
+                training_state.record_result(score.left, score.right, match_id);
 
                 // Determine outcome message
                 let outcome = if time_expired && !score_reached {
@@ -919,13 +928,14 @@ fn training_state_machine(
 
                     // Start new match in SQLite
                     let seed: u64 = rand::random();
-                    sqlite_logger.start_match(
+                    let match_id = sqlite_logger.start_match(
                         training_state.current_level,
                         &training_state.current_level_name,
                         "Player",
                         &training_state.ai_profile,
                         seed,
                     );
+                    training_state.current_match_id = match_id;
 
                     event_buffer.buffer.log(
                         0.0,
@@ -962,59 +972,74 @@ fn training_state_machine(
 
             // Run standard analysis (same for all protocols)
             println!("\nAnalyzing training session...");
-            let analysis = analyze_session(
-                &training_state.session_dir,
-                &training_state.game_results,
-                training_state.protocol,
-            );
+            let analysis = training_state.sqlite_session_id.as_deref().and_then(|session_id| {
+                SimDatabase::open(std::path::Path::new("training.db"))
+                    .ok()
+                    .and_then(|db| analyze_session_from_db(&db, session_id, training_state.protocol))
+            });
 
-            if let Err(e) = write_analysis_files(&training_state.session_dir, &analysis) {
-                eprintln!("Failed to write analysis: {}", e);
+            if let Some(ref analysis) = analysis {
+                if let Err(e) = write_analysis_files(&training_state.session_dir, analysis) {
+                    eprintln!("Failed to write analysis: {}", e);
+                }
+            } else {
+                eprintln!("No SQLite analysis available for this session.");
             }
 
             // Run protocol-specific analysis (additional output)
             match training_state.protocol {
                 TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => {
                     // Pursuit-specific analysis (in addition to standard)
-                    let pursuit_analysis =
-                        analyze_pursuit_session(&training_state.game_results);
+                    let pursuit_analysis = training_state.sqlite_session_id.as_deref().and_then(|session_id| {
+                        SimDatabase::open(std::path::Path::new("training.db"))
+                            .ok()
+                            .and_then(|db| analyze_pursuit_session_from_db(&db, session_id))
+                    });
 
-                    // Write pursuit analysis
-                    let md_content = format_pursuit_analysis_markdown(&pursuit_analysis);
-                    let md_path = training_state.session_dir.join("pursuit_analysis.md");
-                    if let Err(e) = fs::write(&md_path, &md_content) {
-                        eprintln!("Failed to write pursuit analysis: {}", e);
+                    if let Some(pursuit_analysis) = pursuit_analysis {
+                        // Write pursuit analysis
+                        let md_content = format_pursuit_analysis_markdown(&pursuit_analysis);
+                        let md_path = training_state.session_dir.join("pursuit_analysis.md");
+                        if let Err(e) = fs::write(&md_path, &md_content) {
+                            eprintln!("Failed to write pursuit analysis: {}", e);
+                        } else {
+                            println!("Pursuit analysis written to: {}", md_path.display());
+                        }
+
+                        // Print pursuit summary to terminal
+                        println!("\n## Pursuit Test Results\n");
+                        println!("Pursuit Score: {:.1}/100", pursuit_analysis.pursuit_score);
+                        println!(
+                            "Outcomes: {} catches, {} player scores, {} timeouts",
+                            pursuit_analysis.ai_catches,
+                            pursuit_analysis.player_scores,
+                            pursuit_analysis.timeouts
+                        );
+                        println!(
+                            "Avg Distance: {:.0}px | Closing Rate: {:.1}px/s",
+                            pursuit_analysis.avg_distance, pursuit_analysis.avg_closing_rate
+                        );
+
+                        if pursuit_analysis.pursuit_score >= 70.0 {
+                            println!("\nResult: PASS - AI demonstrates good pursuit behavior.");
+                        } else if pursuit_analysis.pursuit_score >= 50.0 {
+                            println!("\nResult: MARGINAL - AI shows some pursuit but with issues.");
+                        } else {
+                            println!("\nResult: FAIL - AI is not effectively pursuing the player.");
+                        }
                     } else {
-                        println!("Pursuit analysis written to: {}", md_path.display());
-                    }
-
-                    // Print pursuit summary to terminal
-                    println!("\n## Pursuit Test Results\n");
-                    println!("Pursuit Score: {:.1}/100", pursuit_analysis.pursuit_score);
-                    println!(
-                        "Outcomes: {} catches, {} player scores, {} timeouts",
-                        pursuit_analysis.ai_catches,
-                        pursuit_analysis.player_scores,
-                        pursuit_analysis.timeouts
-                    );
-                    println!(
-                        "Avg Distance: {:.0}px | Closing Rate: {:.1}px/s",
-                        pursuit_analysis.avg_distance, pursuit_analysis.avg_closing_rate
-                    );
-
-                    if pursuit_analysis.pursuit_score >= 70.0 {
-                        println!("\nResult: PASS - AI demonstrates good pursuit behavior.");
-                    } else if pursuit_analysis.pursuit_score >= 50.0 {
-                        println!("\nResult: MARGINAL - AI shows some pursuit but with issues.");
-                    } else {
-                        println!("\nResult: FAIL - AI is not effectively pursuing the player.");
+                        eprintln!("No SQLite pursuit analysis available for this session.");
                     }
                 }
                 TrainingProtocol::AdvancedPlatform => {
-                    // Print Claude prompt to terminal
-                    let prompt =
-                        generate_claude_prompt(&training_state.session_dir, &analysis);
-                    println!("\n{}", prompt);
+                    if let Some(ref analysis) = analysis {
+                        // Print Claude prompt to terminal
+                        let prompt =
+                            generate_claude_prompt(&training_state.session_dir, analysis);
+                        println!("\n{}", prompt);
+                    } else {
+                        eprintln!("No analysis available for Claude prompt.");
+                    }
                 }
             }
 
@@ -1081,7 +1106,11 @@ fn emit_training_events(
     }
 
     // Bridge EventBus → EventBuffer
-    let bus_events = event_bus.export_events();
+    let bus_events: Vec<_> = event_bus
+        .export_events()
+        .into_iter()
+        .filter(|(_, event)| !matches!(event, GameEvent::Goal { .. }))
+        .collect();
     event_buffer.buffer.import_events(bus_events);
 
     let time = training_state.game_elapsed;
@@ -1128,6 +1157,25 @@ fn emit_training_events(
     );
 }
 
+fn flush_training_events_buffer(
+    event_buffer: &mut TrainingEventBuffer,
+    sqlite_logger: &SqliteEventLogger,
+) {
+    let events = event_buffer.buffer.drain_events();
+    if events.is_empty() {
+        return;
+    }
+
+    sqlite_logger.log_events(&events);
+}
+
+fn flush_training_events_to_sqlite(
+    mut event_buffer: ResMut<TrainingEventBuffer>,
+    sqlite_logger: Res<SqliteEventLogger>,
+) {
+    flush_training_events_buffer(&mut event_buffer, &sqlite_logger);
+}
+
 /// Check for escape key to quit
 fn check_escape_quit(
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -1160,7 +1208,7 @@ fn check_pause_restart(
     mut event_buffer: ResMut<TrainingEventBuffer>,
     mut countdown: ResMut<MatchCountdown>,
     level_db: Res<LevelDatabase>,
-    _settings: Res<TrainingSettings>,
+    settings: Res<TrainingSettings>,
     mut current_level: ResMut<CurrentLevel>,
     mut players: Query<(Entity, &mut Transform, &Team), With<Player>>,
     mut balls: Query<(Entity, &mut Transform, &mut BallState, &mut Velocity), (With<Ball>, Without<Player>)>,
@@ -1248,16 +1296,23 @@ fn check_pause_restart(
                 player_transform.translation = PLAYER_SPAWN_RIGHT;
             }
         }
+        commands.entity(entity).remove::<HoldingBall>();
     }
 
-    // Reset ball - give it to the human player (keep ball's z for proper rendering)
+    // Reset ball - jump ball by default, drive mode gives human possession
     for (ball_entity, mut ball_transform, mut ball_state, mut velocity) in &mut balls {
-        if let Some(left_player) = left_player_entity {
-            ball_transform.translation.x = PLAYER_SPAWN_LEFT.x;
-            ball_transform.translation.y = PLAYER_SPAWN_LEFT.y;
-            *ball_state = BallState::Held(left_player);
+        if settings.drive_mode {
+            if let Some(left_player) = left_player_entity {
+                ball_transform.translation.x = PLAYER_SPAWN_LEFT.x;
+                ball_transform.translation.y = PLAYER_SPAWN_LEFT.y;
+                *ball_state = BallState::Held(left_player);
+                velocity.0 = Vec2::ZERO;
+                commands.entity(left_player).insert(HoldingBall(ball_entity));
+            }
+        } else {
+            ball_transform.translation = BALL_SPAWN;
+            *ball_state = BallState::Free;
             velocity.0 = Vec2::ZERO;
-            commands.entity(left_player).insert(HoldingBall(ball_entity));
         }
     }
 
@@ -1277,13 +1332,14 @@ fn check_pause_restart(
 
     // Start new match in SQLite
     let seed: u64 = rand::random();
-    sqlite_logger.start_match(
+    let match_id = sqlite_logger.start_match(
         training_state.current_level,
         &training_state.current_level_name,
         "Player",
         &training_state.ai_profile,
         seed,
     );
+    training_state.current_match_id = match_id;
 
     event_buffer.buffer.log(
         0.0,
@@ -1302,16 +1358,4 @@ fn check_pause_restart(
         training_state.games_total,
         training_state.current_level_name
     );
-}
-
-/// Write evlog to file
-fn write_evlog(event_buffer: &TrainingEventBuffer, path: &std::path::Path) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    let content = event_buffer.buffer.serialize();
-    let mut file = File::create(path)?;
-    file.write_all(content.as_bytes())?;
-    Ok(())
 }

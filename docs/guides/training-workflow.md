@@ -2,7 +2,7 @@
 
 ## Overview
 
-All training events are stored in SQLite (`training.db`). Analysis runs SQL queries directly, replacing file-based evlog parsing.
+All training events are stored in SQLite (`training.db`). Analysis runs SQL queries directly, replacing file-based parsing.
 
 ## Running Training
 
@@ -18,8 +18,6 @@ cargo run --bin training -- --profile Aggressive  # Specific AI profile
 training.db                              # SQLite database with all events
 training_logs/
 └── session_YYYYMMDD_HHMMSS/
-    ├── game_1_levelN.evlog              # Legacy evlog (still generated)
-    ├── game_2_levelN.evlog
     ├── summary.json                     # Session summary
     ├── analysis.md                      # Human-readable report
     └── claude_prompt_YYYYMMDD_HHMM.txt  # AI review prompt

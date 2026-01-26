@@ -156,11 +156,10 @@ Add new mode: `cargo run --bin training -- --ghost <match_id> [--ghost-player L|
 - Keybinds: Comma (,) rewind, Period (.) step forward
 
 ### Step 7: Cleanup
-- Remove file-based evlog writing
-- Remove `src/events/evlog_parser.rs` entirely
-- Remove `src/events/format.rs` (compact text serialization)
-- Update analysis tools to read from DB
-- Delete any .evlog files in training_logs/
+- Remove remaining evlog references and unused scripts
+- Keep compact text serialization for SQLite event rows
+- Update analysis tools to read from DB only
+- Ensure training outputs produce no `.evlog` files
 
 ## Files to Modify
 

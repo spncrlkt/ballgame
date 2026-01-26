@@ -3,13 +3,10 @@
 use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
 use rand::Rng;
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::ai::{
-    AiNavState, AiProfileDatabase, AiState, InputState, NavGraph, ai_decision_update,
+    AiCapabilities, AiNavState, AiProfileDatabase, AiState, InputState, NavGraph, ai_decision_update,
     ai_navigation_update, mark_nav_dirty_on_level_change, rebuild_nav_graph,
     shot_quality::evaluate_shot_quality,
 };
@@ -18,7 +15,7 @@ use crate::ball::{
     ball_gravity, ball_player_collision, ball_spin, ball_state_update, apply_velocity, pickup_ball,
 };
 use crate::events::{
-    emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventBuffer,
+    emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventBuffer, EventBus,
     EventEmitterState, GameConfig, GameEvent,
 };
 use crate::palettes::PaletteDatabase;
@@ -94,16 +91,17 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
+    app.init_resource::<AiCapabilities>();
     app.init_resource::<PhysicsTweaks>();
     app.init_resource::<LastShotInfo>();
     app.insert_resource(CurrentPalette(0)); // Use first palette for simulation
     app.init_resource::<PaletteDatabase>();
+    app.insert_resource(EventBus::new());
 
     // Event logging buffer
     let mut event_buffer = SimEventBuffer {
         buffer: EventBuffer::new(),
-        enabled: config.log_events,
-        log_dir: PathBuf::from(&config.log_dir),
+        enabled: config.db_path.is_some(),
         emitter_state: EventEmitterState::with_config(EmitterConfig {
             track_both_ai_goals: true,
         }),
@@ -299,25 +297,21 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
         left_stats,
         right_stats,
         seed,
+        events: Vec::new(),
     };
 
     result.left_stats.finalize();
     result.right_stats.finalize();
     result.determine_winner();
 
-    // Write event log if enabled
-    {
-        let mut event_buffer = app.world_mut().resource_mut::<SimEventBuffer>();
+    if let Some(mut event_buffer) = app.world_mut().get_resource_mut::<SimEventBuffer>() {
         if event_buffer.enabled {
-            // Log match end event
             event_buffer.buffer.log(elapsed, GameEvent::MatchEnd {
                 score_left,
                 score_right,
                 duration: elapsed,
             });
-
-            // Write buffer to file
-            write_event_log(&event_buffer);
+            result.events = event_buffer.buffer.drain_events();
         }
     }
 
@@ -584,40 +578,6 @@ fn emit_simulation_events(
     );
 }
 
-/// Write the event buffer to a .evlog file
-fn write_event_log(event_buffer: &SimEventBuffer) {
-    if !event_buffer.enabled {
-        return;
-    }
-
-    // Create log directory if needed
-    if let Err(e) = fs::create_dir_all(&event_buffer.log_dir) {
-        eprintln!("Failed to create log directory: {}", e);
-        return;
-    }
-
-    // Generate filename from session ID
-    let session_id = event_buffer.buffer.session_id();
-    if session_id.is_empty() {
-        return;
-    }
-
-    let filename = format!("{}.evlog", &session_id[..session_id.len().min(36)]);
-    let path = event_buffer.log_dir.join(filename);
-
-    // Serialize and write
-    let content = event_buffer.buffer.serialize();
-    match File::create(&path) {
-        Ok(mut file) => {
-            if let Err(e) = file.write_all(content.as_bytes()) {
-                eprintln!("Failed to write event log: {}", e);
-            }
-        }
-        Err(e) => {
-            eprintln!("Failed to create event log file: {}", e);
-        }
-    }
-}
 
 /// Main simulation entry point
 pub fn run_simulation(config: SimConfig) {
@@ -680,6 +640,9 @@ pub fn run_simulation(config: SimConfig) {
 
             let result = run_match(&config, seed, &level_db, &profile_db);
             output_result(&result, &config);
+            if let Some(ref db) = db {
+                store_results_in_db(db, "single", std::slice::from_ref(&result), &config);
+            }
         }
 
         super::config::SimMode::MultiMatch { count } => {
@@ -950,13 +913,55 @@ fn store_results_in_db(db: &SimDatabase, session_type: &str, results: &[MatchRes
     let mut stored = 0;
     for result in results {
         match db.insert_match(&session_id, result) {
-            Ok(_) => stored += 1,
+            Ok(match_id) => {
+                stored += 1;
+                if !result.events.is_empty() {
+                    if let Err(e) = db.insert_events_with_points(match_id, result.duration, &result.events) {
+                        eprintln!("Warning: Failed to store match events: {}", e);
+                    }
+                }
+            }
             Err(e) => eprintln!("Warning: Failed to store match result: {}", e),
         }
     }
 
     if !config.quiet && stored > 0 {
         println!("Stored {} results in database", stored);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::simulation::metrics::PlayerStats;
+
+    #[test]
+    fn test_store_results_in_db_persists_events() {
+        let db = SimDatabase::open_in_memory().unwrap();
+        let mut result = MatchResult {
+            level: 1,
+            level_name: "Test".to_string(),
+            left_profile: "Balanced".to_string(),
+            right_profile: "Balanced".to_string(),
+            duration: 1.0,
+            score_left: 1,
+            score_right: 0,
+            winner: "left".to_string(),
+            left_stats: PlayerStats::default(),
+            right_stats: PlayerStats::default(),
+            seed: 123,
+            events: Vec::new(),
+        };
+        result.events.push((0, GameEvent::ResetScores));
+
+        store_results_in_db(&db, "test", std::slice::from_ref(&result), &SimConfig::default());
+
+        let match_id: i64 = db
+            .conn()
+            .query_row("SELECT MAX(id) FROM matches", [], |row| row.get(0))
+            .unwrap();
+        let event_count = db.event_count(match_id).unwrap();
+        assert!(event_count > 0);
     }
 }
 

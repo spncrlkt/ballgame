@@ -60,10 +60,9 @@ CLI arguments override file settings.
 Sessions are saved to `training_logs/session_YYYYMMDD_HHMMSS/`:
 ```
 training_logs/session_20260125_143022/
-├── game_1_level3.evlog
-├── game_2_level7.evlog
-├── game_3_level2.evlog
-└── summary.json
+├── summary.json
+├── analysis.md
+└── claude_prompt_20260125_143022.txt
 ```
 
 ## Post-Session Analysis
@@ -71,14 +70,8 @@ training_logs/session_20260125_143022/
 Each training iteration is a complete drive (you start with the ball). No extraction needed.
 
 ```bash
-# Run ghost trials directly on training logs
-cargo run --bin run-ghost training_logs/session_YYYYMMDD_HHMMSS/
-
-# Test specific AI profile's defense
-cargo run --bin run-ghost training_logs/session_*/ --profile v3_Rush_Smart
-
-# Analyze events
-cargo run --bin analyze -- training_logs/session_YYYYMMDD_HHMMSS/
+# Analyze events from SQLite
+cargo run --bin analyze -- training.db
 ```
 
 ## Controls

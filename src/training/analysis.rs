@@ -9,10 +9,7 @@ use std::path::Path;
 
 use chrono::Local;
 
-use crate::events::evlog_parser::{parse_evlog, ParsedEvlog};
-use crate::events::PlayerId;
 use crate::simulation::db::{SimDatabase, MatchSummary, DistanceAnalysis, InputAnalysis, GoalTransition};
-use crate::training::state::GameResult;
 
 /// Per-game analysis metrics
 #[derive(Debug, Clone, Default)]
@@ -320,90 +317,7 @@ impl AggregateStats {
 
 use super::protocol::TrainingProtocol;
 
-/// Analyze a training session from evlog files
-pub fn analyze_session(
-    session_dir: &Path,
-    game_results: &[GameResult],
-    protocol: TrainingProtocol,
-) -> SessionAnalysis {
-    let mut games = Vec::new();
-    let mut aggregate = AggregateStats::default();
-
-    // Get AI profile from first game result
-    let ai_profile = game_results
-        .first()
-        .map(|_| {
-            // Parse first evlog to get AI profile
-            if let Some(first) = game_results.first() {
-                if let Ok(parsed) = parse_evlog(&first.evlog_path) {
-                    return parsed.metadata.right_profile.clone();
-                }
-            }
-            "Unknown".to_string()
-        })
-        .unwrap_or_else(|| "Unknown".to_string());
-
-    // Session ID from directory name
-    let session_id = session_dir
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("unknown")
-        .to_string();
-
-    // Analyze each game
-    for result in game_results {
-        if let Ok(parsed) = parse_evlog(&result.evlog_path) {
-            let game_analysis = analyze_game(&parsed, result);
-
-            // Update aggregate stats
-            aggregate.total_games += 1;
-            if result.human_score > result.ai_score {
-                aggregate.human_wins += 1;
-            } else {
-                aggregate.ai_wins += 1;
-            }
-            aggregate.total_duration_secs += game_analysis.duration_secs;
-            aggregate.avg_human_possession += game_analysis.possession.human_pct;
-            aggregate.avg_ai_possession += game_analysis.possession.ai_pct;
-            aggregate.total_human_shots += game_analysis.shots.human_shots;
-            aggregate.total_ai_shots += game_analysis.shots.ai_shots;
-            aggregate.total_human_goals += game_analysis.shots.human_goals;
-            aggregate.total_ai_goals += game_analysis.shots.ai_goals;
-            aggregate.total_human_steals += game_analysis.steals.human_successes;
-            aggregate.total_ai_steals += game_analysis.steals.ai_successes;
-            aggregate.total_human_steal_attempts += game_analysis.steals.human_attempts;
-            aggregate.total_ai_steal_attempts += game_analysis.steals.ai_attempts;
-
-            games.push(game_analysis);
-        }
-    }
-
-    // Average possession percentages
-    if aggregate.total_games > 0 {
-        aggregate.avg_human_possession /= aggregate.total_games as f32;
-        aggregate.avg_ai_possession /= aggregate.total_games as f32;
-    }
-
-    // Generate insights and weaknesses
-    let insights = generate_insights(&aggregate, &games);
-    let weaknesses = identify_weaknesses(&aggregate, &games);
-
-    SessionAnalysis {
-        session_id,
-        protocol: protocol.cli_name().to_string(),
-        protocol_description: protocol.description().to_string(),
-        ai_profile,
-        games,
-        aggregate,
-        insights,
-        weaknesses,
-    }
-}
-
-/// Analyze a training session from SQLite database
-///
-/// This is the SQLite-based alternative to `analyze_session()` which parses evlog files.
-/// All event data is queried directly from the database.
+/// Analyze a training session from SQLite database.
 pub fn analyze_session_from_db(
     db: &SimDatabase,
     session_id: &str,
@@ -527,10 +441,11 @@ fn analyze_game_from_db(db: &SimDatabase, match_info: &MatchSummary, game_number
     let ai_behavior = build_ai_behavior_from_transitions(&goal_transitions, match_info.duration);
 
     // Build movement stats from input analysis
+    let tick_stats = analyze_movement_from_ticks(db, match_id);
     let ai_movement = build_movement_from_input_analysis(
         input_analysis.as_ref(),
         distance_analysis.as_ref(),
-        match_info.duration,
+        tick_stats,
     );
 
     GameAnalysis {
@@ -731,7 +646,7 @@ fn build_ai_behavior_from_transitions(transitions: &[GoalTransition], duration_s
 fn build_movement_from_input_analysis(
     input: Option<&InputAnalysis>,
     distance: Option<&DistanceAnalysis>,
-    _duration_secs: f32,
+    tick_stats: Option<MovementTickStats>,
 ) -> MovementStats {
     let input = match input {
         Some(i) => i,
@@ -748,42 +663,151 @@ fn build_movement_from_input_analysis(
     // Get distance stats
     let avg_distance_to_opponent = distance.map(|d| d.avg_distance).unwrap_or(0.0);
 
+    let (avg_x_position, x_position_range, closing_rate, time_stuck_secs) = tick_stats
+        .map(|stats| {
+            (
+                stats.avg_x_position,
+                (stats.min_x_position, stats.max_x_position),
+                stats.closing_rate,
+                stats.time_stuck_secs,
+            )
+        })
+        .unwrap_or((0.0, (0.0, 0.0), 0.0, 0.0));
+
     MovementStats {
         time_moving_left_secs,
         time_moving_right_secs,
         time_stationary_secs,
         avg_distance_to_opponent,
-        closing_rate: 0.0, // Would need tick-by-tick analysis
-        time_stuck_secs: 0.0, // Would need position history
-        avg_x_position: 0.0, // Would need tick data
-        x_position_range: (0.0, 0.0), // Would need tick data
+        closing_rate,
+        time_stuck_secs,
+        avg_x_position,
+        x_position_range,
         per_goal_movement: HashMap::new(), // Would need per-tick goal correlation
     }
 }
 
-/// Analyze a pursuit protocol session
-pub fn analyze_pursuit_session(game_results: &[GameResult]) -> PursuitAnalysis {
-    let mut analysis = PursuitAnalysis::default();
+#[derive(Clone, Copy)]
+struct MovementTickStats {
+    min_x_position: f32,
+    max_x_position: f32,
+    avg_x_position: f32,
+    closing_rate: f32,
+    time_stuck_secs: f32,
+}
 
-    // Get AI profile from first result
-    if let Some(first) = game_results.first() {
-        if let Ok(parsed) = parse_evlog(&first.evlog_path) {
-            analysis.ai_profile = parsed.metadata.right_profile.clone();
-        }
+fn analyze_movement_from_ticks(db: &SimDatabase, match_id: i64) -> Option<MovementTickStats> {
+    let tick_events = db.get_events_by_type(match_id, "T").ok()?;
+    if tick_events.is_empty() {
+        return None;
     }
+
+    let mut min_x = f32::MAX;
+    let mut max_x = f32::MIN;
+    let mut sum_x = 0.0f32;
+    let mut x_samples = 0u32;
+    let mut total_closing_rate = 0.0f32;
+    let mut closing_samples = 0u32;
+    let mut time_stuck_secs = 0.0f32;
+
+    let mut prev_right_pos: Option<(f32, f32)> = None;
+    let mut prev_distance: Option<f32> = None;
+    let mut prev_time_ms: Option<u32> = None;
+    let stuck_threshold = 3.0f32;
+
+    for event in &tick_events {
+        let parts: Vec<&str> = event.data.split('|').collect();
+        if parts.len() < 6 {
+            continue;
+        }
+
+        let left_pos = parse_pos_simple(parts[3]);
+        let right_pos = parse_pos_simple(parts[5]);
+
+        let Some((rx, ry)) = right_pos else {
+            continue;
+        };
+        sum_x += rx;
+        x_samples += 1;
+        min_x = min_x.min(rx);
+        max_x = max_x.max(rx);
+
+        if let Some(prev_pos) = prev_right_pos {
+            let dx = rx - prev_pos.0;
+            let dy = ry - prev_pos.1;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < stuck_threshold {
+                if let Some(prev_ms) = prev_time_ms {
+                    let dt = (event.time_ms.saturating_sub(prev_ms)) as f32 / 1000.0;
+                    time_stuck_secs += dt;
+                }
+            }
+        }
+        prev_right_pos = Some((rx, ry));
+
+        if let (Some((lx, ly)), Some(prev_dist), Some(prev_ms)) = (left_pos, prev_distance, prev_time_ms) {
+            let distance = ((rx - lx).powi(2) + (ry - ly).powi(2)).sqrt();
+            let dt = (event.time_ms.saturating_sub(prev_ms)) as f32 / 1000.0;
+            if dt > 0.0 {
+                total_closing_rate += (prev_dist - distance) / dt;
+                closing_samples += 1;
+            }
+            prev_distance = Some(distance);
+        } else if let Some((lx, ly)) = left_pos {
+            let distance = ((rx - lx).powi(2) + (ry - ly).powi(2)).sqrt();
+            prev_distance = Some(distance);
+        }
+
+        prev_time_ms = Some(event.time_ms);
+    }
+
+    if x_samples == 0 {
+        return None;
+    }
+
+    let avg_x = sum_x / x_samples as f32;
+    let closing_rate = if closing_samples > 0 {
+        total_closing_rate / closing_samples as f32
+    } else {
+        0.0
+    };
+
+    Some(MovementTickStats {
+        min_x_position: if min_x == f32::MAX { 0.0 } else { min_x },
+        max_x_position: if max_x == f32::MIN { 0.0 } else { max_x },
+        avg_x_position: avg_x,
+        closing_rate,
+        time_stuck_secs,
+    })
+}
+
+/// Analyze a pursuit protocol session from SQLite.
+pub fn analyze_pursuit_session_from_db(
+    db: &SimDatabase,
+    session_id: &str,
+) -> Option<PursuitAnalysis> {
+    let matches = db.get_session_matches(session_id).ok()?;
+    if matches.is_empty() {
+        return None;
+    }
+
+    let mut analysis = PursuitAnalysis::default();
+    analysis.ai_profile = matches
+        .first()
+        .map(|m| m.right_profile.clone())
+        .unwrap_or_else(|| "Unknown".to_string());
 
     let mut total_distance = 0.0f32;
     let mut total_closing_rate = 0.0f32;
     let mut min_distance = f32::MAX;
 
-    for result in game_results {
+    for (idx, match_info) in matches.iter().enumerate() {
         analysis.iterations += 1;
 
-        // Determine outcome
-        let outcome = if result.ai_score > 0 {
+        let outcome = if match_info.score_right > 0 {
             analysis.ai_catches += 1;
             "ai_catch"
-        } else if result.human_score > 0 {
+        } else if match_info.score_left > 0 {
             analysis.player_scores += 1;
             "player_score"
         } else {
@@ -791,55 +815,37 @@ pub fn analyze_pursuit_session(game_results: &[GameResult]) -> PursuitAnalysis {
             "timeout"
         };
 
-        // Parse evlog for movement stats
-        if let Ok(parsed) = parse_evlog(&result.evlog_path) {
-            let movement = calculate_movement_stats(&parsed);
+        let distance = db.analyze_distance(match_info.id).ok().unwrap_or_default();
+        let iter_min_distance = distance.min_distance;
 
-            // Calculate min distance from tick data
-            let iter_min_distance = parsed
-                .ticks
-                .iter()
-                .map(|t| (t.right_pos.0 - t.left_pos.0).abs())
-                .fold(f32::MAX, f32::min);
-
-            if iter_min_distance < min_distance {
-                min_distance = iter_min_distance;
-            }
-
-            total_distance += movement.avg_distance_to_opponent;
-            total_closing_rate += movement.closing_rate;
-            analysis.total_stuck_time_secs += movement.time_stuck_secs;
-
-            let position_range = movement.x_position_range.1 - movement.x_position_range.0;
-
-            analysis.iteration_stats.push(PursuitIterationStats {
-                iteration: result.game_number,
-                duration_secs: result.duration_secs,
-                outcome: outcome.to_string(),
-                avg_distance: movement.avg_distance_to_opponent,
-                min_distance: iter_min_distance,
-                closing_rate: movement.closing_rate,
-                stuck_time_secs: movement.time_stuck_secs,
-                position_range,
-            });
+        if iter_min_distance < min_distance {
+            min_distance = iter_min_distance;
         }
+
+        total_distance += distance.avg_distance;
+        total_closing_rate += 0.0;
+
+        analysis.iteration_stats.push(PursuitIterationStats {
+            iteration: (idx + 1) as u32,
+            duration_secs: match_info.duration,
+            outcome: outcome.to_string(),
+            avg_distance: distance.avg_distance,
+            min_distance: iter_min_distance,
+            closing_rate: 0.0,
+            stuck_time_secs: 0.0,
+            position_range: 0.0,
+        });
     }
 
-    // Calculate averages
     if analysis.iterations > 0 {
         analysis.avg_distance = total_distance / analysis.iterations as f32;
         analysis.avg_closing_rate = total_closing_rate / analysis.iterations as f32;
-        analysis.min_distance = if min_distance == f32::MAX {
-            0.0
-        } else {
-            min_distance
-        };
+        analysis.min_distance = if min_distance == f32::MAX { 0.0 } else { min_distance };
     }
 
-    // Calculate pursuit score
     analysis.pursuit_score = analysis.calculate_pursuit_score();
 
-    analysis
+    Some(analysis)
 }
 
 /// Generate pursuit-specific markdown report
@@ -957,367 +963,6 @@ pub fn format_pursuit_analysis_markdown(analysis: &PursuitAnalysis) -> String {
     }
 
     md
-}
-
-/// Analyze a single game from parsed evlog
-fn analyze_game(parsed: &ParsedEvlog, result: &GameResult) -> GameAnalysis {
-    // Calculate possession from ticks
-    let possession = calculate_possession(parsed);
-
-    // Shot stats
-    let shots = ShotStats {
-        human_shots: parsed.shots_for(PlayerId::L) as u32,
-        human_goals: parsed.goals_for(PlayerId::L) as u32,
-        ai_shots: parsed.shots_for(PlayerId::R) as u32,
-        ai_goals: parsed.goals_for(PlayerId::R) as u32,
-    };
-
-    // Steal stats
-    let steals = StealStats {
-        human_attempts: parsed.steal_attempts_for(PlayerId::L) as u32,
-        human_successes: parsed.steal_successes_for(PlayerId::L) as u32,
-        ai_attempts: parsed.steal_attempts_for(PlayerId::R) as u32,
-        ai_successes: parsed.steal_successes_for(PlayerId::R) as u32,
-    };
-
-    // AI behavior analysis
-    let ai_behavior = analyze_ai_behavior(parsed);
-
-    // AI movement analysis
-    let ai_movement = calculate_movement_stats(parsed);
-
-    GameAnalysis {
-        game_number: result.game_number,
-        level_name: result.level_name.clone(),
-        duration_secs: result.duration_secs,
-        human_score: result.human_score,
-        ai_score: result.ai_score,
-        possession,
-        shots,
-        steals,
-        ai_behavior,
-        ai_movement,
-        notes: result.notes.clone(),
-    }
-}
-
-/// Calculate possession percentages from tick data
-fn calculate_possession(parsed: &ParsedEvlog) -> PossessionStats {
-    if parsed.ticks.is_empty() {
-        return PossessionStats::default();
-    }
-
-    let mut human_ticks = 0u32;
-    let mut ai_ticks = 0u32;
-    let mut free_ticks = 0u32;
-
-    for tick in &parsed.ticks {
-        match tick.ball_state {
-            'H' => {
-                // Ball is held - determine by which player based on position proximity
-                let ball_pos = tick.ball_pos;
-                let left_dist = (ball_pos.0 - tick.left_pos.0).powi(2)
-                    + (ball_pos.1 - tick.left_pos.1).powi(2);
-                let right_dist = (ball_pos.0 - tick.right_pos.0).powi(2)
-                    + (ball_pos.1 - tick.right_pos.1).powi(2);
-
-                if left_dist < right_dist {
-                    human_ticks += 1;
-                } else {
-                    ai_ticks += 1;
-                }
-            }
-            'I' => {
-                // Ball in flight - count as free
-                free_ticks += 1;
-            }
-            _ => {
-                // 'F' or other - free ball
-                free_ticks += 1;
-            }
-        }
-    }
-
-    let total = (human_ticks + ai_ticks + free_ticks) as f32;
-    if total == 0.0 {
-        return PossessionStats::default();
-    }
-
-    PossessionStats {
-        human_pct: (human_ticks as f32 / total) * 100.0,
-        ai_pct: (ai_ticks as f32 / total) * 100.0,
-        free_pct: (free_ticks as f32 / total) * 100.0,
-        human_pickups: parsed.pickups_for(PlayerId::L) as u32,
-        ai_pickups: parsed.pickups_for(PlayerId::R) as u32,
-    }
-}
-
-/// Analyze AI behavior patterns
-fn analyze_ai_behavior(parsed: &ParsedEvlog) -> AiBehaviorStats {
-    let mut goal_distribution: HashMap<String, u32> = HashMap::new();
-    let mut goal_time_breakdown: HashMap<String, f32> = HashMap::new();
-    let mut goal_transitions = 0u32;
-    let mut oscillation_count = 0u32;
-
-    // Track recent goals for oscillation detection
-    let mut recent_goals: Vec<&str> = Vec::new();
-    const OSCILLATION_WINDOW: usize = 6;
-    const OSCILLATION_THRESHOLD: usize = 3; // 3+ switches in window = oscillation
-
-    // Get AI goals sorted by time
-    let ai_goals: Vec<_> = parsed
-        .ai_goals
-        .iter()
-        .filter(|g| g.player == PlayerId::R)
-        .collect();
-
-    let match_end_ms = parsed.max_time_ms;
-    let mut last_goal: Option<(&str, u32)> = None; // (goal_name, start_time_ms)
-    let mut longest_goal_duration_secs = 0.0f32;
-
-    for ai_goal in &ai_goals {
-        let goal = ai_goal.goal.as_str();
-        let time_ms = ai_goal.time_ms;
-
-        // Count distribution
-        *goal_distribution.entry(goal.to_string()).or_insert(0) += 1;
-
-        // Calculate time spent in previous goal
-        if let Some((prev_goal, prev_time)) = last_goal {
-            let duration_secs = (time_ms - prev_time) as f32 / 1000.0;
-            *goal_time_breakdown.entry(prev_goal.to_string()).or_insert(0.0) += duration_secs;
-
-            if duration_secs > longest_goal_duration_secs {
-                longest_goal_duration_secs = duration_secs;
-            }
-
-            // Count transitions
-            if prev_goal != goal {
-                goal_transitions += 1;
-
-                // Track for oscillation detection
-                recent_goals.push(goal);
-                if recent_goals.len() > OSCILLATION_WINDOW {
-                    recent_goals.remove(0);
-                }
-
-                // Check for oscillation (rapid switching between goals)
-                if recent_goals.len() >= OSCILLATION_WINDOW {
-                    let unique_goals: std::collections::HashSet<_> = recent_goals.iter().collect();
-                    if unique_goals.len() <= 2 && recent_goals.len() >= OSCILLATION_THRESHOLD {
-                        oscillation_count += 1;
-                    }
-                }
-            }
-        }
-
-        last_goal = Some((goal, time_ms));
-    }
-
-    // Account for time from last goal to match end
-    if let Some((last_goal_name, last_time)) = last_goal {
-        let duration_secs = (match_end_ms - last_time) as f32 / 1000.0;
-        *goal_time_breakdown
-            .entry(last_goal_name.to_string())
-            .or_insert(0.0) += duration_secs;
-
-        if duration_secs > longest_goal_duration_secs {
-            longest_goal_duration_secs = duration_secs;
-        }
-    }
-
-    // Find dominant goal (most time spent)
-    let (dominant_goal, dominant_goal_time) = goal_time_breakdown
-        .iter()
-        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(k, v)| (k.clone(), *v))
-        .unwrap_or_default();
-
-    AiBehaviorStats {
-        goal_distribution,
-        goal_transitions,
-        oscillation_count,
-        goal_time_breakdown,
-        longest_goal_duration_secs,
-        dominant_goal,
-        dominant_goal_time,
-    }
-}
-
-/// Calculate AI movement statistics from tick and input data
-fn calculate_movement_stats(parsed: &ParsedEvlog) -> MovementStats {
-    if parsed.ticks.is_empty() {
-        return MovementStats::default();
-    }
-
-    // Collect AI (right player) inputs
-    let ai_inputs: Vec<_> = parsed.inputs_for(PlayerId::R).collect();
-
-    let mut time_moving_left_secs = 0.0f32;
-    let mut time_moving_right_secs = 0.0f32;
-    let mut time_stationary_secs = 0.0f32;
-
-    let mut total_distance = 0.0f32;
-    let mut distance_samples = 0u32;
-
-    let mut closing_distance_sum = 0.0f32;
-    let mut closing_samples = 0u32;
-
-    let mut x_positions: Vec<f32> = Vec::new();
-    let mut time_stuck_secs = 0.0f32;
-
-    // Per-goal movement tracking
-    let mut per_goal_movement: HashMap<String, GoalMovementStats> = HashMap::new();
-
-    // Build a map of time -> AI goal
-    let mut current_goal = String::new();
-    let ai_goals: Vec<_> = parsed
-        .ai_goals
-        .iter()
-        .filter(|g| g.player == PlayerId::R)
-        .collect();
-    let mut goal_idx = 0;
-
-    // Stuck detection: track position history
-    const STUCK_WINDOW_MS: u32 = 500;
-    const STUCK_THRESHOLD_PX: f32 = 5.0;
-    let mut position_history: Vec<(u32, f32)> = Vec::new(); // (time_ms, x_pos)
-
-    // Process ticks with their corresponding inputs
-    let mut prev_tick: Option<&crate::events::evlog_parser::TickData> = None;
-
-    for tick in &parsed.ticks {
-        let time_ms = tick.time_ms;
-
-        // Update current goal
-        while goal_idx < ai_goals.len() && ai_goals[goal_idx].time_ms <= time_ms {
-            current_goal = ai_goals[goal_idx].goal.clone();
-            goal_idx += 1;
-        }
-
-        // Find input for this tick (closest by time)
-        let input = ai_inputs
-            .iter()
-            .filter(|i| i.time_ms <= time_ms)
-            .last()
-            .map(|i| i.move_x)
-            .unwrap_or(0.0);
-
-        // Calculate time delta from previous tick
-        let dt_secs = if let Some(prev) = prev_tick {
-            (time_ms - prev.time_ms) as f32 / 1000.0
-        } else {
-            0.0
-        };
-
-        // Movement direction tracking
-        if input < -0.1 {
-            time_moving_left_secs += dt_secs;
-        } else if input > 0.1 {
-            time_moving_right_secs += dt_secs;
-        } else {
-            time_stationary_secs += dt_secs;
-        }
-
-        // Track position
-        let ai_x = tick.right_pos.0;
-        let human_x = tick.left_pos.0;
-        x_positions.push(ai_x);
-
-        // Distance to opponent
-        let distance = (ai_x - human_x).abs();
-        total_distance += distance;
-        distance_samples += 1;
-
-        // Closing rate (change in distance)
-        if let Some(prev) = prev_tick {
-            let prev_distance = (prev.right_pos.0 - prev.left_pos.0).abs();
-            let distance_change = prev_distance - distance; // positive = closing
-            if dt_secs > 0.0 {
-                closing_distance_sum += distance_change / dt_secs;
-                closing_samples += 1;
-            }
-        }
-
-        // Stuck detection
-        position_history.push((time_ms, ai_x));
-        // Remove old entries
-        position_history.retain(|(t, _)| time_ms - *t <= STUCK_WINDOW_MS);
-
-        if position_history.len() >= 2 && input.abs() > 0.1 {
-            let oldest = position_history.first().unwrap();
-            let position_change = (ai_x - oldest.1).abs();
-            if position_change < STUCK_THRESHOLD_PX {
-                time_stuck_secs += dt_secs;
-            }
-        }
-
-        // Per-goal movement tracking
-        if !current_goal.is_empty() {
-            let goal_stats = per_goal_movement
-                .entry(current_goal.clone())
-                .or_default();
-            goal_stats.time_secs += dt_secs;
-            if input < -0.1 {
-                goal_stats.time_moving_left_secs += dt_secs;
-            } else if input > 0.1 {
-                goal_stats.time_moving_right_secs += dt_secs;
-            } else {
-                goal_stats.time_stationary_secs += dt_secs;
-            }
-            goal_stats.avg_distance += distance * dt_secs; // weighted sum, will divide later
-        }
-
-        prev_tick = Some(tick);
-    }
-
-    // Finalize per-goal averages
-    for stats in per_goal_movement.values_mut() {
-        if stats.time_secs > 0.0 {
-            stats.avg_distance /= stats.time_secs;
-        }
-    }
-
-    // Calculate closing rate per goal
-    // (This is a simplification - we already have aggregate closing rate)
-
-    let avg_distance_to_opponent = if distance_samples > 0 {
-        total_distance / distance_samples as f32
-    } else {
-        0.0
-    };
-
-    let closing_rate = if closing_samples > 0 {
-        closing_distance_sum / closing_samples as f32
-    } else {
-        0.0
-    };
-
-    let avg_x_position = if !x_positions.is_empty() {
-        x_positions.iter().sum::<f32>() / x_positions.len() as f32
-    } else {
-        0.0
-    };
-
-    let x_position_range = if !x_positions.is_empty() {
-        let min = x_positions.iter().cloned().fold(f32::INFINITY, f32::min);
-        let max = x_positions.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        (min, max)
-    } else {
-        (0.0, 0.0)
-    };
-
-    MovementStats {
-        time_moving_left_secs,
-        time_moving_right_secs,
-        time_stationary_secs,
-        avg_distance_to_opponent,
-        closing_rate,
-        time_stuck_secs,
-        avg_x_position,
-        x_position_range,
-        per_goal_movement,
-    }
 }
 
 /// Generate insights from session data
@@ -1889,72 +1534,9 @@ pub fn generate_claude_prompt(session_dir: &Path, analysis: &SessionAnalysis) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::evlog_parser::parse_evlog_content;
-
-    // Sample evlog with AI movement data
-    const SAMPLE_EVLOG_WITH_MOVEMENT: &str = r#"
-T:00000|SE|test_session|2026-01-25
-T:00000|MS|3|Test Level|Player|Aggressive|12345
-T:00000|AG|R|ChaseBall
-T:00100|T|1|-300.0,-350.0|0.0,0.0|300.0,-350.0|0.0,0.0|-300.0,-350.0|0.0,0.0|H
-T:00100|I|L|0.0|-
-T:00100|I|R|-1.0|-
-T:00200|AG|R|InterceptDefense
-T:00200|T|2|-300.0,-350.0|0.0,0.0|290.0,-350.0|-100.0,0.0|-300.0,-350.0|0.0,0.0|H
-T:00200|I|L|0.0|-
-T:00200|I|R|-1.0|-
-T:00300|T|3|-300.0,-350.0|0.0,0.0|280.0,-350.0|-100.0,0.0|-300.0,-350.0|0.0,0.0|H
-T:00300|I|L|0.0|-
-T:00300|I|R|-1.0|-
-T:00400|T|4|-300.0,-350.0|0.0,0.0|270.0,-350.0|-100.0,0.0|-300.0,-350.0|0.0,0.0|H
-T:00400|I|L|0.0|-
-T:00400|I|R|-1.0|-
-T:00500|T|5|-290.0,-350.0|100.0,0.0|260.0,-350.0|-100.0,0.0|-290.0,-350.0|0.0,0.0|H
-T:00500|I|L|1.0|-
-T:00500|I|R|-1.0|-
-T:01000|ME|0|0|1.0
-"#;
-
-    #[test]
-    fn test_ai_behavior_with_goal_time_breakdown() {
-        let parsed = parse_evlog_content(SAMPLE_EVLOG_WITH_MOVEMENT);
-        let behavior = analyze_ai_behavior(&parsed);
-
-        // Should have 2 goals tracked
-        assert!(behavior.goal_distribution.contains_key("ChaseBall"));
-        assert!(behavior.goal_distribution.contains_key("InterceptDefense"));
-
-        // Should have goal time breakdown
-        assert!(!behavior.goal_time_breakdown.is_empty());
-
-        // InterceptDefense should be dominant (more time spent)
-        assert_eq!(behavior.dominant_goal, "InterceptDefense");
-        assert!(behavior.dominant_goal_time > 0.0);
-
-        // Should have 1 transition
-        assert_eq!(behavior.goal_transitions, 1);
-    }
-
-    #[test]
-    fn test_movement_stats() {
-        let parsed = parse_evlog_content(SAMPLE_EVLOG_WITH_MOVEMENT);
-        let movement = calculate_movement_stats(&parsed);
-
-        // AI should be moving left (input -1.0 throughout)
-        assert!(movement.time_moving_left_secs > 0.0);
-        assert!(movement.time_moving_right_secs < 0.1); // nearly 0
-
-        // Should have per-goal movement data
-        assert!(!movement.per_goal_movement.is_empty());
-        assert!(movement.per_goal_movement.contains_key("InterceptDefense"));
-
-        // Position range should be tracked
-        assert!(movement.x_position_range.0 <= movement.x_position_range.1);
-    }
 
     #[test]
     fn test_identify_movement_weaknesses() {
-        // Create a minimal GameAnalysis with movement issues
         let game = GameAnalysis {
             game_number: 1,
             level_name: "Test".to_string(),
@@ -1974,9 +1556,9 @@ T:01000|ME|0|0|1.0
                 time_moving_left_secs: 15.0,
                 time_moving_right_secs: 0.5,
                 time_stationary_secs: 4.5,
-                time_stuck_secs: 8.0, // 40% of game - should trigger weakness
-                closing_rate: -15.0,  // falling behind
-                x_position_range: (280.0, 320.0), // only 40px range
+                time_stuck_secs: 8.0,
+                closing_rate: -15.0,
+                x_position_range: (280.0, 320.0),
                 ..Default::default()
             },
             notes: None,
@@ -1989,78 +1571,10 @@ T:01000|ME|0|0|1.0
 
         let weaknesses = identify_weaknesses(&aggregate, &[game]);
 
-        // Should detect stuck pattern
         assert!(weaknesses.iter().any(|w| w.contains("stuck")));
-
-        // Should detect falling behind
         assert!(weaknesses.iter().any(|w| w.contains("falling behind")));
-
-        // Should detect monotonic movement
         assert!(weaknesses.iter().any(|w| w.contains("monotonic")));
-
-        // Should detect small position range
         assert!(weaknesses.iter().any(|w| w.contains("position range")));
-
-        // Should detect dominant goal with few transitions
         assert!(weaknesses.iter().any(|w| w.contains("InterceptDefense")));
-    }
-
-    #[test]
-    fn test_real_session_analysis() {
-        // Test against actual evlog file if it exists
-        use crate::events::evlog_parser::parse_evlog;
-        use std::path::Path;
-
-        let evlog_path = Path::new("training_logs/session_20260125_172911/game_1_level7.evlog");
-        if !evlog_path.exists() {
-            // Skip test if file doesn't exist
-            return;
-        }
-
-        let parsed = parse_evlog(evlog_path).expect("Should parse evlog");
-
-        // Verify inputs were parsed
-        assert!(!parsed.inputs.is_empty(), "Should have input data");
-
-        // Verify AI inputs exist
-        let ai_inputs: Vec<_> = parsed.inputs_for(PlayerId::R).collect();
-        assert!(!ai_inputs.is_empty(), "Should have AI input data");
-
-        // Run analysis
-        let behavior = analyze_ai_behavior(&parsed);
-        let movement = calculate_movement_stats(&parsed);
-
-        // Verify goal time breakdown matches expected from analysis.md
-        // InterceptDefense should be dominant at ~97%
-        assert_eq!(behavior.dominant_goal, "InterceptDefense");
-        assert!(behavior.dominant_goal_time > 15.0, "InterceptDefense should be >15s");
-
-        // Verify movement stats are reasonable
-        // From analysis.md: Left: 6.3s, Right: 3.8s, Still: 11.0s
-        assert!(movement.time_moving_left_secs > 5.0, "Should have >5s moving left");
-        assert!(movement.time_moving_right_secs > 2.0, "Should have >2s moving right");
-        assert!(movement.time_stationary_secs > 8.0, "Should have >8s stationary");
-
-        // Position range should be ~978px (from -443 to 535)
-        let range = movement.x_position_range.1 - movement.x_position_range.0;
-        assert!(range > 500.0, "Position range should be >500px, got {}", range);
-
-        // Closing rate should be positive (AI was closing gap)
-        assert!(movement.closing_rate > 0.0, "Closing rate should be positive (closing gap)");
-
-        // Stuck time should be around 3.2s (15%)
-        assert!(movement.time_stuck_secs > 2.0, "Should have >2s stuck time");
-        assert!(movement.time_stuck_secs < 6.0, "Should have <6s stuck time");
-
-        println!("Real session analysis verified:");
-        println!("  Dominant goal: {} ({:.1}s)", behavior.dominant_goal, behavior.dominant_goal_time);
-        println!("  Movement: L={:.1}s R={:.1}s Still={:.1}s",
-            movement.time_moving_left_secs,
-            movement.time_moving_right_secs,
-            movement.time_stationary_secs);
-        println!("  Position range: {:.0} to {:.0} ({:.0}px)",
-            movement.x_position_range.0, movement.x_position_range.1, range);
-        println!("  Closing rate: {:.1}px/s", movement.closing_rate);
-        println!("  Stuck time: {:.1}s", movement.time_stuck_secs);
     }
 }

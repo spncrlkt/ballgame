@@ -18,7 +18,7 @@ Training Tools → AI Quality → MVP (playable) → V0 (polished) → V1 (multi
 - [ ] Clear status display between games
 
 **Ghost System:**
-- [ ] Extract player drives from evlogs (segment by goals)
+- [ ] Extract player drives from SQLite events (segment by goals)
 - [ ] Ghost replay mode - one player follows recorded inputs
 - [ ] `--ghost` flag works in simulate binary
 - [ ] Defense test: measure AI success at stopping recorded human plays
@@ -105,4 +105,4 @@ Training Tools → AI Quality → MVP (playable) → V0 (polished) → V1 (multi
 ## Decision Docs Needed
 
 - [ ] **Netcode architecture** - Required before multiplayer (V1)
-- [ ] **Input-first logging** - Refactor evlogs to be replay-deterministic
+- [ ] **Input-first logging** - Refactor event logging to be replay-deterministic

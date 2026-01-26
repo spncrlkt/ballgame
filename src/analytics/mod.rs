@@ -11,7 +11,7 @@ pub mod suggestions;
 mod defaults;
 pub mod db_analytics;
 
-pub use parser::{parse_event_log, parse_all_logs, ParsedMatch};
+pub use parser::{parse_all_matches_from_db, parse_match_from_db, ParsedMatch};
 pub use metrics::{AggregateMetrics, ProfileMetrics};
 pub use leaderboard::{ProfileRanking, Leaderboard};
 pub use targets::{TuningTargets, TargetDelta, TargetStatus, load_targets, default_targets};
