@@ -11,6 +11,7 @@ use chrono::Local;
 
 use crate::events::evlog_parser::{parse_evlog, ParsedEvlog};
 use crate::events::PlayerId;
+use crate::simulation::db::{SimDatabase, MatchSummary, DistanceAnalysis, InputAnalysis, GoalTransition};
 use crate::training::state::GameResult;
 
 /// Per-game analysis metrics
@@ -396,6 +397,367 @@ pub fn analyze_session(
         aggregate,
         insights,
         weaknesses,
+    }
+}
+
+/// Analyze a training session from SQLite database
+///
+/// This is the SQLite-based alternative to `analyze_session()` which parses evlog files.
+/// All event data is queried directly from the database.
+pub fn analyze_session_from_db(
+    db: &SimDatabase,
+    session_id: &str,
+    protocol: TrainingProtocol,
+) -> Option<SessionAnalysis> {
+    // Get session matches
+    let matches = db.get_session_matches(session_id).ok()?;
+    if matches.is_empty() {
+        return None;
+    }
+
+    let mut games = Vec::new();
+    let mut aggregate = AggregateStats::default();
+
+    // Get AI profile from first match
+    let ai_profile = matches.first().map(|m| m.right_profile.clone()).unwrap_or_else(|| "Unknown".to_string());
+
+    // Analyze each match
+    for (idx, match_info) in matches.iter().enumerate() {
+        let game_analysis = analyze_game_from_db(db, match_info, (idx + 1) as u32);
+
+        // Update aggregate stats
+        aggregate.total_games += 1;
+        if match_info.score_left > match_info.score_right {
+            aggregate.human_wins += 1;
+        } else if match_info.score_right > match_info.score_left {
+            aggregate.ai_wins += 1;
+        }
+        aggregate.total_duration_secs += game_analysis.duration_secs;
+        aggregate.avg_human_possession += game_analysis.possession.human_pct;
+        aggregate.avg_ai_possession += game_analysis.possession.ai_pct;
+        aggregate.total_human_shots += game_analysis.shots.human_shots;
+        aggregate.total_ai_shots += game_analysis.shots.ai_shots;
+        aggregate.total_human_goals += game_analysis.shots.human_goals;
+        aggregate.total_ai_goals += game_analysis.shots.ai_goals;
+        aggregate.total_human_steals += game_analysis.steals.human_successes;
+        aggregate.total_ai_steals += game_analysis.steals.ai_successes;
+        aggregate.total_human_steal_attempts += game_analysis.steals.human_attempts;
+        aggregate.total_ai_steal_attempts += game_analysis.steals.ai_attempts;
+
+        games.push(game_analysis);
+    }
+
+    // Average possession percentages
+    if aggregate.total_games > 0 {
+        aggregate.avg_human_possession /= aggregate.total_games as f32;
+        aggregate.avg_ai_possession /= aggregate.total_games as f32;
+    }
+
+    // Generate insights and weaknesses
+    let insights = generate_insights(&aggregate, &games);
+    let weaknesses = identify_weaknesses(&aggregate, &games);
+
+    Some(SessionAnalysis {
+        session_id: session_id.to_string(),
+        protocol: protocol.cli_name().to_string(),
+        protocol_description: protocol.description().to_string(),
+        ai_profile,
+        games,
+        aggregate,
+        insights,
+        weaknesses,
+    })
+}
+
+/// Analyze a single game from SQLite database
+fn analyze_game_from_db(db: &SimDatabase, match_info: &MatchSummary, game_number: u32) -> GameAnalysis {
+    let match_id = match_info.id;
+
+    // Get event statistics
+    let event_stats = db.get_match_event_stats(match_id).ok();
+
+    // Get distance analysis
+    let distance_analysis = db.analyze_distance(match_id).ok();
+
+    // Get AI input analysis
+    let input_analysis = db.analyze_ai_inputs(match_id).ok();
+
+    // Get goal transitions
+    let goal_transitions = db.get_goal_transitions(match_id).ok().unwrap_or_default();
+
+    // Build shot stats from events
+    let shots = if let Some(_stats) = &event_stats {
+        // Count shots and goals by player from events
+        let shot_events = db.get_events_by_type(match_id, "SR").ok().unwrap_or_default();
+        let goal_events = db.get_events_by_type(match_id, "G").ok().unwrap_or_default();
+
+        let (human_shots, ai_shots) = count_events_by_player(&shot_events);
+        let (human_goals, ai_goals) = count_events_by_player(&goal_events);
+
+        ShotStats {
+            human_shots,
+            human_goals,
+            ai_shots,
+            ai_goals,
+        }
+    } else {
+        ShotStats::default()
+    };
+
+    // Build steal stats from events
+    let steals = {
+        let steal_attempt_events = db.get_events_by_type(match_id, "SA").ok().unwrap_or_default();
+        let steal_success_events = db.get_events_by_type(match_id, "S+").ok().unwrap_or_default();
+
+        let (human_attempts, ai_attempts) = count_events_by_player(&steal_attempt_events);
+        let (human_successes, ai_successes) = count_events_by_player(&steal_success_events);
+
+        StealStats {
+            human_attempts,
+            human_successes,
+            ai_attempts,
+            ai_successes,
+        }
+    };
+
+    // Build possession stats (approximate from tick data)
+    let possession = calculate_possession_from_db(db, match_id);
+
+    // Build AI behavior stats from goal transitions
+    let ai_behavior = build_ai_behavior_from_transitions(&goal_transitions, match_info.duration);
+
+    // Build movement stats from input analysis
+    let ai_movement = build_movement_from_input_analysis(
+        input_analysis.as_ref(),
+        distance_analysis.as_ref(),
+        match_info.duration,
+    );
+
+    GameAnalysis {
+        game_number,
+        level_name: match_info.level_name.clone(),
+        duration_secs: match_info.duration,
+        human_score: match_info.score_left,
+        ai_score: match_info.score_right,
+        possession,
+        shots,
+        steals,
+        ai_behavior,
+        ai_movement,
+        notes: None,
+    }
+}
+
+/// Count events by player (L = human, R = AI)
+fn count_events_by_player(events: &[crate::simulation::db::EventRecord]) -> (u32, u32) {
+    let mut human = 0u32;
+    let mut ai = 0u32;
+
+    for event in events {
+        // Event data format: T:NNNNN|TYPE|player|...
+        let parts: Vec<&str> = event.data.split('|').collect();
+        if parts.len() >= 3 {
+            match parts[2] {
+                "L" => human += 1,
+                "R" => ai += 1,
+                _ => {}
+            }
+        }
+    }
+
+    (human, ai)
+}
+
+/// Calculate possession stats from tick events in database
+fn calculate_possession_from_db(db: &SimDatabase, match_id: i64) -> PossessionStats {
+    let tick_events = db.get_events_by_type(match_id, "T").ok().unwrap_or_default();
+
+    if tick_events.is_empty() {
+        return PossessionStats::default();
+    }
+
+    let mut human_ticks = 0u32;
+    let mut ai_ticks = 0u32;
+    let mut free_ticks = 0u32;
+
+    for event in &tick_events {
+        // Parse tick data: T:NNNNN|T|frame|left_pos|left_vel|right_pos|right_vel|ball_pos|ball_vel|state
+        let parts: Vec<&str> = event.data.split('|').collect();
+        if parts.len() < 10 {
+            continue;
+        }
+
+        let state = parts[9];
+        match state {
+            "H" => {
+                // Ball is held - determine holder by proximity
+                if let (Some(left_pos), Some(right_pos), Some(ball_pos)) = (
+                    parse_pos_simple(parts[3]),
+                    parse_pos_simple(parts[5]),
+                    parse_pos_simple(parts[7]),
+                ) {
+                    let left_dist = (ball_pos.0 - left_pos.0).powi(2) + (ball_pos.1 - left_pos.1).powi(2);
+                    let right_dist = (ball_pos.0 - right_pos.0).powi(2) + (ball_pos.1 - right_pos.1).powi(2);
+
+                    if left_dist < right_dist {
+                        human_ticks += 1;
+                    } else {
+                        ai_ticks += 1;
+                    }
+                }
+            }
+            "I" | "F" | _ => {
+                free_ticks += 1;
+            }
+        }
+    }
+
+    // Count pickups from P events
+    let pickup_events = db.get_events_by_type(match_id, "P").ok().unwrap_or_default();
+    let (human_pickups, ai_pickups) = count_events_by_player(&pickup_events);
+
+    let total = (human_ticks + ai_ticks + free_ticks) as f32;
+    if total == 0.0 {
+        return PossessionStats::default();
+    }
+
+    PossessionStats {
+        human_pct: (human_ticks as f32 / total) * 100.0,
+        ai_pct: (ai_ticks as f32 / total) * 100.0,
+        free_pct: (free_ticks as f32 / total) * 100.0,
+        human_pickups,
+        ai_pickups,
+    }
+}
+
+/// Parse position string "x,y" into tuple
+fn parse_pos_simple(s: &str) -> Option<(f32, f32)> {
+    let parts: Vec<&str> = s.split(',').collect();
+    if parts.len() == 2 {
+        let x = parts[0].parse::<f32>().ok()?;
+        let y = parts[1].parse::<f32>().ok()?;
+        Some((x, y))
+    } else {
+        None
+    }
+}
+
+/// Build AI behavior stats from goal transitions
+fn build_ai_behavior_from_transitions(transitions: &[GoalTransition], duration_secs: f32) -> AiBehaviorStats {
+    let mut goal_distribution: HashMap<String, u32> = HashMap::new();
+    let mut goal_time_breakdown: HashMap<String, f32> = HashMap::new();
+    let mut goal_transitions_count = 0u32;
+    let mut oscillation_count = 0u32;
+
+    // Track recent goals for oscillation detection
+    let mut recent_goals: Vec<&str> = Vec::new();
+    const OSCILLATION_WINDOW: usize = 6;
+
+    // Filter for AI (R) goals
+    let ai_goals: Vec<_> = transitions.iter().filter(|t| t.player == "R").collect();
+
+    let mut last_goal: Option<(&str, u32)> = None;
+    let mut longest_goal_duration_secs = 0.0f32;
+    let match_end_ms = (duration_secs * 1000.0) as u32;
+
+    for ai_goal in &ai_goals {
+        let goal = ai_goal.goal.as_str();
+        let time_ms = ai_goal.time_ms;
+
+        // Count distribution
+        *goal_distribution.entry(goal.to_string()).or_insert(0) += 1;
+
+        // Calculate time spent in previous goal
+        if let Some((prev_goal, prev_time)) = last_goal {
+            let duration = (time_ms - prev_time) as f32 / 1000.0;
+            *goal_time_breakdown.entry(prev_goal.to_string()).or_insert(0.0) += duration;
+
+            if duration > longest_goal_duration_secs {
+                longest_goal_duration_secs = duration;
+            }
+
+            // Count transitions
+            if prev_goal != goal {
+                goal_transitions_count += 1;
+
+                // Track for oscillation detection
+                recent_goals.push(goal);
+                if recent_goals.len() > OSCILLATION_WINDOW {
+                    recent_goals.remove(0);
+                }
+
+                // Check for oscillation
+                if recent_goals.len() >= OSCILLATION_WINDOW {
+                    let unique_goals: std::collections::HashSet<_> = recent_goals.iter().collect();
+                    if unique_goals.len() <= 2 {
+                        oscillation_count += 1;
+                    }
+                }
+            }
+        }
+
+        last_goal = Some((goal, time_ms));
+    }
+
+    // Account for time from last goal to match end
+    if let Some((last_goal_name, last_time)) = last_goal {
+        let duration = (match_end_ms.saturating_sub(last_time)) as f32 / 1000.0;
+        *goal_time_breakdown.entry(last_goal_name.to_string()).or_insert(0.0) += duration;
+
+        if duration > longest_goal_duration_secs {
+            longest_goal_duration_secs = duration;
+        }
+    }
+
+    // Find dominant goal
+    let (dominant_goal, dominant_goal_time) = goal_time_breakdown
+        .iter()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(k, v)| (k.clone(), *v))
+        .unwrap_or_default();
+
+    AiBehaviorStats {
+        goal_distribution,
+        goal_transitions: goal_transitions_count,
+        oscillation_count,
+        goal_time_breakdown,
+        longest_goal_duration_secs,
+        dominant_goal,
+        dominant_goal_time,
+    }
+}
+
+/// Build movement stats from input analysis
+fn build_movement_from_input_analysis(
+    input: Option<&InputAnalysis>,
+    distance: Option<&DistanceAnalysis>,
+    _duration_secs: f32,
+) -> MovementStats {
+    let input = match input {
+        Some(i) => i,
+        None => return MovementStats::default(),
+    };
+
+    // Approximate time from frame counts (assuming ~60 FPS)
+    let frame_to_secs = |frames: u32| frames as f32 / 60.0;
+
+    let time_moving_left_secs = frame_to_secs(input.move_left_frames);
+    let time_moving_right_secs = frame_to_secs(input.move_right_frames);
+    let time_stationary_secs = frame_to_secs(input.stationary_frames);
+
+    // Get distance stats
+    let avg_distance_to_opponent = distance.map(|d| d.avg_distance).unwrap_or(0.0);
+
+    MovementStats {
+        time_moving_left_secs,
+        time_moving_right_secs,
+        time_stationary_secs,
+        avg_distance_to_opponent,
+        closing_rate: 0.0, // Would need tick-by-tick analysis
+        time_stuck_secs: 0.0, // Would need position history
+        avg_x_position: 0.0, // Would need tick data
+        x_position_range: (0.0, 0.0), // Would need tick data
+        per_goal_movement: HashMap::new(), // Would need per-tick goal correlation
     }
 }
 

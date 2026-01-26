@@ -401,6 +401,420 @@ pub struct MatchSummary {
     pub winner: String,
 }
 
+//=============================================================================
+// Analysis Data Structures
+//=============================================================================
+
+/// Distance analysis metrics for a match
+#[derive(Debug, Clone, Default)]
+pub struct DistanceAnalysis {
+    pub min_distance: f32,
+    pub avg_distance: f32,
+    pub max_distance: f32,
+    pub ticks_within_60px: u32,
+    pub ticks_within_100px: u32,
+    pub ticks_within_200px: u32,
+    pub total_ticks: u32,
+    pub closest_moment_ms: Option<u32>,
+}
+
+/// AI input analysis metrics for a match
+#[derive(Debug, Clone, Default)]
+pub struct InputAnalysis {
+    pub move_left_frames: u32,
+    pub move_right_frames: u32,
+    pub stationary_frames: u32,
+    pub jump_presses: u32,
+    pub pickup_presses: u32,
+    pub throw_presses: u32,
+    pub total_frames: u32,
+}
+
+/// Closest moment during a match
+#[derive(Debug, Clone)]
+pub struct ClosestMoment {
+    pub time_ms: u32,
+    pub distance: f32,
+    pub left_pos: (f32, f32),
+    pub right_pos: (f32, f32),
+}
+
+/// Goal transition data
+#[derive(Debug, Clone)]
+pub struct GoalTransition {
+    pub time_ms: u32,
+    pub player: String,
+    pub goal: String,
+}
+
+/// Session summary for analysis
+#[derive(Debug, Clone)]
+pub struct SessionSummary {
+    pub session_id: String,
+    pub session_type: String,
+    pub created_at: String,
+    pub match_count: u32,
+    pub total_duration_secs: f32,
+}
+
+/// Match with event statistics
+#[derive(Debug, Clone)]
+pub struct MatchEventStats {
+    pub match_id: i64,
+    pub level_name: String,
+    pub left_profile: String,
+    pub right_profile: String,
+    pub score_left: u32,
+    pub score_right: u32,
+    pub duration_secs: f32,
+    pub event_count: u32,
+    pub tick_count: u32,
+    pub goal_count: u32,
+    pub shot_count: u32,
+    pub steal_count: u32,
+}
+
+//=============================================================================
+// Analysis Query Methods
+//=============================================================================
+
+impl SimDatabase {
+    /// Get session summary
+    pub fn get_session_summary(&self, session_id: &str) -> Result<SessionSummary> {
+        self.conn.query_row(
+            r#"SELECT
+                s.id, s.session_type, s.created_at,
+                COUNT(m.id) as match_count,
+                COALESCE(SUM(m.duration_secs), 0.0) as total_duration
+               FROM sessions s
+               LEFT JOIN matches m ON m.session_id = s.id
+               WHERE s.id = ?1
+               GROUP BY s.id"#,
+            params![session_id],
+            |row| {
+                Ok(SessionSummary {
+                    session_id: row.get(0)?,
+                    session_type: row.get(1)?,
+                    created_at: row.get(2)?,
+                    match_count: row.get(3)?,
+                    total_duration_secs: row.get(4)?,
+                })
+            },
+        )
+    }
+
+    /// Get matches for a session
+    pub fn get_session_matches(&self, session_id: &str) -> Result<Vec<MatchSummary>> {
+        let mut stmt = self.conn.prepare(
+            r#"SELECT id, level, level_name, left_profile, right_profile,
+                      score_left, score_right, duration_secs, winner
+               FROM matches
+               WHERE session_id = ?1
+               ORDER BY id"#,
+        )?;
+
+        let rows = stmt.query_map(params![session_id], |row| {
+            Ok(MatchSummary {
+                id: row.get(0)?,
+                level: row.get(1)?,
+                level_name: row.get(2)?,
+                left_profile: row.get(3)?,
+                right_profile: row.get(4)?,
+                score_left: row.get(5)?,
+                score_right: row.get(6)?,
+                duration: row.get(7)?,
+                winner: row.get(8)?,
+            })
+        })?;
+
+        rows.collect()
+    }
+
+    /// Get match event statistics
+    pub fn get_match_event_stats(&self, match_id: i64) -> Result<MatchEventStats> {
+        self.conn.query_row(
+            r#"SELECT
+                m.id, m.level_name, m.left_profile, m.right_profile,
+                m.score_left, m.score_right, m.duration_secs,
+                (SELECT COUNT(*) FROM events WHERE match_id = m.id) as event_count,
+                (SELECT COUNT(*) FROM events WHERE match_id = m.id AND event_type = 'T') as tick_count,
+                (SELECT COUNT(*) FROM events WHERE match_id = m.id AND event_type = 'G') as goal_count,
+                (SELECT COUNT(*) FROM events WHERE match_id = m.id AND event_type = 'SR') as shot_count,
+                (SELECT COUNT(*) FROM events WHERE match_id = m.id AND event_type IN ('SA', 'S+', 'S-', 'SO')) as steal_count
+               FROM matches m
+               WHERE m.id = ?1"#,
+            params![match_id],
+            |row| {
+                Ok(MatchEventStats {
+                    match_id: row.get(0)?,
+                    level_name: row.get(1)?,
+                    left_profile: row.get(2)?,
+                    right_profile: row.get(3)?,
+                    score_left: row.get(4)?,
+                    score_right: row.get(5)?,
+                    duration_secs: row.get(6)?,
+                    event_count: row.get(7)?,
+                    tick_count: row.get(8)?,
+                    goal_count: row.get(9)?,
+                    shot_count: row.get(10)?,
+                    steal_count: row.get(11)?,
+                })
+            },
+        )
+    }
+
+    /// Get AI goal transitions for a match
+    pub fn get_goal_transitions(&self, match_id: i64) -> Result<Vec<GoalTransition>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT time_ms, data FROM events WHERE match_id = ?1 AND event_type = 'AG' ORDER BY time_ms"
+        )?;
+
+        let rows = stmt.query_map(params![match_id], |row| {
+            let time_ms: u32 = row.get(0)?;
+            let data: String = row.get(1)?;
+
+            // Parse data format: T:NNNNN|AG|player|goal
+            // The data column contains the full serialized event
+            let parts: Vec<&str> = data.split('|').collect();
+            let (player, goal) = if parts.len() >= 4 {
+                (parts[2].to_string(), parts[3].to_string())
+            } else {
+                ("?".to_string(), "?".to_string())
+            };
+
+            Ok(GoalTransition {
+                time_ms,
+                player,
+                goal,
+            })
+        })?;
+
+        rows.collect()
+    }
+
+    /// Count events by type for a match
+    pub fn count_events_by_type(&self, match_id: i64) -> Result<Vec<(String, u32)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT event_type, COUNT(*) FROM events WHERE match_id = ?1 GROUP BY event_type ORDER BY COUNT(*) DESC"
+        )?;
+
+        let rows = stmt.query_map(params![match_id], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
+
+        rows.collect()
+    }
+
+    /// Get the most recent session ID
+    pub fn get_latest_session(&self) -> Result<Option<String>> {
+        let result = self.conn.query_row(
+            "SELECT id FROM sessions ORDER BY created_at DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        );
+
+        match result {
+            Ok(id) => Ok(Some(id)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Get matches for the most recent session
+    pub fn get_latest_session_matches(&self) -> Result<Vec<MatchSummary>> {
+        if let Some(session_id) = self.get_latest_session()? {
+            self.get_session_matches(&session_id)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Get tick events with parsed position data for distance analysis
+    ///
+    /// This parses the Tick events (format: T:NNNNN|T|frame|left_pos|left_vel|right_pos|right_vel|ball_pos|ball_vel|state)
+    /// and calculates distance between players.
+    pub fn analyze_distance(&self, match_id: i64) -> Result<DistanceAnalysis> {
+        let tick_events = self.get_events_by_type(match_id, "T")?;
+
+        if tick_events.is_empty() {
+            return Ok(DistanceAnalysis::default());
+        }
+
+        let mut min_distance = f32::MAX;
+        let mut max_distance = f32::MIN;
+        let mut total_distance = 0.0f32;
+        let mut closest_moment_ms = 0u32;
+        let mut ticks_within_60 = 0u32;
+        let mut ticks_within_100 = 0u32;
+        let mut ticks_within_200 = 0u32;
+
+        for event in &tick_events {
+            // Parse: T:NNNNN|T|frame|left_pos|left_vel|right_pos|right_vel|ball_pos|ball_vel|state
+            let parts: Vec<&str> = event.data.split('|').collect();
+            if parts.len() < 6 {
+                continue;
+            }
+
+            // left_pos is at index 3, right_pos is at index 5
+            let left_pos = parse_pos(parts[3]);
+            let right_pos = parse_pos(parts[5]);
+
+            if let (Some((lx, ly)), Some((rx, ry))) = (left_pos, right_pos) {
+                let distance = ((rx - lx).powi(2) + (ry - ly).powi(2)).sqrt();
+
+                total_distance += distance;
+
+                if distance < min_distance {
+                    min_distance = distance;
+                    closest_moment_ms = event.time_ms;
+                }
+                if distance > max_distance {
+                    max_distance = distance;
+                }
+
+                if distance < 60.0 {
+                    ticks_within_60 += 1;
+                }
+                if distance < 100.0 {
+                    ticks_within_100 += 1;
+                }
+                if distance < 200.0 {
+                    ticks_within_200 += 1;
+                }
+            }
+        }
+
+        let total_ticks = tick_events.len() as u32;
+        let avg_distance = if total_ticks > 0 {
+            total_distance / total_ticks as f32
+        } else {
+            0.0
+        };
+
+        Ok(DistanceAnalysis {
+            min_distance: if min_distance == f32::MAX { 0.0 } else { min_distance },
+            avg_distance,
+            max_distance: if max_distance == f32::MIN { 0.0 } else { max_distance },
+            ticks_within_60px: ticks_within_60,
+            ticks_within_100px: ticks_within_100,
+            ticks_within_200px: ticks_within_200,
+            total_ticks,
+            closest_moment_ms: if total_ticks > 0 { Some(closest_moment_ms) } else { None },
+        })
+    }
+
+    /// Analyze AI input patterns for a match
+    ///
+    /// Parses ControllerInput events (CI) for the AI player (R)
+    pub fn analyze_ai_inputs(&self, match_id: i64) -> Result<InputAnalysis> {
+        let ci_events = self.get_events_by_type(match_id, "CI")?;
+
+        let mut move_left = 0u32;
+        let mut move_right = 0u32;
+        let mut stationary = 0u32;
+        let mut jump_presses = 0u32;
+        let mut pickup_presses = 0u32;
+        let mut throw_presses = 0u32;
+        let mut total_frames = 0u32;
+
+        for event in &ci_events {
+            // Parse: T:NNNNN|CI|player|source|move_x|jump|jump_pressed|throw|throw_released|pickup
+            let parts: Vec<&str> = event.data.split('|').collect();
+            if parts.len() < 10 {
+                continue;
+            }
+
+            // Only analyze AI (R) inputs
+            if parts[2] != "R" {
+                continue;
+            }
+
+            total_frames += 1;
+
+            // move_x is at index 4
+            if let Ok(move_x) = parts[4].parse::<f32>() {
+                if move_x < -0.1 {
+                    move_left += 1;
+                } else if move_x > 0.1 {
+                    move_right += 1;
+                } else {
+                    stationary += 1;
+                }
+            }
+
+            // jump_pressed is at index 6
+            if parts[6] == "1" {
+                jump_presses += 1;
+            }
+
+            // throw is at index 7
+            if parts[7] == "1" {
+                throw_presses += 1;
+            }
+
+            // pickup is at index 9
+            if parts[9] == "1" {
+                pickup_presses += 1;
+            }
+        }
+
+        Ok(InputAnalysis {
+            move_left_frames: move_left,
+            move_right_frames: move_right,
+            stationary_frames: stationary,
+            jump_presses,
+            pickup_presses,
+            throw_presses,
+            total_frames,
+        })
+    }
+
+    /// Get closest moments (where distance < threshold)
+    pub fn get_closest_moments(&self, match_id: i64, threshold: f32) -> Result<Vec<ClosestMoment>> {
+        let tick_events = self.get_events_by_type(match_id, "T")?;
+        let mut moments = Vec::new();
+
+        for event in &tick_events {
+            let parts: Vec<&str> = event.data.split('|').collect();
+            if parts.len() < 6 {
+                continue;
+            }
+
+            let left_pos = parse_pos(parts[3]);
+            let right_pos = parse_pos(parts[5]);
+
+            if let (Some((lx, ly)), Some((rx, ry))) = (left_pos, right_pos) {
+                let distance = ((rx - lx).powi(2) + (ry - ly).powi(2)).sqrt();
+
+                if distance < threshold {
+                    moments.push(ClosestMoment {
+                        time_ms: event.time_ms,
+                        distance,
+                        left_pos: (lx, ly),
+                        right_pos: (rx, ry),
+                    });
+                }
+            }
+        }
+
+        // Sort by distance (closest first)
+        moments.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal));
+
+        Ok(moments)
+    }
+}
+
+/// Parse a position string "x,y" into (f32, f32)
+fn parse_pos(s: &str) -> Option<(f32, f32)> {
+    let parts: Vec<&str> = s.split(',').collect();
+    if parts.len() != 2 {
+        return None;
+    }
+    let x = parts[0].parse().ok()?;
+    let y = parts[1].parse().ok()?;
+    Some((x, y))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

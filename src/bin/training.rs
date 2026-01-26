@@ -22,6 +22,7 @@ use ballgame::{
 };
 use ballgame::events::{
     emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventEmitterState,
+    SqliteEventLogger, flush_events_to_sqlite,
 };
 use ballgame::training::{
     LevelSelector, TrainingMode, TrainingPhase, TrainingProtocol, TrainingSettings, TrainingState,
@@ -59,6 +60,21 @@ fn load_ball_style_names() -> Vec<String> {
     }
 
     styles
+}
+
+/// Create the SQLite event logger for training
+fn create_sqlite_logger() -> SqliteEventLogger {
+    let db_path = std::path::Path::new("training.db");
+    match SqliteEventLogger::new(db_path, "training") {
+        Ok(logger) => {
+            info!("SQLite event logger initialized: {:?}", db_path);
+            logger
+        }
+        Err(e) => {
+            warn!("Failed to create SQLite logger ({}), using disabled logger", e);
+            SqliteEventLogger::disabled()
+        }
+    }
 }
 
 fn main() {
@@ -236,6 +252,8 @@ fn main() {
         .insert_resource(EventBus::new())
         .insert_resource(HumanControlTarget(Some(PlayerId::L))) // Left player is human
         .init_resource::<LevelChangeTracker>()
+        // SQLite event logger - central hub for event storage
+        .insert_resource(create_sqlite_logger())
         // Startup systems
         .add_systems(Startup, training_setup)
         // Event bus time update (runs every frame for timestamping)
@@ -277,6 +295,7 @@ fn main() {
                 training_state_machine,
                 update_training_hud,
                 emit_training_events,
+                flush_events_to_sqlite,
                 check_escape_quit,
                 check_pause_restart,
             ),
@@ -379,6 +398,7 @@ fn training_setup(
     training_settings: Res<TrainingSettings>,
     mut current_level: ResMut<CurrentLevel>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
+    sqlite_logger: Res<SqliteEventLogger>,
 ) {
     // Set current level from training state
     current_level.0 = training_state.current_level;
@@ -700,6 +720,16 @@ fn training_setup(
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
     event_buffer.buffer.start_session(&timestamp);
 
+    // Start match in SQLite (events will be flushed to SQLite during gameplay)
+    let seed: u64 = rand::random();
+    sqlite_logger.start_match(
+        training_state.current_level,
+        &training_state.current_level_name,
+        "Player",
+        &training_state.ai_profile,
+        seed,
+    );
+
     // Log match start
     event_buffer.buffer.log(
         0.0,
@@ -754,6 +784,7 @@ fn training_state_machine(
     mut app_exit: MessageWriter<AppExit>,
     level_db: Res<LevelDatabase>,
     mut current_level: ResMut<CurrentLevel>,
+    sqlite_logger: Res<SqliteEventLogger>,
 ) {
     match training_state.phase {
         TrainingPhase::WaitingToStart => {
@@ -794,6 +825,9 @@ fn training_state_machine(
                 if let Err(e) = write_evlog(&event_buffer, &evlog_path) {
                     eprintln!("Failed to write evlog: {}", e);
                 }
+
+                // End match in SQLite
+                sqlite_logger.end_match(score.left, score.right, training_state.game_elapsed);
 
                 // Record result
                 training_state.record_result(score.left, score.right, evlog_path);
@@ -882,6 +916,17 @@ fn training_state_machine(
                     *event_buffer = TrainingEventBuffer::default();
                     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
                     event_buffer.buffer.start_session(&timestamp);
+
+                    // Start new match in SQLite
+                    let seed: u64 = rand::random();
+                    sqlite_logger.start_match(
+                        training_state.current_level,
+                        &training_state.current_level_name,
+                        "Player",
+                        &training_state.ai_profile,
+                        seed,
+                    );
+
                     event_buffer.buffer.log(
                         0.0,
                         GameEvent::MatchStart {
@@ -889,7 +934,7 @@ fn training_state_machine(
                             level_name: training_state.current_level_name.clone(),
                             left_profile: "Player".to_string(),
                             right_profile: training_state.ai_profile.clone(),
-                            seed: rand::random(),
+                            seed,
                         },
                     );
 
@@ -1119,6 +1164,7 @@ fn check_pause_restart(
     mut current_level: ResMut<CurrentLevel>,
     mut players: Query<(Entity, &mut Transform, &Team), With<Player>>,
     mut balls: Query<(Entity, &mut Transform, &mut BallState, &mut Velocity), (With<Ball>, Without<Player>)>,
+    sqlite_logger: Res<SqliteEventLogger>,
 ) {
     // Check for Start button (keyboard P or gamepad Start)
     let start_pressed = keyboard.just_pressed(KeyCode::KeyP)
@@ -1228,6 +1274,17 @@ fn check_pause_restart(
     *event_buffer = TrainingEventBuffer::default();
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
     event_buffer.buffer.start_session(&timestamp);
+
+    // Start new match in SQLite
+    let seed: u64 = rand::random();
+    sqlite_logger.start_match(
+        training_state.current_level,
+        &training_state.current_level_name,
+        "Player",
+        &training_state.ai_profile,
+        seed,
+    );
+
     event_buffer.buffer.log(
         0.0,
         GameEvent::MatchStart {
@@ -1235,7 +1292,7 @@ fn check_pause_restart(
             level_name: training_state.current_level_name.clone(),
             left_profile: "Player".to_string(),
             right_profile: training_state.ai_profile.clone(),
-            seed: rand::random(),
+            seed,
         },
     );
 

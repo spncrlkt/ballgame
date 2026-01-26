@@ -25,4 +25,9 @@ pub use metrics::{MatchResult, PlayerStats, SimMetrics, TournamentResult};
 pub use runner::{run_match, run_simulation};
 pub use setup::{sim_setup, spawn_corner_steps};
 pub use shot_test::{run_shot_test, ShotOutcome};
-pub use db::{SimDatabase, ProfileStats, MatchFilter, MatchSummary};
+pub use db::{
+    SimDatabase, ProfileStats, MatchFilter, MatchSummary, EventRecord,
+    // Analysis types
+    DistanceAnalysis, InputAnalysis, ClosestMoment, GoalTransition,
+    SessionSummary, MatchEventStats,
+};

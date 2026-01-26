@@ -204,6 +204,7 @@ src/
 - `CurrentPresets` - Currently active preset indices (movement, ball, shooting, composite)
 - `SnapshotConfig` - Controls automatic game state capture (on_score, on_steal, on_level_change, save_screenshots)
 - `SnapshotTriggerState` - Tracks previous frame state for detecting changes
+- `SqliteEventLogger` - Central event logger for SQLite storage (used by training binary)
 
 **Player Components:**
 - `Player` - Marker for player entities
@@ -328,15 +329,22 @@ cargo run --bin training -- --profile Aggressive  # Specific AI profile
 
 **Output:**
 ```
+training.db                              # SQLite database with all events
 training_logs/
 └── session_20260123_143022/
     ├── game_1_level4.evlog
     ├── game_2_level7.evlog
-    ├── game_3_level2.evlog
-    ├── game_4_level9.evlog
-    ├── game_5_level3.evlog
-    └── summary.json
+    ├── summary.json
+    ├── analysis.md                      # Human-readable report
+    └── claude_prompt_YYYYMMDD_HHMM.txt  # AI review prompt
 ```
+
+**SQLite Analysis:** All events are stored in `training.db`. Query directly with:
+```bash
+sqlite3 training.db "SELECT event_type, COUNT(*) FROM events GROUP BY event_type;"
+```
+
+See `docs/guides/training-workflow.md` for full SQL examples and analysis workflow.
 
 **Post-session analysis:** Ask Claude Code to analyze the training session:
 ```
