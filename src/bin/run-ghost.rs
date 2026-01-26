@@ -430,8 +430,8 @@ fn main() {
     }
 
     // Load databases
-    let level_db = LevelDatabase::load_from_file("assets/levels.txt");
-    let profile_db = AiProfileDatabase::load_from_file("assets/ai_profiles.txt");
+    let level_db = LevelDatabase::load_from_file("config/levels.txt");
+    let profile_db = AiProfileDatabase::load_from_file("config/ai_profiles.txt");
 
     // Verify AI profile exists
     if profile_db.index_of(&ai_profile).is_none() {

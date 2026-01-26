@@ -13,7 +13,7 @@
 
 ## Code Review Available (2026-01-25)
 
-**Deep analysis completed** - see `code_review_2026-01-25.md` for:
+**Deep analysis completed** - see `docs/reviews/code_review_2026-01-25.md` for:
 - Best practices library with sources
 - Anti-patterns found in codebase
 - Prioritized improvement plan (P0-P3)
@@ -28,7 +28,7 @@
 
 ## P0: SQLite Ghost Replay System
 
-*See `notes/sqlite-ghost-replay-plan.md` for full implementation plan*
+*See `docs/planning/sqlite-ghost-replay-plan.md` for full implementation plan*
 
 - [ ] **Implement SQLite-based training + ghost replay** - Record inputs to DB, replay as ghost
 
@@ -58,7 +58,7 @@
 
 ## P1.5: AI Plugin Consolidation
 
-*Unify AI decision-making across all contexts - see `notes/ai-plugin-plan.md`*
+*Unify AI decision-making across all contexts - see `docs/planning/ai-plugin-plan.md`*
 
 - [ ] **Create `AiPlugin`** - Single source of truth for AI system registration
 - [ ] **Update main game** - Use AiPlugin instead of inline systems
@@ -105,7 +105,7 @@ Benefits: ~120 lines deleted, full AI defense in ghost mode, cleaner architectur
 
 ## Known Issues
 
-**Tournament Simulation Bug (see `notes/tournament_analysis.md`):**
+**Tournament Simulation Bug (see `docs/analysis/tournament_analysis.md`):**
 - 4 profiles NEVER shoot: Defensive, Patient, Sniper, Turtle
 - Root cause: min_shot_quality too high for floor shots (max quality ~0.51)
 - 54.8% of matches ended 0-0

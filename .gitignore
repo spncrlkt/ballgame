@@ -5,11 +5,11 @@ Cargo.lock
 .claude/
 
 # Snapshots (ephemeral)
-/snapshots/
+/showcase/snapshots/
 
-# Regression test artifacts (except baseline)
-/regression/current.png
-/regression/diff.png
+# Regression test artifacts (except baselines)
+/showcase/regression/current/
+/showcase/regression/diffs/
 
 # Simulation/training event logs (local only)
 /logs/
@@ -18,4 +18,4 @@ Cargo.lock
 *_logs/
 
 # Local training settings (use template for defaults)
-assets/training_settings.json
+config/training_settings.json

@@ -17,7 +17,7 @@ use crate::scoring::CurrentLevel;
 use crate::world::{Basket, CornerRamp, LevelPlatform};
 
 /// Path to ball options file
-const BALL_OPTIONS_FILE: &str = "assets/ball_options.txt";
+const BALL_OPTIONS_FILE: &str = "config/ball_options.txt";
 
 /// How often to check for config changes (seconds)
 const CHECK_INTERVAL: f32 = 10.0;

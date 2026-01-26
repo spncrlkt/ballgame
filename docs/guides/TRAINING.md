@@ -30,7 +30,7 @@ cargo run --bin training -- -l 3            # Force level 3
 
 ## Settings File
 
-Persist your preferences in `assets/training_settings.json` (gitignored):
+Persist your preferences in `config/training_settings.json` (gitignored):
 
 ```json
 {
@@ -103,4 +103,4 @@ cargo run --bin analyze -- training_logs/session_YYYYMMDD_HHMMSS/
 | `v3_Spec_Chaos` | Unpredictable, takes risky shots |
 | `v3_Ultra_Rush` | Maximum aggression |
 
-List all: check `assets/ai_profiles.txt`
+List all: check `config/ai_profiles.txt`

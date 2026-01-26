@@ -1,6 +1,6 @@
 # Test Levels - Minimal arenas for scenario testing
 # These are separate from game levels and use debug mode.
-# Loaded by test runner from assets/test_levels.txt
+# Loaded by test runner from config/test_levels.txt
 
 # FLAT FLOOR - Just floor, walls, baskets. No platforms.
 # Use for: movement, basic ball physics, pickup, basic shooting

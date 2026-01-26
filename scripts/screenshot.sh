@@ -16,7 +16,7 @@ if [[ "$1" == "--quiet" ]]; then
 fi
 
 # Clean old snapshots
-rm -rf snapshots/
+rm -rf showcase/snapshots/
 
 # Build if needed (suppress output in quiet mode)
 if [[ -n "$QUIET" ]]; then
@@ -34,7 +34,7 @@ else
 fi
 
 # Find and output the screenshot path
-SCREENSHOT=$(ls -t snapshots/*startup*.png 2>/dev/null | head -1)
+SCREENSHOT=$(ls -t showcase/snapshots/*startup*.png 2>/dev/null | head -1)
 if [ -n "$SCREENSHOT" ]; then
     if [[ -z "$QUIET" ]]; then
         echo "Screenshot saved: $SCREENSHOT"

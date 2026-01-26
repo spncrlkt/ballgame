@@ -1,13 +1,13 @@
 //! AI profiles - configurable AI personality parameters
 //!
 //! Each profile defines numeric values that affect AI behavior.
-//! Loaded from assets/ai_profiles.txt and hot-reloaded every 10 seconds.
+//! Loaded from config/ai_profiles.txt and hot-reloaded every 10 seconds.
 
 use bevy::prelude::*;
 use std::fs;
 
 /// Path to AI profiles file
-pub const AI_PROFILES_FILE: &str = "assets/ai_profiles.txt";
+pub const AI_PROFILES_FILE: &str = "config/ai_profiles.txt";
 
 /// AI behavior parameters loaded from config file
 #[derive(Debug, Clone)]

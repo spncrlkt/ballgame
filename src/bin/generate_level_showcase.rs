@@ -21,7 +21,7 @@ const FONT_DATA: &[u8] = include_bytes!("/System/Library/Fonts/Helvetica.ttc");
 
 fn main() {
     let screenshot_dir = "level_screenshots";
-    let output_path = "assets/level_showcase.png";
+    let output_path = "showcase/level_showcase.png";
 
     // Find all level screenshots
     let mut screenshots: Vec<(String, String)> = Vec::new();

@@ -1,7 +1,7 @@
 //! Persistent settings for game initialization
 //!
 //! Saves and loads user preferences (viewport size, palette, level, etc.)
-//! to/from an init_settings.json file in the assets directory.
+//! to/from an init_settings.json file in the config directory.
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use std::fs;
 use std::path::Path;
 
 /// Path to the settings file
-pub const SETTINGS_FILE: &str = "assets/init_settings.json";
+pub const SETTINGS_FILE: &str = "config/init_settings.json";
 
 /// Persistent settings that survive between sessions
 #[derive(Debug, Clone, Serialize, Deserialize)]

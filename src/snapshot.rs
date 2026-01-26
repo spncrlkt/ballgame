@@ -19,7 +19,7 @@ use crate::shooting::LastShotInfo;
 use crate::world::Basket;
 
 /// Directory where snapshots are saved
-const SNAPSHOT_DIR: &str = "snapshots";
+const SNAPSHOT_DIR: &str = "showcase/snapshots";
 
 /// Configuration for what triggers snapshots
 #[derive(Resource)]

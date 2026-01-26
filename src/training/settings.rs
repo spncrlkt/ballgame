@@ -11,9 +11,9 @@ use std::path::Path;
 use super::protocol::TrainingProtocol;
 
 /// Path to local settings file (gitignored)
-pub const SETTINGS_FILE: &str = "assets/training_settings.json";
+pub const SETTINGS_FILE: &str = "config/training_settings.json";
 /// Path to template file (tracked in git)
-pub const TEMPLATE_FILE: &str = "assets/training_settings.template.json";
+pub const TEMPLATE_FILE: &str = "config/training_settings.template.json";
 
 /// Training mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -308,8 +308,8 @@ OPTIONS:
     -h, --help                 Show this help
 
 SETTINGS FILES:
-    assets/training_settings.json          Local settings (gitignored)
-    assets/training_settings.template.json Template with defaults (tracked)
+    config/training_settings.json          Local settings (gitignored)
+    config/training_settings.template.json Template with defaults (tracked)
 
     CLI arguments override file settings.
 

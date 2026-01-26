@@ -14,8 +14,8 @@ use std::fs;
 const WHITE: [u8; 4] = [245, 245, 240, 255]; // Off-white (cream)
 const BLACK: [u8; 4] = [20, 20, 20, 255]; // Outline
 
-const PALETTES_FILE: &str = "assets/palettes.txt";
-const OPTIONS_FILE: &str = "assets/ball_options.txt";
+const PALETTES_FILE: &str = "config/palettes.txt";
+const OPTIONS_FILE: &str = "config/ball_options.txt";
 
 /// Color palette with left and right team colors (RGB 0-255)
 #[derive(Clone)]
@@ -25,7 +25,7 @@ struct Palette {
     right: [u8; 4],
 }
 
-/// Load palettes from assets/palettes.txt
+/// Load palettes from config/palettes.txt
 fn load_palettes() -> Vec<Palette> {
     let content = fs::read_to_string(PALETTES_FILE).unwrap_or_else(|e| {
         panic!(
@@ -117,7 +117,7 @@ fn main() {
 
     for style in &config.styles {
         for (palette_idx, palette) in config.palettes.iter().enumerate() {
-            let filename = format!("assets/ball_{}_{}.png", style.name, palette_idx);
+            let filename = format!("assets/textures/balls/ball_{}_{}.png", style.name, palette_idx);
             generate_texture(&filename, &config, style, palette);
             println!("  Created: {} ({})", filename, palette.name);
         }

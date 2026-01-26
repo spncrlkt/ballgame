@@ -38,8 +38,8 @@ Features like countdown, new resources, or system changes should be propagated t
 
 Run at the beginning of each working session:
 
-- [ ] **Read `todo.md`** - Check current sprint tasks and priorities
-- [ ] **Read `open_questions.md`** - Review pending questions/decisions
+- [ ] **Read `docs/project/todo.md`** - Check current sprint tasks and priorities
+- [ ] **Read `docs/project/open_questions.md`** - Review pending questions/decisions
 - [ ] **Check git status** - Note any uncommitted work from previous session
 - [ ] **Run `cargo check`** - Verify codebase compiles
 - [ ] **Run `./scripts/regression.sh`** - Verify visual baseline still matches
@@ -53,11 +53,11 @@ Run at the end of each working session (or after ~10 changes):
 - [ ] **Run `cargo clippy`** - Check for new warnings
 - [ ] **Run `./scripts/regression.sh`** - Visual regression test
 - [ ] **Update baseline if needed** - `./scripts/regression.sh --update` (if UI changed intentionally)
-- [ ] **Review screenshot** - Read `regression/current.png` to verify UI looks correct
-- [ ] **Update `todo.md`** - Mark completed items, add new items discovered
-- [ ] **Archive done items** - Keep only last 5 in todo.md, move older to `todone.md`
-- [ ] **Update `open_questions.md`** - Add any new questions or decisions needed
-- [ ] **Update `audit_record.md`** - Document changes and findings
+- [ ] **Review screenshot** - Read `showcase/regression/current/*.png` to verify UI looks correct
+- [ ] **Update `docs/project/todo.md`** - Mark completed items, add new items discovered
+- [ ] **Archive done items** - Keep only last 5 in todo.md, move older to `docs/project/todone.md`
+- [ ] **Update `docs/project/open_questions.md`** - Add any new questions or decisions needed
+- [ ] **Update `docs/reviews/audit_record.md`** - Document changes and findings
 - [ ] **Verify CLAUDE.md accuracy** - Update if architecture changed
 - [ ] **Commit changes** - With descriptive message
 
@@ -104,29 +104,29 @@ This pattern ensures:
 
 ## Todo Management
 
-**Project planning uses three files:**
+**Project planning uses three files in `docs/project/`:**
 - `milestones.md` - Master plan with MVP → V0 → V1/Beyond stages and all tasks
 - `todo.md` - Current sprint (active work items pulled from milestones)
 - `todone.md` - Archive of completed work
 
-**At the start of each session:** Check `todo.md` for current sprint tasks.
+**At the start of each session:** Check `docs/project/todo.md` for current sprint tasks.
 
 **When completing work:**
-- Mark items done in `todo.md`, move to Done section
-- Keep only last 5 done items in todo.md; archive older ones to `todone.md` with dated header
-- Update `milestones.md` if completing a milestone goal
+- Mark items done in `docs/project/todo.md`, move to Done section
+- Keep only last 5 done items in todo.md; archive older ones to `docs/project/todone.md` with dated header
+- Update `docs/project/milestones.md` if completing a milestone goal
 
 **When adding new tasks:**
-- Quick/urgent items → add to `todo.md` Active Work
-- Planned features → add to appropriate milestone in `milestones.md`
+- Quick/urgent items → add to `docs/project/todo.md` Active Work
+- Planned features → add to appropriate milestone in `docs/project/milestones.md`
 
 ### Prioritization Process
 
 Use this interactive process when the todo list needs reorganization or a new sprint needs planning:
 
 **Step 1: Clean up**
-- Archive all done items to `todone.md` with dated header (e.g., `## Archived 2026-01-23`)
-- Keep only last 5 done items in `todo.md`
+- Archive all done items to `docs/project/todone.md` with dated header (e.g., `## Archived 2026-01-23`)
+- Keep only last 5 done items in `docs/project/todo.md`
 
 **Step 2: Separate concerns**
 - Move decision docs and architectural questions to their own section
@@ -143,7 +143,7 @@ Use this interactive process when the todo list needs reorganization or a new sp
 - New systems, multiplayer, speculative features → V1/Beyond
 
 **Step 5: Build current sprint**
-- Pull active tasks from current milestone (usually MVP) into `todo.md`
+- Pull active tasks from current milestone (usually MVP) into `docs/project/todo.md`
 - Group by area (e.g., Stealing, AI, Movement)
 
 **Step 6: Prioritize within sprint**
@@ -151,7 +151,7 @@ Use this interactive process when the todo list needs reorganization or a new sp
 - For each group, ask: "Which task is most impactful?" → order within group
 - Assign linear priority numbers (P1, P2, P3...) across all tasks
 
-**Result:** `todo.md` becomes a prioritized, numbered list ready for execution.
+**Result:** `docs/project/todo.md` becomes a prioritized, numbered list ready for execution.
 
 ## Architecture
 
@@ -190,7 +190,7 @@ src/
 - `CurrentLevel` - Current level number (1-10)
 - `CurrentPalette` - Current color palette index (default: 0)
 - `PhysicsTweaks` - Runtime-adjustable physics values with panel UI
-- `LevelDatabase` - Loaded level definitions from assets/levels.txt
+- `LevelDatabase` - Loaded level definitions from config/levels.txt
 - `LastShotInfo` - Debug info about the most recent shot (angle, power, variance breakdown)
 - `BallTextures` - Handles to ball textures (dynamic styles × palettes)
 - `ReplayMode` - Controls replay mode (active flag, file path)
@@ -198,9 +198,9 @@ src/
 - `ReplayState` - Playback state (time, speed, paused, stepping)
 - `ViewportScale` - Current viewport preset for testing different screen sizes
 - `CycleSelection` - D-pad direction-based cycle state (active_direction, down_option, right_option, ai_player_index)
-- `AiProfileDatabase` - Loaded AI personality profiles from assets/ai_profiles.txt
+- `AiProfileDatabase` - Loaded AI personality profiles from config/ai_profiles.txt
 - `ConfigWatcher` - Tracks config file modification times for auto-reload (every 10s)
-- `PresetDatabase` - Game tuning presets from assets/game_presets.txt
+- `PresetDatabase` - Game tuning presets from config/game_presets.txt
 - `CurrentPresets` - Currently active preset indices (movement, ball, shooting, composite)
 - `SnapshotConfig` - Controls automatic game state capture (on_score, on_steal, on_level_change, save_screenshots)
 - `SnapshotTriggerState` - Tracks previous frame state for detecting changes
@@ -222,7 +222,7 @@ src/
 **Ball Components:**
 - `Ball` - Marker for ball entity
 - `BallState` - Free, Held(Entity), or InFlight { shooter, power }
-- `BallStyle` - Visual style name (loaded from assets/ball_options.txt: wedges, half, spiral, etc.)
+- `BallStyle` - Visual style name (loaded from config/ball_options.txt: wedges, half, spiral, etc.)
 - `BallPlayerContact` - Tracks overlap for collision effects
 - `BallPulse` - Animation timer for pickup indicator
 - `BallRolling` - Whether ball is rolling on ground (vs bouncing/flying)
@@ -451,7 +451,7 @@ velocity.x *= 0.98;           // Faster decay at higher FPS
 
 **Remind the user to audit every ~10 changes if they haven't recently.**
 
-For detailed explanations and code examples, see `code_review_guidelines.md`.
+For detailed explanations and code examples, see `docs/reviews/code_review_guidelines.md`.
 
 ### Code Review Quick Checklists
 
@@ -506,23 +506,23 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 5. **Constants** - No magic numbers in code; all tunable values in `src/constants.rs`
 
 **Code Review (every audit):**
-Run the full code review process from `code_review_prompt.md`. This includes:
+Run the full code review process from `docs/reviews/code_review_prompt.md`. This includes:
 - Deep investigation of codebase for anti-patterns
 - Research game dev best practices from authoritative sources
 - Grade each area: Physics, Input, ECS, AI, Performance, Game Design
-- Create dated review file: `code_review_YYYY-MM-DD.md`
-- Update `code_review_guidelines.md` with new patterns/resources discovered
-- Log findings to `code_review_audits.md`
+- Create dated review file: `docs/reviews/code_review_YYYY-MM-DD.md`
+- Update `docs/reviews/code_review_guidelines.md` with new patterns/resources discovered
+- Log findings to `docs/reviews/code_review_audits.md`
 
 **Balance Testing (when relevant):**
 - `cargo run --bin simulate -- --shot-test 30 --level 3` (target: 40-60% over/under ratio)
 - `cargo run --bin simulate -- --tournament 5 --parallel 8` (AI match testing)
-- See `notes/balance-testing-workflow.md` for full iterative workflow
+- See `docs/analysis/balance-testing-workflow.md` for full iterative workflow
 
 **After auditing:**
-- Write findings to `audit_record.md` with commit reference
-- Update `todo.md` - add improvement tasks from code review, move completed items to Done
-- Archive old done records to `todone.md` with dated header
+- Write findings to `docs/reviews/audit_record.md` with commit reference
+- Update `docs/project/todo.md` - add improvement tasks from code review, move completed items to Done
+- Archive old done records to `docs/project/todone.md` with dated header
 
 ### Scaling Concerns to Monitor
 
@@ -542,16 +542,16 @@ These areas may need attention as the game grows:
 When making changes to UI elements (text positioning, HUD layout, debug displays, indicators):
 
 1. Run the game and trigger a snapshot with F4 (or let events trigger automatically)
-2. Read the screenshot from `snapshots/` directory to verify the change looks correct
+2. Read the screenshot from `showcase/snapshots/` directory to verify the change looks correct
 3. Check for: text clipping, overlapping elements, correct positioning, readability
 
-The snapshot system captures both JSON (game state) and PNG (screenshot) to `snapshots/` directory. Use this to verify visual changes without manually inspecting the running game.
+The snapshot system captures both JSON (game state) and PNG (screenshot) to `showcase/snapshots/` directory. Use this to verify visual changes without manually inspecting the running game.
 
 **Snapshot triggers:**
 - Automatic: score changes, steal attempts, level changes
 - Manual: F4 key
 
-**Output location:** `snapshots/YYYYMMDD_HHMMSS_trigger.json` and `.png`
+**Output location:** `showcase/snapshots/YYYYMMDD_HHMMSS_trigger.json` and `.png`
 
 ### Visual Regression Testing
 
@@ -567,9 +567,9 @@ The snapshot system captures both JSON (game state) and PNG (screenshot) to `sna
 4. Read screenshots directly with Read tool to verify visual changes
 
 **Files:**
-- `regression/baseline.png` - Known-good reference screenshot
-- `regression/current.png` - Most recent captured screenshot
-- `regression/diff.png` - Visual diff (if ImageMagick is installed)
+- `showcase/regression/baselines/*.png` - Known-good reference screenshots (per scenario)
+- `showcase/regression/current/*.png` - Most recent captured screenshots
+- `showcase/regression/diffs/*.png` - Visual diffs (if ImageMagick is installed)
 
 **Notes:**
 - Small differences are normal due to timing/compression variations

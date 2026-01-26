@@ -1,7 +1,7 @@
 //! Presets module - game tuning preset system
 //!
 //! Provides hierarchical presets for movement, ball physics, and shooting.
-//! Presets can be loaded from assets/game_presets.txt and hot-reloaded.
+//! Presets can be loaded from config/game_presets.txt and hot-reloaded.
 
 mod apply;
 mod database;

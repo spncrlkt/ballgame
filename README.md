@@ -10,8 +10,8 @@ cargo run --release    # Play with optimizations
 ```
 
 **Guides:**
-- `HOW_TO_PLAY.md` - Controls and gameplay
-- `TRAINING.md` - Training mode setup and analysis workflow
+- [`docs/guides/HOW_TO_PLAY.md`](docs/guides/HOW_TO_PLAY.md) - Controls and gameplay
+- [`docs/guides/TRAINING.md`](docs/guides/TRAINING.md) - Training mode setup and analysis workflow
 
 ---
 
@@ -117,7 +117,7 @@ cargo run --bin heatmap -- shots            # Shot distribution heatmap
 
 ## Controls Reference
 
-See `HOW_TO_PLAY.md` for full controls, or quick reference:
+See [`docs/guides/HOW_TO_PLAY.md`](docs/guides/HOW_TO_PLAY.md) for full controls, or quick reference:
 
 | Action | Keyboard | Gamepad |
 |--------|----------|---------|
@@ -163,17 +163,77 @@ cargo fmt                # Format code
 cargo clippy             # Lint
 ```
 
-## Project Files
+## Project Structure
 
+```
+ballgame/
+├── CLAUDE.md                 # AI assistant guidance, architecture docs
+├── README.md                 # This file
+├── Cargo.toml
+│
+├── config/                   # Game configuration files
+│   ├── ai_profiles.txt       # 53 AI personality definitions
+│   ├── levels.txt            # Level definitions
+│   ├── palettes.txt          # Color palettes (30)
+│   ├── ball_options.txt      # Ball style definitions
+│   ├── game_presets.txt      # Physics/movement presets
+│   └── init_settings.json    # Saved user preferences
+│
+├── docs/
+│   ├── project/              # Task tracking
+│   ├── design/               # Design documents
+│   ├── planning/             # Implementation plans
+│   ├── analysis/             # Analysis and reports
+│   ├── reviews/              # Code reviews
+│   ├── guides/               # User-facing guides
+│   └── historical/           # Archived notes
+│
+├── showcase/                 # Generated outputs
+│   ├── snapshots/            # Game state captures (F4)
+│   ├── regression/           # Visual regression baselines
+│   ├── heatmaps/             # Shot analysis PNGs
+│   └── rankings/             # Tournament results
+│
+├── assets/
+│   └── textures/balls/       # Ball texture PNGs (1650)
+│
+├── src/                      # Source code
+├── scripts/                  # Build/test scripts
+├── tests/scenarios/          # Scenario test files
+├── training_logs/            # Training session data
+└── logs/                     # Simulation logs
+```
+
+## Quick Links
+
+**Most Used:**
 | File | Purpose |
 |------|---------|
-| `HOW_TO_PLAY.md` | Controls and gameplay guide |
-| `TRAINING.md` | Training mode setup and analysis |
-| `CLAUDE.md` | Development instructions, architecture docs |
-| `todo.md` | Current sprint tasks |
-| `milestones.md` | Full project plan (MVP -> V0 -> V1) |
-| `open_questions.md` | Pending decisions |
-| `todone.md` | Completed work archive |
+| [`docs/project/todo.md`](docs/project/todo.md) | Current sprint tasks |
+| [`docs/project/milestones.md`](docs/project/milestones.md) | Full project plan (MVP → V0 → V1) |
+| [`config/ai_profiles.txt`](config/ai_profiles.txt) | AI personality definitions |
+| [`config/levels.txt`](config/levels.txt) | Level definitions |
+| [`showcase/`](showcase/) | Generated outputs (heatmaps, snapshots, regression) |
+
+**Guides:**
+| File | Purpose |
+|------|---------|
+| [`docs/guides/HOW_TO_PLAY.md`](docs/guides/HOW_TO_PLAY.md) | Controls and gameplay |
+| [`docs/guides/TRAINING.md`](docs/guides/TRAINING.md) | Training mode setup |
+| [`docs/guides/TESTING.md`](docs/guides/TESTING.md) | Running tests |
+
+**Development:**
+| File | Purpose |
+|------|---------|
+| [`CLAUDE.md`](CLAUDE.md) | Architecture, patterns, dev workflow |
+| [`docs/reviews/code_review_guidelines.md`](docs/reviews/code_review_guidelines.md) | Code review best practices |
+| [`docs/project/open_questions.md`](docs/project/open_questions.md) | Pending decisions |
+
+**Design:**
+| File | Purpose |
+|------|---------|
+| [`docs/design/functional_spec.md`](docs/design/functional_spec.md) | Full game specification |
+| [`docs/analysis/balance-testing-workflow.md`](docs/analysis/balance-testing-workflow.md) | Balance tuning process |
 
 ## Reference
 

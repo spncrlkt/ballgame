@@ -5,12 +5,22 @@
 //!
 //! The EventBus enables decoupled cross-module communication where all events
 //! are logged to SQLite for full auditability.
+//!
+//! ## Architecture
+//!
+//! ```text
+//! EventBus (in-memory) --> SqliteEventLogger --> SQLite database
+//!                                                    |
+//!                                                    v
+//!                                            SQL analysis views
+//! ```
 
 mod bus;
 mod emitter;
 pub mod evlog_parser;
 mod format;
 mod logger;
+mod sqlite_logger;
 mod types;
 
 pub use bus::{BusEvent, EventBus, LevelChangeTracker, emit_level_change_events, update_event_bus_time};
@@ -25,4 +35,5 @@ pub use evlog_parser::{
 };
 pub use format::{parse_event, serialize_event};
 pub use logger::{EventBuffer, EventLogConfig, EventLogger};
+pub use sqlite_logger::{SqliteEventLogger, flush_events_to_sqlite};
 pub use types::{ControllerSource, GameConfig, GameEvent, PlayerId};

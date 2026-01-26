@@ -9,7 +9,7 @@ Deterministic input-script testing for core game mechanics. Tests are TOML files
 | Decision | Choice |
 |----------|--------|
 | RNG handling | Fixed seed for deterministic randomness |
-| Test levels | Separate file: `assets/test_levels.txt` |
+| Test levels | Separate file: `config/test_levels.txt` |
 | Event coverage | Use state assertions for movement/physics (no new events) |
 | Test file format | TOML |
 | Invocation | Separate binary: `cargo run --bin test-scenarios` |
@@ -127,7 +127,7 @@ checks = [
 
 ## Test Levels Format
 
-Uses existing level parser format. File: `assets/test_levels.txt`
+Uses existing level parser format. File: `config/test_levels.txt`
 
 ```
 # Test Levels - Minimal arenas for scenario testing
@@ -252,7 +252,7 @@ pub struct StateAssertion {
 1. Discover all `.toml` files in `tests/scenarios/`
 2. For each test:
    a. Parse TOML into `TestDefinition`
-   b. Load test level from `assets/test_levels.txt`
+   b. Load test level from `config/test_levels.txt`
    c. Initialize headless simulation with fixed seed
    d. Spawn entities as specified
    e. Run simulation, injecting inputs at specified frames
@@ -323,7 +323,7 @@ Results: 18 passed, 1 failed
    - Sequence matching (ordered events with timing tolerance)
    - State checking (query world after simulation)
 
-5. **Test levels** (`assets/test_levels.txt`)
+5. **Test levels** (`config/test_levels.txt`)
    - Minimal arenas for each test category
 
 6. **CLI binary** (`src/bin/test_scenarios.rs`)
@@ -444,7 +444,7 @@ Target: 40-60% overshoot/undershoot ratio for balanced feel.
 
 Statistical simulations for game balance testing. These tests run many iterations to detect bias and regressions in game mechanics.
 
-**See `notes/balance-testing-workflow.md` for the full iterative workflow (Modify → Test → Analyze → Refine).**
+**See `docs/analysis/balance-testing-workflow.md` for the full iterative workflow (Modify → Test → Analyze → Refine).**
 
 **Pattern:**
 1. Run headless simulation with controlled inputs

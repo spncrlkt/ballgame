@@ -14,6 +14,15 @@ pub struct SimDatabase {
 }
 
 impl SimDatabase {
+    /// Get a reference to the underlying connection
+    ///
+    /// Use sparingly - prefer using the typed methods on SimDatabase.
+    pub fn conn(&self) -> &Connection {
+        &self.conn
+    }
+}
+
+impl SimDatabase {
     /// Open or create a database at the given path
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;

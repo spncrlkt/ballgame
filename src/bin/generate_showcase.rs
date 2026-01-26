@@ -139,7 +139,7 @@ fn main() {
         let mut row_coverage: Option<(f32, f32)> = None;
 
         for (col, &palette_idx) in SHOWCASE_PALETTES.iter().enumerate() {
-            let filename = format!("assets/ball_{}_{}.png", style_name, palette_idx);
+            let filename = format!("assets/textures/balls/ball_{}_{}.png", style_name, palette_idx);
 
             match image::open(&filename) {
                 Ok(ball_img) => {
@@ -205,7 +205,7 @@ fn main() {
     }
 
     // Save the showcase
-    let output_path = "assets/ball_styles_showcase.png";
+    let output_path = "showcase/ball_styles_showcase.png";
     showcase.save(output_path).expect("Failed to save showcase");
 
     println!("\nShowcase saved to: {}", output_path);
@@ -219,7 +219,7 @@ fn main() {
 
 fn load_style_names() -> Vec<String> {
     let content =
-        fs::read_to_string("assets/ball_options.txt").expect("Could not read ball_options.txt");
+        fs::read_to_string("config/ball_options.txt").expect("Could not read ball_options.txt");
 
     let mut styles = Vec::new();
     for line in content.lines() {
@@ -234,7 +234,7 @@ fn load_style_names() -> Vec<String> {
 
 fn load_palette_names() -> Vec<String> {
     let content =
-        fs::read_to_string("assets/palettes.txt").expect("Could not read palettes.txt");
+        fs::read_to_string("config/palettes.txt").expect("Could not read palettes.txt");
 
     let mut palettes = Vec::new();
     for line in content.lines() {

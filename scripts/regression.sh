@@ -18,11 +18,11 @@ set -e
 # Change to project root
 cd "$(dirname "$0")/.."
 
-REGRESSION_DIR="regression"
+REGRESSION_DIR="showcase/regression"
 BASELINE_DIR="$REGRESSION_DIR/baselines"
 CURRENT_DIR="$REGRESSION_DIR/current"
 DIFF_DIR="$REGRESSION_DIR/diffs"
-SCENARIO_FILE="assets/regression_scenarios.txt"
+SCENARIO_FILE="config/regression_scenarios.txt"
 
 # Tolerance: allow up to 1% of pixels to differ (handles timing variations)
 # 2560x1440 = 3,686,400 pixels, 1% = 36,864 pixels
@@ -136,7 +136,7 @@ run_scenario() {
     echo "  Level: $level, Palette: $palette, Viewport: ${width}x${height}"
 
     # Clean old snapshots
-    rm -rf snapshots/
+    rm -rf showcase/snapshots/
 
     # Run game with scenario-specific flags
     cargo run --quiet -- \
@@ -148,7 +148,7 @@ run_scenario() {
 
     # Find the startup screenshot
     local screenshot
-    screenshot=$(ls -t snapshots/*startup*.png 2>/dev/null | head -1)
+    screenshot=$(ls -t showcase/snapshots/*startup*.png 2>/dev/null | head -1)
     if [ -z "$screenshot" ]; then
         echo "  ERROR: No screenshot captured"
         return 2

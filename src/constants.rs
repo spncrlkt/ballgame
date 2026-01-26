@@ -160,7 +160,7 @@ pub const BALL_SPAWN: Vec3 = Vec3::new(0.0, ARENA_FLOOR_Y + 50.0, 2.0); // Cente
 // LEVEL FILE
 // =============================================================================
 
-pub const LEVELS_FILE: &str = "assets/levels.txt";
+pub const LEVELS_FILE: &str = "config/levels.txt";
 
 // =============================================================================
 // VIEWPORT PRESETS (for testing different screen sizes)

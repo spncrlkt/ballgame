@@ -595,9 +595,11 @@ pub fn ai_decision_update(
         } else if opponent_has_ball {
             // Update steal proximity tracking BEFORE goal decision
             // This ensures timer persists across goal switches
+            // IMPORTANT: Use the game's STEAL_RANGE constant (60px), not profile.steal_range
+            // The profile.steal_range is for goal selection, but actual steals require STEAL_RANGE
             if let Some(opp_pos) = opponent_pos {
                 let distance = ai_pos.distance(opp_pos);
-                let in_steal_range = distance < profile.steal_range;
+                let in_steal_range = distance < STEAL_RANGE;
 
                 if in_steal_range {
                     if !ai_state.was_in_steal_range {
@@ -930,14 +932,36 @@ pub fn ai_decision_update(
                         // Check for ceiling before deciding to jump
                         let has_ceiling = has_ceiling_above(ai_pos, &capabilities, &nav_graph);
 
-                        // When far from opponent (> 300px), always chase directly
-                        // to close distance before worrying about intercept positioning
-                        // Use 300px to match navigation threshold for consistency
+                        // When far from opponent (> 300px), chase directly UNLESS opponent is
+                        // highly elevated and we're on the floor (need to climb, not chase)
                         let very_far = distance_to_opponent > 300.0;
 
-                        if very_far || same_height_level {
-                            // Chase opponent directly - either very far or same platform level
-                            // Use tight tolerance when close, looser when far
+                        // PRIORITY 1: If opponent is highly elevated and AI is on floor, climb first
+                        // This takes precedence over "very far" because horizontal chase won't help
+                        if ai_near_floor && opponent_highly_elevated {
+                            // Opponent is high above and we're at ground level
+                            // Move toward the ramp on the OPPONENT'S side to climb and intercept
+                            let arena_edge = ARENA_WIDTH / 2.0 - WALL_THICKNESS - 100.0;
+                            let ramp_target_x = if opp_pos.x > 0.0 {
+                                arena_edge // Opponent on right side, use right ramp
+                            } else {
+                                -arena_edge // Opponent on left side, use left ramp
+                            };
+
+                            let dx = ramp_target_x - ai_pos.x;
+                            if dx.abs() > profile.position_tolerance {
+                                input.move_x = dx.signum();
+                            }
+
+                            // Jump continuously when on the ramp area to climb steps
+                            // (ramps are designed for climbing, ceiling check not needed)
+                            let on_ramp_area = ai_pos.x.abs() > ARENA_WIDTH / 2.0 - WALL_THICKNESS - 300.0;
+                            if on_ramp_area && grounded.0 {
+                                input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                                input.jump_held = true;
+                            }
+                        } else if very_far || same_height_level {
+                            // PRIORITY 2: Chase opponent directly when very far or same height
                             let chase_tolerance = if very_far {
                                 profile.position_tolerance
                             } else {
@@ -966,31 +990,8 @@ pub fn ai_decision_update(
                                     input.jump_held = true;
                                 }
                             }
-                        } else if ai_near_floor && opponent_highly_elevated {
-                            // Opponent is high above and we're at ground level
-                            // Move toward the ramp on the OPPONENT'S side to climb and intercept
-                            let arena_edge = ARENA_WIDTH / 2.0 - WALL_THICKNESS - 100.0;
-                            let ramp_target_x = if opp_pos.x > 0.0 {
-                                arena_edge // Opponent on right side, use right ramp
-                            } else {
-                                -arena_edge // Opponent on left side, use left ramp
-                            };
-
-                            let dx = ramp_target_x - ai_pos.x;
-                            if dx.abs() > profile.position_tolerance {
-                                input.move_x = dx.signum();
-                            }
-
-                            // Jump continuously when on the ramp area to climb steps
-                            // (ramps are designed for climbing, ceiling check not needed)
-                            let on_ramp_area = ai_pos.x.abs() > ARENA_WIDTH / 2.0 - WALL_THICKNESS - 300.0;
-                            if on_ramp_area && grounded.0 {
-                                input.jump_buffer_timer = JUMP_BUFFER_TIME;
-                                input.jump_held = true;
-                            }
                         } else {
-                            // Different height but not extreme - chase opponent directly
-                            // to close horizontal distance, then jump to reach them
+                            // PRIORITY 3: Moderate height difference - chase + jump
                             let dx = opp_pos.x - ai_pos.x;
 
                             // Check if we need to escape from under a ceiling first

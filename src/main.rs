@@ -24,7 +24,7 @@ use std::fs;
 use world::{Basket, Collider};
 
 /// Path to ball options file
-const BALL_OPTIONS_FILE: &str = "assets/ball_options.txt";
+const BALL_OPTIONS_FILE: &str = "config/ball_options.txt";
 
 /// Parse ball_options.txt to get list of style names
 fn load_ball_style_names() -> Vec<String> {
@@ -560,7 +560,7 @@ fn setup(
     for style_name in &style_names {
         let textures = StyleTextures {
             textures: (0..num_palettes)
-                .map(|i| asset_server.load(format!("ball_{}_{}.png", style_name, i)))
+                .map(|i| asset_server.load(format!("textures/balls/ball_{}_{}.png", style_name, i)))
                 .collect(),
         };
         styles_map.insert(style_name.clone(), textures);

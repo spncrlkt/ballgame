@@ -58,7 +58,7 @@ impl Default for PaletteDatabase {
 }
 
 /// Path to palettes file
-pub const PALETTES_FILE: &str = "assets/palettes.txt";
+pub const PALETTES_FILE: &str = "config/palettes.txt";
 
 impl PaletteDatabase {
     /// Load palettes from file, creating default file if it doesn't exist
@@ -291,12 +291,12 @@ impl PaletteDatabase {
         self.palettes.is_empty()
     }
 
-    /// Minimal fallback palettes - used only if assets/palettes.txt fails to load
-    /// The real palettes should be defined in assets/palettes.txt (single source of truth)
+    /// Minimal fallback palettes - used only if config/palettes.txt fails to load
+    /// The real palettes should be defined in config/palettes.txt (single source of truth)
     pub fn default_palettes() -> Self {
         Self {
             palettes: vec![
-                // Just 3 essential fallbacks - the real palettes are in assets/palettes.txt
+                // Just 3 essential fallbacks - the real palettes are in config/palettes.txt
                 Palette::new(
                     "Neon",
                     (0.0, 1.0, 0.8),

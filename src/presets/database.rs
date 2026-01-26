@@ -8,7 +8,7 @@ use crate::constants::*;
 use crate::presets::types::{BallPreset, CompositePreset, MovementPreset, ShootingPreset};
 
 /// Path to game presets file
-pub const PRESETS_FILE: &str = "assets/game_presets.txt";
+pub const PRESETS_FILE: &str = "config/game_presets.txt";
 
 /// Database of all loaded presets
 #[derive(Resource, Default)]

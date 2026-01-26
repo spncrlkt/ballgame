@@ -362,7 +362,7 @@ This document describes all intended behaviors in the game, organized for intera
 
 ### 8.4 AI Profiles
 
-Profiles define AI personality via parameters loaded from `assets/ai_profiles.txt`.
+Profiles define AI personality via parameters loaded from `config/ai_profiles.txt`.
 
 | Parameter | Effect |
 |-----------|--------|
@@ -385,7 +385,7 @@ Profiles define AI personality via parameters loaded from `assets/ai_profiles.tx
 | ID | Behavior | Expected Outcome |
 |----|----------|------------------|
 | L1.1 | Game start | Level 1 loads from database |
-| L1.2 | Level file | Read from `assets/levels.txt` |
+| L1.2 | Level file | Read from `config/levels.txt` |
 | L1.3 | ] key | Load next level |
 | L1.4 | [ key | Load previous level |
 | L1.5 | R key | Reset current level, randomize AI profiles |
@@ -479,7 +479,7 @@ Profiles define AI personality via parameters loaded from `assets/ai_profiles.tx
 
 ### 11.1 Settings File
 
-**File:** `assets/init_settings.json`
+**File:** `config/init_settings.json`
 
 | ID | Behavior | Expected Outcome |
 |----|----------|------------------|
