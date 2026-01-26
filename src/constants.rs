@@ -78,7 +78,7 @@ pub const BALL_SPIN_DECAY: f32 = 0.5; // Spin retained per second (airborne)
 
 // Heights: tap=2x player height (128), full=6x player height (384)
 // Using h = v_y²/(2g), v_y = sqrt(2*g*h): tap needs v_y≈452, full needs v_y≈784
-pub const SHOT_MAX_POWER: f32 = 900.0; // Maximum horizontal velocity (fallback for extreme shots)
+pub const SHOT_MAX_POWER: f32 = 1314.0; // Maximum horizontal velocity (fallback for extreme shots)
 pub const SHOT_MAX_SPEED: f32 = 800.0; // Maximum total ball speed (caps velocity magnitude)
 pub const SHOT_HARD_CAP: f32 = 2000.0; // Absolute maximum shot speed (alerts if reached)
 pub const SHOT_CHARGE_TIME: f32 = 1.6; // Seconds to reach full charge

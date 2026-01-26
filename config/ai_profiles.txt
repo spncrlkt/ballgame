@@ -1585,3 +1585,247 @@ steal_reaction_time: 0.10
 button_presses_per_sec: 13
 position_patience: 0.55
 seek_threshold: 0.12
+
+# =============================================================================
+# v9 RANDOMIZED - Based on top 3 (Beta, Alpha, Epsilon) parameter ranges
+# Key ranges: aggression 0.72-0.82, patience 0.40-0.62, steal 135-168
+# =============================================================================
+
+# v9_Rand_A: High aggression variant
+profile: v9_Rand_A
+id: e5f6g7h8i9100001
+position_tolerance: 23
+shoot_range: 495
+charge_min: 0.26
+charge_max: 0.52
+steal_range: 158
+defense_offset: 175
+min_shot_quality: 0.21
+pressure_distance: 58
+aggression: 0.80
+defensive_iq: 0.68
+steal_reaction_time: 0.08
+button_presses_per_sec: 15
+position_patience: 0.52
+seek_threshold: 0.13
+
+# v9_Rand_B: Patient sniper variant
+profile: v9_Rand_B
+id: e5f6g7h8i9100002
+position_tolerance: 20
+shoot_range: 510
+charge_min: 0.34
+charge_max: 0.60
+steal_range: 140
+defense_offset: 200
+min_shot_quality: 0.28
+pressure_distance: 72
+aggression: 0.70
+defensive_iq: 0.72
+steal_reaction_time: 0.11
+button_presses_per_sec: 13
+position_patience: 0.65
+seek_threshold: 0.10
+
+# v9_Rand_C: Steal-focused disruptor
+profile: v9_Rand_C
+id: e5f6g7h8i9100003
+position_tolerance: 25
+shoot_range: 460
+charge_min: 0.24
+charge_max: 0.48
+steal_range: 172
+defense_offset: 155
+min_shot_quality: 0.18
+pressure_distance: 48
+aggression: 0.76
+defensive_iq: 0.75
+steal_reaction_time: 0.06
+button_presses_per_sec: 17
+position_patience: 0.42
+seek_threshold: 0.16
+
+# v9_Rand_D: Balanced aggro
+profile: v9_Rand_D
+id: e5f6g7h8i9100004
+position_tolerance: 22
+shoot_range: 485
+charge_min: 0.28
+charge_max: 0.54
+steal_range: 148
+defense_offset: 185
+min_shot_quality: 0.22
+pressure_distance: 62
+aggression: 0.78
+defensive_iq: 0.70
+steal_reaction_time: 0.09
+button_presses_per_sec: 14
+position_patience: 0.50
+seek_threshold: 0.12
+
+# v9_Rand_E: Quick shooter
+profile: v9_Rand_E
+id: e5f6g7h8i9100005
+position_tolerance: 26
+shoot_range: 470
+charge_min: 0.20
+charge_max: 0.42
+steal_range: 145
+defense_offset: 195
+min_shot_quality: 0.19
+pressure_distance: 55
+aggression: 0.84
+defensive_iq: 0.62
+steal_reaction_time: 0.10
+button_presses_per_sec: 16
+position_patience: 0.38
+seek_threshold: 0.18
+
+# v9_Rand_F: Defensive opportunist
+profile: v9_Rand_F
+id: e5f6g7h8i9100006
+position_tolerance: 21
+shoot_range: 500
+charge_min: 0.30
+charge_max: 0.56
+steal_range: 162
+defense_offset: 165
+min_shot_quality: 0.24
+pressure_distance: 52
+aggression: 0.68
+defensive_iq: 0.78
+steal_reaction_time: 0.07
+button_presses_per_sec: 14
+position_patience: 0.58
+seek_threshold: 0.11
+
+# v9_Rand_G: Mobile attacker
+profile: v9_Rand_G
+id: e5f6g7h8i9100007
+position_tolerance: 24
+shoot_range: 475
+charge_min: 0.25
+charge_max: 0.50
+steal_range: 152
+defense_offset: 180
+min_shot_quality: 0.20
+pressure_distance: 60
+aggression: 0.82
+defensive_iq: 0.66
+steal_reaction_time: 0.09
+button_presses_per_sec: 15
+position_patience: 0.46
+seek_threshold: 0.14
+
+# =============================================================================
+# v10 RANDOMIZED - Based on top 4 (v9_Rand_C, v8_Rand_Alpha, v8_Rand_Beta, v9_Rand_D)
+# Ranges: aggression 0.72-0.82, patience 0.42-0.62, steal 135-172, charge_min 0.24-0.32
+# =============================================================================
+
+# v10_Rand_A: Balanced steal pressure
+profile: v10_Rand_A
+id: f6g7h8i9j100001
+position_tolerance: 23
+shoot_range: 490
+charge_min: 0.26
+charge_max: 0.52
+steal_range: 160
+defense_offset: 180
+min_shot_quality: 0.20
+pressure_distance: 58
+aggression: 0.78
+defensive_iq: 0.72
+steal_reaction_time: 0.08
+button_presses_per_sec: 15
+position_patience: 0.50
+seek_threshold: 0.13
+
+# v10_Rand_B: Patient, higher range
+profile: v10_Rand_B
+id: f6g7h8i9j100002
+position_tolerance: 22
+shoot_range: 510
+charge_min: 0.30
+charge_max: 0.56
+steal_range: 150
+defense_offset: 200
+min_shot_quality: 0.23
+pressure_distance: 66
+aggression: 0.74
+defensive_iq: 0.74
+steal_reaction_time: 0.09
+button_presses_per_sec: 14
+position_patience: 0.60
+seek_threshold: 0.11
+
+# v10_Rand_C: Aggro disruptor mix
+profile: v10_Rand_C
+id: f6g7h8i9j100003
+position_tolerance: 25
+shoot_range: 465
+charge_min: 0.24
+charge_max: 0.50
+steal_range: 170
+defense_offset: 165
+min_shot_quality: 0.19
+pressure_distance: 50
+aggression: 0.81
+defensive_iq: 0.68
+steal_reaction_time: 0.06
+button_presses_per_sec: 17
+position_patience: 0.44
+seek_threshold: 0.16
+
+# v10_Rand_D: Compact shooter
+profile: v10_Rand_D
+id: f6g7h8i9j100004
+position_tolerance: 21
+shoot_range: 480
+charge_min: 0.28
+charge_max: 0.54
+steal_range: 145
+defense_offset: 190
+min_shot_quality: 0.22
+pressure_distance: 62
+aggression: 0.76
+defensive_iq: 0.70
+steal_reaction_time: 0.09
+button_presses_per_sec: 14
+position_patience: 0.52
+seek_threshold: 0.12
+
+# v10_Rand_E: High pressure, mid patience
+profile: v10_Rand_E
+id: f6g7h8i9j100005
+position_tolerance: 24
+shoot_range: 495
+charge_min: 0.27
+charge_max: 0.52
+steal_range: 165
+defense_offset: 175
+min_shot_quality: 0.21
+pressure_distance: 54
+aggression: 0.80
+defensive_iq: 0.66
+steal_reaction_time: 0.07
+button_presses_per_sec: 16
+position_patience: 0.46
+seek_threshold: 0.15
+
+# v10_Rand_F: Defensive lean
+profile: v10_Rand_F
+id: f6g7h8i9j100006
+position_tolerance: 22
+shoot_range: 505
+charge_min: 0.32
+charge_max: 0.58
+steal_range: 140
+defense_offset: 210
+min_shot_quality: 0.24
+pressure_distance: 70
+aggression: 0.72
+defensive_iq: 0.76
+steal_reaction_time: 0.10
+button_presses_per_sec: 14
+position_patience: 0.62
+seek_threshold: 0.11

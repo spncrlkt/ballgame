@@ -505,9 +505,9 @@ pub fn ai_decision_update(
             // This discourages but doesn't prevent close-range shots
             let front_court_quality_penalty = if in_front_court { 0.15 } else { 0.0 };
 
-            // Force shot after holding ball for 3+ seconds (prevents stalling)
-            if ai_state.ball_hold_time > 3.0 {
-                // Force shot after holding ball for 3+ seconds (prevents stalling)
+            // Force shot after holding ball for 2+ seconds (prevents stalling)
+            // Reduced from 3s to increase shooting activity
+            if ai_state.ball_hold_time > 2.0 {
                 AiGoal::ChargeShot
             } else {
             let horizontal_distance = (ai_pos.x - target_basket_pos.x).abs();
@@ -533,9 +533,11 @@ pub fn ai_decision_update(
                 nav_graph.level_max_shot_quality,
             );
 
-            // Desperation factor: after 8 seconds holding ball, lower threshold (max 50% reduction)
-            let desperation_factor = if ai_state.ball_hold_time > 8.0 {
-                1.0 - ((ai_state.ball_hold_time - 8.0) * 0.03).min(0.5)
+            // Desperation factor: after 1 second holding ball, gradually lower threshold
+            // Ramps from 1.0 at 1s to 0.5 at 2s (when force shot kicks in)
+            // This encourages shooting sooner rather than waiting for perfect position
+            let desperation_factor = if ai_state.ball_hold_time > 1.0 {
+                1.0 - ((ai_state.ball_hold_time - 1.0) * 0.5).min(0.5)
             } else {
                 1.0
             };
@@ -591,9 +593,11 @@ pub fn ai_decision_update(
 
                         // 4. Floor penalty - urgently seek height if currently at floor level
                         // This helps even low-patience profiles climb before shooting
+                        // Increased from 0.15 to 0.25 based on tournament data showing
+                        // floor shots have 9-13% success vs elevated shots at 20-35%
                         let current_height = ai_pos.y - ARENA_FLOOR_Y;
                         let at_floor_level = current_height < 100.0;
-                        let floor_urgency = if at_floor_level { 0.15 } else { 0.0 };
+                        let floor_urgency = if at_floor_level { 0.25 } else { 0.0 };
 
                         // Utility = quality_gain + height_bonus + floor_urgency - opportunity_costs
                         // Floor urgency bypasses patience scaling to help impatient profiles seek height
