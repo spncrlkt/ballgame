@@ -26,18 +26,14 @@
 
 ---
 
-## P0: Evlog Elimination (Next Session Priority)
+## P0: Bug Fixes
 
-*See `docs/planning/evlog-elimination-plan.md` for full implementation plan*
+**Cooldown timing bug** - `steal_cooldown_update` runs in BOTH Update and FixedUpdate across multiple binaries (main.rs, training.rs, run-ghost.rs, runner.rs), causing timers to tick twice as fast.
+- [ ] Consolidate to FixedUpdate only (physics timing)
+- [ ] Verify UI in `steal_indicators.rs` still works (reads timers in Update)
 
-- [ ] **Complete evlog elimination** - Migrate fully to SQLite, remove all .evlog infrastructure
-  - [x] Phase 1: Add SQLite replay loading to SimDatabase
-  - [x] Phase 2: Add --replay-db flag to main binary
-  - [x] Phase 3: Update training binary to remove evlog writing
-  - [x] Phase 4: Update analysis to use SQLite only
-  - [x] Phase 5: Update other binaries (plus sim event persistence)
-  - [ ] Phase 6: Delete evlog code (logger.rs, evlog_parser.rs, Python scripts)
-  - [ ] Phase 7: Documentation cleanup
+**Input capture bug** - When tweak panel is open, `capture_input` early-returns but `copy_human_input` continues applying stale `PlayerInput`.
+- [ ] Clear input state when panel is open, or skip copy_human_input
 
 ---
 
@@ -110,6 +106,18 @@ Benefits: ~120 lines deleted, full AI defense in ghost mode, cleaner architectur
 
 ## Backlog (not prioritized)
 
+**Technical Debt:**
+- System wiring drift: consolidate schedules across binaries (main/training/simulation/run-ghost diverged)
+- EventBus `processed` retention: clear/limit after logging (grows unbounded)
+- Reduce re-export surface in `src/lib.rs`
+- Deterministic sim mode (seed + fixed timestep for reproducible runs)
+
+**AI Improvements:**
+- AI-vs-AI opponent selection: `ai_navigation_update` targets `HumanControlled` only; `ai_decision_update` uses "any other player" - inconsistent
+- Define zone geometry constants + formulas (for defense positioning)
+- Defensive test matrix (levels, seeds, profiles, expected goal mix)
+
+**Features:**
 - Settings file: move init_settings out of VC, use template as default
 - Settings persistence: save viewport/prefs on change, load on start
 - Ball options: more styles (yin yang, volleyball, pool balls, etc.)
@@ -143,6 +151,9 @@ cargo run --bin training                 # Training mode
 
 ## Done (Last 5)
 
+- [x] **Evlog elimination complete** - Full SQLite migration, all .evlog infrastructure removed (2026-01-26)
+  - SQLite replay loading, --replay-db CLI, training writes to DB only
+  - Deleted: evlog_parser.rs, logger.rs, loader.rs, Python scripts
 - [x] **AI pressure/steal fixes** - Meta-analysis of 19 sessions → 4 fixes implemented (2026-01-25)
   - Profile: steal_range 128→100, pressure_distance 82→120
   - Intercept position closer to opponent (0.3-0.7x instead of 1.0x)
@@ -151,6 +162,5 @@ cargo run --bin training                 # Training mode
 - [x] **AI architecture refactor** - AiCapabilities + world_model.rs for single source of physics truth (2026-01-25)
 - [x] **Fix JumpAt horizontal movement** - AI now moves toward landing during entire jump arc (was stopping mid-air)
 - [x] **Fix calculate_edge overlap case** - Jump from edge of overlap, not center (avoids ceiling collision)
-- [x] Ghost system MVP - extract-drives + run-ghost binaries working (2026-01-25)
 
 *See `todone.md` for full archive with commit references*

@@ -27,6 +27,10 @@ pub struct StealOutOfRangeFlash;
 #[derive(Component)]
 pub struct VulnerableIndicator;
 
+/// Marker for cooldown-blocked flash (shows when steal pressed but on cooldown)
+#[derive(Component)]
+pub struct CooldownBlockedFlash;
+
 // =============================================================================
 // COLORS
 // =============================================================================
@@ -35,6 +39,7 @@ const COOLDOWN_COLOR: Color = Color::srgba(0.4, 0.4, 0.5, 0.8);
 const FAIL_FLASH_COLOR: Color = Color::srgba(0.9, 0.2, 0.2, 0.7); // Red - steal failed
 const OUT_OF_RANGE_COLOR: Color = Color::srgba(1.0, 0.5, 0.0, 0.6); // Orange - too far
 const VULNERABLE_COLOR: Color = Color::srgba(1.0, 0.8, 0.0, 0.6); // Yellow warning
+const COOLDOWN_BLOCKED_COLOR: Color = Color::srgba(0.3, 0.6, 0.9, 0.7); // Blue - on cooldown
 
 // =============================================================================
 // SPAWNING
@@ -94,6 +99,20 @@ pub fn spawn_steal_indicators(commands: &mut Commands, player_entity: Entity, _f
         ))
         .id();
     commands.entity(player_entity).add_child(vulnerable);
+
+    // Cooldown-blocked flash: blue pulse when steal pressed but on cooldown
+    let cooldown_blocked = commands
+        .spawn((
+            Sprite::from_color(
+                COOLDOWN_BLOCKED_COLOR,
+                Vec2::new(PLAYER_SIZE.x + 12.0, PLAYER_SIZE.y + 12.0),
+            ),
+            Transform::from_xyz(0.0, 0.0, -0.2),
+            Visibility::Hidden,
+            CooldownBlockedFlash,
+        ))
+        .id();
+    commands.entity(player_entity).add_child(cooldown_blocked);
 }
 
 // =============================================================================
@@ -112,6 +131,7 @@ pub fn update_steal_indicators(
             Without<StealFailFlash>,
             Without<StealOutOfRangeFlash>,
             Without<VulnerableIndicator>,
+            Without<CooldownBlockedFlash>,
         ),
     >,
     mut fail_flash_query: Query<
@@ -121,6 +141,7 @@ pub fn update_steal_indicators(
             Without<StealCooldownIndicator>,
             Without<StealOutOfRangeFlash>,
             Without<VulnerableIndicator>,
+            Without<CooldownBlockedFlash>,
         ),
     >,
     mut out_of_range_query: Query<
@@ -130,6 +151,7 @@ pub fn update_steal_indicators(
             Without<StealCooldownIndicator>,
             Without<StealFailFlash>,
             Without<VulnerableIndicator>,
+            Without<CooldownBlockedFlash>,
         ),
     >,
     mut vulnerable_query: Query<
@@ -139,6 +161,17 @@ pub fn update_steal_indicators(
             Without<StealCooldownIndicator>,
             Without<StealFailFlash>,
             Without<StealOutOfRangeFlash>,
+            Without<CooldownBlockedFlash>,
+        ),
+    >,
+    mut cooldown_blocked_query: Query<
+        &mut Visibility,
+        (
+            With<CooldownBlockedFlash>,
+            Without<StealCooldownIndicator>,
+            Without<StealFailFlash>,
+            Without<StealOutOfRangeFlash>,
+            Without<VulnerableIndicator>,
         ),
     >,
 ) {
@@ -186,6 +219,18 @@ pub fn update_steal_indicators(
             if let Ok(mut visibility) = vulnerable_query.get_mut(child) {
                 // Show when charging (vulnerable to steal)
                 if charging.charge_time > 0.0 {
+                    *visibility = Visibility::Inherited;
+                } else {
+                    *visibility = Visibility::Hidden;
+                }
+            }
+
+            // Update cooldown-blocked flash indicator
+            if let Ok(mut visibility) = cooldown_blocked_query.get_mut(child) {
+                // Show when this player pressed steal but was on cooldown
+                if steal_contest.cooldown_blocked_timer > 0.0
+                    && steal_contest.cooldown_blocked_entity == Some(player_entity)
+                {
                     *visibility = Visibility::Inherited;
                 } else {
                     *visibility = Visibility::Hidden;

@@ -37,6 +37,18 @@
   - Worth fixing or leave as standard Bevy patterns?
 - [ ] **ghost-visual.rs** - Fix or delete? (Currently broken)
 
+## System Architecture (from Codex investigation)
+
+- [ ] **System wiring divergence** - main/training/simulation/run-ghost have duplicated system chains that have already diverged. Options:
+  - Create shared plugins (e.g., AiPlugin, PhysicsPlugin) used by all binaries
+  - Accept divergence and document differences
+  - Merge some binaries (e.g., training mode into main game)
+
+- [ ] **EventBus memory growth** - `export_events`/`drain` append to `processed` without clearing. Options:
+  - Clear after each frame
+  - Limit to last N events
+  - Only retain if replay system needs history
+
 ---
 
 ## Resolved
@@ -47,4 +59,4 @@
 
 ---
 
-*Last reviewed: 2026-01-25 (AI architecture session)*
+*Last reviewed: 2026-01-26 (Codex evlog elimination)*

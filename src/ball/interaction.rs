@@ -8,7 +8,7 @@ use crate::ball::components::*;
 use crate::constants::*;
 use crate::player::{Facing, HoldingBall, Player, Team, Velocity};
 use crate::shooting::ChargingShot;
-use crate::steal::{StealContest, StealCooldown, StealTracker, MAX_STEAL_DIFFERENTIAL};
+use crate::steal::{StealContest, StealCooldown, StealTracker};
 
 /// Handle ball-player collision physics
 pub fn ball_player_collision(
@@ -131,7 +131,7 @@ pub fn ball_follow_holder(
 
 /// Handle ball pickup and instant steal attempts.
 /// All players read from their InputState component.
-/// Enforces steal differential: no team can have more than MAX_STEAL_DIFFERENTIAL more steals.
+/// Uses graduated steal difficulty: teams with more steals have reduced success chance.
 pub fn pickup_ball(
     mut commands: Commands,
     mut steal_contest: ResMut<StealContest>,
@@ -198,21 +198,23 @@ pub fn pickup_ball(
             return; // Done - picked up ball
         }
 
-        // Skip steal attempts if on cooldown
+        // Skip steal attempts if on cooldown, but give visual feedback
         if cooldown.0 > 0.0 {
+            // Show "blocked by cooldown" feedback so player knows their press was eaten
+            steal_contest.cooldown_blocked_timer = 0.15; // Brief flash
+            steal_contest.cooldown_blocked_entity = Some(player_entity);
             continue;
         }
 
-        // STRICT STEAL SUCCESS DIFFERENTIAL ENFORCEMENT
-        // Check if this team is allowed to attempt based on successful steal differential
-        if !steal_tracker.can_attempt_steal(*team) {
-            let diff = steal_tracker.success_differential();
-            warn!(
-                "STEAL BLOCKED: {:?} has {} more successful steals (L{}/R{} diff={})",
-                team, MAX_STEAL_DIFFERENTIAL,
+        // Calculate steal difficulty modifier (graduated rubber-banding)
+        let steal_modifier = steal_tracker.steal_difficulty_modifier(*team);
+        let diff = steal_tracker.success_differential();
+        if steal_modifier < 1.0 {
+            info!(
+                "STEAL DIFFICULTY: {:?} modifier={:.2} (L{}/R{} diff={})",
+                team, steal_modifier,
                 steal_tracker.left_steals, steal_tracker.right_steals, diff
             );
-            continue;
         }
 
         // If no free ball nearby, check for steal opportunity
@@ -241,14 +243,17 @@ pub fn pickup_ball(
                     success_chance += STEAL_CHARGING_BONUS;
                 }
 
+                // Apply graduated difficulty modifier (rubber-banding)
+                success_chance = (success_chance * steal_modifier).clamp(0.0, 1.0);
+
                 // Roll for success
                 let mut rng = rand::thread_rng();
                 let roll: f32 = rng.gen_range(0.0..1.0);
 
                 // Log the attempt with roll details
                 info!(
-                    "STEAL ATTEMPT: {:?} roll={:.2} vs chance={:.2} (attempts: L{}/R{})",
-                    team, roll, success_chance,
+                    "STEAL ATTEMPT: {:?} roll={:.2} vs chance={:.2} (modifier={:.2}, attempts: L{}/R{})",
+                    team, roll, success_chance, steal_modifier,
                     steal_tracker.left_attempts, steal_tracker.right_attempts
                 );
 
@@ -265,15 +270,6 @@ pub fn pickup_ball(
                         // Record the success for tracking
                         steal_tracker.record_success(*team);
                         steal_tracker.log_state("SUCCESS");
-
-                        // HARD ERROR if success differential exceeds limit
-                        let diff = steal_tracker.success_differential();
-                        assert!(
-                            diff.abs() <= MAX_STEAL_DIFFERENTIAL,
-                            "STEAL SUCCESS DIFFERENTIAL VIOLATION: {} exceeds max of {}",
-                            diff,
-                            MAX_STEAL_DIFFERENTIAL
-                        );
 
                         // Apply pushback to defender (away from attacker)
                         let pushback_dir = if defender_transform.translation.x >= player_pos.x {

@@ -7,6 +7,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use bevy::prelude::warn;
 use chrono::Local;
 
 use crate::simulation::db::{SimDatabase, MatchSummary, DistanceAnalysis, InputAnalysis, GoalTransition};
@@ -772,9 +773,19 @@ fn analyze_movement_from_ticks(db: &SimDatabase, match_id: i64) -> Option<Moveme
         0.0
     };
 
+    // Validate position range - return None if we didn't get valid min/max
+    // This prevents misleading (0.0, 0.0) ranges in analysis output
+    if min_x == f32::MAX || max_x == f32::MIN || min_x > max_x {
+        warn!(
+            "Invalid position range in tick analysis: min={}, max={}, samples={}",
+            min_x, max_x, x_samples
+        );
+        return None;
+    }
+
     Some(MovementTickStats {
-        min_x_position: if min_x == f32::MAX { 0.0 } else { min_x },
-        max_x_position: if max_x == f32::MIN { 0.0 } else { max_x },
+        min_x_position: min_x,
+        max_x_position: max_x,
         avg_x_position: avg_x,
         closing_rate,
         time_stuck_secs,

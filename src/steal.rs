@@ -4,10 +4,12 @@ use bevy::prelude::*;
 
 use crate::player::Team;
 
-/// Maximum allowed steal differential between teams.
-/// If one team has MAX_STEAL_DIFFERENTIAL more steals than the other,
-/// that team cannot steal until the differential is reduced.
-pub const MAX_STEAL_DIFFERENTIAL: i32 = 2;
+/// Threshold at which graduated steal difficulty starts applying.
+/// Below this differential, steal chances are normal.
+pub const STEAL_DIFFICULTY_THRESHOLD: i32 = 2;
+
+/// Maximum steal differential at which leader has 0% chance and trailer has 100%.
+pub const STEAL_DIFFICULTY_MAX: i32 = 8;
 
 /// Steal feedback resource - tracks last attempt result for visual feedback
 #[derive(Resource, Default)]
@@ -22,6 +24,10 @@ pub struct StealContest {
     pub out_of_range_timer: f32,
     /// Entity that attempted steal while out of range
     pub out_of_range_entity: Option<Entity>,
+    /// Timer for "cooldown blocked" feedback (button pressed while on cooldown)
+    pub cooldown_blocked_timer: f32,
+    /// Entity that pressed steal while on cooldown
+    pub cooldown_blocked_entity: Option<Entity>,
 }
 
 /// Resource tracking steal attempts and successes per team for differential enforcement
@@ -48,12 +54,44 @@ impl StealTracker {
         self.left_steals - self.right_steals
     }
 
-    /// Check if a team is allowed to attempt a steal based on SUCCESS differential
-    pub fn can_attempt_steal(&self, team: Team) -> bool {
+    /// Calculate steal success modifier based on differential.
+    /// Returns a multiplier for the base steal success chance.
+    ///
+    /// Graduated rubber-banding:
+    /// - Differential 0-2: Normal chances (1.0)
+    /// - Differential 3-7: Leader -17% to -83%, Trailer +17% to +83%
+    /// - Differential 8+: Leader 0% (impossible), Trailer 100% (guaranteed)
+    pub fn steal_difficulty_modifier(&self, team: Team) -> f32 {
         let diff = self.success_differential();
-        match team {
-            Team::Left => diff < MAX_STEAL_DIFFERENTIAL,
-            Team::Right => diff > -MAX_STEAL_DIFFERENTIAL,
+
+        // Determine if this team is the leader or trailer
+        let is_leader = match team {
+            Team::Left => diff > 0,  // Left has more steals
+            Team::Right => diff < 0, // Right has more steals
+        };
+
+        let abs_diff = diff.abs();
+
+        // No adjustment if within threshold
+        if abs_diff <= STEAL_DIFFICULTY_THRESHOLD {
+            return 1.0;
+        }
+
+        // Calculate adjustment steps (0 to 6 steps beyond threshold)
+        let steps_beyond = (abs_diff - STEAL_DIFFICULTY_THRESHOLD).min(
+            STEAL_DIFFICULTY_MAX - STEAL_DIFFICULTY_THRESHOLD,
+        ) as f32;
+        let max_steps = (STEAL_DIFFICULTY_MAX - STEAL_DIFFICULTY_THRESHOLD) as f32;
+
+        // adjustment goes from 0.0 to 1.0 over the range
+        let adjustment = steps_beyond / max_steps;
+
+        if is_leader {
+            // Leader: decrease from 1.0 toward 0.0
+            1.0 - adjustment
+        } else {
+            // Trailer: increase from 1.0 toward 2.0 (capped by clamp later)
+            1.0 + adjustment
         }
     }
 
@@ -129,6 +167,14 @@ pub fn steal_cooldown_update(
         steal_contest.out_of_range_timer -= dt;
         if steal_contest.out_of_range_timer <= 0.0 {
             steal_contest.out_of_range_entity = None;
+        }
+    }
+
+    // Tick down cooldown-blocked timer
+    if steal_contest.cooldown_blocked_timer > 0.0 {
+        steal_contest.cooldown_blocked_timer -= dt;
+        if steal_contest.cooldown_blocked_timer <= 0.0 {
+            steal_contest.cooldown_blocked_entity = None;
         }
     }
 }

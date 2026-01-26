@@ -488,8 +488,9 @@ pub fn ai_decision_update(
 
         // Decide current goal (using profile values)
         let new_goal = if ai_has_ball {
-            // Force shot after holding ball for 6+ seconds (prevents stalling)
-            if ai_state.ball_hold_time > 6.0 {
+            // Force shot after holding ball for 3+ seconds (prevents stalling)
+            // Reduced from 6s to encourage more shooting attempts
+            if ai_state.ball_hold_time > 3.0 {
                 AiGoal::ChargeShot
             } else {
             let horizontal_distance = (ai_pos.x - target_basket_pos.x).abs();
@@ -536,9 +537,11 @@ pub fn ai_decision_update(
 
             // Safety check: don't START charging if opponent is very close (steal risk)
             // But if already charging, COMMIT to the shot - aborting leads to steals anyway
+            // Use actual STEAL_RANGE constant * 1.5 (90px) rather than profile.steal_range
+            // which can be much larger and block shooting opportunities unnecessarily
             let already_charging = ai_state.current_goal == AiGoal::ChargeShot;
             let opponent_too_close = !already_charging && opponent_pos
-                .map(|opp| ai_pos.distance(opp) < profile.steal_range * 1.2)
+                .map(|opp| ai_pos.distance(opp) < STEAL_RANGE * 1.5)
                 .unwrap_or(false);
 
             // Calculate utility of seeking a better position vs shooting now
@@ -549,8 +552,9 @@ pub fn ai_decision_update(
                     let best_quality = nav_graph.get_shot_quality(best_node_idx, target_basket_pos);
                     let quality_gain = best_quality - shot_quality;
 
-                    // Only seek if there's meaningful quality to gain
-                    if quality_gain > 0.01 {
+                    // Only seek if there's SIGNIFICANT quality to gain (10%+ improvement)
+                    // Was 0.01 which made AI too hesitant to shoot from "good enough" spots
+                    if quality_gain > 0.10 {
                         // Opportunity cost factors:
                         // 1. Path cost (time/risk to reach better position)
                         let path_cost = nav_graph.estimate_path_cost(ai_pos, best_node_idx);
@@ -593,6 +597,16 @@ pub fn ai_decision_update(
                 // Commit to the shot once started
                 AiGoal::ChargeShot
             } else {
+                // Debug: log why AI isn't shooting (once per second to avoid spam)
+                if ai_state.ball_hold_time > 0.5 && (ai_state.ball_hold_time * 10.0) as u32 % 10 == 0 {
+                    info!(
+                        "AI NOT SHOOTING: quality={:.2} (need>={:.2}) ok={} | range={:.0} (need<{:.0}) ok={} | opp_dist={:.0} close={} | seek={}",
+                        shot_quality, effective_min_quality, quality_acceptable,
+                        effective_distance, profile.shoot_range, in_shoot_range,
+                        opponent_pos.map(|o| ai_pos.distance(o)).unwrap_or(999.0), opponent_too_close,
+                        should_seek
+                    );
+                }
                 AiGoal::AttackWithBall
             }
             } // End of else block for forced shot after 12s
