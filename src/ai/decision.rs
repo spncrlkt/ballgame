@@ -25,8 +25,13 @@ fn calculate_interception_position(
     // Direction from opponent to basket (the shot line)
     let shot_direction = (basket_pos - opponent_pos).normalize_or_zero();
 
-    // Base intercept position: on the shot line, pressure_distance away from opponent
-    let base_intercept = opponent_pos + shot_direction * pressure_distance;
+    // Position CLOSER to opponent rather than ahead of them
+    // Use a fraction of pressure_distance to stay tight on the ball carrier
+    // Higher defensive_iq = tighter positioning (closer to opponent)
+    let effective_distance = pressure_distance * (0.3 + (1.0 - defensive_iq) * 0.4);
+
+    // Base intercept: between opponent and basket, but biased toward opponent
+    let base_intercept = opponent_pos + shot_direction * effective_distance;
 
     // Apply defensive IQ - higher IQ means staying more precisely on the shot line
     // Lower IQ introduces perpendicular positioning error
@@ -599,7 +604,8 @@ pub fn ai_decision_update(
                 let distance_to_opponent = ai_pos.distance(opp_pos);
                 // Calculate effective pressure threshold based on profile
                 // Higher aggression = tighter pressure, lower = zone defense
-                let pressure_threshold = profile.pressure_distance * (1.0 + (1.0 - profile.aggression));
+                // Use larger multiplier (1.5 base) for wider PressureDefense window
+                let pressure_threshold = profile.pressure_distance * (1.5 + (1.0 - profile.aggression));
 
                 // Determine ideal defensive goal
                 let ideal_defense = if distance_to_opponent < profile.steal_range {

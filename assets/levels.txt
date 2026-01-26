@@ -60,14 +60,14 @@ center: 240 230
 center: 360 120
 
 level: Arena
-basket_height: 640
+basket_height: 780
 steps: 7
-step_push_in: 100
-corner_height: 240
-corner_width: 220
-mirror: 480 240 150
-mirror: 265 390 180
-center: 170 280
+step_push_in: 80
+corner_height: 260
+corner_width: 250
+center: 220 230
+mirror: 380 380 120
+mirror: 200 560 120
 
 level: Skyway
 basket_height: 700

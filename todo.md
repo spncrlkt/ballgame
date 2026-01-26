@@ -4,6 +4,13 @@
 
 ---
 
+## gameplay notes 
+- we need to have an animated gif of a good starting 3-2-1 -> 20 seconds of action ending in a point. we need a system to recreate a full replay (like our ghost/replay system) and record it as a gif for the front page demo on our readme. lets organize and fix the leaky abstractions that we have laid out across our events/replay system
+- archive level system. move to archived file, remove all references, ensure no path to read from the archived levels file
+- documentantion roundup: assets, notes, settings, readme, todo systems, etc let's try to categorize and organize these files into a structure in our project that works
+- the ai steals too easily and it is too hard for me to steal. lets set up a training protocol for stealing only with a flat level and normal baskets no stairs. we'll play for 60 seconds and record steal attempts and successful steals. make sure we are logging enough information to analyze the fairness of player stealing vs ai stealing.
+- the platforming and understanding of steps and platforms are still inefficient. lets set up a training protocol for steps and platforming. make the level look like Skyway. 
+
 ## Code Review Available (2026-01-25)
 
 **Deep analysis completed** - see `code_review_2026-01-25.md` for:
@@ -121,10 +128,14 @@ cargo run --bin training                 # Training mode
 
 ## Done (Last 5)
 
+- [x] **AI pressure/steal fixes** - Meta-analysis of 19 sessions → 4 fixes implemented (2026-01-25)
+  - Profile: steal_range 128→100, pressure_distance 82→120
+  - Intercept position closer to opponent (0.3-0.7x instead of 1.0x)
+  - PressureDefense window widened 34px→97px
+  - Result: AI steal attempts 0.26/game → 13/game
 - [x] **AI architecture refactor** - AiCapabilities + world_model.rs for single source of physics truth (2026-01-25)
 - [x] **Fix JumpAt horizontal movement** - AI now moves toward landing during entire jump arc (was stopping mid-air)
 - [x] **Fix calculate_edge overlap case** - Jump from edge of overlap, not center (avoids ceiling collision)
 - [x] Ghost system MVP - extract-drives + run-ghost binaries working (2026-01-25)
-- [x] HOW_TO_PLAY.md - ASCII controller guide with all controls
 
 *See `todone.md` for full archive with commit references*
