@@ -1,0 +1,16 @@
+{
+  "mode": "Single",
+  "level": null,
+  "left_profile": "Balanced",
+  "right_profile": "Balanced",
+  "duration_limit": 60.0,
+  "score_limit": 0,
+  "seed": null,
+  "stalemate_timeout": 30.0,
+  "output_file": null,
+  "quiet": false,
+  "parallel": 8,
+  "db_path": null,
+  "profiles": ["v4_RP_Gamma", "v4_Elite_A", "v4_RA_Core"],
+  "levels": [3, 4, 5, 6, 7, 8, 11, 14, 15]
+}

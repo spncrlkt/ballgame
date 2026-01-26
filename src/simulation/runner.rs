@@ -39,10 +39,19 @@ use super::setup::sim_setup;
 use super::shot_test::run_shot_test;
 
 /// Get the effective level for a match.
-/// If config.level is None, picks a random non-debug level (excluding Pit).
+/// If config.level is Some, uses that specific level.
+/// If config.levels is non-empty, picks randomly from that list.
+/// Otherwise picks a random non-debug level (excluding Pit).
 fn get_effective_level(config: &SimConfig, level_db: &LevelDatabase, seed: u64) -> u32 {
+    // Specific level override takes priority
     if let Some(level) = config.level {
         return level;
+    }
+
+    // If levels list is specified, use that
+    if !config.levels.is_empty() {
+        let idx = (seed as usize) % config.levels.len();
+        return config.levels[idx];
     }
 
     // Build list of valid levels (exclude debug levels and "Pit")
@@ -606,8 +615,23 @@ pub fn run_simulation(config: SimConfig) {
         }
     }).flatten();
 
-    // Get profile list
-    let profiles: Vec<String> = profile_db.profiles().iter().map(|p| p.name.clone()).collect();
+    // Get profile list (use config.profiles if specified, otherwise all)
+    let profiles: Vec<String> = if config.profiles.is_empty() {
+        profile_db.profiles().iter().map(|p| p.name.clone()).collect()
+    } else {
+        // Validate that all specified profiles exist
+        let all_profile_names: std::collections::HashSet<_> =
+            profile_db.profiles().iter().map(|p| p.name.as_str()).collect();
+        let mut valid_profiles = Vec::new();
+        for name in &config.profiles {
+            if all_profile_names.contains(name.as_str()) {
+                valid_profiles.push(name.clone());
+            } else {
+                eprintln!("Warning: Unknown profile '{}', skipping", name);
+            }
+        }
+        valid_profiles
+    };
 
     // Get level names
     let mut level_names = std::collections::HashMap::new();

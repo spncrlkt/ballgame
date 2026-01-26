@@ -52,6 +52,10 @@ pub struct SimConfig {
     pub parallel: usize,
     /// Path to SQLite database for storing results
     pub db_path: Option<String>,
+    /// Profiles to include in tournament (empty = all profiles)
+    pub profiles: Vec<String>,
+    /// Levels to use for matches (empty = all non-debug levels)
+    pub levels: Vec<u32>,
 }
 
 impl Default for SimConfig {
@@ -69,22 +73,95 @@ impl Default for SimConfig {
             quiet: false,
             parallel: 0, // Sequential by default
             db_path: None,
+            profiles: Vec::new(), // Empty = all profiles
+            levels: Vec::new(),   // Empty = all non-debug levels
         }
     }
 }
 
+/// Template simulation settings (checked into git)
+pub const SIM_SETTINGS_TEMPLATE: &str = "config/simulation_settings.template.json";
+/// Local simulation settings (gitignored, user's custom settings)
+pub const SIM_SETTINGS_FILE: &str = "config/simulation_settings.json";
+
 impl SimConfig {
+    /// Load configuration from a JSON settings file
+    pub fn from_file(path: &str) -> Result<Self, String> {
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read {}: {}", path, e))?;
+        serde_json::from_str(&contents)
+            .map_err(|e| format!("Failed to parse {}: {}", path, e))
+    }
+
+    /// Load configuration from default config files
+    /// Priority: local settings > template settings > built-in defaults
+    pub fn from_config_files() -> Self {
+        // Try local settings first
+        if let Ok(config) = Self::from_file(SIM_SETTINGS_FILE) {
+            return config;
+        }
+        // Fall back to template settings
+        if let Ok(config) = Self::from_file(SIM_SETTINGS_TEMPLATE) {
+            return config;
+        }
+        // Fall back to built-in defaults
+        Self::default()
+    }
+
     /// Parse configuration from command line arguments
     pub fn from_args() -> Self {
         let args: Vec<String> = std::env::args().collect();
-        let mut config = Self::default();
 
+        // Start with config files as base
+        let mut config = Self::from_config_files();
+
+        // Check for explicit settings file override
         let mut i = 1;
         while i < args.len() {
+            if args[i] == "--settings" && i + 1 < args.len() {
+                match Self::from_file(&args[i + 1]) {
+                    Ok(loaded) => config = loaded,
+                    Err(e) => {
+                        eprintln!("Warning: {}", e);
+                    }
+                }
+                break;
+            }
+            i += 1;
+        }
+
+        // Then apply command line overrides
+        i = 1;
+        while i < args.len() {
             match args[i].as_str() {
+                "--settings" => {
+                    // Already handled above
+                    i += 1;
+                }
                 "--level" => {
                     if i + 1 < args.len() {
                         config.level = args[i + 1].parse().ok();
+                        i += 1;
+                    }
+                }
+                "--levels" => {
+                    if i + 1 < args.len() {
+                        // Parse comma-separated list of levels
+                        config.levels = args[i + 1]
+                            .split(',')
+                            .filter_map(|s| s.trim().parse().ok())
+                            .collect();
+                        i += 1;
+                    }
+                }
+                "--profiles" => {
+                    if i + 1 < args.len() {
+                        // Parse comma-separated list of profiles
+                        config.profiles = args[i + 1]
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect();
                         i += 1;
                     }
                 }
@@ -211,7 +288,10 @@ USAGE:
     cargo run --bin simulate -- [OPTIONS]
 
 OPTIONS:
+    --settings <FILE>   Load settings from JSON file (CLI args override file settings)
     --level <N>         Level number (1-12, default: random per match)
+    --levels <LIST>     Comma-separated level numbers to use (e.g., "3,4,7,11")
+    --profiles <LIST>   Comma-separated profile names for tournament (e.g., "v4_RP_Gamma,v4_Elite_A")
     --left <PROFILE>    Left player AI profile (default: Balanced)
     --right <PROFILE>   Right player AI profile (default: Balanced)
     --duration <SECS>   Match duration limit in seconds (default: 60)
@@ -233,8 +313,11 @@ EXAMPLES:
     # Single match on level 3
     cargo run --bin simulate -- --level 3 --left Balanced --right Aggressive
 
-    # Tournament with 10 matches per pair
-    cargo run --bin simulate -- --tournament 10
+    # Tournament with specific profiles and levels
+    cargo run --bin simulate -- --tournament 5 --profiles "v4_RP_Gamma,v4_Elite_A,v4_RA_Core" --levels "3,4,7,11" --db results.db
+
+    # Load settings from file
+    cargo run --bin simulate -- --settings sim_settings.json --tournament 3
 
     # Test Sniper profile across all levels
     cargo run --bin simulate -- --level-sweep 5 --left Sniper
@@ -247,6 +330,15 @@ EXAMPLES:
 
 PROFILES:
     Balanced, Aggressive, Defensive, Sniper, Rusher, Turtle, Chaotic, Patient, Hunter, Goalie
+    (Use --profiles to filter which profiles participate in tournament)
+
+SETTINGS FILE FORMAT (JSON):
+    {{
+      "profiles": ["v4_RP_Gamma", "v4_Elite_A", "v4_RA_Core"],
+      "levels": [3, 4, 5, 6, 7, 8, 11, 14, 15],
+      "parallel": 8,
+      "duration_limit": 60.0
+    }}
 "#
     );
 }

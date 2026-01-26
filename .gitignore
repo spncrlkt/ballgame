@@ -17,6 +17,9 @@ training.db
 /training_logs/
 /sim_logs/
 *_logs/
+/db/
 
-# Local training settings (use template for defaults)
+# Local settings (use templates for defaults)
 config/training_settings.json
+config/simulation_settings.json
+
