@@ -18,6 +18,7 @@ use crate::player::{
     CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, TargetBasket, Team,
     apply_gravity, apply_input, check_collisions,
 };
+use crate::events::EventBus;
 use crate::scoring::{CurrentLevel, Score, check_scoring};
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
 use crate::steal::{StealContest, StealCooldown, StealTracker, steal_cooldown_update};
@@ -134,6 +135,7 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
     app.init_resource::<LastShotInfo>();
     app.insert_resource(CurrentPalette(0));
     app.init_resource::<PaletteDatabase>();
+    app.insert_resource(EventBus::new());
     // Collect state check frames
     let state_check_frames: Vec<u64> = {
         let mut frames: Vec<u64> = test.expect.state.iter().map(|s| s.after_frame).collect();

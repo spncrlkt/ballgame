@@ -1,5 +1,6 @@
 /target
 Cargo.lock
+training.db
 
 # Claude Code
 .claude/
