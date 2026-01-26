@@ -131,7 +131,8 @@ pub fn ai_navigation_update(
             continue;
         }
 
-        let profile = profile_db.get(ai_state.profile_index);
+        let profile = profile_db.get_by_id(&ai_state.profile_id)
+            .unwrap_or_else(|| profile_db.default_profile());
         let ai_pos = ai_transform.translation.truncate();
 
         // Get ball position
@@ -413,7 +414,8 @@ pub fn ai_decision_update(
         }
 
         // Get AI profile for this player
-        let profile = profile_db.get(ai_state.profile_index);
+        let profile = profile_db.get_by_id(&ai_state.profile_id)
+            .unwrap_or_else(|| profile_db.default_profile());
 
         // Decrement button press cooldown (simulates human mashing speed limit)
         // Use a minimum dt of 1/60 to handle headless mode where delta can be tiny
@@ -488,9 +490,24 @@ pub fn ai_decision_update(
 
         // Decide current goal (using profile values)
         let new_goal = if ai_has_ball {
+            // Check if AI is in "front court" (front 1/3 of arena, close to target basket)
+            // Front court = near target basket, where shots are too close/easy to block
+            // If targeting right basket (x > 0): front court = right 1/3 (x > ARENA_WIDTH/6)
+            // If targeting left basket (x < 0): front court = left 1/3 (x < -ARENA_WIDTH/6)
+            let front_court_threshold = ARENA_WIDTH / 6.0;
+            let in_front_court = if target_basket_pos.x > 0.0 {
+                ai_pos.x > front_court_threshold  // Right 1/3 when targeting right
+            } else {
+                ai_pos.x < -front_court_threshold  // Left 1/3 when targeting left
+            };
+
+            // Apply front-court penalty: reduce effective shot quality when too close
+            // This discourages but doesn't prevent close-range shots
+            let front_court_quality_penalty = if in_front_court { 0.15 } else { 0.0 };
+
             // Force shot after holding ball for 3+ seconds (prevents stalling)
-            // Reduced from 6s to encourage more shooting attempts
             if ai_state.ball_hold_time > 3.0 {
+                // Force shot after holding ball for 3+ seconds (prevents stalling)
                 AiGoal::ChargeShot
             } else {
             let horizontal_distance = (ai_pos.x - target_basket_pos.x).abs();
@@ -506,7 +523,8 @@ pub fn ai_decision_update(
             };
 
             // Evaluate shot quality based on position (heatmap-derived)
-            let shot_quality = evaluate_shot_quality(ai_pos, target_basket_pos);
+            // Apply front-court penalty to discourage close-range shots
+            let shot_quality = evaluate_shot_quality(ai_pos, target_basket_pos) - front_court_quality_penalty;
 
             // Scale min_shot_quality based on what's achievable on this level
             // Flat levels (max ~0.50) get lower thresholds so AI still shoots
@@ -565,16 +583,25 @@ pub fn ai_decision_update(
                             .map(|opp| 1.0 - (ai_pos.distance(opp) / 300.0).min(1.0))
                             .unwrap_or(0.0);
 
-                        // 3. Height bonus - reward seeking elevated platforms
+                        // 3. Height bonus - strongly reward seeking elevated platforms
+                        // Tournament data shows elevated shots (Y > -300) have 20-35% success
+                        // vs floor shots (Y < -350) at only 3-10% success
                         let height_above_floor = (best_node.top_y - ARENA_FLOOR_Y - 50.0).max(0.0);
-                        let height_bonus = (height_above_floor / 300.0).min(0.3) * 0.5; // Up to +0.15
+                        let height_bonus = (height_above_floor / 200.0).min(0.5) * 0.6; // Up to +0.30
 
-                        // Utility = quality_gain + height_bonus - opportunity_costs, scaled by patience
+                        // 4. Floor penalty - urgently seek height if currently at floor level
+                        // This helps even low-patience profiles climb before shooting
+                        let current_height = ai_pos.y - ARENA_FLOOR_Y;
+                        let at_floor_level = current_height < 100.0;
+                        let floor_urgency = if at_floor_level { 0.15 } else { 0.0 };
+
+                        // Utility = quality_gain + height_bonus + floor_urgency - opportunity_costs
+                        // Floor urgency bypasses patience scaling to help impatient profiles seek height
                         let raw_utility = quality_gain
                             + height_bonus
-                            - (path_cost_normalized * 0.15) // Reduced from 0.3
+                            - (path_cost_normalized * 0.15)
                             - (opponent_pressure * 0.2);
-                        let seek_utility = raw_utility * profile.position_patience;
+                        let seek_utility = raw_utility * profile.position_patience + floor_urgency;
 
                         // Seek if utility exceeds threshold
                         seek_utility > profile.seek_threshold

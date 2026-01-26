@@ -83,22 +83,36 @@ pub fn run_tournament_parallel(
     level_db: &LevelDatabase,
     profile_db: &AiProfileDatabase,
 ) -> Vec<MatchResult> {
-    let profiles: Vec<String> = profile_db
-        .profiles()
-        .iter()
-        .map(|p| p.name.clone())
-        .collect();
+    // Use config profiles if specified, otherwise use all profiles from database
+    let profiles: Vec<String> = if base_config.profiles.is_empty() {
+        profile_db
+            .profiles()
+            .iter()
+            .map(|p| p.name.clone())
+            .collect()
+    } else {
+        base_config
+            .profiles
+            .iter()
+            .filter(|p| profile_db.get_by_name(p).is_some())
+            .cloned()
+            .collect()
+    };
 
-    // Build list of valid levels for random selection (exclude debug levels and Pit)
-    let valid_levels: Vec<u32> = (1..=level_db.len() as u32)
-        .filter(|&level| {
-            if let Some(lvl) = level_db.get((level - 1) as usize) {
-                !lvl.debug && lvl.name != "Pit"
-            } else {
-                false
-            }
-        })
-        .collect();
+    // Use config levels if specified, otherwise build list excluding debug levels and Pit
+    let valid_levels: Vec<u32> = if base_config.levels.is_empty() {
+        (1..=level_db.len() as u32)
+            .filter(|&level| {
+                if let Some(lvl) = level_db.get((level - 1) as usize) {
+                    !lvl.debug && lvl.name != "Pit"
+                } else {
+                    false
+                }
+            })
+            .collect()
+    } else {
+        base_config.levels.clone()
+    };
 
     // Build all match configurations
     let mut configs = Vec::new();
@@ -141,16 +155,20 @@ pub fn run_multi_match_parallel(
     level_db: &LevelDatabase,
     profile_db: &AiProfileDatabase,
 ) -> Vec<MatchResult> {
-    // Build list of valid levels for random selection (exclude debug levels and Pit)
-    let valid_levels: Vec<u32> = (1..=level_db.len() as u32)
-        .filter(|&level| {
-            if let Some(lvl) = level_db.get((level - 1) as usize) {
-                !lvl.debug && lvl.name != "Pit"
-            } else {
-                false
-            }
-        })
-        .collect();
+    // Use config levels if specified, otherwise build list excluding debug levels and Pit
+    let valid_levels: Vec<u32> = if base_config.levels.is_empty() {
+        (1..=level_db.len() as u32)
+            .filter(|&level| {
+                if let Some(lvl) = level_db.get((level - 1) as usize) {
+                    !lvl.debug && lvl.name != "Pit"
+                } else {
+                    false
+                }
+            })
+            .collect()
+    } else {
+        base_config.levels.clone()
+    };
 
     let configs: Vec<_> = (0..count)
         .map(|i| {

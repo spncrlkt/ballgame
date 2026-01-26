@@ -17,16 +17,16 @@ use crate::ball::CurrentPalette;
 
 /// Builder for creating headless Bevy apps
 pub struct HeadlessAppBuilder {
-    level: u32,
+    level_id: String,
     fps: f32,
     minimal_threads: bool,
 }
 
 impl HeadlessAppBuilder {
-    /// Create a new builder for the given level
-    pub fn new(level: u32) -> Self {
+    /// Create a new builder for the given level ID
+    pub fn new(level_id: String) -> Self {
         Self {
-            level,
+            level_id,
             fps: 60.0,
             minimal_threads: false,
         }
@@ -88,7 +88,7 @@ impl HeadlessAppBuilder {
 
         // Common game resources
         app.init_resource::<Score>();
-        app.insert_resource(CurrentLevel(self.level));
+        app.insert_resource(CurrentLevel(self.level_id.clone()));
         app.init_resource::<StealContest>();
         app.init_resource::<StealTracker>();
         app.init_resource::<PhysicsTweaks>();
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn test_builder_creates_app() {
-        let app = HeadlessAppBuilder::new(1).build();
+        let app = HeadlessAppBuilder::new("test_level".to_string()).build();
         // Just verify it doesn't panic and has expected resources
         assert!(app.world().contains_resource::<Score>());
         assert!(app.world().contains_resource::<CurrentLevel>());
@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn test_minimal_threads_creates_app() {
         // Verify minimal_threads mode creates an app without panicking
-        let app = HeadlessAppBuilder::new(1)
+        let app = HeadlessAppBuilder::new("test_level".to_string())
             .with_minimal_threads()
             .build();
         assert!(app.world().contains_resource::<Score>());

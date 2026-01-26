@@ -205,7 +205,11 @@ fn run_shots_at_position(
     // Resources
     app.insert_resource((*level_db).clone());
     app.init_resource::<Score>();
-    app.insert_resource(CurrentLevel(level));
+    // Convert level number to level ID
+    let level_id = level_db.get((level - 1) as usize)
+        .map(|l| l.id.clone())
+        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+    app.insert_resource(CurrentLevel(level_id));
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<PhysicsTweaks>();

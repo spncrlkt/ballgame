@@ -96,7 +96,11 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
     app.insert_resource((*level_db).clone());
     app.insert_resource((*profile_db).clone());
     app.init_resource::<Score>();
-    app.insert_resource(CurrentLevel(level));
+    // Convert level number to level ID
+    let level_id = level_db.get((level - 1) as usize)
+        .map(|l| l.id.clone())
+        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+    app.insert_resource(CurrentLevel(level_id));
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
@@ -600,7 +604,19 @@ pub fn run_simulation(config: SimConfig) {
     }
 
     // Initialize database if requested
-    let db = config.db_path.as_ref().map(|path| {
+    // For tournaments, auto-generate a timestamped db to ensure fresh data
+    let db_path = match &config.mode {
+        super::config::SimMode::Tournament { .. } => {
+            // Ensure db directory exists
+            std::fs::create_dir_all("db").ok();
+            // Generate timestamped db path for tournaments
+            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+            Some(format!("db/tournament_{}.db", timestamp))
+        }
+        _ => config.db_path.clone(),
+    };
+
+    let db = db_path.as_ref().map(|path| {
         match SimDatabase::open(std::path::Path::new(path)) {
             Ok(db) => {
                 if !config.quiet {
@@ -1106,7 +1122,11 @@ pub fn run_ghost_trial(
     app.insert_resource((*level_db).clone());
     app.insert_resource((*profile_db).clone());
     app.init_resource::<Score>();
-    app.insert_resource(CurrentLevel(level));
+    // Convert level number to level ID
+    let level_id = level_db.get((level - 1) as usize)
+        .map(|l| l.id.clone())
+        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+    app.insert_resource(CurrentLevel(level_id));
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
@@ -1226,12 +1246,11 @@ fn ghost_trial_setup(
 
     let config = &control.config;
 
-    // Find AI profile index for right player
-    let right_idx = profile_db
-        .profiles()
-        .iter()
-        .position(|p| p.name == config.right_profile)
-        .unwrap_or(0);
+    // Find AI profile ID for right player
+    let right_profile_id = profile_db
+        .get_by_name(&config.right_profile)
+        .map(|p| p.id.clone())
+        .unwrap_or_else(|| profile_db.default_profile().id.clone());
 
     // Spawn left player (Ghost controlled - no AI)
     let left_player = commands
@@ -1279,7 +1298,7 @@ fn ghost_trial_setup(
             InputState::default(),
             AiState {
                 current_goal: AiGoal::ChaseBall,
-                profile_index: right_idx,
+                profile_id: right_profile_id,
                 ..default()
             },
             AiNavState::default(),
@@ -1340,8 +1359,7 @@ fn ghost_trial_setup(
     ));
 
     // Spawn level platforms
-    let level_idx = (current_level.0 - 1) as usize;
-    if let Some(level) = level_db.get(level_idx) {
+    if let Some(level) = level_db.get_by_id(&current_level.0) {
         for platform in &level.platforms {
             match platform {
                 crate::levels::PlatformDef::Mirror { x, y, width } => {

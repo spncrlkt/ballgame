@@ -110,7 +110,7 @@ struct AnalyzeConfig {
 impl Default for AnalyzeConfig {
     fn default() -> Self {
         Self {
-            db_path: PathBuf::from("training.db"),
+            db_path: PathBuf::from("db/training.db"),
             targets_file: None,
             output_file: None,
             update_defaults: false,

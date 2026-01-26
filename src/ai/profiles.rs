@@ -4,14 +4,27 @@
 //! Loaded from config/ai_profiles.txt and hot-reloaded every 10 seconds.
 
 use bevy::prelude::*;
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 
 /// Path to AI profiles file
 pub const AI_PROFILES_FILE: &str = "config/ai_profiles.txt";
 
+/// Generate a deterministic 16-char hex UUID from a name.
+/// Used for backward compatibility when config files lack explicit IDs.
+fn generate_uuid_from_name(name: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    name.hash(&mut hasher);
+    let hash = hasher.finish();
+    format!("{:016x}", hash)
+}
+
 /// AI behavior parameters loaded from config file
 #[derive(Debug, Clone)]
 pub struct AiProfile {
+    /// 16-char hex UUID for stable identification
+    pub id: String,
     /// Profile name for display
     pub name: String,
     /// How close AI needs to be to target before stopping (pixels)
@@ -54,6 +67,7 @@ pub struct AiProfile {
 impl Default for AiProfile {
     fn default() -> Self {
         Self {
+            id: generate_uuid_from_name("Balanced"),
             name: "Balanced".to_string(),
             position_tolerance: 30.0,
             shoot_range: 400.0,
@@ -115,6 +129,11 @@ impl AiProfileDatabase {
         &self.profiles[index % self.profiles.len()]
     }
 
+    /// Get profile by UUID
+    pub fn get_by_id(&self, id: &str) -> Option<&AiProfile> {
+        self.profiles.iter().find(|p| p.id == id)
+    }
+
     /// Get number of profiles
     pub fn len(&self) -> usize {
         self.profiles.len()
@@ -130,11 +149,23 @@ impl AiProfileDatabase {
         &self.profiles
     }
 
+    /// Get first profile as a fallback default
+    pub fn default_profile(&self) -> &AiProfile {
+        &self.profiles[0]
+    }
+
     /// Find index of a profile by name (case-insensitive)
     pub fn index_of(&self, name: &str) -> Option<usize> {
         self.profiles
             .iter()
             .position(|p| p.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Get profile by name (case-insensitive)
+    pub fn get_by_name(&self, name: &str) -> Option<&AiProfile> {
+        self.profiles
+            .iter()
+            .find(|p| p.name.eq_ignore_ascii_case(name))
     }
 }
 
@@ -157,8 +188,10 @@ fn parse_profiles(content: &str) -> Vec<AiProfile> {
             if let Some(p) = current.take() {
                 profiles.push(p);
             }
+            let trimmed_name = name.trim();
             current = Some(AiProfile {
-                name: name.trim().to_string(),
+                id: generate_uuid_from_name(trimmed_name), // Auto-generate, may be overwritten
+                name: trimmed_name.to_string(),
                 ..default()
             });
             continue;
@@ -174,6 +207,9 @@ fn parse_profiles(content: &str) -> Vec<AiProfile> {
             let value = value.trim();
 
             match key {
+                "id" => {
+                    profile.id = value.to_string();
+                }
                 "position_tolerance" => {
                     if let Ok(v) = value.parse() {
                         profile.position_tolerance = v;

@@ -26,7 +26,7 @@ use world::{Basket, Collider};
 
 /// Path to ball options file
 const BALL_OPTIONS_FILE: &str = "config/ball_options.txt";
-const DEFAULT_REPLAY_DB: &str = "training.db";
+const DEFAULT_REPLAY_DB: &str = "db/training.db";
 const DEFAULT_REPLAY_TIMEOUT_SECS: f32 = 5.0;
 
 /// Parse ball_options.txt to get list of style names
@@ -108,30 +108,46 @@ fn main() {
     // Load level database from file (needed for level name lookup)
     let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
 
-    // Resolve level: CLI name override -> saved settings level number
-    let level_override = level_name_override.as_ref().and_then(|name| {
-        // First try parsing as a number (backwards compatibility)
-        if let Ok(num) = name.parse::<u32>() {
-            Some(num)
-        } else {
-            // Look up by name
-            level_db.index_of(name).map(|i| (i + 1) as u32)
+    // Resolve level: CLI name override -> saved settings -> first level
+    // Supports: level ID (16-char hex), level name, or level number (backward compat)
+    let resolve_level_id = |input: &str| -> Option<String> {
+        // Empty string = use first level
+        if input.is_empty() {
+            return level_db.all().first().map(|l| l.id.clone());
         }
-    });
+        // Try as level ID first (16-char hex)
+        if input.len() == 16 && input.chars().all(|c| c.is_ascii_hexdigit()) {
+            if level_db.get_by_id(input).is_some() {
+                return Some(input.to_string());
+            }
+        }
+        // Try as level number (backward compatibility)
+        if let Ok(num) = input.parse::<usize>() {
+            if num > 0 {
+                return level_db.get(num - 1).map(|l| l.id.clone());
+            }
+        }
+        // Try as level name
+        level_db.get_by_name(input).map(|l| l.id.clone())
+    };
+
+    // Resolve CLI override first, then settings, then default to first level
+    let loaded_level_id = level_name_override
+        .as_ref()
+        .and_then(|s| resolve_level_id(s))
+        .or_else(|| resolve_level_id(&current_settings.settings.level))
+        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
 
     // Extract values from loaded settings for resource initialization
     let loaded_viewport_index = current_settings.settings.viewport_index;
     let loaded_palette_index = palette_override.unwrap_or(current_settings.settings.palette_index);
-    // Use command-line level override if provided, otherwise use saved settings
-    let loaded_level = level_override.unwrap_or(current_settings.settings.level);
     let loaded_active_direction = current_settings.settings.active_direction.clone();
     let loaded_down_option = current_settings.settings.down_option.clone();
     let loaded_right_option = current_settings.settings.right_option.clone();
 
     // Check if initial level is a regression level (for countdown freezing)
-    let initial_level_index = (loaded_level as usize).saturating_sub(1);
     let is_regression_level = level_db
-        .get(initial_level_index)
+        .get_by_id(&loaded_level_id)
         .map(|l| l.regression)
         .unwrap_or(false);
 
@@ -188,7 +204,7 @@ fn main() {
         .init_resource::<StealContest>()
         .init_resource::<StealTracker>()
         .init_resource::<Score>()
-        .insert_resource(CurrentLevel(loaded_level))
+        .insert_resource(CurrentLevel(loaded_level_id))
         .insert_resource(CurrentPalette(loaded_palette_index))
         .init_resource::<PhysicsTweaks>()
         .init_resource::<LastShotInfo>()
@@ -412,15 +428,17 @@ fn setup(
     let palette_index = current_palette.0.min(palette_db.len().saturating_sub(1));
     let initial_palette = palette_db.get(palette_index).expect("No palettes loaded");
 
-    // Get level index from loaded settings (1-indexed, convert to 0-indexed)
-    let level_index = (current_level.0 as usize).saturating_sub(1).min(level_db.len().saturating_sub(1));
+    // Get level data from current level ID
+    let level_data = level_db.get_by_id(&current_level.0);
 
-    // Load AI profile indices for players
-    let left_ai_profile_index = current_settings.settings.left_ai_profile.as_ref()
-        .and_then(|name| profile_db.index_of(name))
-        .unwrap_or(0);
-    let right_ai_profile_index = profile_db.index_of(&current_settings.settings.right_ai_profile)
-        .unwrap_or(0);
+    // Load AI profile IDs for players (use name lookup, fall back to first profile)
+    let left_ai_profile_id = current_settings.settings.left_ai_profile.as_ref()
+        .and_then(|name| profile_db.get_by_name(name))
+        .map(|p| p.id.clone())
+        .unwrap_or_else(|| profile_db.default_profile().id.clone());
+    let right_ai_profile_id = profile_db.get_by_name(&current_settings.settings.right_ai_profile)
+        .map(|p| p.id.clone())
+        .unwrap_or_else(|| profile_db.default_profile().id.clone());
 
     // Determine if left player is human or AI based on settings
     let left_is_human = current_settings.settings.left_ai_profile.is_none();
@@ -433,7 +451,6 @@ fn setup(
     };
 
     // Check if this is a debug or regression level early (for AI goal)
-    let level_data = level_db.get(level_index);
     let is_special_level = level_data.map(|l| l.debug || l.regression).unwrap_or(false);
 
     // Left team player - spawns on left side
@@ -463,7 +480,7 @@ fn setup(
                     } else {
                         AiGoal::default()
                     },
-                    profile_index: left_ai_profile_index,
+                    profile_id: left_ai_profile_id,
                     ..default()
                 },
                 AiNavState::default(),
@@ -501,7 +518,7 @@ fn setup(
                     } else {
                         AiGoal::default()
                     },
-                    profile_index: right_ai_profile_index,
+                    profile_id: right_ai_profile_id,
                     ..default()
                 },
                 AiNavState::default(),
@@ -593,7 +610,7 @@ fn setup(
     commands.insert_resource(ball_textures.clone());
 
     // Check if this is a debug level (spawns all ball styles, AI idle)
-    let is_debug_level = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
+    let is_debug_level = level_data.map(|l| l.debug).unwrap_or(false);
 
     if is_debug_level {
         // Debug level: spawn ALL ball styles on shelf platforms with labels
@@ -655,10 +672,10 @@ fn setup(
     world::spawn_walls(&mut commands, initial_palette.platforms);
 
     // Spawn level platforms for the loaded level
-    levels::spawn_level_platforms(&mut commands, &level_db, level_index, initial_palette.platforms);
+    levels::spawn_level_platforms(&mut commands, &level_db, &current_level.0, initial_palette.platforms);
 
     // Baskets with rims (shared spawning function)
-    let initial_level = level_db.get(level_index);
+    let initial_level = level_data;
     let basket_y = initial_level
         .map(|l| ARENA_FLOOR_Y + l.basket_height)
         .unwrap_or(ARENA_FLOOR_Y + 400.0);

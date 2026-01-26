@@ -207,7 +207,7 @@ pub enum GameEvent {
     /// Reset ball to spawn position
     ResetBall,
     /// Level changed
-    LevelChange { level: u32 },
+    LevelChange { level_id: String },
 }
 
 impl GameEvent {

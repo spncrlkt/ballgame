@@ -29,17 +29,15 @@ pub fn sim_setup(
 ) {
     let config = &control.config;
 
-    // Find profile indices
-    let left_idx = profile_db
-        .profiles()
-        .iter()
-        .position(|p| p.name == config.left_profile)
-        .unwrap_or(0);
-    let right_idx = profile_db
-        .profiles()
-        .iter()
-        .position(|p| p.name == config.right_profile)
-        .unwrap_or(0);
+    // Find profile IDs
+    let left_profile_id = profile_db
+        .get_by_name(&config.left_profile)
+        .map(|p| p.id.clone())
+        .unwrap_or_else(|| profile_db.default_profile().id.clone());
+    let right_profile_id = profile_db
+        .get_by_name(&config.right_profile)
+        .map(|p| p.id.clone())
+        .unwrap_or_else(|| profile_db.default_profile().id.clone());
 
     // Spawn left player (AI controlled)
     commands
@@ -64,7 +62,7 @@ pub fn sim_setup(
             InputState::default(),
             AiState {
                 current_goal: AiGoal::ChaseBall,
-                profile_index: left_idx,
+                profile_id: left_profile_id,
                 ..default()
             },
             AiNavState::default(),
@@ -94,7 +92,7 @@ pub fn sim_setup(
             InputState::default(),
             AiState {
                 current_goal: AiGoal::ChaseBall,
-                profile_index: right_idx,
+                profile_id: right_profile_id,
                 ..default()
             },
             AiNavState::default(),
@@ -151,8 +149,7 @@ pub fn sim_setup(
     ));
 
     // Spawn level platforms
-    let level_idx = (current_level.0 - 1) as usize;
-    if let Some(level) = level_db.get(level_idx) {
+    if let Some(level) = level_db.get_by_id(&current_level.0) {
         for platform in &level.platforms {
             match platform {
                 crate::levels::PlatformDef::Mirror { x, y, width } => {

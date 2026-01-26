@@ -103,8 +103,8 @@ pub struct NavGraph {
     pub edges: Vec<Vec<NavEdge>>,
     /// Whether the graph needs rebuilding
     pub dirty: bool,
-    /// Level index this graph was built for
-    pub built_for_level: usize,
+    /// Level ID this graph was built for
+    pub built_for_level_id: String,
     /// Frames to wait before rebuilding (allows platform spawning)
     pub rebuild_delay: u8,
     /// Maximum achievable shot quality on this level (for scaling AI thresholds)
@@ -465,7 +465,7 @@ impl AiNavState {
 pub fn rebuild_nav_graph(
     mut nav_graph: ResMut<NavGraph>,
     current_level: Res<CurrentLevel>,
-    _level_db: Res<LevelDatabase>,
+    level_db: Res<LevelDatabase>,
     platform_query: Query<
         (Entity, &Transform, &Sprite, Option<&CornerRamp>),
         (With<Platform>, Without<BasketRim>),
@@ -474,9 +474,7 @@ pub fn rebuild_nav_graph(
     corner_ramp_query: Query<Entity, With<CornerRamp>>,
 ) {
     // Check if we need to rebuild
-    // CurrentLevel uses 1-based numbering, convert to 0-based index
-    let level_idx = (current_level.0.saturating_sub(1)) as usize;
-    if !nav_graph.dirty && nav_graph.built_for_level == level_idx && !nav_graph.nodes.is_empty() {
+    if !nav_graph.dirty && nav_graph.built_for_level_id == current_level.0 && !nav_graph.nodes.is_empty() {
         return;
     }
 
@@ -487,9 +485,13 @@ pub fn rebuild_nav_graph(
     }
 
     // Check if level platforms have spawned yet
-    // Levels 2+ should have platforms; if none found, wait for next frame
+    // Levels with platforms should have them spawned; if none found, wait for next frame
     let level_platform_count = level_platform_query.iter().count();
-    if level_idx >= 1 && level_platform_count == 0 {
+    // Check if current level has platforms defined
+    let level_has_platforms = level_db.get_by_id(&current_level.0)
+        .map(|l| !l.platforms.is_empty())
+        .unwrap_or(false);
+    if level_has_platforms && level_platform_count == 0 {
         // Level platforms haven't spawned yet - keep graph dirty and wait
         nav_graph.dirty = true;
         return;
@@ -608,7 +610,7 @@ pub fn rebuild_nav_graph(
     }
 
     nav_graph.dirty = false;
-    nav_graph.built_for_level = level_idx;
+    nav_graph.built_for_level_id = current_level.0.clone();
 
     info!(
         "Nav graph built: {} nodes, {} total edges",

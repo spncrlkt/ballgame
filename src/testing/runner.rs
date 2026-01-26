@@ -125,10 +125,15 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
     )));
     app.add_plugins(bevy::transform::TransformPlugin);
 
+    // Get level ID before moving level_db into app
+    let level_id = level_db.get(level_idx)
+        .map(|l| l.id.clone())
+        .unwrap_or_default();
+
     // Resources
     app.insert_resource(level_db);
     app.init_resource::<Score>();
-    app.insert_resource(CurrentLevel((level_idx + 1) as u32));
+    app.insert_resource(CurrentLevel(level_id));
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<PhysicsTweaks>();
@@ -273,8 +278,7 @@ fn test_setup(
     spawn_walls(&mut commands, arena_color);
 
     // Level platforms and baskets
-    let level_idx = (current_level.0 - 1) as usize;
-    if let Some(level) = level_db.get(level_idx) {
+    if let Some(level) = level_db.get_by_id(&current_level.0) {
         for platform in &level.platforms {
             match platform {
                 crate::levels::PlatformDef::Mirror { x, y, width } => {

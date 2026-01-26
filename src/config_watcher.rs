@@ -123,7 +123,6 @@ pub fn check_config_changes(
         *level_db = LevelDatabase::load_from_file(LEVELS_FILE);
         info!("Auto-reloaded levels from {}", LEVELS_FILE);
 
-        let level_index = (current_level.0 - 1) as usize;
         let palette = palette_db
             .get(current_palette.0)
             .expect("Palette index out of bounds");
@@ -132,7 +131,7 @@ pub fn check_config_changes(
         if let Some((left_x, right_x, basket_y)) = reload_level_geometry(
             &mut commands,
             &level_db,
-            level_index,
+            &current_level.0,
             palette.platforms,
             level_platforms.iter(),
             corner_ramps.iter(),

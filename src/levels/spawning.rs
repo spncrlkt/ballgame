@@ -143,11 +143,11 @@ pub fn spawn_corner_ramps(
 pub fn spawn_level_platforms(
     commands: &mut Commands,
     level_db: &LevelDatabase,
-    level_index: usize,
+    level_id: &str,
     platform_color: Color,
 ) {
-    let Some(level) = level_db.get(level_index) else {
-        warn!("Level {} not found, spawning empty", level_index);
+    let Some(level) = level_db.get_by_id(level_id) else {
+        warn!("Level {} not found, spawning empty", level_id);
         return;
     };
 
@@ -169,7 +169,7 @@ pub fn spawn_level_platforms(
 pub fn reload_level_geometry(
     commands: &mut Commands,
     level_db: &LevelDatabase,
-    level_index: usize,
+    level_id: &str,
     platform_color: Color,
     platforms_to_despawn: impl IntoIterator<Item = Entity>,
     ramps_to_despawn: impl IntoIterator<Item = Entity>,
@@ -185,10 +185,10 @@ pub fn reload_level_geometry(
     }
 
     // Spawn new level platforms
-    spawn_level_platforms(commands, level_db, level_index, platform_color);
+    spawn_level_platforms(commands, level_db, level_id, platform_color);
 
     // Spawn corner ramps and return basket positions
-    let level = level_db.get(level_index)?;
+    let level = level_db.get_by_id(level_id)?;
 
     spawn_corner_ramps(
         commands,

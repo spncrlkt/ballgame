@@ -269,7 +269,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut db_path = PathBuf::from("training.db");
+    let mut db_path = PathBuf::from("db/training.db");
     let mut session_id: Option<String> = None;
     let mut match_id: Option<i64> = None;
     let mut output_dir: Option<PathBuf> = None;

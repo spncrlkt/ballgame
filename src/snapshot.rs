@@ -56,7 +56,7 @@ impl Default for SnapshotConfig {
 pub struct SnapshotTriggerState {
     pub prev_score_left: u32,
     pub prev_score_right: u32,
-    pub prev_level: u32,
+    pub prev_level_id: String,
     pub prev_steal_failed: bool,
     pub frame_count: u64,
     /// Take a startup screenshot after this many frames (0 = disabled)
@@ -70,7 +70,7 @@ impl Default for SnapshotTriggerState {
         Self {
             prev_score_left: 0,
             prev_score_right: 0,
-            prev_level: 1, // Game starts at level 1, don't trigger on startup
+            prev_level_id: String::new(), // Empty = don't trigger on startup
             prev_steal_failed: false,
             frame_count: 0,
             startup_screenshot_frame: 60, // Take screenshot after ~1 second
@@ -90,8 +90,8 @@ pub struct GameSnapshot {
     pub trigger: String,
     /// Current score
     pub score: ScoreSnapshot,
-    /// Current level
-    pub level: u32,
+    /// Current level ID
+    pub level_id: String,
     /// Current palette index
     pub palette: usize,
     /// Ball state
@@ -198,14 +198,14 @@ pub fn snapshot_trigger_system(
     }
 
     // Check for level change
-    if config.on_level_change && current_level.0 != trigger_state.prev_level {
+    if config.on_level_change && current_level.0 != trigger_state.prev_level_id && !trigger_state.prev_level_id.is_empty() {
         trigger = Some(format!("level_change_{}", current_level.0));
     }
 
     // Update tracking state
     trigger_state.prev_score_left = score.left;
     trigger_state.prev_score_right = score.right;
-    trigger_state.prev_level = current_level.0;
+    trigger_state.prev_level_id = current_level.0.clone();
     trigger_state.prev_steal_failed = steal_contest.last_attempt_failed;
     trigger_state.frame_count += 1;
 
@@ -282,7 +282,7 @@ pub fn snapshot_trigger_system(
                 left: score.left,
                 right: score.right,
             },
-            level: current_level.0,
+            level_id: current_level.0.clone(),
             palette: current_palette.0,
             ball: ball_snapshot,
             players,
@@ -451,7 +451,7 @@ pub fn manual_snapshot(
             left: score.left,
             right: score.right,
         },
-        level: current_level.0,
+        level_id: current_level.0.clone(),
         palette: current_palette.0,
         ball: ball_snapshot,
         players,

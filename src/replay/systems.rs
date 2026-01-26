@@ -43,8 +43,11 @@ pub fn replay_setup(
         replay_data.match_info.right_profile
     );
 
-    // Set current level from replay
-    current_level.0 = replay_data.match_info.level;
+    // Set current level from replay - look up by name or fall back to index
+    current_level.0 = level_db.get_by_name(&replay_data.match_info.level_name)
+        .or_else(|| level_db.get(replay_data.match_info.level as usize - 1))
+        .map(|l| l.id.clone())
+        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
 
     // Get initial positions from first tick (or use defaults)
     let (left_pos, right_pos, ball_pos) = if let Some(first) = replay_data.ticks.first() {

@@ -62,7 +62,12 @@ fn run_ghost_trial(
     app.insert_resource(level_db.clone());
     app.insert_resource(profile_db.clone());
     app.init_resource::<Score>();
-    app.insert_resource(CurrentLevel(trial.level));
+    // Convert level number to level ID
+    let level_id = level_db.all()
+        .get((trial.level as usize).saturating_sub(1))
+        .map(|l| l.id.clone())
+        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+    app.insert_resource(CurrentLevel(level_id));
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
@@ -95,13 +100,15 @@ fn run_ghost_trial(
     });
 
     // Configure AI profile for right player
-    let profile_index = profile_db.index_of(ai_profile).unwrap_or(0);
+    let profile_id = profile_db.get_by_name(ai_profile)
+        .map(|p| p.id.clone())
+        .unwrap_or_else(|| profile_db.default_profile().id.clone());
     app.add_systems(
         PostStartup,
         move |mut players: Query<(&Team, &mut AiState), With<Player>>| {
             for (team, mut ai_state) in &mut players {
                 if *team == Team::Right {
-                    ai_state.profile_index = profile_index;
+                    ai_state.profile_id = profile_id.clone();
                 }
             }
         },
@@ -246,7 +253,8 @@ fn ai_decision_for_right_only(
 
         // Call the regular AI decision logic for this player
         // (Simplified version - just basic behavior)
-        let profile = profile_db.get(ai_state.profile_index);
+        let profile = profile_db.get_by_id(&ai_state.profile_id)
+            .unwrap_or_else(|| profile_db.default_profile());
         let ai_pos = transform.translation.truncate();
 
         // Get ball info

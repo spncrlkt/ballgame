@@ -46,13 +46,13 @@ for level_info in "${LEVELS[@]}"; do
     echo "  Level $idx: $name"
 
     # Clear snapshots
-    rm -rf snapshots/
+    rm -rf showcase/snapshots/
 
     # Run game with level override, capture screenshot, quit immediately
     cargo run --quiet -- --level "$idx" --screenshot-and-quit 2>/dev/null || true
 
     # Find the screenshot and copy with nice name
-    SCREENSHOT=$(ls -t snapshots/*startup*.png 2>/dev/null | head -1)
+    SCREENSHOT=$(ls -t showcase/snapshots/*startup*.png 2>/dev/null | head -1)
     if [ -n "$SCREENSHOT" ]; then
         cp "$SCREENSHOT" "$LEVEL_DIR/level_$(printf '%02d' $idx)_${name// /_}.png"
     else
@@ -68,6 +68,6 @@ cargo run --quiet --bin generate_level_showcase
 
 # Clean up temp directories
 rm -rf "$LEVEL_DIR"
-rm -rf snapshots/
+rm -rf showcase/snapshots/
 
 echo "Done!"

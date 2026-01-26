@@ -333,7 +333,7 @@ mod tests {
             nodes,
             edges,
             dirty: false,
-            built_for_level: 0,
+            built_for_level_id: String::new(), // Test value
             rebuild_delay: 0,
             level_max_shot_quality: 0.5, // Test value
         }

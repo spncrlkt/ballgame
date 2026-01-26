@@ -1,9 +1,20 @@
 //! Level database - parsing and storage
 
 use bevy::prelude::*;
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 
 use crate::constants::*;
+
+/// Generate a deterministic 16-char hex UUID from a name.
+/// Used for backward compatibility when config files lack explicit IDs.
+fn generate_uuid_from_name(name: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    name.hash(&mut hasher);
+    let hash = hasher.finish();
+    format!("{:016x}", hash)
+}
 
 /// Platform definition in level data
 #[derive(Clone, Debug)]
@@ -15,6 +26,7 @@ pub enum PlatformDef {
 /// Single level definition
 #[derive(Clone, Debug)]
 pub struct LevelData {
+    pub id: String,        // 16-char hex UUID for stable identification
     pub name: String,
     pub basket_height: f32,
     pub basket_push_in: f32, // Distance from wall inner edge to basket center
@@ -69,8 +81,9 @@ impl LevelDatabase {
                 if let Some(level) = current_level.take() {
                     levels.push(level);
                 }
-                // Start new level
+                // Start new level with auto-generated UUID (will be replaced if id: line follows)
                 current_level = Some(LevelData {
+                    id: generate_uuid_from_name(name.trim()), // Auto-generate, may be overwritten
                     name: name.trim().to_string(),
                     basket_height: 400.0,           // default
                     basket_push_in: BASKET_PUSH_IN, // default
@@ -82,6 +95,10 @@ impl LevelDatabase {
                     debug: false,                            // default
                     regression: false,                       // default
                 });
+            } else if let Some(id_str) = line.strip_prefix("id:") {
+                if let Some(level) = &mut current_level {
+                    level.id = id_str.trim().to_string();
+                }
             } else if let Some(height_str) = line.strip_prefix("basket_height:") {
                 if let Some(level) = &mut current_level {
                     if let Ok(height) = height_str.trim().parse::<f32>() {
@@ -170,6 +187,7 @@ impl LevelDatabase {
         Self {
             levels: vec![
                 LevelData {
+                    id: generate_uuid_from_name("Simple"),
                     name: "Simple".to_string(),
                     basket_height: 350.0,
                     basket_push_in: BASKET_PUSH_IN,
@@ -186,6 +204,7 @@ impl LevelDatabase {
                     regression: false,
                 },
                 LevelData {
+                    id: generate_uuid_from_name("Default"),
                     name: "Default".to_string(),
                     basket_height: 400.0,
                     basket_push_in: BASKET_PUSH_IN,
@@ -216,6 +235,11 @@ impl LevelDatabase {
         self.levels.get(index)
     }
 
+    /// Get level by UUID
+    pub fn get_by_id(&self, id: &str) -> Option<&LevelData> {
+        self.levels.iter().find(|l| l.id == id)
+    }
+
     /// Get level by name (case-insensitive)
     pub fn get_by_name(&self, name: &str) -> Option<&LevelData> {
         self.levels.iter().find(|l| l.name.eq_ignore_ascii_case(name))
@@ -224,6 +248,11 @@ impl LevelDatabase {
     /// Get level index by name (case-insensitive)
     pub fn index_of(&self, name: &str) -> Option<usize> {
         self.levels.iter().position(|l| l.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Get all levels as a slice
+    pub fn all(&self) -> &[LevelData] {
+        &self.levels
     }
 
     /// Get number of levels

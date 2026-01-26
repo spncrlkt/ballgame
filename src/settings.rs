@@ -18,8 +18,9 @@ pub struct InitSettings {
     pub viewport_index: usize,
     /// Palette index (0-29)
     pub palette_index: usize,
-    /// Starting level (1-indexed)
-    pub level: u32,
+    /// Starting level ID (16-char hex UUID)
+    /// For backward compatibility, also accepts level number as string
+    pub level: String,
     /// Ball style name
     pub ball_style: String,
     /// Left player AI profile name (empty = human)
@@ -39,7 +40,7 @@ impl Default for InitSettings {
         Self {
             viewport_index: 2,              // 1440p default
             palette_index: 0,               // Aurora (first palette)
-            level: 2,                       // Open Floor
+            level: String::new(),           // Empty = use first level
             ball_style: "wedges".to_string(),
             left_ai_profile: None,          // Human controlled
             right_ai_profile: "Balanced".to_string(),

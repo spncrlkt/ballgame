@@ -18,13 +18,14 @@ pub struct Score {
     pub right: u32, // Right team's score
 }
 
-/// Current level number (1-indexed)
+/// Current level (stores level ID)
 #[derive(Resource)]
-pub struct CurrentLevel(pub u32);
+pub struct CurrentLevel(pub String);
 
 impl Default for CurrentLevel {
     fn default() -> Self {
-        Self(1)
+        // Default to empty string; should be set to first level's ID on initialization
+        Self(String::new())
     }
 }
 

@@ -1,11 +1,11 @@
 {
   "viewport_index": 2,
   "palette_index": 0,
-  "level": 4,
+  "level": "",
   "ball_style": "wedges",
   "left_ai_profile": null,
-  "right_ai_profile": "Aggressive",
-  "active_direction": "Right",
+  "right_ai_profile": "Balanced",
+  "active_direction": "Down",
   "down_option": "Composite",
   "right_option": "Level"
 }

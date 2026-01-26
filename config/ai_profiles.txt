@@ -22,6 +22,7 @@
 # =============================================================================
 
 profile: v4_Pat_50
+id: 70ae91d03ac88f56
 position_tolerance: 15
 shoot_range: 555
 charge_min: 0.29
@@ -42,6 +43,7 @@ seek_threshold: 0.14
 # =============================================================================
 
 profile: v1_Rusher
+id: 159401ee1127c29a
 position_tolerance: 25
 shoot_range: 500
 charge_min: 0.2
@@ -58,6 +60,7 @@ position_patience: 0.3
 seek_threshold: 0.20
 
 profile: v2_Rusher
+id: 5136024b50153a2c
 position_tolerance: 25
 shoot_range: 500
 charge_min: 0.2
@@ -74,6 +77,7 @@ position_patience: 0.3
 seek_threshold: 0.20
 
 profile: v2_Balanced_Steady
+id: 404a5379894996dc
 position_tolerance: 28
 shoot_range: 580
 charge_min: 0.6
@@ -90,6 +94,7 @@ position_patience: 1.2
 seek_threshold: 0.06
 
 profile: v2_Aggro_Ctrl
+id: b072b2d38cedb8d0
 position_tolerance: 22
 shoot_range: 620
 charge_min: 0.35
@@ -110,6 +115,7 @@ seek_threshold: 0.10
 # =============================================================================
 
 profile: v3_Rush_Patient
+id: 9c2edff39583ba6d
 position_tolerance: 26
 shoot_range: 540
 charge_min: 0.30
@@ -126,6 +132,7 @@ position_patience: 0.45
 seek_threshold: 0.15
 
 profile: v3_Mix_RA50
+id: afb9f4306b280c84
 position_tolerance: 24
 shoot_range: 560
 charge_min: 0.28
@@ -142,6 +149,7 @@ position_patience: 0.40
 seek_threshold: 0.15
 
 profile: v3_Bal_Rush
+id: 551b63cab3265d4c
 position_tolerance: 24
 shoot_range: 580
 charge_min: 0.32
@@ -158,6 +166,7 @@ position_patience: 0.8
 seek_threshold: 0.11
 
 profile: v3_Rush_Sniper
+id: de21b0d136b8b442
 position_tolerance: 23
 shoot_range: 650
 charge_min: 0.25
@@ -178,6 +187,7 @@ seek_threshold: 0.16
 # =============================================================================
 
 profile: v4_RP_Alpha
+id: 5fe104e067024f7f
 position_tolerance: 25
 shoot_range: 545
 charge_min: 0.28
@@ -194,6 +204,7 @@ position_patience: 0.43
 seek_threshold: 0.16
 
 profile: v4_RP_Beta
+id: 4620b32b8b71d7ef
 position_tolerance: 26
 shoot_range: 535
 charge_min: 0.32
@@ -210,6 +221,7 @@ position_patience: 0.47
 seek_threshold: 0.14
 
 profile: v4_RP_Gamma
+id: e6c22dbe0c65e489
 position_tolerance: 24
 shoot_range: 550
 charge_min: 0.29
@@ -226,6 +238,7 @@ position_patience: 0.42
 seek_threshold: 0.17
 
 profile: v4_RP_Delta
+id: 3eee1e928acb1980
 position_tolerance: 27
 shoot_range: 530
 charge_min: 0.31
@@ -242,6 +255,7 @@ position_patience: 0.50
 seek_threshold: 0.13
 
 profile: v4_RP_Epsilon
+id: 098fc7f612ca4387
 position_tolerance: 25
 shoot_range: 555
 charge_min: 0.27
@@ -258,6 +272,7 @@ position_patience: 0.40
 seek_threshold: 0.18
 
 profile: v4_RP_Zeta
+id: 8265901a0e5fe28a
 position_tolerance: 26
 shoot_range: 540
 charge_min: 0.30
@@ -278,6 +293,7 @@ seek_threshold: 0.15
 # =============================================================================
 
 profile: v4_RA_Prime
+id: 7e1c3f18805d78f4
 position_tolerance: 24
 shoot_range: 565
 charge_min: 0.27
@@ -294,6 +310,7 @@ position_patience: 0.42
 seek_threshold: 0.16
 
 profile: v4_RA_Apex
+id: f38cc18664594b27
 position_tolerance: 23
 shoot_range: 570
 charge_min: 0.26
@@ -310,6 +327,7 @@ position_patience: 0.40
 seek_threshold: 0.17
 
 profile: v4_RA_Core
+id: ae5d570db27b8420
 position_tolerance: 25
 shoot_range: 555
 charge_min: 0.29
@@ -326,6 +344,7 @@ position_patience: 0.43
 seek_threshold: 0.15
 
 profile: v4_RA_Edge
+id: cc7bdfc9b06a6647
 position_tolerance: 24
 shoot_range: 575
 charge_min: 0.25
@@ -342,6 +361,7 @@ position_patience: 0.38
 seek_threshold: 0.18
 
 profile: v4_RA_Flux
+id: 727c196f49691a66
 position_tolerance: 25
 shoot_range: 560
 charge_min: 0.28
@@ -362,6 +382,7 @@ seek_threshold: 0.16
 # =============================================================================
 
 profile: v4_BR_Swift
+id: c2b9019a5d256ed7
 position_tolerance: 24
 shoot_range: 575
 charge_min: 0.30
@@ -378,6 +399,7 @@ position_patience: 0.72
 seek_threshold: 0.12
 
 profile: v4_BR_Strike
+id: 68ca457811fabd1c
 position_tolerance: 23
 shoot_range: 585
 charge_min: 0.28
@@ -394,6 +416,7 @@ position_patience: 0.68
 seek_threshold: 0.13
 
 profile: v4_BR_Storm
+id: d39127016a724c1f
 position_tolerance: 25
 shoot_range: 570
 charge_min: 0.32
@@ -410,6 +433,7 @@ position_patience: 0.76
 seek_threshold: 0.11
 
 profile: v4_BR_Surge
+id: fb7370f566e054ff
 position_tolerance: 24
 shoot_range: 580
 charge_min: 0.29
@@ -426,6 +450,7 @@ position_patience: 0.70
 seek_threshold: 0.12
 
 profile: v4_BR_Blaze
+id: 1f70253a083fd9da
 position_tolerance: 23
 shoot_range: 590
 charge_min: 0.27
@@ -446,6 +471,7 @@ seek_threshold: 0.14
 # =============================================================================
 
 profile: v4_RS_Hawk
+id: 26ccc03cd057c994
 position_tolerance: 23
 shoot_range: 640
 charge_min: 0.26
@@ -462,6 +488,7 @@ position_patience: 0.40
 seek_threshold: 0.16
 
 profile: v4_RS_Falcon
+id: cc1c4a6146438cbc
 position_tolerance: 24
 shoot_range: 635
 charge_min: 0.27
@@ -478,6 +505,7 @@ position_patience: 0.42
 seek_threshold: 0.15
 
 profile: v4_RS_Eagle
+id: 306fbd9d4c7fb76c
 position_tolerance: 22
 shoot_range: 655
 charge_min: 0.24
@@ -494,6 +522,7 @@ position_patience: 0.36
 seek_threshold: 0.18
 
 profile: v4_RS_Raptor
+id: f78eb11425f3bd70
 position_tolerance: 23
 shoot_range: 645
 charge_min: 0.25
@@ -510,6 +539,7 @@ position_patience: 0.38
 seek_threshold: 0.17
 
 profile: v4_RS_Kite
+id: c19871127922dcbb
 position_tolerance: 24
 shoot_range: 630
 charge_min: 0.28
@@ -530,6 +560,7 @@ seek_threshold: 0.14
 # =============================================================================
 
 profile: v4_Tri_A
+id: 189bd28c291f413c
 position_tolerance: 25
 shoot_range: 555
 charge_min: 0.29
@@ -546,6 +577,7 @@ position_patience: 0.52
 seek_threshold: 0.14
 
 profile: v4_Tri_B
+id: e55340852a4001f7
 position_tolerance: 24
 shoot_range: 565
 charge_min: 0.28
@@ -562,6 +594,7 @@ position_patience: 0.48
 seek_threshold: 0.15
 
 profile: v4_Tri_C
+id: b3323ebc6a1802e9
 position_tolerance: 25
 shoot_range: 560
 charge_min: 0.30
@@ -578,6 +611,7 @@ position_patience: 0.55
 seek_threshold: 0.13
 
 profile: v4_Tri_D
+id: cf786d7d29209233
 position_tolerance: 24
 shoot_range: 570
 charge_min: 0.27
@@ -594,6 +628,7 @@ position_patience: 0.45
 seek_threshold: 0.16
 
 profile: v4_Tri_E
+id: 697ada5fb001e4a2
 position_tolerance: 25
 shoot_range: 555
 charge_min: 0.29
@@ -614,6 +649,7 @@ seek_threshold: 0.14
 # =============================================================================
 
 profile: v4_Agg_82
+id: 012982e60630926a
 position_tolerance: 25
 shoot_range: 560
 charge_min: 0.30
@@ -630,6 +666,7 @@ position_patience: 0.52
 seek_threshold: 0.13
 
 profile: v4_Agg_85
+id: 4c2a7f6c56660679
 position_tolerance: 25
 shoot_range: 555
 charge_min: 0.29
@@ -646,6 +683,7 @@ position_patience: 0.48
 seek_threshold: 0.14
 
 profile: v4_Agg_88
+id: d13906c405017767
 position_tolerance: 24
 shoot_range: 550
 charge_min: 0.28
@@ -662,6 +700,7 @@ position_patience: 0.45
 seek_threshold: 0.15
 
 profile: v4_Agg_91
+id: ca65cbafeeb90b47
 position_tolerance: 24
 shoot_range: 555
 charge_min: 0.27
@@ -678,6 +717,7 @@ position_patience: 0.42
 seek_threshold: 0.16
 
 profile: v4_Agg_94
+id: 5187d9c40ca03dd4
 position_tolerance: 23
 shoot_range: 560
 charge_min: 0.26
@@ -694,6 +734,7 @@ position_patience: 0.38
 seek_threshold: 0.17
 
 profile: v4_Agg_97
+id: e1705fa3e6450154
 position_tolerance: 23
 shoot_range: 545
 charge_min: 0.24
@@ -714,6 +755,7 @@ seek_threshold: 0.19
 # =============================================================================
 
 profile: v4_Pat_35
+id: 1c0e8a9f0c42fd7b
 position_tolerance: 24
 shoot_range: 555
 charge_min: 0.26
@@ -730,6 +772,7 @@ position_patience: 0.35
 seek_threshold: 0.18
 
 profile: v4_Pat_40
+id: 23c349095572f453
 position_tolerance: 24
 shoot_range: 558
 charge_min: 0.27
@@ -746,6 +789,7 @@ position_patience: 0.40
 seek_threshold: 0.17
 
 profile: v4_Pat_45
+id: 97da8695b550cc6a
 position_tolerance: 25
 shoot_range: 552
 charge_min: 0.28
@@ -764,6 +808,7 @@ seek_threshold: 0.15
 # v4_Pat_50 moved to top of file as default profile
 
 profile: v4_Pat_55
+id: a46517be43eb53ce
 position_tolerance: 26
 shoot_range: 558
 charge_min: 0.30
@@ -780,6 +825,7 @@ position_patience: 0.55
 seek_threshold: 0.13
 
 profile: v4_Pat_60
+id: 77697d3fc3eca67a
 position_tolerance: 26
 shoot_range: 562
 charge_min: 0.31
@@ -800,6 +846,7 @@ seek_threshold: 0.12
 # =============================================================================
 
 profile: v4_Qual_20
+id: e4b58b175056746e
 position_tolerance: 24
 shoot_range: 545
 charge_min: 0.25
@@ -816,6 +863,7 @@ position_patience: 0.36
 seek_threshold: 0.19
 
 profile: v4_Qual_23
+id: ca960690610e5860
 position_tolerance: 24
 shoot_range: 552
 charge_min: 0.27
@@ -832,6 +880,7 @@ position_patience: 0.40
 seek_threshold: 0.17
 
 profile: v4_Qual_26
+id: 4a85c216d0ba080b
 position_tolerance: 25
 shoot_range: 555
 charge_min: 0.28
@@ -848,6 +897,7 @@ position_patience: 0.44
 seek_threshold: 0.15
 
 profile: v4_Qual_29
+id: ddb588dfee50f254
 position_tolerance: 25
 shoot_range: 560
 charge_min: 0.30
@@ -864,6 +914,7 @@ position_patience: 0.48
 seek_threshold: 0.14
 
 profile: v4_Qual_32
+id: 1285cc6cd1d47ad1
 position_tolerance: 26
 shoot_range: 565
 charge_min: 0.32
@@ -884,6 +935,7 @@ seek_threshold: 0.12
 # =============================================================================
 
 profile: v4_Elite_A
+id: f64c23003e4a4a5d
 position_tolerance: 24
 shoot_range: 555
 charge_min: 0.28
@@ -900,6 +952,7 @@ position_patience: 0.42
 seek_threshold: 0.16
 
 profile: v4_Elite_B
+id: 62a689b552c36172
 position_tolerance: 25
 shoot_range: 550
 charge_min: 0.29
@@ -916,6 +969,7 @@ position_patience: 0.45
 seek_threshold: 0.15
 
 profile: v4_Elite_C
+id: fe1b739e10f04bb3
 position_tolerance: 24
 shoot_range: 560
 charge_min: 0.27
@@ -932,6 +986,7 @@ position_patience: 0.40
 seek_threshold: 0.17
 
 profile: v4_Elite_D
+id: 55a833eac251d65d
 position_tolerance: 25
 shoot_range: 548
 charge_min: 0.30
@@ -948,6 +1003,7 @@ position_patience: 0.46
 seek_threshold: 0.14
 
 profile: v4_Elite_E
+id: 340934ee1f86ebdf
 position_tolerance: 24
 shoot_range: 565
 charge_min: 0.26
@@ -964,6 +1020,7 @@ position_patience: 0.38
 seek_threshold: 0.18
 
 profile: v4_Elite_F
+id: 6052f8b1309e537e
 position_tolerance: 25
 shoot_range: 552
 charge_min: 0.29
@@ -978,3 +1035,553 @@ steal_reaction_time: 0.11
 button_presses_per_sec: 13
 position_patience: 0.44
 seek_threshold: 0.15
+
+# =============================================================================
+# v5 EXPERIMENTAL - VERY DIFFERENT PLAYSTYLES
+# =============================================================================
+
+# Sniper: Long range, patient, only takes high-quality shots
+profile: v5_Sniper
+id: a1b2c3d4e5f60001
+position_tolerance: 20
+shoot_range: 700
+charge_min: 0.40
+charge_max: 0.90
+steal_range: 80
+defense_offset: 350
+min_shot_quality: 0.42
+pressure_distance: 150
+aggression: 0.55
+defensive_iq: 0.70
+steal_reaction_time: 0.20
+button_presses_per_sec: 9
+position_patience: 0.85
+seek_threshold: 0.08
+
+# Brawler: Close range, aggressive steals, in-your-face pressure
+profile: v5_Brawler
+id: a1b2c3d4e5f60002
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.18
+charge_max: 0.45
+steal_range: 180
+defense_offset: 150
+min_shot_quality: 0.15
+pressure_distance: 45
+aggression: 0.98
+defensive_iq: 0.35
+steal_reaction_time: 0.08
+button_presses_per_sec: 16
+position_patience: 0.20
+seek_threshold: 0.25
+
+# Fortress: Pure defense, rarely shoots, walls off opponent
+profile: v5_Fortress
+id: a1b2c3d4e5f60003
+position_tolerance: 18
+shoot_range: 500
+charge_min: 0.35
+charge_max: 0.80
+steal_range: 140
+defense_offset: 180
+min_shot_quality: 0.38
+pressure_distance: 60
+aggression: 0.45
+defensive_iq: 0.88
+steal_reaction_time: 0.09
+button_presses_per_sec: 11
+position_patience: 1.00
+seek_threshold: 0.05
+
+# =============================================================================
+# v5 EXTREME - EVEN MORE DIFFERENT (UNUSUAL BUILDS)
+# =============================================================================
+
+# Chaos: Maximum aggression, shoots from anywhere, zero patience
+profile: v5_Chaos
+id: a1b2c3d4e5f60004
+position_tolerance: 35
+shoot_range: 450
+charge_min: 0.12
+charge_max: 0.35
+steal_range: 200
+defense_offset: 120
+min_shot_quality: 0.08
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.25
+steal_reaction_time: 0.06
+button_presses_per_sec: 18
+position_patience: 0.12
+seek_threshold: 0.30
+
+# Turtle: Maximum patience, only perfect shots, avoids all risk
+profile: v5_Turtle
+id: a1b2c3d4e5f60005
+position_tolerance: 15
+shoot_range: 600
+charge_min: 0.50
+charge_max: 1.10
+steal_range: 60
+defense_offset: 400
+min_shot_quality: 0.55
+pressure_distance: 200
+aggression: 0.28
+defensive_iq: 0.92
+steal_reaction_time: 0.25
+button_presses_per_sec: 7
+position_patience: 1.50
+seek_threshold: 0.03
+
+# Gunner: Rapid fire, constant shooting, ignores defense entirely
+profile: v5_Gunner
+id: a1b2c3d4e5f60006
+position_tolerance: 28
+shoot_range: 520
+charge_min: 0.10
+charge_max: 0.30
+steal_range: 70
+defense_offset: 500
+min_shot_quality: 0.12
+pressure_distance: 250
+aggression: 0.95
+defensive_iq: 0.15
+steal_reaction_time: 0.30
+button_presses_per_sec: 20
+position_patience: 0.18
+seek_threshold: 0.22
+
+# Jumpshot: Loves fully charged jump shots from midfield (back-court shooter)
+profile: v5_Jumpshot
+id: a1b2c3d4e5f60007
+position_tolerance: 20
+shoot_range: 500
+charge_min: 0.50
+charge_max: 0.70
+steal_range: 100
+defense_offset: 280
+min_shot_quality: 0.20
+pressure_distance: 100
+aggression: 0.80
+defensive_iq: 0.60
+steal_reaction_time: 0.15
+button_presses_per_sec: 10
+position_patience: 0.60
+seek_threshold: 0.12
+
+# =============================================================================
+# v6 EXPERIMENTAL - UNIQUE PLAYSTYLES
+# =============================================================================
+
+# Midrange: Sweet spot specialist, medium charge, balanced approach
+profile: v6_Midrange
+id: b2c3d4e5f6070001
+position_tolerance: 22
+shoot_range: 420
+charge_min: 0.40
+charge_max: 0.60
+steal_range: 110
+defense_offset: 260
+min_shot_quality: 0.28
+pressure_distance: 90
+aggression: 0.70
+defensive_iq: 0.65
+steal_reaction_time: 0.14
+button_presses_per_sec: 12
+position_patience: 0.50
+seek_threshold: 0.10
+
+# Counter: Defensive posture, but shoots quickly when opportunity arises
+profile: v6_Counter
+id: b2c3d4e5f6070002
+position_tolerance: 18
+shoot_range: 480
+charge_min: 0.20
+charge_max: 0.40
+steal_range: 145
+defense_offset: 180
+min_shot_quality: 0.18
+pressure_distance: 55
+aggression: 0.55
+defensive_iq: 0.82
+steal_reaction_time: 0.08
+button_presses_per_sec: 14
+position_patience: 0.25
+seek_threshold: 0.20
+
+# Floater: Prefers elevated positions, patient, seeks height advantage
+profile: v6_Floater
+id: b2c3d4e5f6070003
+position_tolerance: 16
+shoot_range: 550
+charge_min: 0.45
+charge_max: 0.75
+steal_range: 90
+defense_offset: 300
+min_shot_quality: 0.35
+pressure_distance: 120
+aggression: 0.60
+defensive_iq: 0.70
+steal_reaction_time: 0.18
+button_presses_per_sec: 10
+position_patience: 0.90
+seek_threshold: 0.06
+
+# Blitz: Ultra fast, quick shots, constant pressure
+profile: v6_Blitz
+id: b2c3d4e5f6070004
+position_tolerance: 32
+shoot_range: 400
+charge_min: 0.15
+charge_max: 0.35
+steal_range: 160
+defense_offset: 140
+min_shot_quality: 0.14
+pressure_distance: 40
+aggression: 0.96
+defensive_iq: 0.40
+steal_reaction_time: 0.07
+button_presses_per_sec: 17
+position_patience: 0.18
+seek_threshold: 0.24
+
+# Anchor: Stays near own basket, intercepts passes, opportunistic
+profile: v6_Anchor
+id: b2c3d4e5f6070005
+position_tolerance: 20
+shoot_range: 600
+charge_min: 0.35
+charge_max: 0.65
+steal_range: 120
+defense_offset: 150
+min_shot_quality: 0.22
+pressure_distance: 80
+aggression: 0.50
+defensive_iq: 0.85
+steal_reaction_time: 0.10
+button_presses_per_sec: 11
+position_patience: 0.70
+seek_threshold: 0.08
+
+# GlassCannon: Maximum offense, ignores defense entirely
+profile: v6_GlassCannon
+id: b2c3d4e5f6070006
+position_tolerance: 28
+shoot_range: 480
+charge_min: 0.25
+charge_max: 0.50
+steal_range: 50
+defense_offset: 450
+min_shot_quality: 0.16
+pressure_distance: 300
+aggression: 0.98
+defensive_iq: 0.10
+steal_reaction_time: 0.35
+button_presses_per_sec: 15
+position_patience: 0.22
+seek_threshold: 0.18
+
+# Methodical: Slow, deliberate, only shoots when completely safe
+profile: v6_Methodical
+id: b2c3d4e5f6070007
+position_tolerance: 14
+shoot_range: 520
+charge_min: 0.55
+charge_max: 0.85
+steal_range: 100
+defense_offset: 320
+min_shot_quality: 0.40
+pressure_distance: 140
+aggression: 0.42
+defensive_iq: 0.78
+steal_reaction_time: 0.22
+button_presses_per_sec: 8
+position_patience: 1.10
+seek_threshold: 0.04
+
+# Opportunist: Low patience, shoots whenever remotely possible
+profile: v6_Opportunist
+id: b2c3d4e5f6070008
+position_tolerance: 26
+shoot_range: 550
+charge_min: 0.22
+charge_max: 0.48
+steal_range: 115
+defense_offset: 220
+min_shot_quality: 0.15
+pressure_distance: 95
+aggression: 0.85
+defensive_iq: 0.45
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 0.28
+seek_threshold: 0.22
+
+# Disruptor: Focuses on stealing and harassing, secondary shooter
+profile: v6_Disruptor
+id: b2c3d4e5f6070009
+position_tolerance: 24
+shoot_range: 450
+charge_min: 0.30
+charge_max: 0.55
+steal_range: 175
+defense_offset: 160
+min_shot_quality: 0.20
+pressure_distance: 50
+aggression: 0.75
+defensive_iq: 0.72
+steal_reaction_time: 0.06
+button_presses_per_sec: 18
+position_patience: 0.35
+seek_threshold: 0.15
+
+# Clutch: Balanced but performs well under pressure, quick decisions
+profile: v6_Clutch
+id: b2c3d4e5f6070010
+position_tolerance: 22
+shoot_range: 500
+charge_min: 0.32
+charge_max: 0.58
+steal_range: 125
+defense_offset: 240
+min_shot_quality: 0.24
+pressure_distance: 75
+aggression: 0.78
+defensive_iq: 0.62
+steal_reaction_time: 0.11
+button_presses_per_sec: 13
+position_patience: 0.42
+seek_threshold: 0.13
+
+# =============================================================================
+# v7 VARIANTS - Single parameter changes from top performers
+# Based on tournament analysis showing which parameters impact outcomes
+# =============================================================================
+
+# v7_Disruptor_Patient: Disruptor with higher position_patience (0.35 → 0.55)
+# Hypothesis: seeking better shot positions will improve shot efficiency
+profile: v7_Disruptor_Patient
+id: c3d4e5f6g7080001
+position_tolerance: 24
+shoot_range: 450
+charge_min: 0.30
+charge_max: 0.55
+steal_range: 175
+defense_offset: 160
+min_shot_quality: 0.20
+pressure_distance: 50
+aggression: 0.75
+defensive_iq: 0.72
+steal_reaction_time: 0.06
+button_presses_per_sec: 18
+position_patience: 0.55
+seek_threshold: 0.15
+
+# v7_Midrange_Aggro: Midrange with higher aggression (0.70 → 0.85)
+# Hypothesis: more proactive play will capitalize on opportunities
+profile: v7_Midrange_Aggro
+id: c3d4e5f6g7080002
+position_tolerance: 22
+shoot_range: 420
+charge_min: 0.40
+charge_max: 0.60
+steal_range: 110
+defense_offset: 260
+min_shot_quality: 0.28
+pressure_distance: 90
+aggression: 0.85
+defensive_iq: 0.65
+steal_reaction_time: 0.14
+button_presses_per_sec: 12
+position_patience: 0.50
+seek_threshold: 0.10
+
+# v7_Methodical_Loose: Methodical with lower min_shot_quality (0.40 → 0.28)
+# Hypothesis: shooting more often will increase goal output
+profile: v7_Methodical_Loose
+id: c3d4e5f6g7080003
+position_tolerance: 14
+shoot_range: 520
+charge_min: 0.55
+charge_max: 0.85
+steal_range: 100
+defense_offset: 320
+min_shot_quality: 0.28
+pressure_distance: 140
+aggression: 0.42
+defensive_iq: 0.78
+steal_reaction_time: 0.22
+button_presses_per_sec: 8
+position_patience: 1.10
+seek_threshold: 0.04
+
+# v7_Fortress_Aggro: Fortress with higher aggression (0.45 → 0.65)
+# Hypothesis: capitalizing on defensive possessions will improve scoring
+profile: v7_Fortress_Aggro
+id: c3d4e5f6g7080004
+position_tolerance: 18
+shoot_range: 500
+charge_min: 0.35
+charge_max: 0.80
+steal_range: 140
+defense_offset: 180
+min_shot_quality: 0.38
+pressure_distance: 60
+aggression: 0.65
+defensive_iq: 0.88
+steal_reaction_time: 0.09
+button_presses_per_sec: 11
+position_patience: 1.00
+seek_threshold: 0.05
+
+# v7_Anchor_Stealer: Anchor with higher steal_range (120 → 160)
+# Hypothesis: more aggressive stealing will disrupt opponents
+profile: v7_Anchor_Stealer
+id: c3d4e5f6g7080005
+position_tolerance: 20
+shoot_range: 600
+charge_min: 0.35
+charge_max: 0.65
+steal_range: 160
+defense_offset: 150
+min_shot_quality: 0.22
+pressure_distance: 80
+aggression: 0.50
+defensive_iq: 0.85
+steal_reaction_time: 0.10
+button_presses_per_sec: 11
+position_patience: 0.70
+seek_threshold: 0.08
+
+# v7_Opportunist_Patient: Opportunist with higher position_patience (0.28 → 0.50)
+# Hypothesis: seeking better positions will improve shot success rate
+profile: v7_Opportunist_Patient
+id: c3d4e5f6g7080006
+position_tolerance: 26
+shoot_range: 550
+charge_min: 0.22
+charge_max: 0.48
+steal_range: 115
+defense_offset: 220
+min_shot_quality: 0.15
+pressure_distance: 95
+aggression: 0.85
+defensive_iq: 0.45
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 0.50
+seek_threshold: 0.22
+
+# =============================================================================
+# v8 RANDOMIZED - Generated from successful parameter ranges
+# Based on top performers: patience 0.35-0.70, aggression 0.50-0.85, steal 100-175
+# =============================================================================
+
+# v8_Rand_Alpha: High patience, moderate aggression, strong steals
+profile: v8_Rand_Alpha
+id: d4e5f6g7h8090001
+position_tolerance: 21
+shoot_range: 480
+charge_min: 0.32
+charge_max: 0.58
+steal_range: 155
+defense_offset: 185
+min_shot_quality: 0.24
+pressure_distance: 65
+aggression: 0.72
+defensive_iq: 0.76
+steal_reaction_time: 0.09
+button_presses_per_sec: 14
+position_patience: 0.62
+seek_threshold: 0.11
+
+# v8_Rand_Beta: Balanced patience, high aggression, wide shoot range
+profile: v8_Rand_Beta
+id: d4e5f6g7h8090002
+position_tolerance: 24
+shoot_range: 520
+charge_min: 0.28
+charge_max: 0.52
+steal_range: 135
+defense_offset: 210
+min_shot_quality: 0.20
+pressure_distance: 70
+aggression: 0.82
+defensive_iq: 0.58
+steal_reaction_time: 0.10
+button_presses_per_sec: 15
+position_patience: 0.48
+seek_threshold: 0.14
+
+# v8_Rand_Gamma: Very patient, defensive, selective shooter
+profile: v8_Rand_Gamma
+id: d4e5f6g7h8090003
+position_tolerance: 18
+shoot_range: 490
+charge_min: 0.38
+charge_max: 0.68
+steal_range: 145
+defense_offset: 170
+min_shot_quality: 0.32
+pressure_distance: 55
+aggression: 0.58
+defensive_iq: 0.82
+steal_reaction_time: 0.08
+button_presses_per_sec: 12
+position_patience: 0.72
+seek_threshold: 0.08
+
+# v8_Rand_Delta: Moderate patience, opportunistic stealer
+profile: v8_Rand_Delta
+id: d4e5f6g7h8090004
+position_tolerance: 23
+shoot_range: 465
+charge_min: 0.25
+charge_max: 0.50
+steal_range: 168
+defense_offset: 165
+min_shot_quality: 0.18
+pressure_distance: 52
+aggression: 0.68
+defensive_iq: 0.70
+steal_reaction_time: 0.07
+button_presses_per_sec: 16
+position_patience: 0.45
+seek_threshold: 0.16
+
+# v8_Rand_Epsilon: High aggression, quick shots, mobile
+profile: v8_Rand_Epsilon
+id: d4e5f6g7h8090005
+position_tolerance: 26
+shoot_range: 440
+charge_min: 0.22
+charge_max: 0.45
+steal_range: 142
+defense_offset: 195
+min_shot_quality: 0.22
+pressure_distance: 60
+aggression: 0.78
+defensive_iq: 0.62
+steal_reaction_time: 0.11
+button_presses_per_sec: 14
+position_patience: 0.40
+seek_threshold: 0.18
+
+# v8_Rand_Zeta: Balanced all-rounder with slight defensive edge
+profile: v8_Rand_Zeta
+id: d4e5f6g7h8090006
+position_tolerance: 22
+shoot_range: 505
+charge_min: 0.30
+charge_max: 0.55
+steal_range: 150
+defense_offset: 190
+min_shot_quality: 0.26
+pressure_distance: 68
+aggression: 0.65
+defensive_iq: 0.74
+steal_reaction_time: 0.10
+button_presses_per_sec: 13
+position_patience: 0.55
+seek_threshold: 0.12

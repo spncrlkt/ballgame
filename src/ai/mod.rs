@@ -43,8 +43,8 @@ pub struct InputState {
 pub struct AiState {
     pub current_goal: AiGoal,
     pub shot_charge_target: f32,
-    /// Index into AiProfileDatabase for this AI's personality
-    pub profile_index: usize,
+    /// UUID of the AI profile for this AI's personality
+    pub profile_id: String,
     /// Target position for navigation (set by goal system, consumed by nav system)
     pub nav_target: Option<bevy::prelude::Vec2>,
     /// Whether AI is performing a jump shot

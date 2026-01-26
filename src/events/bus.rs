@@ -148,7 +148,7 @@ pub fn update_event_bus_time(mut bus: ResMut<EventBus>, time: Res<Time>) {
 /// Resource to track previous level for change detection
 #[derive(Resource, Default)]
 pub struct LevelChangeTracker {
-    pub prev_level: u32,
+    pub prev_level_id: String,
 }
 
 /// System to emit LevelChange events when CurrentLevel changes.
@@ -158,11 +158,11 @@ pub fn emit_level_change_events(
     mut tracker: ResMut<LevelChangeTracker>,
     mut bus: ResMut<EventBus>,
 ) {
-    let level = current_level.0;
-    if level != tracker.prev_level && tracker.prev_level != 0 {
-        bus.emit(super::types::GameEvent::LevelChange { level });
+    let level_id = &current_level.0;
+    if level_id != &tracker.prev_level_id && !tracker.prev_level_id.is_empty() {
+        bus.emit(super::types::GameEvent::LevelChange { level_id: level_id.clone() });
     }
-    tracker.prev_level = level;
+    tracker.prev_level_id = level_id.clone();
 }
 
 #[cfg(test)]

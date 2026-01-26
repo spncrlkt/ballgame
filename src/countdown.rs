@@ -133,9 +133,8 @@ pub fn trigger_countdown_on_level_change(
     // Trigger countdown when level changes (level resource is marked changed)
     if current_level.is_changed() {
         // Check if this is a regression level (freeze countdown)
-        let level_index = (current_level.0 as usize).saturating_sub(1);
         let is_regression = level_db
-            .get(level_index)
+            .get_by_id(&current_level.0)
             .map(|l| l.regression)
             .unwrap_or(false);
 

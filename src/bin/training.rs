@@ -63,7 +63,9 @@ fn load_ball_style_names() -> Vec<String> {
 
 /// Create the SQLite event logger for training
 fn create_sqlite_logger() -> SqliteEventLogger {
-    let db_path = std::path::Path::new("training.db");
+    // Ensure db directory exists
+    std::fs::create_dir_all("db").ok();
+    let db_path = std::path::Path::new("db/training.db");
     match SqliteEventLogger::new(db_path, "training") {
         Ok(logger) => {
             info!("SQLite event logger initialized: {:?}", db_path);
@@ -237,7 +239,7 @@ fn main() {
         .init_resource::<StealContest>()
         .init_resource::<StealTracker>()
         .init_resource::<Score>()
-        .insert_resource(CurrentLevel(1)) // Will be set from training state
+        .insert_resource(CurrentLevel(String::new())) // Will be set from training state
         .insert_resource(CurrentPalette(0))
         .init_resource::<PhysicsTweaks>()
         .init_resource::<LastShotInfo>()
@@ -403,8 +405,12 @@ fn training_setup(
     mut event_buffer: ResMut<TrainingEventBuffer>,
     sqlite_logger: Res<SqliteEventLogger>,
 ) {
-    // Set current level from training state
-    current_level.0 = training_state.current_level;
+    // Set current level from training state (convert level number to level ID)
+    let level_id = level_db.all()
+        .get((training_state.current_level as usize).saturating_sub(1))
+        .map(|l| l.id.clone())
+        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+    current_level.0 = level_id;
 
     // Camera
     commands.spawn((
@@ -421,15 +427,17 @@ fn training_setup(
     // Get palette
     let initial_palette = palette_db.get(0).expect("No palettes loaded");
 
-    // Get level
-    let level_index = (training_state.current_level as usize).saturating_sub(1);
+    // Get level ID from training state
+    let level_id = level_db.all()
+        .get((training_state.current_level as usize).saturating_sub(1))
+        .map(|l| l.id.clone())
+        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
 
-    // Find AI profile index
-    let ai_profile_index = profile_db
-        .profiles()
-        .iter()
-        .position(|p| p.name == training_state.ai_profile)
-        .unwrap_or(0);
+    // Find AI profile ID
+    let ai_profile_id = profile_db
+        .get_by_name(&training_state.ai_profile)
+        .map(|p| p.id.clone())
+        .unwrap_or_else(|| profile_db.default_profile().id.clone());
 
     // Left player - HUMAN controlled
     let left_player = commands
@@ -451,7 +459,7 @@ fn training_setup(
             InputState::default(),
             AiState {
                 current_goal: AiGoal::Idle, // Not used, human controlled
-                profile_index: 0,
+                profile_id: profile_db.default_profile().id.clone(),
                 ..default()
             },
             AiNavState::default(),
@@ -480,7 +488,7 @@ fn training_setup(
             InputState::default(),
             AiState {
                 current_goal: AiGoal::ChaseBall,
-                profile_index: ai_profile_index,
+                profile_id: ai_profile_id.clone(),
                 ..default()
             },
             AiNavState::default(),
@@ -624,10 +632,10 @@ fn training_setup(
     ));
 
     // Level platforms
-    levels::spawn_level_platforms(&mut commands, &level_db, level_index, initial_palette.platforms);
+    levels::spawn_level_platforms(&mut commands, &level_db, &level_id, initial_palette.platforms);
 
     // Baskets
-    let initial_level = level_db.get(level_index);
+    let initial_level = level_db.get_by_id(&level_id);
     let basket_y = initial_level
         .map(|l| ARENA_FLOOR_Y + l.basket_height)
         .unwrap_or(ARENA_FLOOR_Y + 400.0);
@@ -877,37 +885,30 @@ fn training_state_machine(
                     if let Some(fixed_level_name) = training_state.protocol.fixed_level() {
                         // Protocol specifies a fixed level - keep using it
                         // Level is already set, just ensure current_level matches
-                        if let Some(idx) = (0..level_db.len()).find(|&i| {
-                            level_db
-                                .get(i)
-                                .map(|l| l.name.to_lowercase() == fixed_level_name.to_lowercase())
-                                .unwrap_or(false)
+                        if let Some((idx, level_data)) = level_db.all().iter().enumerate().find(|(_, l)| {
+                            l.name.to_lowercase() == fixed_level_name.to_lowercase()
                         }) {
                             training_state.current_level = (idx + 1) as u32;
                             training_state.current_level_name = fixed_level_name.to_string();
-                            current_level.0 = training_state.current_level;
+                            current_level.0 = level_data.id.clone();
                         }
                     } else {
                         // Pick new random level
                         // Filter out debug levels and Pit (too hard for training)
-                        let training_levels: Vec<u32> = (0..level_db.len())
-                            .filter(|&i| {
-                                let level = level_db.get(i);
-                                let is_debug = level.map(|l| l.debug).unwrap_or(true);
-                                let is_pit =
-                                    level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
+                        let training_levels: Vec<(usize, &ballgame::levels::LevelData)> = level_db.all()
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, l)| {
+                                let is_debug = l.debug;
+                                let is_pit = l.name.to_lowercase() == "pit";
                                 !is_debug && !is_pit
                             })
-                            .map(|i| (i + 1) as u32)
                             .collect();
 
-                        if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
-                            training_state.current_level = level;
-                            training_state.current_level_name = level_db
-                                .get((level - 1) as usize)
-                                .map(|l| l.name.clone())
-                                .unwrap_or_else(|| format!("Level {}", level));
-                            current_level.0 = level;
+                        if let Some(&(idx, level_data)) = training_levels.choose(&mut rand::thread_rng()) {
+                            training_state.current_level = (idx + 1) as u32;
+                            training_state.current_level_name = level_data.name.clone();
+                            current_level.0 = level_data.id.clone();
                         }
                     }
 
@@ -973,7 +974,7 @@ fn training_state_machine(
             // Run standard analysis (same for all protocols)
             println!("\nAnalyzing training session...");
             let analysis = training_state.sqlite_session_id.as_deref().and_then(|session_id| {
-                SimDatabase::open(std::path::Path::new("training.db"))
+                SimDatabase::open(std::path::Path::new("db/training.db"))
                     .ok()
                     .and_then(|db| analyze_session_from_db(&db, session_id, training_state.protocol))
             });
@@ -991,7 +992,7 @@ fn training_state_machine(
                 TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => {
                     // Pursuit-specific analysis (in addition to standard)
                     let pursuit_analysis = training_state.sqlite_session_id.as_deref().and_then(|session_id| {
-                        SimDatabase::open(std::path::Path::new("training.db"))
+                        SimDatabase::open(std::path::Path::new("db/training.db"))
                             .ok()
                             .and_then(|db| analyze_pursuit_session_from_db(&db, session_id))
                     });
@@ -1245,37 +1246,31 @@ fn check_pause_restart(
     if let Some(fixed_level_name) = training_state.protocol.fixed_level() {
         // Protocol specifies a fixed level - keep using it
         println!("\nRestarting iteration on {}...", fixed_level_name);
-        if let Some(idx) = (0..level_db.len()).find(|&i| {
-            level_db
-                .get(i)
-                .map(|l| l.name.to_lowercase() == fixed_level_name.to_lowercase())
-                .unwrap_or(false)
+        if let Some((idx, level_data)) = level_db.all().iter().enumerate().find(|(_, l)| {
+            l.name.to_lowercase() == fixed_level_name.to_lowercase()
         }) {
             training_state.current_level = (idx + 1) as u32;
             training_state.current_level_name = fixed_level_name.to_string();
-            current_level.0 = training_state.current_level;
+            current_level.0 = level_data.id.clone();
         }
     } else {
         println!("\nRestarting game with new level...");
 
         // Pick new random level (excluding debug and Pit)
-        let training_levels: Vec<u32> = (0..level_db.len())
-            .filter(|&i| {
-                let level = level_db.get(i);
-                let is_debug = level.map(|l| l.debug).unwrap_or(true);
-                let is_pit = level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
+        let training_levels: Vec<(usize, &ballgame::levels::LevelData)> = level_db.all()
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| {
+                let is_debug = l.debug;
+                let is_pit = l.name.to_lowercase() == "pit";
                 !is_debug && !is_pit
             })
-            .map(|i| (i + 1) as u32)
             .collect();
 
-        if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
-            training_state.current_level = level;
-            training_state.current_level_name = level_db
-                .get((level - 1) as usize)
-                .map(|l| l.name.clone())
-                .unwrap_or_else(|| format!("Level {}", level));
-            current_level.0 = level;
+        if let Some(&(idx, level_data)) = training_levels.choose(&mut rand::thread_rng()) {
+            training_state.current_level = (idx + 1) as u32;
+            training_state.current_level_name = level_data.name.clone();
+            current_level.0 = level_data.id.clone();
         }
     }
 

@@ -5,6 +5,8 @@
 
 use bevy::prelude::*;
 
+use crate::constants::ARENA_FLOOR_Y;
+
 /// Evaluate the quality of a shot from a given position to a target basket.
 /// Returns a value from 0.0 (terrible shot) to 1.0 (excellent shot).
 ///
@@ -76,6 +78,19 @@ pub fn evaluate_shot_quality(shooter_pos: Vec2, basket_pos: Vec2) -> f32 {
     if dy < 0.0 && horizontal_dist < 60.0 {
         let under_penalty = (1.0 - horizontal_dist / 60.0) * 0.2;
         quality -= under_penalty;
+    }
+
+    // === Absolute floor level penalty ===
+    // Shots from near floor level (Y < -350) are empirically much worse
+    // Tournament data shows: floor shots (Y ~ -350) have 3-10% success vs
+    // elevated shots (Y ~ -200) which have 20-35% success
+    // This penalty encourages AI to seek platforms before shooting
+    let floor_threshold = ARENA_FLOOR_Y + 100.0; // About -350
+    if shooter_pos.y < floor_threshold {
+        // Gradual penalty: max 0.15 at floor level, tapering to 0 at threshold
+        let depth_below_threshold = floor_threshold - shooter_pos.y;
+        let floor_penalty = (depth_below_threshold / 100.0).min(1.0) * 0.15;
+        quality -= floor_penalty;
     }
 
     // Clamp to valid range

@@ -436,8 +436,11 @@ pub fn unified_cycle_system(
 
                     // Apply additional global settings from composite preset
                     if let Some(p) = preset_db.get_composite(idx) {
-                        if let Some(level) = p.level {
-                            current_level.0 = level;
+                        if let Some(level_num) = p.level {
+                            // Convert 1-indexed level number to level ID
+                            if let Some(level_data) = level_db.all().get((level_num as usize).saturating_sub(1)) {
+                                current_level.0 = level_data.id.clone();
+                            }
                         }
                         if let Some(palette) = p.palette {
                             current_palette.0 = palette;
@@ -513,11 +516,14 @@ pub fn unified_cycle_system(
                 } else {
                     Team::Right
                 };
-                let num_profiles = profile_db.len();
+                let profile_ids: Vec<String> = profile_db.profiles().iter().map(|p| p.id.clone()).collect();
+                let num_profiles = profile_ids.len();
                 for (mut ai_state, team) in &mut ai_query {
                     if *team == target_team {
-                        ai_state.profile_index = (ai_state.profile_index + 1) % num_profiles;
-                        let profile = profile_db.get(ai_state.profile_index);
+                        let current_idx = profile_ids.iter().position(|id| *id == ai_state.profile_id).unwrap_or(0);
+                        let next_idx = (current_idx + 1) % num_profiles;
+                        ai_state.profile_id = profile_ids[next_idx].clone();
+                        let profile = profile_db.get_by_id(&ai_state.profile_id).unwrap_or_else(|| profile_db.default_profile());
                         // Save to settings
                         if *team == Team::Left {
                             current_settings.settings.left_ai_profile = Some(profile.name.clone());
@@ -538,27 +544,24 @@ pub fn unified_cycle_system(
             // Level, Palette, BallStyle
             match cycle_selection.right_option {
                 RightOption::Level => {
-                    let num_levels = level_db.len() as u32;
+                    let level_ids: Vec<String> = level_db.all().iter().map(|l| l.id.clone()).collect();
+                    let num_levels = level_ids.len();
+                    let current_idx = level_ids.iter().position(|id| *id == current_level.0).unwrap_or(0);
                     if cycle_next {
-                        current_level.0 = if current_level.0 >= num_levels {
-                            1
-                        } else {
-                            current_level.0 + 1
-                        };
+                        let next_idx = (current_idx + 1) % num_levels;
+                        current_level.0 = level_ids[next_idx].clone();
                     } else if cycle_prev {
-                        current_level.0 = if current_level.0 <= 1 {
-                            num_levels
-                        } else {
-                            current_level.0 - 1
-                        };
+                        let prev_idx = (current_idx + num_levels - 1) % num_levels;
+                        current_level.0 = level_ids[prev_idx].clone();
                     }
-                    current_settings.settings.level = current_level.0;
+                    current_settings.settings.level = current_level.0.clone();
                     current_settings.mark_dirty();
                     let level_name = level_db
-                        .get((current_level.0 as usize).saturating_sub(1))
+                        .get_by_id(&current_level.0)
                         .map(|l| l.name.as_str())
                         .unwrap_or("?");
-                    info!("Level: {}/{} {}", current_level.0, num_levels, level_name);
+                    let display_num = current_idx + 1;
+                    info!("Level: {}/{} {}", display_num, num_levels, level_name);
                 }
                 RightOption::Palette => {
                     let num_palettes = palette_db.len();
@@ -649,7 +652,9 @@ pub fn update_cycle_indicator(
     let mut left_human = false;
     let mut right_human = false;
     for (ai_state, team, human) in &ai_query {
-        let profile_name = profile_db.get(ai_state.profile_index).name.clone();
+        let profile_name = profile_db.get_by_id(&ai_state.profile_id)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| "?".to_string());
         match team {
             Team::Left => {
                 left_profile = profile_name;
@@ -678,10 +683,12 @@ pub fn update_cycle_indicator(
     let right_value = match cycle_selection.right_option {
         RightOption::Level => {
             let level_name = level_db
-                .get((current_level.0 as usize).saturating_sub(1))
+                .get_by_id(&current_level.0)
                 .map(|l| l.name.as_str())
                 .unwrap_or("?");
-            format!("{}/{} {}", current_level.0, level_db.len(), level_name)
+            let level_ids: Vec<&str> = level_db.all().iter().map(|l| l.id.as_str()).collect();
+            let display_num = level_ids.iter().position(|id| *id == current_level.0).map(|i| i + 1).unwrap_or(0);
+            format!("{}/{} {}", display_num, level_db.len(), level_name)
         }
         RightOption::Palette => format!("{}", current_palette.0),
         RightOption::BallStyle => ball_query

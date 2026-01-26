@@ -25,6 +25,7 @@
 # =============================================================================
 
 level: Debug
+id: 8d4516f538c3d90e
 basket_height: 300
 basket_push_in: 200
 steps: 0
@@ -36,6 +37,7 @@ center: 780 1200
 debug: true
 
 level: Regression
+id: ba805c6c0ce3036e
 basket_height: 400
 basket_push_in: 156
 steps: 3
@@ -50,6 +52,7 @@ regression: true
 # =============================================================================
 
 level: Arena
+id: 522463e6dee8f2ac
 basket_height: 780
 steps: 7
 step_push_in: 80
@@ -60,10 +63,12 @@ mirror: 380 380 120
 mirror: 200 560 120
 
 level: Open Floor
+id: 44a6a078c08e14e9
 basket_height: 660
 steps: 0
 
 level: Islands
+id: 01dc33ee4a95d95b
 basket_height: 690
 basket_push_in: 200
 steps: 0
@@ -73,12 +78,14 @@ center: 440 100
 center: 140 100
 
 level: Slopes
+id: d2761827ede9729b
 basket_height: 670
 steps: 8
 step_push_in: 100
 mirror: 235 200 180
 
 level: Tower
+id: eeed2567ff826241
 basket_height: 620
 steps: 11
 corner_height: 360
@@ -88,6 +95,7 @@ center: 240 230
 center: 360 120
 
 level: Skyway
+id: 5e6739814d8221f2
 basket_height: 700
 steps: 15
 step_push_in: 100
@@ -97,6 +105,7 @@ mirror: 400 320 140
 center: 450 200
 
 level: Terraces
+id: d507cdf2647f1dc3
 basket_height: 660
 steps: 0
 mirror: 520 100 180
@@ -104,6 +113,7 @@ mirror: 380 200 160
 mirror: 240 300 140
 
 level: Catwalk
+id: b7569f063af0f78b
 basket_height: 620
 basket_push_in: 166
 steps: 0
@@ -111,6 +121,7 @@ center: 200 600
 mirror: 200 200 120
 
 level: Bunker
+id: 48508ee3482ee303
 basket_height: 520
 steps: 8
 corner_height: 240
@@ -119,6 +130,7 @@ mirror: 350 90 200
 center: 90 280
 
 level: Pit
+id: 3dfbe4067f4e7d6a
 basket_height: 580
 steps: 0
 mirror: 520 140 160
@@ -126,6 +138,7 @@ mirror: 340 100 140
 center: 50 400
 
 level: Twin Towers
+id: 69d755aa56384746
 basket_height: 720
 basket_push_in: 260
 steps: 0
@@ -138,11 +151,13 @@ mirror: 520 500 60
 # =============================================================================
 
 level: Pursuit Arena
+id: b4b51d36fe73b709
 basket_height: 680
 basket_push_in: 180
 steps: 0
 
 level: Pursuit Arena 2
+id: 8ed21959dfc3d54c
 basket_height: 680
 basket_push_in: 180
 steps: 0

@@ -228,7 +228,7 @@ pub fn check_settings_reset(
         current_settings.reset_to_defaults();
 
         // Apply reset settings to resources
-        current_level.0 = current_settings.settings.level;
+        current_level.0 = current_settings.settings.level.clone();
         current_palette.0 = current_settings.settings.palette_index;
         viewport_scale.preset_index = current_settings.settings.viewport_index;
         cycle_selection.active_direction = crate::ui::CycleDirection::from_str(&current_settings.settings.active_direction);
@@ -287,17 +287,19 @@ pub fn respawn_player(
     let prev_level_pressed = keyboard.just_pressed(KeyCode::BracketLeft);
 
     // Detect if level was changed externally (by unified cycle system)
-    let num_levels = level_db.len() as u32;
     let level_changed_externally = current_level.is_changed() && !reset_pressed;
 
+    // Handle level cycling with IDs
+    let level_ids: Vec<String> = level_db.all().iter().map(|l| l.id.clone()).collect();
+    let current_idx = level_ids.iter().position(|id| *id == current_level.0).unwrap_or(0);
+    let num_levels = level_ids.len();
+
     if next_level_pressed {
-        current_level.0 = (current_level.0 % num_levels) + 1;
+        let next_idx = (current_idx + 1) % num_levels;
+        current_level.0 = level_ids[next_idx].clone();
     } else if prev_level_pressed {
-        current_level.0 = if current_level.0 <= 1 {
-            num_levels
-        } else {
-            current_level.0 - 1
-        };
+        let prev_idx = if current_idx == 0 { num_levels - 1 } else { current_idx - 1 };
+        current_level.0 = level_ids[prev_idx].clone();
     }
 
     let level_changed = next_level_pressed || prev_level_pressed || level_changed_externally;
@@ -328,17 +330,18 @@ pub fn respawn_player(
             commands.entity(ball_entity).despawn();
         }
 
-        let level_index = (current_level.0 - 1) as usize;
-        let is_debug = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
+        let is_debug = level_db.get_by_id(&current_level.0).map(|l| l.debug).unwrap_or(false);
 
         spawn_balls(&mut commands, &ball_textures, current_palette.0, is_debug);
 
         // Randomize AI profile on reset
-        let num_profiles = profile_db.len();
+        let profiles: Vec<String> = profile_db.profiles().iter().map(|p| p.id.clone()).collect();
         for mut ai_state in &mut ai_players {
-            ai_state.profile_index = rand::thread_rng().gen_range(0..num_profiles);
-            let profile = profile_db.get(ai_state.profile_index);
-            info!("AI reset with profile: {}", profile.name);
+            let random_idx = rand::thread_rng().gen_range(0..profiles.len());
+            ai_state.profile_id = profiles[random_idx].clone();
+            if let Some(profile) = profile_db.get_by_id(&ai_state.profile_id) {
+                info!("AI reset with profile: {}", profile.name);
+            }
         }
 
         }
@@ -348,7 +351,6 @@ pub fn respawn_player(
         // Reset score on level change
         score.left = 0;
         score.right = 0;
-        let level_index = (current_level.0 - 1) as usize;
 
         // Get palette for new geometry colors
         let palette = palette_db
@@ -373,7 +375,7 @@ pub fn respawn_player(
             commands.entity(ball_entity).despawn();
         }
 
-        let is_debug = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
+        let is_debug = level_db.get_by_id(&current_level.0).map(|l| l.debug).unwrap_or(false);
 
         spawn_balls(&mut commands, &ball_textures, current_palette.0, is_debug);
 
@@ -381,7 +383,7 @@ pub fn respawn_player(
         if let Some((left_x, right_x, basket_y)) = reload_level_geometry(
             &mut commands,
             &level_db,
-            level_index,
+            &current_level.0,
             palette.platforms,
             level_platforms.iter(),
             corner_ramps.iter(),
@@ -398,7 +400,7 @@ pub fn respawn_player(
             }
 
             // Update AI goals based on debug status
-            let is_debug = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
+            let is_debug = level_db.get_by_id(&current_level.0).map(|l| l.debug).unwrap_or(false);
             let new_goal = if is_debug {
                 AiGoal::Idle
             } else {
@@ -468,8 +470,7 @@ pub fn manage_debug_display(
         return;
     }
 
-    let level_index = (current_level.0 - 1) as usize;
-    let is_debug = level_db.get(level_index).map(|l| l.debug).unwrap_or(false);
+    let is_debug = level_db.get_by_id(&current_level.0).map(|l| l.debug).unwrap_or(false);
     let has_display_balls = !display_balls.is_empty();
 
     if is_debug && !has_display_balls {

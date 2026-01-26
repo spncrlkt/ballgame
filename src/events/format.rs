@@ -178,7 +178,7 @@ pub fn serialize_event(time_ms: u32, event: &GameEvent) -> String {
         GameEvent::ResetAiState { player } => player.to_string(),
         GameEvent::ResetScores => String::new(),
         GameEvent::ResetBall => String::new(),
-        GameEvent::LevelChange { level } => level.to_string(),
+        GameEvent::LevelChange { level_id } => level_id.clone(),
     };
 
     format!("{}|{}|{}", ts, code, data)
@@ -309,7 +309,7 @@ pub fn parse_event(line: &str) -> Option<(u32, GameEvent)> {
         "RS" => GameEvent::ResetScores,
         "RB" => GameEvent::ResetBall,
         "LC" if !data.is_empty() => GameEvent::LevelChange {
-            level: data[0].parse().ok()?,
+            level_id: data[0].to_string(),
         },
         _ => return None,
     };
