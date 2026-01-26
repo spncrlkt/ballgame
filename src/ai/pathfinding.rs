@@ -335,6 +335,7 @@ mod tests {
             dirty: false,
             built_for_level: 0,
             rebuild_delay: 0,
+            level_max_shot_quality: 0.5, // Test value
         }
     }
 

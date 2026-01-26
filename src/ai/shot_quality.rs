@@ -88,6 +88,37 @@ pub const SHOT_QUALITY_GOOD: f32 = 0.55;
 pub const SHOT_QUALITY_ACCEPTABLE: f32 = 0.40;
 pub const SHOT_QUALITY_DESPERATE: f32 = 0.25;
 
+/// Reference max quality (achievable with good platform elevation)
+/// Used for scaling min_shot_quality on flat levels
+pub const SHOT_QUALITY_REFERENCE_MAX: f32 = 0.85;
+
+/// Calculate the maximum achievable shot quality for a level given nav graph node positions.
+/// Returns the best quality achievable from any platform position to either basket.
+pub fn calculate_level_max_quality(node_positions: &[Vec2], basket_positions: &[Vec2]) -> f32 {
+    let mut max_quality = 0.3; // Minimum floor quality baseline
+
+    for &node_pos in node_positions {
+        for &basket_pos in basket_positions {
+            let quality = evaluate_shot_quality(node_pos, basket_pos);
+            if quality > max_quality {
+                max_quality = quality;
+            }
+        }
+    }
+
+    max_quality
+}
+
+/// Scale a profile's min_shot_quality based on what's achievable on the current level.
+/// On flat levels (max ~0.50), this lowers the threshold so AI still shoots.
+/// On elevated levels (max ~0.85), threshold stays close to profile value.
+pub fn scale_min_quality_for_level(profile_min_quality: f32, level_max_quality: f32) -> f32 {
+    // Scale relative to reference max (0.85)
+    // If level max is lower, proportionally reduce the threshold
+    let scale_factor = (level_max_quality / SHOT_QUALITY_REFERENCE_MAX).min(1.0);
+    profile_min_quality * scale_factor
+}
+
 /// Get a descriptive label for a shot quality value
 pub fn quality_label(quality: f32) -> &'static str {
     if quality >= SHOT_QUALITY_EXCELLENT {

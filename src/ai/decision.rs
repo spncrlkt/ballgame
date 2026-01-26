@@ -5,7 +5,8 @@ use rand::Rng;
 
 use crate::ai::{
     AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, InputState, NavAction, NavGraph,
-    find_path, find_path_to_shoot, shot_quality::evaluate_shot_quality,
+    find_path, find_path_to_shoot,
+    shot_quality::{evaluate_shot_quality, scale_min_quality_for_level},
 };
 use crate::ai::navigation::{find_escape_x, has_ceiling_above};
 use crate::ball::{Ball, BallState};
@@ -500,13 +501,20 @@ pub fn ai_decision_update(
             // Evaluate shot quality based on position (heatmap-derived)
             let shot_quality = evaluate_shot_quality(ai_pos, target_basket_pos);
 
+            // Scale min_shot_quality based on what's achievable on this level
+            // Flat levels (max ~0.50) get lower thresholds so AI still shoots
+            let level_scaled_min = scale_min_quality_for_level(
+                profile.min_shot_quality,
+                nav_graph.level_max_shot_quality,
+            );
+
             // Desperation factor: after 8 seconds holding ball, lower threshold (max 50% reduction)
             let desperation_factor = if ai_state.ball_hold_time > 8.0 {
                 1.0 - ((ai_state.ball_hold_time - 8.0) * 0.03).min(0.5)
             } else {
                 1.0
             };
-            let effective_min_quality = profile.min_shot_quality * desperation_factor;
+            let effective_min_quality = level_scaled_min * desperation_factor;
             let quality_acceptable = shot_quality >= effective_min_quality;
 
             // Shoot if within range OR if we've reached our nav target (best position)

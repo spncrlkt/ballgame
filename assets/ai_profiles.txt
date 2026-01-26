@@ -28,7 +28,7 @@ charge_min: 0.29
 charge_max: 0.70
 steal_range: 100
 defense_offset: 245
-min_shot_quality: 0.27
+min_shot_quality: 0.20
 pressure_distance: 120
 aggression: 0.86
 defensive_iq: 0.56

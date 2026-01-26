@@ -107,6 +107,8 @@ pub struct NavGraph {
     pub built_for_level: usize,
     /// Frames to wait before rebuilding (allows platform spawning)
     pub rebuild_delay: u8,
+    /// Maximum achievable shot quality on this level (for scaling AI thresholds)
+    pub level_max_shot_quality: f32,
 }
 
 impl NavGraph {
@@ -577,6 +579,13 @@ pub fn rebuild_nav_graph(
         node.shot_quality_right = evaluate_shot_quality(node.center, right_basket);
         node.platform_role = classify_platform_role(node);
     }
+
+    // Calculate level's max achievable shot quality (for AI threshold scaling)
+    nav_graph.level_max_shot_quality = nav_graph
+        .nodes
+        .iter()
+        .map(|n| n.shot_quality_left.max(n.shot_quality_right))
+        .fold(0.3_f32, |acc, q| acc.max(q));
 
     // Build edges between nodes
     let node_count = nav_graph.nodes.len();
