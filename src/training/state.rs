@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Instant;
 
+use super::protocol::TrainingProtocol;
+
 /// Training session phase
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TrainingPhase {
@@ -57,6 +59,8 @@ pub struct GameResult {
 /// Main training session state resource
 #[derive(Resource)]
 pub struct TrainingState {
+    /// Training protocol being used
+    pub protocol: TrainingProtocol,
     /// Unique session identifier (timestamp-based)
     pub session_id: String,
     /// Current game number (1-based)
@@ -95,6 +99,7 @@ impl Default for TrainingState {
         let session_dir = PathBuf::from("training_logs").join(format!("session_{}", timestamp));
 
         Self {
+            protocol: TrainingProtocol::default(),
             session_id: timestamp,
             game_number: 1,
             games_total: 5,

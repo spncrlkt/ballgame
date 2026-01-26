@@ -22,8 +22,9 @@ use ballgame::events::{
     emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventEmitterState,
 };
 use ballgame::training::{
-    LevelSelector, TrainingMode, TrainingPhase, TrainingSettings, TrainingState, analyze_session,
-    ensure_session_dir, evlog_path_for_game, generate_claude_prompt, print_session_summary,
+    LevelSelector, TrainingMode, TrainingPhase, TrainingProtocol, TrainingSettings, TrainingState,
+    analyze_pursuit_session, analyze_session, ensure_session_dir, evlog_path_for_game,
+    format_pursuit_analysis_markdown, generate_claude_prompt, print_session_summary,
     write_analysis_files, write_session_summary,
 };
 use bevy::{camera::ScalingMode, prelude::*};
@@ -65,6 +66,7 @@ fn main() {
     println!("       TRAINING MODE");
     println!("========================================");
     println!();
+    println!("  Protocol: {}", settings.protocol.display_name());
     let mode_str = match settings.mode {
         TrainingMode::Goal => "Goal-by-goal",
         TrainingMode::Game => "Full games",
@@ -124,6 +126,7 @@ fn main() {
 
     // Create training state with settings
     let mut training_state = TrainingState::new(settings.iterations, &settings.ai_profile);
+    training_state.protocol = settings.protocol;
     training_state.win_score = if settings.mode == TrainingMode::Game {
         settings.win_score
     } else {
@@ -756,8 +759,15 @@ fn training_state_machine(
             training_state.update_elapsed();
             event_buffer.elapsed = training_state.game_elapsed;
 
-            // Check win condition
-            if score.left >= training_state.win_score || score.right >= training_state.win_score {
+            // Check win condition: score reached OR time limit expired
+            let score_reached =
+                score.left >= training_state.win_score || score.right >= training_state.win_score;
+            let time_expired = training_state
+                .time_limit_secs
+                .map(|limit| training_state.game_elapsed >= limit)
+                .unwrap_or(false);
+
+            if score_reached || time_expired {
                 // Log match end
                 event_buffer.buffer.log(
                     training_state.game_elapsed,
@@ -777,11 +787,19 @@ fn training_state_machine(
                 // Record result
                 training_state.record_result(score.left, score.right, evlog_path);
 
-                let winner = if score.left >= training_state.win_score { "You win!" } else { "AI wins!" };
+                // Determine outcome message
+                let outcome = if time_expired && !score_reached {
+                    format!("Time expired ({:.1}s)", training_state.game_elapsed)
+                } else if score.left >= training_state.win_score {
+                    "You win!".to_string()
+                } else {
+                    "AI wins!".to_string()
+                };
+
                 println!(
-                    "Game {} complete: {} ({}-{})",
-                    training_state.game_number - 1 + 1, // game_number not yet incremented
-                    winner,
+                    "Iteration {} complete: {} ({}-{})",
+                    training_state.game_number,
+                    outcome,
                     score.left,
                     score.right
                 );
@@ -801,26 +819,42 @@ fn training_state_machine(
                 if training_state.game_number >= training_state.games_total {
                     training_state.phase = TrainingPhase::SessionComplete;
                 } else {
-                    // Pick new random level
-                    // Filter out debug levels and Pit (too hard for training)
-                    let training_levels: Vec<u32> = (0..level_db.len())
-                        .filter(|&i| {
-                            let level = level_db.get(i);
-                            let is_debug = level.map(|l| l.debug).unwrap_or(true);
-                            let is_pit =
-                                level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
-                            !is_debug && !is_pit
-                        })
-                        .map(|i| (i + 1) as u32)
-                        .collect();
+                    // Pick level based on protocol
+                    if let Some(fixed_level_name) = training_state.protocol.fixed_level() {
+                        // Protocol specifies a fixed level - keep using it
+                        // Level is already set, just ensure current_level matches
+                        if let Some(idx) = (0..level_db.len()).find(|&i| {
+                            level_db
+                                .get(i)
+                                .map(|l| l.name.to_lowercase() == fixed_level_name.to_lowercase())
+                                .unwrap_or(false)
+                        }) {
+                            training_state.current_level = (idx + 1) as u32;
+                            training_state.current_level_name = fixed_level_name.to_string();
+                            current_level.0 = training_state.current_level;
+                        }
+                    } else {
+                        // Pick new random level
+                        // Filter out debug levels and Pit (too hard for training)
+                        let training_levels: Vec<u32> = (0..level_db.len())
+                            .filter(|&i| {
+                                let level = level_db.get(i);
+                                let is_debug = level.map(|l| l.debug).unwrap_or(true);
+                                let is_pit =
+                                    level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
+                                !is_debug && !is_pit
+                            })
+                            .map(|i| (i + 1) as u32)
+                            .collect();
 
-                    if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
-                        training_state.current_level = level;
-                        training_state.current_level_name = level_db
-                            .get((level - 1) as usize)
-                            .map(|l| l.name.clone())
-                            .unwrap_or_else(|| format!("Level {}", level));
-                        current_level.0 = level;
+                        if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
+                            training_state.current_level = level;
+                            training_state.current_level_name = level_db
+                                .get((level - 1) as usize)
+                                .map(|l| l.name.clone())
+                                .unwrap_or_else(|| format!("Level {}", level));
+                            current_level.0 = level;
+                        }
                     }
 
                     training_state.next_game();
@@ -870,16 +904,62 @@ fn training_state_machine(
             }
             print_session_summary(&training_state);
 
-            // Run automated analysis
+            // Run standard analysis (same for all protocols)
             println!("\nAnalyzing training session...");
-            let analysis = analyze_session(&training_state.session_dir, &training_state.game_results);
+            let analysis = analyze_session(
+                &training_state.session_dir,
+                &training_state.game_results,
+                training_state.protocol,
+            );
 
             if let Err(e) = write_analysis_files(&training_state.session_dir, &analysis) {
                 eprintln!("Failed to write analysis: {}", e);
-            } else {
-                // Print prompt to terminal
-                let prompt = generate_claude_prompt(&training_state.session_dir, &analysis);
-                println!("\n{}", prompt);
+            }
+
+            // Run protocol-specific analysis (additional output)
+            match training_state.protocol {
+                TrainingProtocol::Pursuit => {
+                    // Pursuit-specific analysis (in addition to standard)
+                    let pursuit_analysis =
+                        analyze_pursuit_session(&training_state.game_results);
+
+                    // Write pursuit analysis
+                    let md_content = format_pursuit_analysis_markdown(&pursuit_analysis);
+                    let md_path = training_state.session_dir.join("pursuit_analysis.md");
+                    if let Err(e) = fs::write(&md_path, &md_content) {
+                        eprintln!("Failed to write pursuit analysis: {}", e);
+                    } else {
+                        println!("Pursuit analysis written to: {}", md_path.display());
+                    }
+
+                    // Print pursuit summary to terminal
+                    println!("\n## Pursuit Test Results\n");
+                    println!("Pursuit Score: {:.1}/100", pursuit_analysis.pursuit_score);
+                    println!(
+                        "Outcomes: {} catches, {} player scores, {} timeouts",
+                        pursuit_analysis.ai_catches,
+                        pursuit_analysis.player_scores,
+                        pursuit_analysis.timeouts
+                    );
+                    println!(
+                        "Avg Distance: {:.0}px | Closing Rate: {:.1}px/s",
+                        pursuit_analysis.avg_distance, pursuit_analysis.avg_closing_rate
+                    );
+
+                    if pursuit_analysis.pursuit_score >= 70.0 {
+                        println!("\nResult: PASS - AI demonstrates good pursuit behavior.");
+                    } else if pursuit_analysis.pursuit_score >= 50.0 {
+                        println!("\nResult: MARGINAL - AI shows some pursuit but with issues.");
+                    } else {
+                        println!("\nResult: FAIL - AI is not effectively pursuing the player.");
+                    }
+                }
+                TrainingProtocol::AdvancedPlatform => {
+                    // Print Claude prompt to terminal
+                    let prompt =
+                        generate_claude_prompt(&training_state.session_dir, &analysis);
+                    println!("\n{}", prompt);
+                }
             }
 
             app_exit.write(AppExit::Success);
@@ -1051,26 +1131,42 @@ fn check_pause_restart(
         return;
     }
 
-    println!("\nRestarting game with new level...");
+    // Pick level based on protocol
+    if let Some(fixed_level_name) = training_state.protocol.fixed_level() {
+        // Protocol specifies a fixed level - keep using it
+        println!("\nRestarting iteration on {}...", fixed_level_name);
+        if let Some(idx) = (0..level_db.len()).find(|&i| {
+            level_db
+                .get(i)
+                .map(|l| l.name.to_lowercase() == fixed_level_name.to_lowercase())
+                .unwrap_or(false)
+        }) {
+            training_state.current_level = (idx + 1) as u32;
+            training_state.current_level_name = fixed_level_name.to_string();
+            current_level.0 = training_state.current_level;
+        }
+    } else {
+        println!("\nRestarting game with new level...");
 
-    // Pick new random level (excluding debug and Pit)
-    let training_levels: Vec<u32> = (0..level_db.len())
-        .filter(|&i| {
-            let level = level_db.get(i);
-            let is_debug = level.map(|l| l.debug).unwrap_or(true);
-            let is_pit = level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
-            !is_debug && !is_pit
-        })
-        .map(|i| (i + 1) as u32)
-        .collect();
+        // Pick new random level (excluding debug and Pit)
+        let training_levels: Vec<u32> = (0..level_db.len())
+            .filter(|&i| {
+                let level = level_db.get(i);
+                let is_debug = level.map(|l| l.debug).unwrap_or(true);
+                let is_pit = level.map(|l| l.name.to_lowercase() == "pit").unwrap_or(false);
+                !is_debug && !is_pit
+            })
+            .map(|i| (i + 1) as u32)
+            .collect();
 
-    if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
-        training_state.current_level = level;
-        training_state.current_level_name = level_db
-            .get((level - 1) as usize)
-            .map(|l| l.name.clone())
-            .unwrap_or_else(|| format!("Level {}", level));
-        current_level.0 = level;
+        if let Some(&level) = training_levels.choose(&mut rand::thread_rng()) {
+            training_state.current_level = level;
+            training_state.current_level_name = level_db
+                .get((level - 1) as usize)
+                .map(|l| l.name.clone())
+                .unwrap_or_else(|| format!("Level {}", level));
+            current_level.0 = level;
+        }
     }
 
     // Reset score and steal tracker

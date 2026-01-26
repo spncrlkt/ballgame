@@ -115,6 +115,13 @@ mirror: 520 120 100
 mirror: 520 300 160
 mirror: 520 500 60
 
+# Training protocol levels
+
+level: Pursuit Arena
+basket_height: 680
+basket_push_in: 180
+steps: 0
+
 #   level: <name>           Start a new level
 #   basket_height: <h>      Main basket height above floor (8 dunkable: <560, 2 high: >560)
 #   basket_push_in: <dist>  Distance from wall inner edge to basket center (default = 156)

@@ -11,6 +11,8 @@ use super::state::{TrainingState, Winner};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionSummary {
     pub session_id: String,
+    pub protocol: String,
+    pub protocol_description: String,
     pub games_played: u32,
     pub player_wins: u32,
     pub ai_wins: u32,
@@ -67,6 +69,8 @@ impl SessionSummary {
 
         Self {
             session_id: state.session_id.clone(),
+            protocol: state.protocol.cli_name().to_string(),
+            protocol_description: state.protocol.description().to_string(),
             games_played: state.game_results.len() as u32,
             player_wins,
             ai_wins,
@@ -119,8 +123,11 @@ pub fn print_session_summary(state: &TrainingState) {
     println!("       TRAINING SESSION COMPLETE");
     println!("========================================");
     println!();
+    println!("  Protocol: {}", state.protocol.display_name());
+    println!("  Goal: {}", state.protocol.description());
+    println!();
     println!("  Opponent: {} (AI)", state.ai_profile);
-    println!("  Games: {} played", state.game_results.len());
+    println!("  Iterations: {} played", state.game_results.len());
     println!();
     println!("  RESULTS: You {} - {} {}", player_wins, ai_wins, state.ai_profile);
     println!("  TOTAL SCORE: {} - {}", total_player, total_ai);

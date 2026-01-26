@@ -157,10 +157,106 @@ pub struct GoalMovementStats {
     pub closing_rate: f32,
 }
 
+/// Pursuit protocol analysis - aggregated across all iterations
+#[derive(Debug, Clone, Default)]
+pub struct PursuitAnalysis {
+    /// Number of pursuit iterations
+    pub iterations: u32,
+    /// Iterations where AI scored (caught player)
+    pub ai_catches: u32,
+    /// Iterations where player scored
+    pub player_scores: u32,
+    /// Iterations that timed out without a score
+    pub timeouts: u32,
+    /// Average distance between AI and player across all iterations
+    pub avg_distance: f32,
+    /// Minimum distance achieved across all iterations
+    pub min_distance: f32,
+    /// Average closing rate (positive = AI closing gap)
+    pub avg_closing_rate: f32,
+    /// Total time AI was stuck (input active, no movement)
+    pub total_stuck_time_secs: f32,
+    /// Pursuit score (higher = better pursuit, 0-100)
+    pub pursuit_score: f32,
+    /// Per-iteration stats
+    pub iteration_stats: Vec<PursuitIterationStats>,
+    /// AI profile name
+    pub ai_profile: String,
+}
+
+/// Per-iteration pursuit statistics
+#[derive(Debug, Clone, Default)]
+pub struct PursuitIterationStats {
+    /// Iteration number
+    pub iteration: u32,
+    /// Duration in seconds
+    pub duration_secs: f32,
+    /// Outcome: "ai_catch", "player_score", "timeout"
+    pub outcome: String,
+    /// Average distance to opponent
+    pub avg_distance: f32,
+    /// Minimum distance achieved
+    pub min_distance: f32,
+    /// Closing rate (positive = closing gap)
+    pub closing_rate: f32,
+    /// Time stuck (seconds)
+    pub stuck_time_secs: f32,
+    /// Position range (how much AI moved)
+    pub position_range: f32,
+}
+
+impl PursuitAnalysis {
+    /// Calculate pursuit score (0-100, higher is better)
+    fn calculate_pursuit_score(&self) -> f32 {
+        if self.iterations == 0 {
+            return 0.0;
+        }
+
+        let mut score = 50.0; // Start at 50
+
+        // Bonus for catching player
+        let catch_rate = self.ai_catches as f32 / self.iterations as f32;
+        score += catch_rate * 20.0;
+
+        // Penalty for timeouts
+        let timeout_rate = self.timeouts as f32 / self.iterations as f32;
+        score -= timeout_rate * 15.0;
+
+        // Bonus for positive closing rate
+        if self.avg_closing_rate > 0.0 {
+            score += (self.avg_closing_rate / 50.0).min(10.0);
+        } else {
+            score += self.avg_closing_rate / 25.0; // Penalty for negative
+        }
+
+        // Penalty for being stuck
+        let avg_stuck_pct = if self.iteration_stats.is_empty() {
+            0.0
+        } else {
+            let total_duration: f32 = self.iteration_stats.iter().map(|s| s.duration_secs).sum();
+            if total_duration > 0.0 {
+                self.total_stuck_time_secs / total_duration * 100.0
+            } else {
+                0.0
+            }
+        };
+        score -= avg_stuck_pct * 0.3;
+
+        // Bonus for low average distance
+        if self.avg_distance < 200.0 {
+            score += (200.0 - self.avg_distance) / 10.0;
+        }
+
+        score.clamp(0.0, 100.0)
+    }
+}
+
 /// Full session analysis
 #[derive(Debug, Clone)]
 pub struct SessionAnalysis {
     pub session_id: String,
+    pub protocol: String,
+    pub protocol_description: String,
     pub ai_profile: String,
     pub games: Vec<GameAnalysis>,
     pub aggregate: AggregateStats,
@@ -221,8 +317,14 @@ impl AggregateStats {
     }
 }
 
+use super::protocol::TrainingProtocol;
+
 /// Analyze a training session from evlog files
-pub fn analyze_session(session_dir: &Path, game_results: &[GameResult]) -> SessionAnalysis {
+pub fn analyze_session(
+    session_dir: &Path,
+    game_results: &[GameResult],
+    protocol: TrainingProtocol,
+) -> SessionAnalysis {
     let mut games = Vec::new();
     let mut aggregate = AggregateStats::default();
 
@@ -287,12 +389,212 @@ pub fn analyze_session(session_dir: &Path, game_results: &[GameResult]) -> Sessi
 
     SessionAnalysis {
         session_id,
+        protocol: protocol.cli_name().to_string(),
+        protocol_description: protocol.description().to_string(),
         ai_profile,
         games,
         aggregate,
         insights,
         weaknesses,
     }
+}
+
+/// Analyze a pursuit protocol session
+pub fn analyze_pursuit_session(game_results: &[GameResult]) -> PursuitAnalysis {
+    let mut analysis = PursuitAnalysis::default();
+
+    // Get AI profile from first result
+    if let Some(first) = game_results.first() {
+        if let Ok(parsed) = parse_evlog(&first.evlog_path) {
+            analysis.ai_profile = parsed.metadata.right_profile.clone();
+        }
+    }
+
+    let mut total_distance = 0.0f32;
+    let mut total_closing_rate = 0.0f32;
+    let mut min_distance = f32::MAX;
+
+    for result in game_results {
+        analysis.iterations += 1;
+
+        // Determine outcome
+        let outcome = if result.ai_score > 0 {
+            analysis.ai_catches += 1;
+            "ai_catch"
+        } else if result.human_score > 0 {
+            analysis.player_scores += 1;
+            "player_score"
+        } else {
+            analysis.timeouts += 1;
+            "timeout"
+        };
+
+        // Parse evlog for movement stats
+        if let Ok(parsed) = parse_evlog(&result.evlog_path) {
+            let movement = calculate_movement_stats(&parsed);
+
+            // Calculate min distance from tick data
+            let iter_min_distance = parsed
+                .ticks
+                .iter()
+                .map(|t| (t.right_pos.0 - t.left_pos.0).abs())
+                .fold(f32::MAX, f32::min);
+
+            if iter_min_distance < min_distance {
+                min_distance = iter_min_distance;
+            }
+
+            total_distance += movement.avg_distance_to_opponent;
+            total_closing_rate += movement.closing_rate;
+            analysis.total_stuck_time_secs += movement.time_stuck_secs;
+
+            let position_range = movement.x_position_range.1 - movement.x_position_range.0;
+
+            analysis.iteration_stats.push(PursuitIterationStats {
+                iteration: result.game_number,
+                duration_secs: result.duration_secs,
+                outcome: outcome.to_string(),
+                avg_distance: movement.avg_distance_to_opponent,
+                min_distance: iter_min_distance,
+                closing_rate: movement.closing_rate,
+                stuck_time_secs: movement.time_stuck_secs,
+                position_range,
+            });
+        }
+    }
+
+    // Calculate averages
+    if analysis.iterations > 0 {
+        analysis.avg_distance = total_distance / analysis.iterations as f32;
+        analysis.avg_closing_rate = total_closing_rate / analysis.iterations as f32;
+        analysis.min_distance = if min_distance == f32::MAX {
+            0.0
+        } else {
+            min_distance
+        };
+    }
+
+    // Calculate pursuit score
+    analysis.pursuit_score = analysis.calculate_pursuit_score();
+
+    analysis
+}
+
+/// Generate pursuit-specific markdown report
+pub fn format_pursuit_analysis_markdown(analysis: &PursuitAnalysis) -> String {
+    let mut md = String::new();
+
+    md.push_str("# Pursuit Protocol Analysis\n\n");
+    md.push_str(&format!("**AI Profile:** {}\n\n", analysis.ai_profile));
+
+    // Summary
+    md.push_str("## Summary\n\n");
+    md.push_str(&format!(
+        "**Pursuit Score:** {:.1}/100\n\n",
+        analysis.pursuit_score
+    ));
+
+    md.push_str("| Metric | Value |\n");
+    md.push_str("|--------|-------|\n");
+    md.push_str(&format!("| Iterations | {} |\n", analysis.iterations));
+    md.push_str(&format!(
+        "| AI Catches | {} ({:.0}%) |\n",
+        analysis.ai_catches,
+        if analysis.iterations > 0 {
+            analysis.ai_catches as f32 / analysis.iterations as f32 * 100.0
+        } else {
+            0.0
+        }
+    ));
+    md.push_str(&format!(
+        "| Player Scores | {} ({:.0}%) |\n",
+        analysis.player_scores,
+        if analysis.iterations > 0 {
+            analysis.player_scores as f32 / analysis.iterations as f32 * 100.0
+        } else {
+            0.0
+        }
+    ));
+    md.push_str(&format!(
+        "| Timeouts | {} ({:.0}%) |\n",
+        analysis.timeouts,
+        if analysis.iterations > 0 {
+            analysis.timeouts as f32 / analysis.iterations as f32 * 100.0
+        } else {
+            0.0
+        }
+    ));
+    md.push_str(&format!(
+        "| Avg Distance | {:.0}px |\n",
+        analysis.avg_distance
+    ));
+    md.push_str(&format!(
+        "| Min Distance | {:.0}px |\n",
+        analysis.min_distance
+    ));
+    md.push_str(&format!(
+        "| Avg Closing Rate | {:.1}px/s {} |\n",
+        analysis.avg_closing_rate,
+        if analysis.avg_closing_rate > 0.0 {
+            "(closing)"
+        } else if analysis.avg_closing_rate < 0.0 {
+            "(falling behind)"
+        } else {
+            ""
+        }
+    ));
+    md.push_str(&format!(
+        "| Total Stuck Time | {:.1}s |\n\n",
+        analysis.total_stuck_time_secs
+    ));
+
+    // Per-iteration breakdown
+    md.push_str("## Per-Iteration Breakdown\n\n");
+    md.push_str("| # | Duration | Outcome | Avg Dist | Min Dist | Closing | Stuck | Range |\n");
+    md.push_str("|---|----------|---------|----------|----------|---------|-------|-------|\n");
+
+    for stats in &analysis.iteration_stats {
+        md.push_str(&format!(
+            "| {} | {:.1}s | {} | {:.0}px | {:.0}px | {:.1}px/s | {:.1}s | {:.0}px |\n",
+            stats.iteration,
+            stats.duration_secs,
+            stats.outcome,
+            stats.avg_distance,
+            stats.min_distance,
+            stats.closing_rate,
+            stats.stuck_time_secs,
+            stats.position_range
+        ));
+    }
+
+    md.push('\n');
+
+    // Interpretation
+    md.push_str("## Interpretation\n\n");
+
+    if analysis.pursuit_score >= 70.0 {
+        md.push_str("**PASS:** AI demonstrates good pursuit behavior.\n");
+    } else if analysis.pursuit_score >= 50.0 {
+        md.push_str("**MARGINAL:** AI shows some pursuit but with issues.\n");
+    } else {
+        md.push_str("**FAIL:** AI is not effectively pursuing the player.\n");
+    }
+
+    // Specific issues
+    if analysis.avg_closing_rate < 0.0 {
+        md.push_str("\n- **Issue:** Negative closing rate - AI is falling behind instead of chasing.\n");
+    }
+    if analysis.total_stuck_time_secs > 5.0 {
+        md.push_str(&format!(
+            "\n- **Issue:** AI was stuck for {:.1}s total - movement may be blocked.\n",
+            analysis.total_stuck_time_secs
+        ));
+    }
+    if analysis.timeouts > analysis.iterations / 2 {
+        md.push_str("\n- **Issue:** Majority of iterations timed out - AI not reaching the player.\n");
+    }
+
+    md
 }
 
 /// Analyze a single game from parsed evlog
@@ -907,8 +1209,10 @@ fn format_analysis_markdown(analysis: &SessionAnalysis) -> String {
     let mut md = String::new();
 
     // Header
-    md.push_str(&format!("# Training Session Analysis\n\n"));
+    md.push_str("# Training Session Analysis\n\n");
     md.push_str(&format!("**Session:** {}\n", analysis.session_id));
+    md.push_str(&format!("**Protocol:** {}\n", analysis.protocol));
+    md.push_str(&format!("**Goal:** {}\n", analysis.protocol_description));
     md.push_str(&format!("**AI Profile:** {}\n\n", analysis.ai_profile));
 
     // Session Summary
@@ -1137,6 +1441,10 @@ pub fn generate_claude_prompt(session_dir: &Path, analysis: &SessionAnalysis) ->
     let mut prompt = String::new();
 
     prompt.push_str("## Training Session Analysis Request\n\n");
+    prompt.push_str(&format!(
+        "**Protocol:** {} - {}\n\n",
+        analysis.protocol, analysis.protocol_description
+    ));
     prompt.push_str(&format!(
         "I completed a training session against the **{}** AI.\n\n",
         analysis.ai_profile

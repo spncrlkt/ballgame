@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+use super::protocol::TrainingProtocol;
+
 /// Path to local settings file (gitignored)
 pub const SETTINGS_FILE: &str = "assets/training_settings.json";
 /// Path to template file (tracked in git)
@@ -43,6 +45,9 @@ impl std::fmt::Display for LevelSelector {
 /// Training session settings
 #[derive(Debug, Clone, Resource, Serialize, Deserialize)]
 pub struct TrainingSettings {
+    /// Training protocol (advanced-platform, pursuit, etc.)
+    #[serde(default)]
+    pub protocol: TrainingProtocol,
     /// Training mode (game or goal-by-goal)
     pub mode: TrainingMode,
     /// Number of iterations (games in Game mode, goals in Goal mode)
@@ -58,7 +63,7 @@ pub struct TrainingSettings {
 
     /// RNG seed for determinism (null = random)
     pub seed: Option<u64>,
-    /// Time limit per iteration in seconds (null = no limit)
+    /// Time limit per iteration in seconds (null = no limit, protocol may set default)
     pub time_limit_secs: Option<f32>,
     /// Timeout if no score within this many seconds (null = no timeout)
     pub first_point_timeout_secs: Option<f32>,
@@ -74,6 +79,7 @@ pub struct TrainingSettings {
 impl Default for TrainingSettings {
     fn default() -> Self {
         Self {
+            protocol: TrainingProtocol::default(),
             mode: TrainingMode::Goal,
             iterations: 5,
             win_score: 5,
@@ -142,6 +148,23 @@ impl TrainingSettings {
         let mut i = 1;
         while i < args.len() {
             match args[i].as_str() {
+                "--protocol" => {
+                    if let Some(val) = args.get(i + 1) {
+                        if let Some(protocol) = TrainingProtocol::from_str(val) {
+                            self.protocol = protocol;
+                            // Apply protocol defaults - fixed level always overrides
+                            if let Some(level_name) = protocol.fixed_level() {
+                                self.level = Some(LevelSelector::Name(level_name.to_string()));
+                            }
+                            if self.time_limit_secs.is_none() {
+                                self.time_limit_secs = protocol.default_time_limit();
+                            }
+                        } else {
+                            eprintln!("Warning: Unknown protocol '{}', using default", val);
+                        }
+                        i += 1;
+                    }
+                }
                 "--mode" | "-m" => {
                     if let Some(val) = args.get(i + 1) {
                         match val.to_lowercase().as_str() {
@@ -260,18 +283,23 @@ fn print_help() {
 USAGE:
     cargo run --bin training [OPTIONS]
 
+PROTOCOLS:
+    advanced-platform (default) - Full 1v1 games on random levels
+    pursuit                     - Flat level chase test (verifies AI pursues player)
+
 MODES:
     goal  (default) - Each iteration ends after one goal, then reset
     game            - Each iteration is a full game to win_score points
 
 OPTIONS:
+    --protocol NAME            Training protocol (default: advanced-platform)
     -m, --mode MODE            Training mode: goal or game (default: goal)
     -n, --iterations N         Number of iterations (default: 5)
     -w, --win-score N          Points to win in game mode (default: 5)
     -p, --profile NAME         AI opponent profile (default: Balanced)
-    -l, --level N              Force specific level (default: random)
+    -l, --level N              Force specific level (default: random or protocol default)
     -s, --seed N               RNG seed for determinism (default: random)
-    -t, --time-limit SECS      Time limit per iteration (default: none)
+    -t, --time-limit SECS      Time limit per iteration (default: none or protocol default)
     --first-point-timeout SECS End if no score within SECS (default: none)
     --viewport N               Viewport preset index (default: 2)
     --palette N                Color palette index (default: 0)
@@ -287,6 +315,11 @@ SETTINGS FILES:
 AI PROFILES:
     Balanced, Aggressive, Defensive, Sniper, Rusher,
     Turtle, Chaotic, Patient, Hunter, Goalie
+
+EXAMPLES:
+    cargo run --bin training -- --protocol pursuit
+    cargo run --bin training -- --protocol pursuit --time-limit 60
+    cargo run --bin training -- --protocol advanced-platform --iterations 3
 "#
     );
 }

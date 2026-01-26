@@ -66,6 +66,10 @@ pub struct AiState {
     pub stuck_window_start: Option<bevy::prelude::Vec2>,
     /// Timer for stuck detection window (resets when movement detected)
     pub stuck_window_timer: f32,
+    /// Timer for stuck reversal - when > 0, override movement direction
+    pub stuck_reverse_timer: f32,
+    /// The reversed direction to use when stuck_reverse_timer > 0
+    pub stuck_reverse_direction: f32,
 }
 
 /// Goals the AI can pursue

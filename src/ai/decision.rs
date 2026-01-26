@@ -240,9 +240,11 @@ pub fn ai_navigation_update(
                 if let Some(opp_pos) = opponent_pos {
                     let distance_to_opponent = ai_pos.distance(opp_pos);
 
-                    // If far from opponent (> steal_range * 2.5), chase them directly
-                    // Higher multiplier = more aggressive direct pursuit
-                    if distance_to_opponent > profile.steal_range * 2.5 {
+                    // If far from opponent, chase them directly
+                    // Use max of profile-based threshold and fixed minimum (300px)
+                    // This ensures aggressive pursuit even with low steal_range profiles
+                    let chase_threshold = (profile.steal_range * 3.5).max(300.0);
+                    if distance_to_opponent > chase_threshold {
                         Some(opp_pos)
                     } else {
                         // Close enough - use intercept positioning
@@ -643,6 +645,9 @@ pub fn ai_decision_update(
             }
         }
 
+        // Decrement stuck reversal timer
+        ai_state.stuck_reverse_timer = (ai_state.stuck_reverse_timer - dt).max(0.0);
+
         // Reset inputs each frame (will be set below)
         input.move_x = 0.0;
         input.jump_held = false;
@@ -793,11 +798,33 @@ pub fn ai_decision_update(
                 }
 
                 AiGoal::AttemptSteal => {
-                    // Move toward opponent
+                    // Chase opponent aggressively during steal attempts
                     if let Some(opp_pos) = opponent_pos {
                         let dx = opp_pos.x - ai_pos.x;
-                        if dx.abs() > profile.position_tolerance {
+                        let distance = ai_pos.distance(opp_pos);
+
+                        // Always move toward opponent unless extremely close (< 10px)
+                        // This prevents oscillation while maintaining aggressive pursuit
+                        if dx.abs() > 10.0 {
                             input.move_x = dx.signum();
+                        } else if distance > profile.steal_range * 0.5 {
+                            // If within 10px horizontally but still far vertically,
+                            // keep moving to maintain contact
+                            input.move_x = dx.signum();
+                        }
+
+                        // Jump if opponent is above us - maintain jump to reach them
+                        let height_diff = opp_pos.y - ai_pos.y;
+                        if height_diff > PLAYER_SIZE.y * 0.5 {
+                            if grounded.0 {
+                                input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                            }
+                            input.jump_held = true; // Maintain jump while stealing
+                        }
+
+                        // Keep holding jump while airborne if still need to gain height
+                        if !grounded.0 && height_diff > PLAYER_SIZE.y {
+                            input.jump_held = true;
                         }
 
                         // Attempt steal if timer met and cooldown ready
@@ -817,6 +844,7 @@ pub fn ai_decision_update(
                     // When at same height level as opponent, chase them directly
                     // rather than targeting a static intercept point
                     if let Some(opp_pos) = opponent_pos {
+                        let distance_to_opponent = ai_pos.distance(opp_pos);
                         let height_diff = opp_pos.y - ai_pos.y;
                         let same_height_level = height_diff.abs() < PLAYER_SIZE.y * 1.5;
 
@@ -825,13 +853,28 @@ pub fn ai_decision_update(
                         let ai_near_floor = ai_pos.y < floor_y + PLAYER_SIZE.y;
                         let opponent_highly_elevated = height_diff > NAV_MAX_JUMP_HEIGHT * 0.5;
 
-                        if same_height_level {
-                            // Same platform level - chase opponent directly
-                            // Use tight tolerance to get within steal range for pressure
-                            let chase_tolerance = profile.steal_range * 0.3; // ~38px - closer than steal range
+                        // When far from opponent (> 300px), always chase directly
+                        // to close distance before worrying about intercept positioning
+                        // Use 300px to match navigation threshold for consistency
+                        let very_far = distance_to_opponent > 300.0;
+
+                        if very_far || same_height_level {
+                            // Chase opponent directly - either very far or same platform level
+                            // Use tight tolerance when close, looser when far
+                            let chase_tolerance = if very_far {
+                                profile.position_tolerance
+                            } else {
+                                profile.steal_range * 0.3 // ~38px - closer than steal range
+                            };
                             let dx = opp_pos.x - ai_pos.x;
                             if dx.abs() > chase_tolerance {
                                 input.move_x = dx.signum();
+                            }
+
+                            // Jump if opponent is above us even when "same level" (small elevation)
+                            if height_diff > PLAYER_SIZE.y * 0.5 && grounded.0 {
+                                input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                                input.jump_held = true;
                             }
                         } else if ai_near_floor && opponent_highly_elevated {
                             // Opponent is high above and we're at ground level
@@ -980,9 +1023,11 @@ pub fn ai_decision_update(
                         input.jump_held = true;
                     }
                     // After more time, try moving the opposite direction
-                    if ai_state.stuck_timer > 0.8 {
-                        input.move_x = -input.move_x;
-                        ai_state.stuck_timer = 0.0; // Reset after trying opposite direction
+                    // Set a reversal timer so the direction persists for 0.5s
+                    if ai_state.stuck_timer > 0.8 && ai_state.stuck_reverse_timer <= 0.0 {
+                        ai_state.stuck_reverse_direction = -input.move_x.signum();
+                        ai_state.stuck_reverse_timer = 0.5; // Persist reversal for 0.5s
+                        ai_state.stuck_timer = 0.0; // Reset stuck timer
                     }
                 } else {
                     // Not stuck, reset
@@ -998,6 +1043,12 @@ pub fn ai_decision_update(
             ai_state.stuck_timer = 0.0;
             ai_state.stuck_window_start = None;
             ai_state.stuck_window_timer = 0.0;
+        }
+
+        // Apply stuck reversal override if active
+        // This overrides goal-based movement to escape walls
+        if ai_state.stuck_reverse_timer > 0.0 {
+            input.move_x = ai_state.stuck_reverse_direction;
         }
 
         // Update last position (kept for compatibility)

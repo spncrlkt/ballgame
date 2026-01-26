@@ -19,6 +19,14 @@
 
 ---
 
+## P0: SQLite Ghost Replay System
+
+*See `notes/sqlite-ghost-replay-plan.md` for full implementation plan*
+
+- [ ] **Implement SQLite-based training + ghost replay** - Record inputs to DB, replay as ghost
+
+---
+
 ## P0: Training Binary UX
 
 *Top priority - enables faster AI iteration*
