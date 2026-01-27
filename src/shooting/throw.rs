@@ -4,12 +4,12 @@ use crate::calculate_shot_trajectory;
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::ai::InputState;
+use crate::ai::{InputState, evaluate_shot_quality};
 use crate::ball::{Ball, BallRolling, BallShotGrace, BallState, Velocity};
 use crate::constants::*;
 use crate::player::{Grounded, HoldingBall, Player, TargetBasket};
 use crate::shooting::{ChargingShot, LastShotInfo};
-use crate::ui::PhysicsTweaks;
+use crate::tuning::PhysicsTweaks;
 use crate::world::Basket;
 
 /// Execute throw when button is released.
@@ -193,6 +193,9 @@ pub fn throw_ball(
         };
 
         // Record shot info for debug display
+        let shot_quality = target_basket_pos
+            .map(|pos| evaluate_shot_quality(player_pos, pos))
+            .unwrap_or(0.0);
         *shot_info = LastShotInfo {
             angle_degrees: final_angle.to_degrees(),
             speed: final_speed,
@@ -202,6 +205,8 @@ pub fn throw_ball(
             distance_variance,
             required_speed,
             total_variance: variance,
+            charge_pct,
+            shot_quality,
             target: Some(target.0),
         };
 

@@ -2,6 +2,7 @@
 
 pub mod capabilities;
 pub mod decision;
+pub mod heatmaps;
 pub mod navigation;
 pub mod pathfinding;
 mod profiles;
@@ -10,6 +11,7 @@ pub mod world_model;
 
 pub use capabilities::AiCapabilities;
 pub use decision::*;
+pub use heatmaps::{HeatmapBundle, load_heatmaps_on_level_change};
 pub use navigation::{
     AiNavState, EdgeType, NavAction, NavEdge, NavGraph, NavNode, mark_nav_dirty_on_level_change,
     rebuild_nav_graph,

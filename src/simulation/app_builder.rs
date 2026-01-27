@@ -13,7 +13,7 @@ use crate::palettes::PaletteDatabase;
 use crate::scoring::{CurrentLevel, Score};
 use crate::shooting::LastShotInfo;
 use crate::steal::{StealContest, StealTracker};
-use crate::ui::PhysicsTweaks;
+use crate::tuning::{self, PhysicsTweaks};
 
 /// Builder for creating headless Bevy apps
 pub struct HeadlessAppBuilder {
@@ -92,6 +92,7 @@ impl HeadlessAppBuilder {
         app.init_resource::<StealContest>();
         app.init_resource::<StealTracker>();
         app.init_resource::<PhysicsTweaks>();
+        let _ = tuning::apply_global_tuning(&mut app.world_mut().resource_mut::<PhysicsTweaks>());
         app.init_resource::<LastShotInfo>();
         app.insert_resource(CurrentPalette(0));
         app.init_resource::<PaletteDatabase>();

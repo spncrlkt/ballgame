@@ -6,9 +6,9 @@ use rand::Rng;
 use std::time::Duration;
 
 use crate::ai::{
-    AiCapabilities, AiNavState, AiProfileDatabase, AiState, InputState, NavGraph,
-    ai_decision_update, ai_navigation_update, mark_nav_dirty_on_level_change, rebuild_nav_graph,
-    shot_quality::evaluate_shot_quality,
+    AiCapabilities, AiNavState, AiProfileDatabase, AiState, HeatmapBundle, InputState, NavGraph,
+    ai_decision_update, ai_navigation_update, load_heatmaps_on_level_change,
+    mark_nav_dirty_on_level_change, rebuild_nav_graph, shot_quality::evaluate_shot_quality,
 };
 use crate::ball::{
     Ball, BallState, CurrentPalette, Velocity, apply_velocity, ball_collisions, ball_follow_holder,
@@ -28,12 +28,12 @@ use crate::player::{
 use crate::scoring::{CurrentLevel, Score, check_scoring};
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
 use crate::steal::{StealContest, StealCooldown, StealTracker, steal_cooldown_update};
-use crate::ui::PhysicsTweaks;
+use crate::tuning::{self, PhysicsTweaks};
 use crate::world::Basket;
 
 use super::config::SimConfig;
 use super::control::{SimControl, SimEventBuffer};
-use super::db::SimDatabase;
+use super::db::{RunStats, SimDatabase};
 use super::metrics::{MatchResult, SimMetrics};
 use super::setup::sim_setup;
 use super::shot_test::run_shot_test;
@@ -119,6 +119,7 @@ pub fn run_match(
     app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
     app.init_resource::<AiCapabilities>();
+    app.init_resource::<HeatmapBundle>();
     app.init_resource::<PhysicsTweaks>();
     app.init_resource::<LastShotInfo>();
     app.insert_resource(CurrentPalette(0)); // Use first palette for simulation
@@ -200,7 +201,7 @@ pub fn run_match(
     app.insert_resource(SimMetrics::new());
 
     // Startup system
-    app.add_systems(Startup, sim_setup);
+    app.add_systems(Startup, (tuning::load_global_tuning_system, sim_setup));
     // Mark nav graph dirty after first frame so GlobalTransform is populated
     app.add_systems(PostStartup, |mut nav_graph: ResMut<NavGraph>| {
         nav_graph.dirty = true;
@@ -211,6 +212,7 @@ pub fn run_match(
         Update,
         (
             mark_nav_dirty_on_level_change,
+            load_heatmaps_on_level_change,
             rebuild_nav_graph,
             ai_navigation_update,
             ai_decision_update,
@@ -582,12 +584,14 @@ fn emit_simulation_events(
     metrics: Res<SimMetrics>,
     score: Res<Score>,
     steal_contest: Res<StealContest>,
+    shot_info: Res<LastShotInfo>,
     players: Query<
         (
             Entity,
             &Team,
             &Transform,
             &Velocity,
+            &TargetBasket,
             &ChargingShot,
             &AiState,
             &StealCooldown,
@@ -596,6 +600,7 @@ fn emit_simulation_events(
         ),
         With<Player>,
     >,
+    baskets: Query<(&Transform, &Basket)>,
     balls: Query<(&Transform, &Velocity, &BallState), With<Ball>>,
 ) {
     if !event_buffer.enabled {
@@ -613,6 +618,7 @@ fn emit_simulation_events(
                 team,
                 transform,
                 velocity,
+                target,
                 charging,
                 ai_state,
                 steal_cooldown,
@@ -624,6 +630,7 @@ fn emit_simulation_events(
                     team,
                     transform,
                     velocity,
+                    target,
                     charging,
                     ai_state,
                     steal_cooldown,
@@ -632,6 +639,14 @@ fn emit_simulation_events(
                 )
             },
         )
+        .collect();
+
+    let basket_snapshots: Vec<_> = baskets
+        .iter()
+        .map(|(transform, basket)| crate::events::BasketSnapshot {
+            basket: *basket,
+            position: (transform.translation.x, transform.translation.y),
+        })
         .collect();
 
     let ball_snapshot = balls
@@ -654,7 +669,9 @@ fn emit_simulation_events(
         &score,
         &steal_contest,
         &player_snapshots,
+        &basket_snapshots,
         ball_snapshot.as_ref(),
+        Some(&shot_info),
     );
 }
 
@@ -670,16 +687,18 @@ pub fn run_simulation(config: SimConfig) {
     }
 
     // Initialize database if requested
-    // For tournaments, auto-generate a timestamped db to ensure fresh data
-    let db_path = match &config.mode {
-        super::config::SimMode::Tournament { .. } => {
-            // Ensure db directory exists
-            std::fs::create_dir_all("db").ok();
-            // Generate timestamped db path for tournaments
-            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-            Some(format!("db/tournament_{}.db", timestamp))
+    // For tournaments, auto-generate a timestamped db to ensure fresh data (unless estimating)
+    let db_path = if config.est_run_time {
+        Some(config.db_path.clone().unwrap_or_else(|| "db/sim.db".to_string()))
+    } else {
+        match &config.mode {
+            super::config::SimMode::Tournament { .. } => {
+                std::fs::create_dir_all("db").ok();
+                let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+                Some(format!("db/tournament_{}.db", timestamp))
+            }
+            _ => config.db_path.clone(),
         }
-        _ => config.db_path.clone(),
     };
 
     let db = db_path
@@ -742,8 +761,74 @@ pub fn run_simulation(config: SimConfig) {
         }
     };
 
+    let valid_levels: Vec<u32> = if config.levels.is_empty() {
+        (1..=level_db.len() as u32)
+            .filter(|&level| {
+                if let Some(lvl) = level_db.get((level - 1) as usize) {
+                    !lvl.debug && lvl.name != "Pit"
+                } else {
+                    false
+                }
+            })
+            .collect()
+    } else {
+        config.levels.clone()
+    };
+
+    let profiles_count = profiles.len() as i64;
+    let levels_count = valid_levels.len() as i64;
+
+    let effective_run_timeout = match &config.mode {
+        super::config::SimMode::Tournament { .. } => config.run_timeout_secs.or(Some(600.0)),
+        _ => config.run_timeout_secs,
+    };
+
+    if config.est_run_time {
+        if let Some(ref db) = db {
+            let (mode_name, matches_planned, _matches_per_pair, _matches_per_level) =
+                plan_run(&config, profiles_count, levels_count);
+            match db.estimate_run_time(
+                &mode_name,
+                matches_planned,
+                config.parallel as i64,
+                config.duration_limit as f64,
+                config.stalemate_timeout as f64,
+            ) {
+                Ok(Some(estimate)) => {
+                    println!(
+                        "Estimated runtime: {:.1}s total ({:.3}s/match), based on {} sessions / {} matches",
+                        estimate.estimated_total_secs,
+                        estimate.avg_secs_per_match,
+                        estimate.sample_sessions,
+                        estimate.sample_matches
+                    );
+                    if let Some(timeout) = effective_run_timeout {
+                        if estimate.estimated_total_secs > timeout as f64 {
+                            println!(
+                                "Warning: estimated runtime {:.1}s exceeds run timeout {:.1}s",
+                                estimate.estimated_total_secs, timeout
+                            );
+                        }
+                    }
+                }
+                Ok(None) => {
+                    println!("No prior sessions available to estimate runtime.");
+                }
+                Err(e) => {
+                    eprintln!("Failed to estimate runtime: {}", e);
+                }
+            }
+            return;
+        } else {
+            eprintln!("No database available for runtime estimation.");
+            return;
+        }
+    }
+
     match &config.mode {
         super::config::SimMode::Single => {
+            let run_started_at = chrono::Utc::now().to_rfc3339();
+            let start = std::time::Instant::now();
             let seed = config.seed.unwrap_or_else(|| rand::thread_rng().r#gen());
             if !config.quiet {
                 println!(
@@ -758,11 +843,26 @@ pub fn run_simulation(config: SimConfig) {
             let result = run_match(&config, seed, &level_db, &profile_db);
             output_result(&result, &config);
             if let Some(ref db) = db {
-                store_results_in_db(db, "single", std::slice::from_ref(&result), &config);
+                let run_stats = build_run_stats(
+                    "single",
+                    &config,
+                    run_started_at,
+                    start.elapsed().as_secs_f64(),
+                    1,
+                    1,
+                    profiles_count,
+                    levels_count,
+                    None,
+                    None,
+                    effective_run_timeout,
+                );
+                store_results_in_db(db, "single", std::slice::from_ref(&result), &config, Some(&run_stats));
             }
         }
 
         super::config::SimMode::MultiMatch { count } => {
+            let run_started_at = chrono::Utc::now().to_rfc3339();
+            let start = std::time::Instant::now();
             let parallel_mode = config.parallel > 0;
             if !config.quiet {
                 println!(
@@ -833,7 +933,20 @@ pub fn run_simulation(config: SimConfig) {
 
             // Store in database if enabled
             if let Some(ref db) = db {
-                store_results_in_db(db, "multi_match", &results, &config);
+                let run_stats = build_run_stats(
+                    "multi_match",
+                    &config,
+                    run_started_at,
+                    start.elapsed().as_secs_f64(),
+                    *count as i64,
+                    results.len() as i64,
+                    2,
+                    levels_count,
+                    None,
+                    None,
+                    effective_run_timeout,
+                );
+                store_results_in_db(db, "multi_match", &results, &config, Some(&run_stats));
             }
 
             if let Some(output_file) = &config.output_file {
@@ -844,7 +957,12 @@ pub fn run_simulation(config: SimConfig) {
         }
 
         super::config::SimMode::Tournament { matches_per_pair } => {
+            let run_started_at = chrono::Utc::now().to_rfc3339();
+            let start = std::time::Instant::now();
             let parallel_mode = config.parallel > 0;
+            if parallel_mode && effective_run_timeout.is_some() {
+                eprintln!("Warning: tournament timeout is not enforced in parallel mode");
+            }
             let total_matches =
                 profiles.len() * (profiles.len() - 1) * (*matches_per_pair as usize);
 
@@ -884,6 +1002,15 @@ pub fn run_simulation(config: SimConfig) {
                         }
 
                         for _i in 0..*matches_per_pair {
+                            if let Some(timeout) = effective_run_timeout {
+                                if start.elapsed().as_secs_f32() > timeout {
+                                    eprintln!(
+                                        "Warning: tournament timeout {:.1}s reached, stopping early",
+                                        timeout
+                                    );
+                                    break;
+                                }
+                            }
                             match_num += 1;
                             if !config.quiet {
                                 print!(
@@ -902,6 +1029,16 @@ pub fn run_simulation(config: SimConfig) {
                             let result = run_match(&match_config, seed, &level_db, &profile_db);
                             tournament.matches.push(result);
                         }
+                        if let Some(timeout) = effective_run_timeout {
+                            if start.elapsed().as_secs_f32() > timeout {
+                                break;
+                            }
+                        }
+                    }
+                    if let Some(timeout) = effective_run_timeout {
+                        if start.elapsed().as_secs_f32() > timeout {
+                            break;
+                        }
                     }
                 }
             }
@@ -915,7 +1052,20 @@ pub fn run_simulation(config: SimConfig) {
 
             // Store in database if enabled
             if let Some(ref db) = db {
-                store_results_in_db(db, "tournament", &tournament.matches, &config);
+                let run_stats = build_run_stats(
+                    "tournament",
+                    &config,
+                    run_started_at,
+                    start.elapsed().as_secs_f64(),
+                    total_matches as i64,
+                    tournament.matches.len() as i64,
+                    profiles_count,
+                    levels_count,
+                    Some(*matches_per_pair as i64),
+                    None,
+                    effective_run_timeout,
+                );
+                store_results_in_db(db, "tournament", &tournament.matches, &config, Some(&run_stats));
             }
 
             if let Some(output_file) = &config.output_file {
@@ -926,6 +1076,8 @@ pub fn run_simulation(config: SimConfig) {
         }
 
         super::config::SimMode::LevelSweep { matches_per_level } => {
+            let run_started_at = chrono::Utc::now().to_rfc3339();
+            let start = std::time::Instant::now();
             let parallel_mode = config.parallel > 0;
             let num_levels = level_db.len();
 
@@ -1008,7 +1160,21 @@ pub fn run_simulation(config: SimConfig) {
                     .values()
                     .flat_map(|v| v.iter().cloned())
                     .collect();
-                store_results_in_db(db, "level_sweep", &all_results, &config);
+                let planned = (valid_levels.len() as i64) * (*matches_per_level as i64);
+                let run_stats = build_run_stats(
+                    "level_sweep",
+                    &config,
+                    run_started_at,
+                    start.elapsed().as_secs_f64(),
+                    planned,
+                    all_results.len() as i64,
+                    1,
+                    levels_count,
+                    None,
+                    Some(*matches_per_level as i64),
+                    effective_run_timeout,
+                );
+                store_results_in_db(db, "level_sweep", &all_results, &config, Some(&run_stats));
             }
 
             if let Some(output_file) = &config.output_file {
@@ -1044,12 +1210,66 @@ fn output_result(result: &MatchResult, config: &SimConfig) {
     }
 }
 
+fn plan_run(
+    config: &SimConfig,
+    profiles_count: i64,
+    levels_count: i64,
+) -> (String, i64, Option<i64>, Option<i64>) {
+    match &config.mode {
+        super::config::SimMode::Single => ("single".to_string(), 1, None, None),
+        super::config::SimMode::MultiMatch { count } => ("multi_match".to_string(), *count as i64, None, None),
+        super::config::SimMode::Tournament { matches_per_pair } => {
+            let total = profiles_count * (profiles_count - 1) * (*matches_per_pair as i64);
+            ("tournament".to_string(), total, Some(*matches_per_pair as i64), None)
+        }
+        super::config::SimMode::LevelSweep { matches_per_level } => {
+            let total = levels_count * (*matches_per_level as i64);
+            ("level_sweep".to_string(), total, None, Some(*matches_per_level as i64))
+        }
+        super::config::SimMode::Regression => ("regression".to_string(), 0, None, None),
+        super::config::SimMode::ShotTest { .. } => ("shot_test".to_string(), 0, None, None),
+        super::config::SimMode::GhostTrial { .. } => ("ghost_trial".to_string(), 0, None, None),
+    }
+}
+
+fn build_run_stats(
+    mode: &str,
+    config: &SimConfig,
+    run_started_at: String,
+    run_elapsed_secs: f64,
+    matches_planned: i64,
+    matches_played: i64,
+    profiles_count: i64,
+    levels_count: i64,
+    matches_per_pair: Option<i64>,
+    matches_per_level: Option<i64>,
+    run_timeout_secs: Option<f32>,
+) -> RunStats {
+    RunStats {
+        run_started_at,
+        run_finished_at: chrono::Utc::now().to_rfc3339(),
+        run_elapsed_secs,
+        matches_planned,
+        matches_played,
+        duration_limit_secs: config.duration_limit as f64,
+        stalemate_timeout_secs: config.stalemate_timeout as f64,
+        parallel_threads: config.parallel as i64,
+        run_timeout_secs: run_timeout_secs.map(|v| v as f64),
+        mode: mode.to_string(),
+        profiles_count,
+        levels_count,
+        matches_per_pair,
+        matches_per_level,
+    }
+}
+
 /// Store match results in the database
 fn store_results_in_db(
     db: &SimDatabase,
     session_type: &str,
     results: &[MatchResult],
     config: &SimConfig,
+    run_stats: Option<&RunStats>,
 ) {
     // Create session
     let config_json = serde_json::to_string(config).ok();
@@ -1082,6 +1302,12 @@ fn store_results_in_db(
     if !config.quiet && stored > 0 {
         println!("Stored {} results in database", stored);
     }
+
+    if let Some(stats) = run_stats {
+        if let Err(e) = db.update_session_stats(&session_id, stats) {
+            eprintln!("Warning: Failed to store run stats: {}", e);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1113,6 +1339,7 @@ mod tests {
             "test",
             std::slice::from_ref(&result),
             &SimConfig::default(),
+            None,
         );
 
         let match_id: i64 = db
@@ -1277,6 +1504,7 @@ pub fn run_ghost_trial(
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
+    app.init_resource::<HeatmapBundle>();
     app.init_resource::<PhysicsTweaks>();
     app.init_resource::<LastShotInfo>();
     app.insert_resource(CurrentPalette(0));
@@ -1299,7 +1527,7 @@ pub fn run_ghost_trial(
     app.insert_resource(SimMetrics::new());
 
     // Startup system - custom setup for ghost trials
-    app.add_systems(Startup, ghost_trial_setup);
+    app.add_systems(Startup, (tuning::load_global_tuning_system, ghost_trial_setup));
     app.add_systems(PostStartup, |mut nav_graph: ResMut<NavGraph>| {
         nav_graph.dirty = true;
     });
@@ -1309,6 +1537,7 @@ pub fn run_ghost_trial(
         Update,
         (
             mark_nav_dirty_on_level_change,
+            load_heatmaps_on_level_change,
             rebuild_nav_graph,
             ai_navigation_update,
             ai_decision_update,

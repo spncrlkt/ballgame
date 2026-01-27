@@ -27,6 +27,7 @@ pub mod presets;
 pub mod scoring;
 pub mod shooting;
 pub mod steal;
+pub mod tuning;
 pub mod ui;
 pub mod world;
 
@@ -82,10 +83,12 @@ pub use training::{
 };
 pub use ui::{
     ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleIndicator, CycleSelection,
-    DebugSettings, DebugText, DownOption, PhysicsTweaks, RightOption, ScoreFlash, ScoreLevelText,
-    StealCooldownIndicator, StealFailFlash, StealOutOfRangeFlash, TweakPanel, TweakRow,
+    DebugSettings, DebugText, DownOption, RightOption, ScoreFlash, ScoreLevelText,
+    StealCooldownIndicator, StealFailFlash, StealOutOfRangeFlash, TweakPanel, TweakPanelState,
+    TweakRow,
     ViewportScale, VulnerableIndicator,
 };
+pub use tuning::{GameplayTuning, PhysicsTweaks, GAMEPLAY_TUNING_FILE};
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 
 // =============================================================================

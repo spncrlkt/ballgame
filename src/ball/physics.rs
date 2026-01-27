@@ -6,7 +6,7 @@ use crate::ball::components::*;
 use crate::constants::*;
 use crate::helpers::{ReflectAxis, apply_bounce_deflection};
 use crate::player::Velocity;
-use crate::ui::PhysicsTweaks;
+use crate::tuning::PhysicsTweaks;
 use crate::world::{BasketRim, CornerRamp, Platform};
 
 /// Apply velocity to all entities with Velocity component

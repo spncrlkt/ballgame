@@ -5,14 +5,16 @@ use rand::Rng;
 
 use crate::ai::navigation::{find_escape_x, has_ceiling_above};
 use crate::ai::{
-    AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, InputState, NavAction,
-    NavGraph, find_path, find_path_to_shoot,
+    AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, HeatmapBundle, InputState,
+    NavAction, NavGraph, find_path, find_path_to_shoot,
     shot_quality::{evaluate_shot_quality, scale_min_quality_for_level},
 };
 use crate::ball::{Ball, BallState};
 use crate::constants::*;
 use crate::events::{ControllerSource, EventBus, GameEvent, PlayerId};
+use crate::levels::LevelDatabase;
 use crate::player::{Grounded, HoldingBall, HumanControlled, Player, TargetBasket, Team};
+use crate::scoring::CurrentLevel;
 use crate::world::Basket;
 
 /// Calculate the interception position on the line between ball carrier and defender's basket.
@@ -370,6 +372,9 @@ pub fn ai_decision_update(
     capabilities: Res<AiCapabilities>,
     profile_db: Res<AiProfileDatabase>,
     nav_graph: Res<NavGraph>,
+    heatmaps: Res<HeatmapBundle>,
+    level_db: Res<LevelDatabase>,
+    current_level: Res<CurrentLevel>,
     mut event_bus: ResMut<EventBus>,
     mut ai_query: Query<
         (
@@ -397,6 +402,19 @@ pub fn ai_decision_update(
     ball_query: Query<(&Transform, &BallState), With<Ball>>,
     basket_query: Query<(&Transform, &Basket)>,
 ) {
+    let level_settings = level_db
+        .get_by_id(&current_level.0)
+        .or_else(|| level_db.get_by_name(&current_level.0));
+    let level_score_weight = level_settings
+        .map(|level| level.heatmap_score_weight)
+        .unwrap_or(1.0);
+    let los_threshold = level_settings
+        .map(|level| level.heatmap_los_threshold)
+        .unwrap_or(HEATMAP_LOS_THRESHOLD_DEFAULT);
+    let los_margin = level_settings
+        .map(|level| level.heatmap_los_margin)
+        .unwrap_or(HEATMAP_LOS_MARGIN_DEFAULT);
+
     for (
         ai_entity,
         ai_transform,
@@ -531,8 +549,16 @@ pub fn ai_decision_update(
 
                 // Evaluate shot quality based on position (heatmap-derived)
                 // Apply front-court penalty to discourage close-range shots
-                let shot_quality =
-                    evaluate_shot_quality(ai_pos, target_basket_pos) - front_court_quality_penalty;
+                let base_quality =
+                    (evaluate_shot_quality(ai_pos, target_basket_pos) - front_court_quality_penalty)
+                        .clamp(0.0, 1.0);
+                let score_heatmap = heatmaps.score_for_basket(target_basket_type, ai_pos);
+                let heatmap_multiplier =
+                    1.0 + (HEATMAP_SCORE_WEIGHT_DEFAULT * level_score_weight * score_heatmap);
+                let shot_quality = (base_quality * heatmap_multiplier).clamp(0.0, 1.0);
+
+                let los_value = heatmaps.line_of_sight_for_basket(target_basket_type, ai_pos);
+                let los_ok = los_value + los_margin >= los_threshold;
 
                 // Scale min_shot_quality based on what's achievable on this level
                 // Flat levels (max ~0.50) get lower thresholds so AI still shoots
@@ -550,7 +576,7 @@ pub fn ai_decision_update(
                     1.0
                 };
                 let effective_min_quality = level_scaled_min * desperation_factor;
-                let quality_acceptable = shot_quality >= effective_min_quality;
+                let quality_acceptable = shot_quality >= effective_min_quality && los_ok;
 
                 // Shoot if within range OR if we've reached our nav target (best position)
                 let at_nav_target = nav_state
@@ -650,10 +676,13 @@ pub fn ai_decision_update(
                         && (ai_state.ball_hold_time * 10.0) as u32 % 10 == 0
                     {
                         info!(
-                            "AI NOT SHOOTING: quality={:.2} (need>={:.2}) ok={} | range={:.0} (need<{:.0}) ok={} | opp_dist={:.0} close={} | seek={}",
+                            "AI NOT SHOOTING: quality={:.2} (need>={:.2}) ok={} | los={:.2} (need>={:.2}) ok={} | range={:.0} (need<{:.0}) ok={} | opp_dist={:.0} close={} | seek={}",
                             shot_quality,
                             effective_min_quality,
                             quality_acceptable,
+                            los_value,
+                            los_threshold,
+                            los_ok,
                             effective_distance,
                             profile.shoot_range,
                             in_shoot_range,

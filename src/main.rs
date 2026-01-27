@@ -13,10 +13,11 @@ use ballgame::{
     NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerId,
     PlayerInput, PresetDatabase, Score, ScoreLevelText, SnapshotConfig, SnapshotTriggerState,
     StealContest, StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, TweakPanel,
-    TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball, config_watcher,
+    TweakPanelState, TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball,
+    config_watcher,
     constants::*, countdown, display_ball_wave, emit_level_change_events, input, levels, player,
-    replay, save_settings_system, scoring, shooting, snapshot, spawn_countdown_text, steal, ui,
-    update_event_bus_time, world,
+    replay, save_settings_system, scoring, shooting, snapshot, spawn_countdown_text, steal, tuning,
+    ui, update_event_bus_time, world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
@@ -210,6 +211,7 @@ fn main() {
         .insert_resource(CurrentLevel(loaded_level_id))
         .insert_resource(CurrentPalette(loaded_palette_index))
         .init_resource::<PhysicsTweaks>()
+        .init_resource::<TweakPanelState>()
         .init_resource::<LastShotInfo>()
         .insert_resource(ViewportScale {
             preset_index: loaded_viewport_index,
@@ -226,6 +228,7 @@ fn main() {
         .init_resource::<CurrentPresets>()
         .init_resource::<NavGraph>()
         .init_resource::<AiCapabilities>()
+        .init_resource::<ai::HeatmapBundle>()
         // Event bus for cross-module communication
         .insert_resource(EventBus::new())
         // Human control target (initialized in setup based on settings)
@@ -260,6 +263,7 @@ fn main() {
         })
         .init_resource::<replay::ReplayState>()
         // Startup system - use normal setup only when NOT in replay mode
+        .add_systems(Startup, tuning::load_global_tuning_system)
         .add_systems(Startup, setup.run_if(replay::not_replay_active))
         // =========== NORMAL GAME SYSTEMS (disabled in replay mode) ===========
         // Countdown system - always runs to update timer and text
@@ -281,6 +285,7 @@ fn main() {
                 ai::copy_human_input,
                 ai::swap_control,
                 ai::mark_nav_dirty_on_level_change,
+                ai::load_heatmaps_on_level_change,
                 ai::rebuild_nav_graph,
                 ai::ai_navigation_update,
                 ai::ai_decision_update,

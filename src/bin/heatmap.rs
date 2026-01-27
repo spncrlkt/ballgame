@@ -19,6 +19,7 @@
 //!
 //! Speed outputs land in showcase/heatmaps as:
 //!   heatmap_speed_<level>_<uuid>.png
+//!   heatmap_speed_<level>_<uuid>.txt (x,y,value)
 //! Score outputs land in showcase/heatmaps as:
 //!   heatmap_score_<level>_<uuid>_<side>.png
 //!   heatmap_score_<level>_<uuid>_<side>.txt (x,y,shot_pct)
@@ -522,6 +523,7 @@ fn select_target_levels<'a>(
 
 fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData]) {
     let mut generated = Vec::new();
+    let mut generated_overlays = Vec::new();
 
     for level in levels {
         let basket_y = ARENA_FLOOR_Y + level.basket_height;
@@ -542,6 +544,12 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData]) {
                 basket_y,
                 Some(&overlay),
             ));
+            generated_overlays.push(overlay_path(
+                "score",
+                level.name.as_str(),
+                level.id.as_str(),
+                Some("left"),
+            ));
             generated.push(generate_score_heatmap(
                 level.name.as_str(),
                 level.id.as_str(),
@@ -549,6 +557,12 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData]) {
                 right_x,
                 basket_y,
                 Some(&overlay),
+            ));
+            generated_overlays.push(overlay_path(
+                "score",
+                level.name.as_str(),
+                level.id.as_str(),
+                Some("right"),
             ));
         } else if kind == HeatmapKind::LineOfSight {
             let los_left = compute_line_of_sight(&platform_rects, left_x, basket_y);
@@ -561,6 +575,12 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData]) {
                 Some("left"),
                 Some(&overlay),
             ));
+            generated_overlays.push(overlay_path(
+                "line_of_sight",
+                level.name.as_str(),
+                level.id.as_str(),
+                Some("left"),
+            ));
             generated.push(generate_value_heatmap(
                 level,
                 "line_of_sight",
@@ -568,6 +588,12 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData]) {
                 1.0,
                 Some("right"),
                 Some(&overlay),
+            ));
+            generated_overlays.push(overlay_path(
+                "line_of_sight",
+                level.name.as_str(),
+                level.id.as_str(),
+                Some("right"),
             ));
         } else {
             let image_path = generate_heatmap_for_kind(
@@ -580,11 +606,22 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData]) {
                 Some(&overlay),
             );
             generated.push(image_path);
+            generated_overlays.push(overlay_path(
+                heatmap_kind_label(kind),
+                level.name.as_str(),
+                level.id.as_str(),
+                None,
+            ));
         }
     }
 
     let combined = format!("showcase/heatmap_{}_all.png", heatmap_kind_label(kind));
     combine_heatmaps(&generated, &combined);
+    let combined_overlay = format!(
+        "showcase/heatmap_{}_all_overlay.png",
+        heatmap_kind_label(kind)
+    );
+    combine_heatmaps(&generated_overlays, &combined_overlay);
     match kind {
         HeatmapKind::Speed => println!(
             "Speed range: {} (green) to {} (red) pixels/sec",
@@ -600,6 +637,7 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData]) {
 
 fn run_full_bundle(levels: &[&ballgame::LevelData]) {
     let mut per_kind: HashMap<HeatmapKind, Vec<String>> = HashMap::new();
+    let mut per_kind_overlays: HashMap<HeatmapKind, Vec<String>> = HashMap::new();
 
     for level in levels {
         let basket_y = ARENA_FLOOR_Y + level.basket_height;
@@ -636,6 +674,24 @@ fn run_full_bundle(levels: &[&ballgame::LevelData]) {
                 level_images.push(right_path.clone());
                 per_kind.entry(kind).or_default().push(left_path);
                 per_kind.entry(kind).or_default().push(right_path);
+                per_kind_overlays
+                    .entry(kind)
+                    .or_default()
+                    .push(overlay_path(
+                        "score",
+                        level.name.as_str(),
+                        level.id.as_str(),
+                        Some("left"),
+                    ));
+                per_kind_overlays
+                    .entry(kind)
+                    .or_default()
+                    .push(overlay_path(
+                        "score",
+                        level.name.as_str(),
+                        level.id.as_str(),
+                        Some("right"),
+                    ));
             } else if kind == HeatmapKind::LineOfSight {
                 let los_left = compute_line_of_sight(&platform_rects, left_x, basket_y);
                 let los_right = compute_line_of_sight(&platform_rects, right_x, basket_y);
@@ -659,6 +715,24 @@ fn run_full_bundle(levels: &[&ballgame::LevelData]) {
                 level_images.push(right_path.clone());
                 per_kind.entry(kind).or_default().push(left_path);
                 per_kind.entry(kind).or_default().push(right_path);
+                per_kind_overlays
+                    .entry(kind)
+                    .or_default()
+                    .push(overlay_path(
+                        "line_of_sight",
+                        level.name.as_str(),
+                        level.id.as_str(),
+                        Some("left"),
+                    ));
+                per_kind_overlays
+                    .entry(kind)
+                    .or_default()
+                    .push(overlay_path(
+                        "line_of_sight",
+                        level.name.as_str(),
+                        level.id.as_str(),
+                        Some("right"),
+                    ));
             } else {
                 let image_path = generate_heatmap_for_kind(
                     kind,
@@ -671,6 +745,15 @@ fn run_full_bundle(levels: &[&ballgame::LevelData]) {
                 );
                 level_images.push(image_path.clone());
                 per_kind.entry(kind).or_default().push(image_path);
+                per_kind_overlays
+                    .entry(kind)
+                    .or_default()
+                    .push(overlay_path(
+                        heatmap_kind_label(kind),
+                        level.name.as_str(),
+                        level.id.as_str(),
+                        None,
+                    ));
             }
         }
 
@@ -683,6 +766,13 @@ fn run_full_bundle(levels: &[&ballgame::LevelData]) {
         if let Some(images) = per_kind.get(&kind) {
             let combined = format!("showcase/heatmap_{}_all.png", heatmap_kind_label(kind));
             combine_heatmaps(images, &combined);
+        }
+        if let Some(overlays) = per_kind_overlays.get(&kind) {
+            let combined_overlay = format!(
+                "showcase/heatmap_{}_all_overlay.png",
+                heatmap_kind_label(kind)
+            );
+            combine_heatmaps(overlays, &combined_overlay);
         }
     }
 
@@ -699,6 +789,20 @@ fn run_full_bundle(levels: &[&ballgame::LevelData]) {
             .collect();
         combine_heatmaps(&left, "showcase/heatmap_line_of_sight_left_all.png");
         combine_heatmaps(&right, "showcase/heatmap_line_of_sight_right_all.png");
+    }
+    if let Some(overlays) = per_kind_overlays.get(&HeatmapKind::LineOfSight) {
+        let left: Vec<String> = overlays
+            .iter()
+            .filter(|path| path.ends_with("_left_overlay.png"))
+            .cloned()
+            .collect();
+        let right: Vec<String> = overlays
+            .iter()
+            .filter(|path| path.ends_with("_right_overlay.png"))
+            .cloned()
+            .collect();
+        combine_heatmaps(&left, "showcase/heatmap_line_of_sight_left_all_overlay.png");
+        combine_heatmaps(&right, "showcase/heatmap_line_of_sight_right_all_overlay.png");
     }
 }
 
@@ -918,6 +1022,12 @@ fn generate_value_heatmap(
 }
 
 fn compute_reachability(platform_rects: &[PlatformRect]) -> HeatmapGrid {
+    // TODO: Hard fail until reachability uses gameplay tuning (config/gameplay_tuning.json)
+    // to ensure the heatmap matches real in-game physics.
+    panic!(
+        "TODO: reachability heatmap must load gameplay tuning before simulating (see docs/analysis/tuning_workflows.md; workflow skips reachability for now)"
+    );
+
     let mut grid = HeatmapGrid::new();
     let mut counts = vec![0u32; (GRID_WIDTH * GRID_HEIGHT) as usize];
     let mut rng = rand::thread_rng();
@@ -1599,6 +1709,7 @@ fn generate_speed_heatmap(
     let safe_name = sanitize_level_name(level_name);
     let base_name = format!("heatmap_speed_{}_{}", safe_name, level_id);
     let image_path = format!("{}/{}.png", OUTPUT_DIR, base_name);
+    let data_path = format!("{}/{}.txt", OUTPUT_DIR, base_name);
 
     println!(
         "Generating speed heatmap for {} ({}): {}x{} cells",
@@ -1616,6 +1727,7 @@ fn generate_speed_heatmap(
 
     let total_cells = GRID_WIDTH * GRID_HEIGHT;
     let mut processed = 0;
+    let mut data = String::from("x,y,value\n");
 
     for cy in 0..GRID_HEIGHT {
         for cx in 0..GRID_WIDTH {
@@ -1630,8 +1742,10 @@ fn generate_speed_heatmap(
                 let color = speed_to_color(t);
                 fill_cell(&mut img, cx, cy, color);
                 draw_arrow(&mut img, cx, cy, traj.angle, color);
+                let _ = writeln!(&mut data, "{:.2},{:.2},{:.3}", world_x, world_y, t);
             } else {
                 fill_cell(&mut img, cx, cy, Rgb([80, 80, 80]));
+                let _ = writeln!(&mut data, "{:.2},{:.2},{:.3}", world_x, world_y, 0.0);
             }
 
             processed += 1;
@@ -1653,7 +1767,8 @@ fn generate_speed_heatmap(
     if let Some(overlay) = overlay {
         write_level_overlay(&img, "speed", level_name, level_id, None, overlay);
     }
-    println!("Saved {}", image_path);
+    fs::write(&data_path, data).expect("Failed to write heatmap data");
+    println!("Saved {} and {}", image_path, data_path);
     image_path
 }
 
@@ -1979,6 +2094,15 @@ fn write_level_overlay(
     if let Err(err) = img.save(&overlay_path) {
         println!("Failed to save overlay {}: {}", overlay_path, err);
     }
+}
+
+fn overlay_path(label: &str, level_name: &str, level_id: &str, side: Option<&str>) -> String {
+    let safe_name = sanitize_level_name(level_name);
+    let side_suffix = side.map_or(String::new(), |side| format!("_{}", side));
+    format!(
+        "{}/overlays/heatmap_{}_{}_{}{}_overlay.png",
+        OUTPUT_DIR, label, safe_name, level_id, side_suffix
+    )
 }
 
 fn draw_platform_overlays(img: &mut RgbImage, rects: &[PlatformRect]) {

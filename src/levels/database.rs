@@ -37,6 +37,9 @@ pub struct LevelData {
     pub step_push_in: f32, // Distance from wall to where stairs start (top step extends to wall)
     pub debug: bool,       // Debug mode: spawn all ball styles, AI idle
     pub regression: bool,  // Regression mode: countdown frozen, AI idle, stable for testing
+    pub heatmap_score_weight: f32, // Per-level multiplier for score heatmap influence
+    pub heatmap_los_threshold: f32, // Line-of-sight threshold for shooting decisions
+    pub heatmap_los_margin: f32, // Line-of-sight margin for shooting decisions
 }
 
 /// Database of all loaded levels
@@ -94,6 +97,9 @@ impl LevelDatabase {
                     step_push_in: STEP_PUSH_IN,              // default
                     debug: false,                            // default
                     regression: false,                       // default
+                    heatmap_score_weight: 1.0,
+                    heatmap_los_threshold: HEATMAP_LOS_THRESHOLD_DEFAULT,
+                    heatmap_los_margin: HEATMAP_LOS_MARGIN_DEFAULT,
                 });
             } else if let Some(id_str) = line.strip_prefix("id:") {
                 if let Some(level) = &mut current_level {
@@ -165,6 +171,24 @@ impl LevelDatabase {
                 if let Some(level) = &mut current_level {
                     level.regression = val.trim() == "true";
                 }
+            } else if let Some(weight_str) = line.strip_prefix("heatmap_score_weight:") {
+                if let Some(level) = &mut current_level {
+                    if let Ok(weight) = weight_str.trim().parse::<f32>() {
+                        level.heatmap_score_weight = weight;
+                    }
+                }
+            } else if let Some(threshold_str) = line.strip_prefix("heatmap_los_threshold:") {
+                if let Some(level) = &mut current_level {
+                    if let Ok(value) = threshold_str.trim().parse::<f32>() {
+                        level.heatmap_los_threshold = value;
+                    }
+                }
+            } else if let Some(margin_str) = line.strip_prefix("heatmap_los_margin:") {
+                if let Some(level) = &mut current_level {
+                    if let Ok(value) = margin_str.trim().parse::<f32>() {
+                        level.heatmap_los_margin = value;
+                    }
+                }
             }
         }
 
@@ -202,6 +226,9 @@ impl LevelDatabase {
                     step_push_in: STEP_PUSH_IN,
                     debug: false,
                     regression: false,
+                    heatmap_score_weight: 1.0,
+                    heatmap_los_threshold: HEATMAP_LOS_THRESHOLD_DEFAULT,
+                    heatmap_los_margin: HEATMAP_LOS_MARGIN_DEFAULT,
                 },
                 LevelData {
                     id: generate_uuid_from_name("Default"),
@@ -225,6 +252,9 @@ impl LevelDatabase {
                     step_push_in: STEP_PUSH_IN,
                     debug: false,
                     regression: false,
+                    heatmap_score_weight: 1.0,
+                    heatmap_los_threshold: HEATMAP_LOS_THRESHOLD_DEFAULT,
+                    heatmap_los_margin: HEATMAP_LOS_MARGIN_DEFAULT,
                 },
             ],
         }

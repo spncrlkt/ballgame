@@ -50,6 +50,12 @@ pub struct SimConfig {
     pub quiet: bool,
     /// Number of parallel threads (0 = sequential, N = N threads)
     pub parallel: usize,
+    /// Estimate runtime based on prior sessions and exit
+    #[serde(default)]
+    pub est_run_time: bool,
+    /// Wall-clock timeout in seconds for a tournament run (None = no limit)
+    #[serde(default)]
+    pub run_timeout_secs: Option<f32>,
     /// Path to SQLite database for storing results
     pub db_path: Option<String>,
     /// Profiles to include in tournament (empty = all profiles)
@@ -72,6 +78,8 @@ impl Default for SimConfig {
             output_file: None,
             quiet: false,
             parallel: 0, // Sequential by default
+            est_run_time: false,
+            run_timeout_secs: None,
             db_path: None,
             profiles: Vec::new(), // Empty = all profiles
             levels: Vec::new(),   // Empty = all non-debug levels
@@ -179,6 +187,15 @@ impl SimConfig {
                 "--duration" => {
                     if i + 1 < args.len() {
                         config.duration_limit = args[i + 1].parse().unwrap_or(60.0);
+                        i += 1;
+                    }
+                }
+                "--est-run-time" => {
+                    config.est_run_time = true;
+                }
+                "--run-timeout" => {
+                    if i + 1 < args.len() {
+                        config.run_timeout_secs = args[i + 1].parse().ok();
                         i += 1;
                     }
                 }
@@ -294,6 +311,8 @@ OPTIONS:
     --left <PROFILE>    Left player AI profile (default: Balanced)
     --right <PROFILE>   Right player AI profile (default: Balanced)
     --duration <SECS>   Match duration limit in seconds (default: 60)
+    --est-run-time      Estimate runtime from prior sessions and exit
+    --run-timeout <SECS> Wall-clock timeout for tournament run (default: 600)
     --score-limit <N>   End match when a player reaches N points (default: no limit)
     --matches <N>       Run N matches with same config
     --tournament [N]    Run all profile combinations (N matches each, default: 5)

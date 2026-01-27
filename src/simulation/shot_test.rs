@@ -26,7 +26,7 @@ use crate::player::{
 use crate::scoring::{CurrentLevel, Score, check_scoring};
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
 use crate::steal::{StealContest, StealCooldown, StealTracker};
-use crate::ui::PhysicsTweaks;
+use crate::tuning::{self, PhysicsTweaks};
 use crate::world::{Basket, Collider, Platform};
 
 use super::config::SimConfig;
@@ -212,6 +212,7 @@ fn run_shots_at_position(
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<PhysicsTweaks>();
+    let _ = tuning::apply_global_tuning(&mut app.world_mut().resource_mut::<PhysicsTweaks>());
     app.init_resource::<LastShotInfo>();
     app.insert_resource(CurrentPalette(0));
     app.init_resource::<PaletteDatabase>();

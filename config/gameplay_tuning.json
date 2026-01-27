@@ -1,0 +1,16 @@
+{
+  "gravity_rise": 980.0,
+  "gravity_fall": 1400.0,
+  "jump_velocity": 650.0,
+  "move_speed": 300.0,
+  "ground_accel": 2400.0,
+  "ground_decel": 1800.0,
+  "air_accel": 1500.0,
+  "air_decel": 900.0,
+  "ball_gravity": 800.0,
+  "ball_bounce": 0.7,
+  "ball_air_friction": 0.95,
+  "ball_roll_friction": 0.6,
+  "shot_max_power": 1314.0,
+  "shot_charge_time": 1.6
+}

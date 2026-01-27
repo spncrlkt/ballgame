@@ -14,7 +14,7 @@ use crate::levels::{LevelDatabase, reload_level_geometry};
 use crate::palettes::PaletteDatabase;
 use crate::player::components::*;
 use crate::scoring::CurrentLevel;
-use crate::ui::PhysicsTweaks;
+use crate::tuning::PhysicsTweaks;
 use crate::world::{Basket, BasketRim, CornerRamp, LevelPlatform, Platform};
 
 /// Runs in FixedUpdate to apply captured input to physics.

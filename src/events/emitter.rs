@@ -7,9 +7,10 @@ use bevy::prelude::*;
 
 use super::{EventBuffer, GameEvent, PlayerId};
 use crate::{
-    AiState, BallState, ChargingShot, HoldingBall, InputState, Score, StealContest, StealCooldown,
-    Team, Velocity,
+    AiState, BallState, Basket, ChargingShot, HoldingBall, InputState, LastShotInfo, Score,
+    StealContest, StealCooldown, TargetBasket, Team, Velocity,
 };
+use crate::ai::evaluate_shot_quality;
 
 /// Configuration for event emission behavior
 #[derive(Debug, Clone)]
@@ -97,6 +98,7 @@ pub struct PlayerSnapshot {
     pub position: (f32, f32),
     pub velocity: (f32, f32),
     pub charge_time: f32,
+    pub target_basket: Basket,
     pub ai_goal: String,
     pub steal_cooldown: f32,
     pub is_holding_ball: bool,
@@ -114,6 +116,12 @@ pub struct BallSnapshot {
     pub state: BallState,
 }
 
+/// Basket data extracted for event emission
+pub struct BasketSnapshot {
+    pub basket: Basket,
+    pub position: (f32, f32),
+}
+
 /// Emit all game events by comparing current state to previous state
 ///
 /// This is the main entry point for event emission. Call this once per frame
@@ -125,7 +133,9 @@ pub fn emit_game_events(
     score: &Score,
     steal_contest: &StealContest,
     players: &[PlayerSnapshot],
+    baskets: &[BasketSnapshot],
     ball: Option<&BallSnapshot>,
+    shot_info: Option<&LastShotInfo>,
 ) {
     // === Tick events at 50ms (20 Hz) ===
     emit_tick_events(state, buffer, elapsed, players, ball);
@@ -140,11 +150,11 @@ pub fn emit_game_events(
     emit_steal_events(state, buffer, elapsed, players, steal_contest);
 
     // === Track ball possession changes and shot charging ===
-    emit_possession_events(state, buffer, elapsed, players);
+    emit_possession_events(state, buffer, elapsed, players, baskets);
 
     // === Detect when ball becomes free (drop or shot release) ===
     if let Some(ball) = ball {
-        emit_ball_state_events(state, buffer, elapsed, ball, players);
+        emit_ball_state_events(state, buffer, elapsed, ball, players, shot_info);
     }
 }
 
@@ -344,6 +354,7 @@ fn emit_possession_events(
     buffer: &mut EventBuffer,
     elapsed: f32,
     players: &[PlayerSnapshot],
+    baskets: &[BasketSnapshot],
 ) {
     for player in players {
         let (idx, player_id) = match player.team {
@@ -363,12 +374,19 @@ fn emit_possession_events(
         // Detect shot charging start
         let is_charging = player.charge_time > 0.0;
         if is_charging && !state.prev_charging[idx] {
+            let target_pos = baskets
+                .iter()
+                .find(|b| b.basket == player.target_basket)
+                .map(|b| Vec2::new(b.position.0, b.position.1));
+            let quality = target_pos
+                .map(|pos| evaluate_shot_quality(Vec2::new(player.position.0, player.position.1), pos))
+                .unwrap_or(0.0);
             buffer.log(
                 elapsed,
                 GameEvent::ShotStart {
                     player: player_id,
                     pos: player.position,
-                    quality: 0.5, // Could calculate based on position
+                    quality,
                 },
             );
         }
@@ -382,6 +400,7 @@ fn emit_ball_state_events(
     elapsed: f32,
     ball: &BallSnapshot,
     players: &[PlayerSnapshot],
+    shot_info: Option<&LastShotInfo>,
 ) {
     match &ball.state {
         BallState::InFlight { shooter, power } => {
@@ -397,12 +416,15 @@ fn emit_ball_state_events(
                         });
 
                 if let Some(pid) = player_id {
+                    let (charge, angle) = shot_info
+                        .map(|info| (info.charge_pct, info.angle_degrees))
+                        .unwrap_or((0.0, 60.0));
                     buffer.log(
                         elapsed,
                         GameEvent::ShotRelease {
                             player: pid,
-                            charge: 0.5,
-                            angle: 60.0,
+                            charge,
+                            angle,
                             power: *power,
                         },
                     );
@@ -440,6 +462,7 @@ pub fn snapshot_player(
     team: &Team,
     transform: &Transform,
     velocity: &Velocity,
+    target: &TargetBasket,
     charging: &ChargingShot,
     ai_state: &AiState,
     steal_cooldown: &StealCooldown,
@@ -452,6 +475,7 @@ pub fn snapshot_player(
         position: (transform.translation.x, transform.translation.y),
         velocity: (velocity.0.x, velocity.0.y),
         charge_time: charging.charge_time,
+        target_basket: target.0,
         ai_goal: format!("{:?}", ai_state.current_goal),
         steal_cooldown: steal_cooldown.0,
         is_holding_ball: holding.is_some(),

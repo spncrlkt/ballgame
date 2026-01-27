@@ -1,0 +1,32 @@
+{
+  "source": "notes/heatmaap_tuning_preconfig_20260127_0123.md",
+  "baseline_constants": {
+    "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.5,
+    "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.9,
+    "HEATMAP_LOS_MARGIN_DEFAULT": 0.05
+  },
+  "baseline_profile_fields": [
+    "min_shot_quality",
+    "seek_threshold",
+    "position_patience",
+    "charge_min",
+    "charge_max"
+  ],
+  "variants": [
+    {
+      "id": "P0",
+      "label": "base",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.4,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.68,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.12
+      },
+      "profile_deltas": {
+        "charge_min": -0.25,
+        "charge_max": -0.2,
+        "min_shot_quality": -0.05,
+        "seek_threshold": 0.08
+      }
+    }
+  ]
+}

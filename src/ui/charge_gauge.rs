@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::constants::*;
 use crate::player::{Facing, HoldingBall, Player};
 use crate::shooting::ChargingShot;
-use crate::ui::PhysicsTweaks;
+use crate::tuning::PhysicsTweaks;
 
 /// Charge gauge background component
 #[derive(Component)]

@@ -16,6 +16,34 @@ pub struct SimDatabase {
     conn: Connection,
 }
 
+/// Run metadata for estimating runtime
+#[derive(Debug, Clone)]
+pub struct RunStats {
+    pub run_started_at: String,
+    pub run_finished_at: String,
+    pub run_elapsed_secs: f64,
+    pub matches_planned: i64,
+    pub matches_played: i64,
+    pub duration_limit_secs: f64,
+    pub stalemate_timeout_secs: f64,
+    pub parallel_threads: i64,
+    pub run_timeout_secs: Option<f64>,
+    pub mode: String,
+    pub profiles_count: i64,
+    pub levels_count: i64,
+    pub matches_per_pair: Option<i64>,
+    pub matches_per_level: Option<i64>,
+}
+
+/// Estimated runtime summary
+#[derive(Debug, Clone)]
+pub struct RunTimeEstimate {
+    pub avg_secs_per_match: f64,
+    pub estimated_total_secs: f64,
+    pub sample_sessions: i64,
+    pub sample_matches: i64,
+}
+
 impl SimDatabase {
     /// Get a reference to the underlying connection
     ///
@@ -58,7 +86,21 @@ impl SimDatabase {
                 created_at TEXT NOT NULL,
                 session_type TEXT NOT NULL,
                 config_json TEXT,
-                display_name TEXT
+                display_name TEXT,
+                run_started_at TEXT,
+                run_finished_at TEXT,
+                run_elapsed_secs REAL,
+                matches_planned INTEGER,
+                matches_played INTEGER,
+                duration_limit_secs REAL,
+                stalemate_timeout_secs REAL,
+                parallel_threads INTEGER,
+                run_timeout_secs REAL,
+                mode TEXT,
+                profiles_count INTEGER,
+                levels_count INTEGER,
+                matches_per_pair INTEGER,
+                matches_per_level INTEGER
             );
 
             CREATE TABLE IF NOT EXISTS matches (
@@ -132,6 +174,48 @@ impl SimDatabase {
             .execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);
         let _ = self
             .conn
+            .execute("ALTER TABLE sessions ADD COLUMN run_started_at TEXT", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN run_finished_at TEXT", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN run_elapsed_secs REAL", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN matches_planned INTEGER", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN matches_played INTEGER", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN duration_limit_secs REAL", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN stalemate_timeout_secs REAL", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN parallel_threads INTEGER", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN run_timeout_secs REAL", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN mode TEXT", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN profiles_count INTEGER", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN levels_count INTEGER", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN matches_per_pair INTEGER", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN matches_per_level INTEGER", []);
+        let _ = self
+            .conn
             .execute("ALTER TABLE matches ADD COLUMN display_name TEXT", []);
         let _ = self
             .conn
@@ -152,6 +236,123 @@ impl SimDatabase {
         )?;
 
         Ok(id_str)
+    }
+
+    /// Update a session with runtime metadata
+    pub fn update_session_stats(&self, session_id: &str, stats: &RunStats) -> Result<()> {
+        self.conn.execute(
+            r#"UPDATE sessions
+               SET run_started_at = ?1,
+                   run_finished_at = ?2,
+                   run_elapsed_secs = ?3,
+                   matches_planned = ?4,
+                   matches_played = ?5,
+                   duration_limit_secs = ?6,
+                   stalemate_timeout_secs = ?7,
+                   parallel_threads = ?8,
+                   run_timeout_secs = ?9,
+                   mode = ?10,
+                   profiles_count = ?11,
+                   levels_count = ?12,
+                   matches_per_pair = ?13,
+                   matches_per_level = ?14
+               WHERE id = ?15"#,
+            params![
+                stats.run_started_at,
+                stats.run_finished_at,
+                stats.run_elapsed_secs,
+                stats.matches_planned,
+                stats.matches_played,
+                stats.duration_limit_secs,
+                stats.stalemate_timeout_secs,
+                stats.parallel_threads,
+                stats.run_timeout_secs,
+                stats.mode,
+                stats.profiles_count,
+                stats.levels_count,
+                stats.matches_per_pair,
+                stats.matches_per_level,
+                session_id,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Estimate runtime based on prior sessions
+    pub fn estimate_run_time(
+        &self,
+        mode: &str,
+        matches_planned: i64,
+        parallel_threads: i64,
+        duration_limit_secs: f64,
+        stalemate_timeout_secs: f64,
+    ) -> Result<Option<RunTimeEstimate>> {
+        let mut stmt = self.conn.prepare(
+            r#"SELECT
+                   COUNT(*) as sessions,
+                   SUM(matches_played) as matches,
+                   SUM(run_elapsed_secs) as elapsed
+               FROM sessions
+               WHERE mode = ?1
+                 AND parallel_threads = ?2
+                 AND duration_limit_secs = ?3
+                 AND stalemate_timeout_secs = ?4
+                 AND run_elapsed_secs IS NOT NULL
+                 AND matches_played IS NOT NULL
+                 AND matches_played > 0"#,
+        )?;
+        let row = stmt
+            .query_row(
+                params![mode, parallel_threads, duration_limit_secs, stalemate_timeout_secs],
+                |row| {
+                    let sessions: i64 = row.get(0)?;
+                    let matches: Option<i64> = row.get(1)?;
+                    let elapsed: Option<f64> = row.get(2)?;
+                    Ok((sessions, matches.unwrap_or(0), elapsed.unwrap_or(0.0)))
+                },
+            )
+            .optional()?;
+
+        let (sessions, matches, elapsed) = match row {
+            Some(data) => data,
+            None => (0, 0, 0.0),
+        };
+
+        let (sessions, matches, elapsed) = if matches > 0 && elapsed > 0.0 {
+            (sessions, matches, elapsed)
+        } else {
+            let mut fallback = self.conn.prepare(
+                r#"SELECT
+                       COUNT(*) as sessions,
+                       SUM(matches_played) as matches,
+                       SUM(run_elapsed_secs) as elapsed
+                   FROM sessions
+                   WHERE mode = ?1
+                     AND run_elapsed_secs IS NOT NULL
+                     AND matches_played IS NOT NULL
+                     AND matches_played > 0"#,
+            )?;
+            let row = fallback.query_row(params![mode], |row| {
+                let sessions: i64 = row.get(0)?;
+                let matches: Option<i64> = row.get(1)?;
+                let elapsed: Option<f64> = row.get(2)?;
+                Ok((sessions, matches.unwrap_or(0), elapsed.unwrap_or(0.0)))
+            })?;
+            row
+        };
+
+        if matches <= 0 || elapsed <= 0.0 {
+            return Ok(None);
+        }
+
+        let avg_secs_per_match = elapsed / matches as f64;
+        let estimated_total_secs = avg_secs_per_match * matches_planned as f64;
+        Ok(Some(RunTimeEstimate {
+            avg_secs_per_match,
+            estimated_total_secs,
+            sample_sessions: sessions,
+            sample_matches: matches,
+        }))
     }
 
     /// Insert a match result and return the match ID

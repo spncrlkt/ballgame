@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use crate::presets::PresetDatabase;
-use crate::ui::PhysicsTweaks;
+use crate::tuning::PhysicsTweaks;
 
 /// Tracks which preset is selected for each category
 #[derive(Resource, Default)]

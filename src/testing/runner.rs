@@ -22,7 +22,7 @@ use crate::player::{
 use crate::scoring::{CurrentLevel, Score, check_scoring};
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
 use crate::steal::{StealContest, StealCooldown, StealTracker, steal_cooldown_update};
-use crate::ui::PhysicsTweaks;
+use crate::tuning::{self, PhysicsTweaks};
 use crate::world::{Basket, Collider, Platform, spawn_baskets, spawn_floor, spawn_walls};
 
 use super::TEST_LEVELS_FILE;
@@ -140,6 +140,7 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<PhysicsTweaks>();
+    let _ = tuning::apply_global_tuning(&mut app.world_mut().resource_mut::<PhysicsTweaks>());
     app.init_resource::<LastShotInfo>();
     app.insert_resource(CurrentPalette(0));
     app.init_resource::<PaletteDatabase>();

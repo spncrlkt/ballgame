@@ -22,6 +22,8 @@ pub struct LastShotInfo {
     pub distance_variance: f32,
     pub required_speed: f32,
     pub total_variance: f32,
+    pub charge_pct: f32,
+    pub shot_quality: f32,
     pub target: Option<crate::world::Basket>,
 }
 

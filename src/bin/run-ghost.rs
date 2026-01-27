@@ -32,7 +32,7 @@ use ballgame::simulation::{
     ghost_input_system, load_ghost_trial, max_tick, sim_setup,
 };
 use ballgame::steal::{StealContest, StealTracker, steal_cooldown_update};
-use ballgame::ui::PhysicsTweaks;
+use ballgame::tuning::{self, PhysicsTweaks};
 
 /// Run a single ghost trial
 fn run_ghost_trial(
@@ -78,6 +78,7 @@ fn run_ghost_trial(
     app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
     app.init_resource::<PhysicsTweaks>();
+    let _ = tuning::apply_global_tuning(&mut app.world_mut().resource_mut::<PhysicsTweaks>());
     app.init_resource::<LastShotInfo>();
     app.insert_resource(CurrentPalette(0));
     app.init_resource::<PaletteDatabase>();

@@ -26,9 +26,9 @@ use ballgame::{
     HoldingBall, HumanControlTarget, HumanControlled, InputState, JumpState, LastShotInfo,
     LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase,
     PhysicsTweaks, Player, PlayerId, PlayerInput, Score, SnapshotConfig, StealContest,
-    StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, Velocity, ai, ball,
-    constants::*, countdown, emit_level_change_events, helpers::*, input, levels, player, scoring,
-    shooting, spawn_countdown_text, steal, update_event_bus_time, world,
+    StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, TweakPanelState, Velocity, ai,
+    ball, constants::*, countdown, emit_level_change_events, helpers::*, input, levels, player,
+    scoring, shooting, spawn_countdown_text, steal, tuning, update_event_bus_time, world,
 };
 use bevy::{camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
@@ -246,17 +246,23 @@ fn main() {
         .insert_resource(settings)
         .insert_resource(training_state)
         .init_resource::<PlayerInput>()
+        .init_resource::<TweakPanelState>()
         .init_resource::<DebugSettings>()
         .init_resource::<StealContest>()
         .init_resource::<StealTracker>()
         .init_resource::<Score>()
         .insert_resource(CurrentLevel(String::new())) // Will be set from training state
         .insert_resource(CurrentPalette(0))
-        .init_resource::<PhysicsTweaks>()
+        .insert_resource({
+            let mut tweaks = PhysicsTweaks::default();
+            let _ = tuning::apply_global_tuning(&mut tweaks);
+            tweaks
+        })
         .init_resource::<LastShotInfo>()
         .init_resource::<AiProfileDatabase>()
         .init_resource::<NavGraph>()
         .init_resource::<AiCapabilities>()
+        .init_resource::<ai::HeatmapBundle>()
         .insert_resource(SnapshotConfig::default())
         .init_resource::<TrainingEventBuffer>()
         .init_resource::<MatchCountdown>()
@@ -277,6 +283,7 @@ fn main() {
                 input::capture_input,
                 ai::copy_human_input,
                 ai::mark_nav_dirty_on_level_change,
+                ai::load_heatmaps_on_level_change,
                 ai::rebuild_nav_graph,
                 ai::ai_navigation_update,
                 ai::ai_decision_update,
@@ -1170,12 +1177,14 @@ fn emit_training_events(
     training_state: Res<TrainingState>,
     score: Res<Score>,
     steal_contest: Res<StealContest>,
+    shot_info: Res<LastShotInfo>,
     players: Query<
         (
             Entity,
             &Team,
             &Transform,
             &Velocity,
+            &TargetBasket,
             &ChargingShot,
             &AiState,
             &StealCooldown,
@@ -1184,6 +1193,7 @@ fn emit_training_events(
         ),
         With<Player>,
     >,
+    baskets: Query<(&Transform, &Basket)>,
     balls: Query<(&Transform, &Velocity, &BallState), With<Ball>>,
     mut event_bus: ResMut<EventBus>,
 ) {
@@ -1210,6 +1220,7 @@ fn emit_training_events(
                 team,
                 transform,
                 velocity,
+                target,
                 charging,
                 ai_state,
                 steal_cooldown,
@@ -1221,6 +1232,7 @@ fn emit_training_events(
                     team,
                     transform,
                     velocity,
+                    target,
                     charging,
                     ai_state,
                     steal_cooldown,
@@ -1229,6 +1241,14 @@ fn emit_training_events(
                 )
             },
         )
+        .collect();
+
+    let basket_snapshots: Vec<_> = baskets
+        .iter()
+        .map(|(transform, basket)| crate::events::BasketSnapshot {
+            basket: *basket,
+            position: (transform.translation.x, transform.translation.y),
+        })
         .collect();
 
     let ball_snapshot = balls
@@ -1251,7 +1271,9 @@ fn emit_training_events(
         &score,
         &steal_contest,
         &player_snapshots,
+        &basket_snapshots,
         ball_snapshot.as_ref(),
+        Some(&shot_info),
     );
 }
 

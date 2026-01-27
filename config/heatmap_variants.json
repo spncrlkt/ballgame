@@ -1,0 +1,232 @@
+{
+  "source": "notes/heatmaap_tuning_preconfig_20260127_0123.md",
+  "baseline_constants": {
+    "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.5,
+    "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.9,
+    "HEATMAP_LOS_MARGIN_DEFAULT": 0.05
+  },
+  "baseline_profile_fields": [
+    "min_shot_quality",
+    "seek_threshold",
+    "position_patience",
+    "charge_min",
+    "charge_max"
+  ],
+  "variants": [
+    {
+      "id": "J0",
+      "label": "base",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.0,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.55,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.25
+      },
+      "profile_deltas": {
+        "min_shot_quality": -0.1,
+        "seek_threshold": 0.15,
+        "position_patience": -0.35
+      }
+    },
+    {
+      "id": "J1",
+      "label": "close delta",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.05,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.58,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.22
+      },
+      "profile_deltas": {
+        "min_shot_quality": -0.08,
+        "seek_threshold": 0.12,
+        "position_patience": -0.3
+      }
+    },
+    {
+      "id": "J2",
+      "label": "close delta + big change in most significant vars",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.1,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.45,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.3
+      },
+      "profile_deltas": {
+        "min_shot_quality": -0.14,
+        "seek_threshold": 0.12,
+        "position_patience": -0.3
+      }
+    },
+    {
+      "id": "J3",
+      "label": "huge change in all vars that differ from baseline",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.0,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.35,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.4
+      },
+      "profile_deltas": {
+        "min_shot_quality": -0.18,
+        "seek_threshold": 0.22,
+        "position_patience": -0.55
+      }
+    },
+    {
+      "id": "J4",
+      "label": "extreme changes in most variables",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.0,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.25,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.55
+      },
+      "profile_deltas": {
+        "min_shot_quality": -0.25,
+        "seek_threshold": 0.3,
+        "position_patience": -0.8
+      }
+    },
+    {
+      "id": "M0",
+      "label": "base",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.5,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.75,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.12
+      },
+      "profile_deltas": {
+        "position_patience": -0.6,
+        "seek_threshold": 0.18,
+        "min_shot_quality": -0.05
+      }
+    },
+    {
+      "id": "M1",
+      "label": "close delta",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.55,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.78,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.1
+      },
+      "profile_deltas": {
+        "position_patience": -0.5,
+        "seek_threshold": 0.15,
+        "min_shot_quality": -0.04
+      }
+    },
+    {
+      "id": "M2",
+      "label": "close delta + big change in most significant vars",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.6,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.68,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.18
+      },
+      "profile_deltas": {
+        "position_patience": -0.8,
+        "seek_threshold": 0.22,
+        "min_shot_quality": -0.06
+      }
+    },
+    {
+      "id": "M3",
+      "label": "huge change in all vars that differ from baseline",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.7,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.6,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.22
+      },
+      "profile_deltas": {
+        "position_patience": -1.0,
+        "seek_threshold": 0.28,
+        "min_shot_quality": -0.1
+      }
+    },
+    {
+      "id": "M4",
+      "label": "extreme changes in most variables",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.9,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.5,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.3
+      },
+      "profile_deltas": {
+        "position_patience": -1.2,
+        "seek_threshold": 0.35,
+        "min_shot_quality": -0.15
+      }
+    },
+    {
+      "id": "P0",
+      "label": "base",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.4,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.68,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.12
+      },
+      "profile_deltas": {
+        "charge_min": -0.25,
+        "charge_max": -0.2,
+        "min_shot_quality": -0.05,
+        "seek_threshold": 0.08
+      }
+    },
+    {
+      "id": "P1",
+      "label": "close delta",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.45,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.7,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.1
+      },
+      "profile_deltas": {
+        "charge_min": -0.22,
+        "charge_max": -0.18,
+        "min_shot_quality": -0.04,
+        "seek_threshold": 0.07
+      }
+    },
+    {
+      "id": "P2",
+      "label": "close delta + big change in most significant vars",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.5,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.6,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.18
+      },
+      "profile_deltas": {
+        "charge_min": -0.35,
+        "charge_max": -0.3,
+        "min_shot_quality": -0.08,
+        "seek_threshold": 0.1
+      }
+    },
+    {
+      "id": "P3",
+      "label": "huge change in all vars that differ from baseline",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.6,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.55,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.22
+      },
+      "profile_deltas": {
+        "charge_min": -0.45,
+        "charge_max": -0.4,
+        "min_shot_quality": -0.12,
+        "seek_threshold": 0.15
+      }
+    },
+    {
+      "id": "P4",
+      "label": "extreme changes in most variables",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.8,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.5,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.3
+      },
+      "profile_deltas": {
+        "charge_min": -0.6,
+        "charge_max": -0.55,
+        "min_shot_quality": -0.18,
+        "seek_threshold": 0.22
+      }
+    }
+  ]
+}

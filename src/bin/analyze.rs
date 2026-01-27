@@ -11,9 +11,10 @@
 use std::path::PathBuf;
 
 use ballgame::analytics::{
-    AggregateMetrics, Leaderboard, ParameterSuggestion, TuningTargets, default_targets,
-    format_suggestions, format_update_report, generate_suggestions, load_targets,
-    parse_all_matches_from_db, update_default_profiles,
+    AggregateMetrics, AnalysisQuery, AnalysisRequest, AnalysisRequestFile, Leaderboard,
+    ParameterSuggestion, TuningTargets, default_targets, format_suggestions, format_update_report,
+    generate_suggestions, load_targets, parse_all_matches_from_db, run_event_audit,
+    run_focused_analysis, run_request, update_default_profiles,
 };
 
 fn main() {
@@ -21,6 +22,148 @@ fn main() {
 
     if config.show_help {
         print_help();
+        return;
+    }
+
+    if config.request_list {
+        let requests = AnalysisRequestFile::load(&config.requests_file)
+            .unwrap_or(AnalysisRequestFile { requests: Vec::new() });
+        if requests.requests.is_empty() {
+            println!("No analysis requests found in {}", config.requests_file.display());
+        } else {
+            println!("Analysis requests in {}:", config.requests_file.display());
+            for req in requests.requests {
+                if let Some(desc) = &req.description {
+                    println!("- {}: {}", req.name, desc);
+                } else {
+                    println!("- {}", req.name);
+                }
+            }
+        }
+        return;
+    }
+
+    if let Some(name) = &config.request_add {
+        let sql = match &config.request_sql {
+            Some(sql) => sql.clone(),
+            None => {
+                eprintln!("--request-add requires --request-sql");
+                std::process::exit(1);
+            }
+        };
+        let mut requests = AnalysisRequestFile::load(&config.requests_file)
+            .unwrap_or(AnalysisRequestFile { requests: Vec::new() });
+        let query_name = config
+            .request_query_name
+            .clone()
+            .unwrap_or_else(|| "query".to_string());
+        let request = AnalysisRequest {
+            name: name.clone(),
+            description: config.request_desc.clone(),
+            db_path: config.request_db.as_ref().map(|p| p.display().to_string()),
+            db_label: config.request_db_label.clone(),
+            queries: vec![AnalysisQuery {
+                name: query_name,
+                sql,
+                notes: None,
+            }],
+        };
+        requests.add_request(request);
+        if let Some(parent) = config.requests_file.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        if let Err(e) = requests.save(&config.requests_file) {
+            eprintln!("Failed to save requests file: {}", e);
+            std::process::exit(1);
+        }
+        println!(
+            "Saved analysis request '{}' to {}",
+            name,
+            config.requests_file.display()
+        );
+        return;
+    }
+
+    if let Some(name) = &config.request_name {
+        let requests = AnalysisRequestFile::load(&config.requests_file)
+            .unwrap_or(AnalysisRequestFile { requests: Vec::new() });
+        let request = requests
+            .requests
+            .iter()
+            .find(|req| req.name == *name)
+            .unwrap_or_else(|| {
+                eprintln!(
+                    "Request '{}' not found in {}",
+                    name,
+                    config.requests_file.display()
+                );
+                std::process::exit(1);
+            });
+        let report = run_request(request, config.request_db.as_deref())
+            .unwrap_or_else(|e| {
+                eprintln!("Failed to run request '{}': {}", name, e);
+                std::process::exit(1);
+            })
+            .to_markdown();
+        let output_path = config
+            .request_output
+            .clone()
+            .unwrap_or_else(|| default_request_output_path(name));
+        if let Some(parent) = output_path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        if let Err(e) = std::fs::write(&output_path, &report) {
+            eprintln!("Failed to write request report: {}", e);
+            std::process::exit(1);
+        }
+        println!("Request report written to {}", output_path.display());
+        return;
+    }
+
+    // Event audit mode (base vs current)
+    if let Some((base_db, current_db)) = &config.event_audit {
+        let report = run_event_audit(base_db, current_db)
+            .unwrap_or_else(|e| {
+                eprintln!("Failed to run event audit: {}", e);
+                std::process::exit(1);
+            })
+            .to_markdown();
+
+        let output_path = config
+            .audit_output
+            .clone()
+            .unwrap_or_else(default_audit_output_path);
+        if let Some(parent) = output_path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        if let Err(e) = std::fs::write(&output_path, &report) {
+            eprintln!("Failed to write audit report: {}", e);
+            std::process::exit(1);
+        }
+        println!("Event audit written to {}", output_path.display());
+        return;
+    }
+
+    // Focused analysis (single DB)
+    if let Some(db_path) = &config.focused_db {
+        let report = run_focused_analysis(db_path)
+            .unwrap_or_else(|e| {
+                eprintln!("Failed to run focused analysis: {}", e);
+                std::process::exit(1);
+            })
+            .to_markdown();
+        let output_path = config
+            .focused_output
+            .clone()
+            .unwrap_or_else(default_focused_output_path);
+        if let Some(parent) = output_path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        if let Err(e) = std::fs::write(&output_path, &report) {
+            eprintln!("Failed to write focused report: {}", e);
+            std::process::exit(1);
+        }
+        println!("Focused analysis written to {}", output_path.display());
         return;
     }
 
@@ -106,6 +249,20 @@ struct AnalyzeConfig {
     db_path: PathBuf,
     targets_file: Option<PathBuf>,
     output_file: Option<PathBuf>,
+    event_audit: Option<(PathBuf, PathBuf)>,
+    audit_output: Option<PathBuf>,
+    focused_db: Option<PathBuf>,
+    focused_output: Option<PathBuf>,
+    request_name: Option<String>,
+    request_output: Option<PathBuf>,
+    request_db: Option<PathBuf>,
+    request_list: bool,
+    requests_file: PathBuf,
+    request_add: Option<String>,
+    request_sql: Option<String>,
+    request_desc: Option<String>,
+    request_query_name: Option<String>,
+    request_db_label: Option<String>,
     update_defaults: bool,
     show_help: bool,
 }
@@ -116,6 +273,20 @@ impl Default for AnalyzeConfig {
             db_path: PathBuf::from("db/training.db"),
             targets_file: None,
             output_file: None,
+            event_audit: None,
+            audit_output: None,
+            focused_db: None,
+            focused_output: None,
+            request_name: None,
+            request_output: None,
+            request_db: None,
+            request_list: false,
+            requests_file: PathBuf::from("config/analysis_requests.json"),
+            request_add: None,
+            request_sql: None,
+            request_desc: None,
+            request_query_name: None,
+            request_db_label: None,
             update_defaults: false,
             show_help: false,
         }
@@ -139,6 +310,90 @@ impl AnalyzeConfig {
                 "--output" | "-o" => {
                     if i + 1 < args.len() {
                         config.output_file = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--event-audit" => {
+                    if i + 2 < args.len() {
+                        config.event_audit = Some((
+                            PathBuf::from(&args[i + 1]),
+                            PathBuf::from(&args[i + 2]),
+                        ));
+                        i += 2;
+                    }
+                }
+                "--audit-output" => {
+                    if i + 1 < args.len() {
+                        config.audit_output = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--focused" => {
+                    if i + 1 < args.len() {
+                        config.focused_db = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--focused-output" => {
+                    if i + 1 < args.len() {
+                        config.focused_output = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--request" => {
+                    if i + 1 < args.len() {
+                        config.request_name = Some(args[i + 1].clone());
+                        i += 1;
+                    }
+                }
+                "--request-output" => {
+                    if i + 1 < args.len() {
+                        config.request_output = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--request-db" => {
+                    if i + 1 < args.len() {
+                        config.request_db = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--request-list" => {
+                    config.request_list = true;
+                }
+                "--requests-file" => {
+                    if i + 1 < args.len() {
+                        config.requests_file = PathBuf::from(&args[i + 1]);
+                        i += 1;
+                    }
+                }
+                "--request-add" => {
+                    if i + 1 < args.len() {
+                        config.request_add = Some(args[i + 1].clone());
+                        i += 1;
+                    }
+                }
+                "--request-sql" => {
+                    if i + 1 < args.len() {
+                        config.request_sql = Some(args[i + 1].clone());
+                        i += 1;
+                    }
+                }
+                "--request-desc" => {
+                    if i + 1 < args.len() {
+                        config.request_desc = Some(args[i + 1].clone());
+                        i += 1;
+                    }
+                }
+                "--request-query-name" => {
+                    if i + 1 < args.len() {
+                        config.request_query_name = Some(args[i + 1].clone());
+                        i += 1;
+                    }
+                }
+                "--request-db-label" => {
+                    if i + 1 < args.len() {
+                        config.request_db_label = Some(args[i + 1].clone());
                         i += 1;
                     }
                 }
@@ -174,6 +429,20 @@ ARGUMENTS:
 OPTIONS:
     --targets <FILE>    Load tuning targets from TOML file
     --output, -o <FILE> Write full report to file
+    --event-audit <BASE_DB> <CURRENT_DB>  Compare two DBs via event audit queries
+    --audit-output <FILE> Write event audit report to file (default: notes/analysis_runs/...)
+    --focused <DB>       Run focused analysis on a single DB
+    --focused-output <FILE> Write focused report to file (default: notes/analysis_runs/...)
+    --request <NAME>     Run a stored SQL analysis request
+    --request-output <FILE> Write request report to file (default: notes/analysis_runs/...)
+    --request-db <DB>    Override DB path for a request
+    --request-list       List available analysis requests
+    --requests-file <FILE> Use an alternate analysis requests file
+    --request-add <NAME> Add a new analysis request (requires --request-sql)
+    --request-sql <SQL>  SQL for --request-add
+    --request-desc <TEXT> Description for --request-add
+    --request-query-name <NAME> Query name for --request-add (default: query)
+    --request-db-label <LABEL> Label stored with request DB
     --update-defaults   Update default profiles in src/constants.rs
     --help, -h          Show this help
 
@@ -186,6 +455,18 @@ EXAMPLES:
 
     # Update default profiles based on leaderboard
     cargo run --bin analyze -- training.db --update-defaults
+
+    # Event audit: compare baseline vs current tournament DBs
+    cargo run --bin analyze -- --event-audit db/baseline.db db/current.db
+
+    # Focused analysis: deep dive on a single DB
+    cargo run --bin analyze -- --focused db/current.db
+
+    # Run a stored analysis request
+    cargo run --bin analyze -- --request focused_core --request-db db/current.db
+
+    # Add a new stored request
+    cargo run --bin analyze -- --request-add my_query --request-sql "SELECT COUNT(*) FROM matches"
 
 TARGETS FILE FORMAT (TOML):
     [targets]
@@ -213,4 +494,22 @@ fn generate_full_report(
     report.push_str(&format_suggestions(suggestions));
 
     report
+}
+
+fn default_audit_output_path() -> PathBuf {
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    PathBuf::from(format!("notes/analysis_runs/event_audit_{}.md", timestamp))
+}
+
+fn default_focused_output_path() -> PathBuf {
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    PathBuf::from(format!("notes/analysis_runs/focused_{}.md", timestamp))
+}
+
+fn default_request_output_path(name: &str) -> PathBuf {
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    PathBuf::from(format!(
+        "notes/analysis_runs/request_{}_{}.md",
+        name, timestamp
+    ))
 }

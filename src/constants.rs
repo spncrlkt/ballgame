@@ -125,6 +125,18 @@ pub const ARENA_HEIGHT: f32 = 900.0;
 pub const ARENA_FLOOR_Y: f32 = -ARENA_HEIGHT / 2.0; // Floor at bottom edge
 
 // =============================================================================
+// HEATMAP SETTINGS
+// =============================================================================
+
+pub const HEATMAP_CELL_SIZE: u32 = 20; // Must match heatmap generator cell size
+pub const HEATMAP_GRID_WIDTH: u32 = (ARENA_WIDTH as u32) / HEATMAP_CELL_SIZE;
+pub const HEATMAP_GRID_HEIGHT: u32 = (ARENA_HEIGHT as u32) / HEATMAP_CELL_SIZE;
+
+pub const HEATMAP_SCORE_WEIGHT_DEFAULT: f32 = 0.05;
+pub const HEATMAP_LOS_THRESHOLD_DEFAULT: f32 = 0.58;
+pub const HEATMAP_LOS_MARGIN_DEFAULT: f32 = 0.22;
+
+// =============================================================================
 // BASKETS
 // =============================================================================
 

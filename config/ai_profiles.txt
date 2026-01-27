@@ -29,14 +29,14 @@ charge_min: 0.29
 charge_max: 0.70
 steal_range: 130
 defense_offset: 245
-min_shot_quality: 0.20
+min_shot_quality: 0.020000000000000004
 pressure_distance: 170
 aggression: 0.86
 defensive_iq: 0.56
 steal_reaction_time: 0.12
 button_presses_per_sec: 13
-position_patience: 0.50
-seek_threshold: 0.14
+position_patience: -0.14999999999999997
+seek_threshold: 0.41000000000000003
 
 # =============================================================================
 # HISTORICAL CHAMPIONS (preserved for comparison)
@@ -50,14 +50,14 @@ charge_min: 0.2
 charge_max: 0.5
 steal_range: 150
 defense_offset: 200
-min_shot_quality: 0.20
+min_shot_quality: 0.020000000000000004
 pressure_distance: 60
 aggression: 1.0
 defensive_iq: 0.40
 steal_reaction_time: 0.10
 button_presses_per_sec: 15
-position_patience: 0.3
-seek_threshold: 0.20
+position_patience: -0.35
+seek_threshold: 0.47
 
 profile: v2_Rusher
 id: 5136024b50153a2c
@@ -67,14 +67,14 @@ charge_min: 0.2
 charge_max: 0.5
 steal_range: 150
 defense_offset: 200
-min_shot_quality: 0.20
+min_shot_quality: 0.020000000000000004
 pressure_distance: 60
 aggression: 1.0
 defensive_iq: 0.40
 steal_reaction_time: 0.10
 button_presses_per_sec: 15
-position_patience: 0.3
-seek_threshold: 0.20
+position_patience: -0.35
+seek_threshold: 0.47
 
 profile: v2_Balanced_Steady
 id: 404a5379894996dc
@@ -84,14 +84,14 @@ charge_min: 0.6
 charge_max: 1.3
 steal_range: 85
 defense_offset: 320
-min_shot_quality: 0.36
+min_shot_quality: 0.18
 pressure_distance: 130
 aggression: 0.55
 defensive_iq: 0.70
 steal_reaction_time: 0.20
 button_presses_per_sec: 10
-position_patience: 1.2
-seek_threshold: 0.06
+position_patience: 0.55
+seek_threshold: 0.32999999999999996
 
 profile: v2_Aggro_Ctrl
 id: b072b2d38cedb8d0

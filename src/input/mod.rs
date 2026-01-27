@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::constants::*;
 use crate::events::{ControllerSource, EventBus, GameEvent};
 use crate::player::HumanControlTarget;
-use crate::ui::PhysicsTweaks;
+use crate::ui::TweakPanelState;
 
 /// Buffered input state for the human-controlled player
 #[derive(Resource, Default)]
@@ -25,13 +25,13 @@ pub fn capture_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut input: ResMut<PlayerInput>,
-    tweaks: Res<PhysicsTweaks>,
+    panel_state: Res<TweakPanelState>,
     time: Res<Time>,
     mut event_bus: ResMut<EventBus>,
     human_target: Res<HumanControlTarget>,
 ) {
     // Don't capture game input when tweak panel is open (uses arrow keys)
-    if tweaks.panel_visible {
+    if panel_state.panel_visible {
         return;
     }
     // Horizontal movement (continuous - overwrite each frame)

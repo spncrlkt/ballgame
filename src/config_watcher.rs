@@ -14,6 +14,7 @@ use crate::levels::{LevelDatabase, reload_level_geometry};
 use crate::palettes::{PALETTES_FILE, PaletteDatabase};
 use crate::presets::{PRESETS_FILE, PresetDatabase};
 use crate::scoring::CurrentLevel;
+use crate::tuning::{GAMEPLAY_TUNING_FILE, PhysicsTweaks, load_gameplay_tuning_from_file};
 use crate::world::{Basket, CornerRamp, LevelPlatform};
 
 /// Path to ball options file
@@ -33,6 +34,7 @@ pub struct ConfigWatcher {
     pub ball_options_mtime: Option<SystemTime>,
     pub ai_profiles_mtime: Option<SystemTime>,
     pub presets_mtime: Option<SystemTime>,
+    pub tuning_mtime: Option<SystemTime>,
 }
 
 impl Default for ConfigWatcher {
@@ -44,6 +46,7 @@ impl Default for ConfigWatcher {
             ball_options_mtime: get_mtime(BALL_OPTIONS_FILE),
             ai_profiles_mtime: get_mtime(AI_PROFILES_FILE),
             presets_mtime: get_mtime(PRESETS_FILE),
+            tuning_mtime: get_mtime(GAMEPLAY_TUNING_FILE),
         }
     }
 }
@@ -64,6 +67,7 @@ pub fn check_config_changes(
     mut palette_db: ResMut<PaletteDatabase>,
     mut profile_db: ResMut<AiProfileDatabase>,
     mut preset_db: ResMut<PresetDatabase>,
+    mut tweaks: ResMut<PhysicsTweaks>,
     current_level: Res<CurrentLevel>,
     current_palette: Res<CurrentPalette>,
     level_platforms: Query<Entity, With<LevelPlatform>>,
@@ -82,6 +86,7 @@ pub fn check_config_changes(
     let mut ball_options_changed = false;
     let mut ai_profiles_changed = false;
     let mut presets_changed = false;
+    let mut tuning_changed = false;
 
     // Check levels.txt
     let new_levels_mtime = get_mtime(LEVELS_FILE);
@@ -116,6 +121,13 @@ pub fn check_config_changes(
     if new_presets_mtime != watcher.presets_mtime {
         watcher.presets_mtime = new_presets_mtime;
         presets_changed = true;
+    }
+
+    // Check gameplay tuning config
+    let new_tuning_mtime = get_mtime(GAMEPLAY_TUNING_FILE);
+    if new_tuning_mtime != watcher.tuning_mtime {
+        watcher.tuning_mtime = new_tuning_mtime;
+        tuning_changed = true;
     }
 
     // Reload levels if changed
@@ -171,5 +183,17 @@ pub fn check_config_changes(
         *preset_db = PresetDatabase::load_from_file(PRESETS_FILE);
         info!("Auto-reloaded game presets from {}", PRESETS_FILE);
         // Note: Preset values are applied when cycling through presets
+    }
+
+    if tuning_changed {
+        match load_gameplay_tuning_from_file(GAMEPLAY_TUNING_FILE) {
+            Ok(tuning) => {
+                tuning.apply_to(&mut tweaks);
+                info!("Auto-reloaded gameplay tuning from {}", GAMEPLAY_TUNING_FILE);
+            }
+            Err(err) => {
+                warn!("Failed to reload gameplay tuning: {}", err);
+            }
+        }
     }
 }

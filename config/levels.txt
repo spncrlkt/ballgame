@@ -13,6 +13,9 @@
 #   center: <y> <w>         Centered platform at (0, y) with width w
 #   debug: true             Debug mode: spawns all ball styles, AI idle (default = false)
 #   regression: true        Regression mode: countdown frozen, AI idle, stable for testing
+#   heatmap_score_weight: <m>   Multiplier for score heatmap influence (default = 1.0)
+#   heatmap_los_threshold: <t>  LOS threshold to allow shooting (default = 0.9)
+#   heatmap_los_margin: <m>     LOS margin to allow shooting (default = 0.05)
 #
 # Heights are relative to ARENA_FLOOR_Y
 # Player max jump = 215 units above platform
@@ -103,6 +106,9 @@ corner_height: 450
 corner_width: 260
 mirror: 400 320 140
 center: 450 200
+heatmap_score_weight: 0.300
+heatmap_los_threshold: 0.600
+heatmap_los_margin: 0.200
 
 level: Terraces
 id: d507cdf2647f1dc3
@@ -155,6 +161,9 @@ id: b4b51d36fe73b709
 basket_height: 680
 basket_push_in: 180
 steps: 0
+heatmap_score_weight: 0.300
+heatmap_los_threshold: 0.600
+heatmap_los_margin: 0.200
 
 level: Pursuit Arena 2
 id: 8ed21959dfc3d54c
@@ -162,3 +171,6 @@ basket_height: 680
 basket_push_in: 180
 steps: 0
 center: 200 200
+heatmap_score_weight: 0.300
+heatmap_los_threshold: 0.600
+heatmap_los_margin: 0.200

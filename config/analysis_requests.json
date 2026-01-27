@@ -1,0 +1,77 @@
+{
+  "requests": [
+    {
+      "name": "focused_core",
+      "description": "Focused analysis core SQL queries for a single tournament DB",
+      "db_path": null,
+      "db_label": null,
+      "queries": [
+        {
+          "name": "match_counts",
+          "sql": "SELECT COUNT(*) AS matches FROM matches",
+          "notes": null
+        },
+        {
+          "name": "avg_duration",
+          "sql": "SELECT AVG(duration_secs) AS avg_duration FROM matches",
+          "notes": null
+        },
+        {
+          "name": "goals_per_match",
+          "sql": "SELECT AVG(score_left + score_right) AS goals_per_match FROM matches",
+          "notes": null
+        },
+        {
+          "name": "scoreless_rate",
+          "sql": "SELECT AVG(CASE WHEN score_left + score_right = 0 THEN 1.0 ELSE 0.0 END) AS scoreless_rate FROM matches",
+          "notes": null
+        },
+        {
+          "name": "shots_total",
+          "sql": "SELECT SUM(shots_attempted) AS shots_attempted, SUM(shots_made) AS shots_made FROM player_stats",
+          "notes": null
+        },
+        {
+          "name": "avg_shot_quality",
+          "sql": "SELECT AVG(avg_shot_quality) AS avg_shot_quality FROM player_stats",
+          "notes": null
+        },
+        {
+          "name": "shot_start_events",
+          "sql": "SELECT match_id, time_ms, data FROM events WHERE event_type = 'SS'",
+          "notes": "Use to inspect shot start positions and quality."
+        },
+        {
+          "name": "shot_release_events",
+          "sql": "SELECT match_id, time_ms, data FROM events WHERE event_type = 'SR'",
+          "notes": "Use to inspect shot charge, angle, and power."
+        },
+        {
+          "name": "ai_goal_changes",
+          "sql": "SELECT match_id, COUNT(*) AS ai_goal_changes FROM events WHERE event_type = 'AG' GROUP BY match_id",
+          "notes": null
+        },
+        {
+          "name": "steal_attempts",
+          "sql": "SELECT match_id, COUNT(*) AS steal_attempts FROM events WHERE event_type = 'SA' GROUP BY match_id",
+          "notes": null
+        },
+        {
+          "name": "event_counts",
+          "sql": "SELECT event_type, COUNT(*) AS count FROM events GROUP BY event_type",
+          "notes": null
+        },
+        {
+          "name": "low_shot_levels",
+          "sql": "SELECT level_name, COUNT(*) AS matches FROM ( SELECT m.id, m.level_name, SUM(ps.shots_attempted) AS shots FROM matches m JOIN player_stats ps ON ps.match_id = m.id GROUP BY m.id ) WHERE shots <= 5 GROUP BY level_name ORDER BY matches DESC",
+          "notes": null
+        },
+        {
+          "name": "per_level_summary",
+          "sql": "SELECT m.level_name, COUNT(DISTINCT m.id) AS matches, AVG(m.score_left + m.score_right) AS goals_per_match, SUM(ps.shots_attempted) AS shots_attempted, SUM(ps.shots_made) AS shots_made, AVG(CASE WHEN m.score_left + m.score_right = 0 THEN 1.0 ELSE 0.0 END) AS scoreless_rate, AVG(ps.avg_shot_quality) AS avg_shot_quality FROM matches m JOIN player_stats ps ON ps.match_id = m.id GROUP BY m.level_name ORDER BY scoreless_rate DESC, shots_attempted ASC",
+          "notes": null
+        }
+      ]
+    }
+  ]
+}
