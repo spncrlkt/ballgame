@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use crate::ai::{AiNavState, AiState, AiGoal, InputState};
+use crate::ai::{AiGoal, AiNavState, AiState, InputState};
 use crate::ball::{Ball, BallState, CurrentPalette, Velocity};
 use crate::constants::*;
 use crate::events::{EventBus, GameEvent, PlayerId};
@@ -67,11 +67,11 @@ pub fn check_scoring(
                 // Determine which team scored
                 let scoring_team = match basket {
                     Basket::Left => {
-                        score.right += points;  // Right team scores in left basket
+                        score.right += points; // Right team scores in left basket
                         PlayerId::R
                     }
                     Basket::Right => {
-                        score.left += points;  // Left team scores in right basket
+                        score.left += points; // Left team scores in right basket
                         PlayerId::L
                     }
                 };

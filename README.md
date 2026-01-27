@@ -26,7 +26,7 @@ cargo run --release    # Play with optimizations
 | `run-ghost` | Run ghost trials (recorded inputs vs AI) |
 | `extract-drives` | Extract drives from evlogs to ghost files |
 | `test-scenarios` | Run scenario tests |
-| `heatmap` | Generate scoring/shot heatmaps |
+| `heatmap` | Generate per-level heatmaps (score, speed, reachability, etc.) |
 
 ### Main Game
 
@@ -109,8 +109,11 @@ cargo run --bin test-scenarios -- -v        # Verbose (show failures)
 ### Heatmaps
 
 ```bash
-cargo run --bin heatmap -- score            # Scoring probability heatmap
-cargo run --bin heatmap -- shots            # Shot distribution heatmap
+cargo run --bin heatmap -- score                  # Per-level scoring heatmaps (left/right)
+cargo run --bin heatmap -- --type reachability    # Reachability heatmaps
+cargo run --bin heatmap -- --full --level "Arena" # Full bundle for one level
+cargo run --bin heatmap -- --full --check         # Full bundles for changed/new levels
+cargo run --bin heatmap -- --full --refresh       # Regenerate everything
 ```
 
 ---

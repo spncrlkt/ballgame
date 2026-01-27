@@ -138,8 +138,8 @@ pub struct BallSpin(pub f32);
 /// Stores row and column for wave animation timing
 #[derive(Component)]
 pub struct DisplayBall {
-    pub row: usize,    // Which shelf (0-4)
-    pub col: usize,    // Position in row
+    pub row: usize, // Which shelf (0-4)
+    pub col: usize, // Position in row
     pub total_rows: usize,
 }
 
@@ -148,8 +148,8 @@ pub struct DisplayBall {
 #[derive(Resource)]
 pub struct DisplayBallWave {
     pub timer: f32,
-    pub row_duration: f32,  // How long each row is active
-    pub cycle_period: f32,  // Total time to cycle through all rows
+    pub row_duration: f32, // How long each row is active
+    pub cycle_period: f32, // Total time to cycle through all rows
     pub num_rows: usize,
 }
 
@@ -157,8 +157,8 @@ impl Default for DisplayBallWave {
     fn default() -> Self {
         Self {
             timer: 0.0,
-            row_duration: 1.0,   // Each row active for 1 second
-            cycle_period: 5.0,   // Full cycle every 5 seconds
+            row_duration: 1.0, // Each row active for 1 second
+            cycle_period: 5.0, // Full cycle every 5 seconds
             num_rows: 5,
         }
     }
@@ -184,11 +184,11 @@ impl DisplayBallWave {
             // Smooth fade in/out
             let progress = time_in_row / self.row_duration;
             if progress < 0.2 {
-                progress / 0.2  // Fade in
+                progress / 0.2 // Fade in
             } else if progress > 0.8 {
-                (1.0 - progress) / 0.2  // Fade out
+                (1.0 - progress) / 0.2 // Fade out
             } else {
-                1.0  // Full intensity
+                1.0 // Full intensity
             }
         }
     }

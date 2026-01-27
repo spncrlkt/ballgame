@@ -87,10 +87,9 @@ pub const SIM_SETTINGS_FILE: &str = "config/simulation_settings.json";
 impl SimConfig {
     /// Load configuration from a JSON settings file
     pub fn from_file(path: &str) -> Result<Self, String> {
-        let contents = std::fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read {}: {}", path, e))?;
-        serde_json::from_str(&contents)
-            .map_err(|e| format!("Failed to parse {}: {}", path, e))
+        let contents =
+            std::fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {}", path, e))?;
+        serde_json::from_str(&contents).map_err(|e| format!("Failed to parse {}: {}", path, e))
     }
 
     /// Load configuration from default config files

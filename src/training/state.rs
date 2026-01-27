@@ -136,8 +136,16 @@ impl TrainingState {
 
     /// Get win counts
     pub fn wins(&self) -> (u32, u32) {
-        let human_wins = self.game_results.iter().filter(|r| r.winner == Winner::Human).count() as u32;
-        let ai_wins = self.game_results.iter().filter(|r| r.winner == Winner::AI).count() as u32;
+        let human_wins = self
+            .game_results
+            .iter()
+            .filter(|r| r.winner == Winner::Human)
+            .count() as u32;
+        let ai_wins = self
+            .game_results
+            .iter()
+            .filter(|r| r.winner == Winner::AI)
+            .count() as u32;
         (human_wins, ai_wins)
     }
 

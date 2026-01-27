@@ -22,10 +22,13 @@ impl EventBuffer {
     pub fn start_session(&mut self, timestamp: &str) {
         self.clear();
         self.session_id = Uuid::new_v4().to_string();
-        self.log(0.0, GameEvent::SessionStart {
-            session_id: self.session_id.clone(),
-            timestamp: timestamp.to_string(),
-        });
+        self.log(
+            0.0,
+            GameEvent::SessionStart {
+                session_id: self.session_id.clone(),
+                timestamp: timestamp.to_string(),
+            },
+        );
     }
 
     /// Log the game configuration

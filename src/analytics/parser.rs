@@ -6,7 +6,7 @@ use std::path::Path;
 
 use rusqlite::params;
 
-use crate::events::{parse_event, GameEvent, PlayerId};
+use crate::events::{GameEvent, PlayerId, parse_event};
 use crate::simulation::SimDatabase;
 
 /// Parsed match data from an event log
@@ -77,22 +77,34 @@ impl ParsedMatch {
 
     /// Count shots for a player
     pub fn shots_for(&self, player: PlayerId) -> usize {
-        self.shots.iter().filter(|(_, p, _, _, _)| *p == player).count()
+        self.shots
+            .iter()
+            .filter(|(_, p, _, _, _)| *p == player)
+            .count()
     }
 
     /// Count goals for a player
     pub fn goals_for(&self, player: PlayerId) -> usize {
-        self.goals.iter().filter(|(_, p, _, _)| *p == player).count()
+        self.goals
+            .iter()
+            .filter(|(_, p, _, _)| *p == player)
+            .count()
     }
 
     /// Count steal attempts for a player
     pub fn steal_attempts_for(&self, player: PlayerId) -> usize {
-        self.steal_attempts.iter().filter(|(_, p)| *p == player).count()
+        self.steal_attempts
+            .iter()
+            .filter(|(_, p)| *p == player)
+            .count()
     }
 
     /// Count steal successes for a player
     pub fn steal_successes_for(&self, player: PlayerId) -> usize {
-        self.steal_successes.iter().filter(|(_, p)| *p == player).count()
+        self.steal_successes
+            .iter()
+            .filter(|(_, p)| *p == player)
+            .count()
     }
 
     /// Count pickups for a player

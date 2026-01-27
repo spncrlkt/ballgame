@@ -5,11 +5,11 @@
 
 use bevy::prelude::*;
 
+use super::{EventBuffer, GameEvent, PlayerId};
 use crate::{
     AiState, BallState, ChargingShot, HoldingBall, InputState, Score, StealContest, StealCooldown,
     Team, Velocity,
 };
-use super::{EventBuffer, GameEvent, PlayerId};
 
 /// Configuration for event emission behavior
 #[derive(Debug, Clone)]
@@ -312,12 +312,27 @@ fn emit_steal_events(
         let cooldown_just_set = prev_cooldown < 0.1;
 
         if is_attacker_cooldown && cooldown_just_set {
-            buffer.log(elapsed, GameEvent::StealAttempt { attacker: player_id });
+            buffer.log(
+                elapsed,
+                GameEvent::StealAttempt {
+                    attacker: player_id,
+                },
+            );
             // Check StealContest for success/fail (fail_flash_timer > 0 means fail)
             if steal_contest.fail_flash_timer > 0.0 {
-                buffer.log(elapsed, GameEvent::StealFail { attacker: player_id });
+                buffer.log(
+                    elapsed,
+                    GameEvent::StealFail {
+                        attacker: player_id,
+                    },
+                );
             } else {
-                buffer.log(elapsed, GameEvent::StealSuccess { attacker: player_id });
+                buffer.log(
+                    elapsed,
+                    GameEvent::StealSuccess {
+                        attacker: player_id,
+                    },
+                );
             }
         }
         state.prev_steal_cooldowns[idx] = current_cooldown;
@@ -372,13 +387,14 @@ fn emit_ball_state_events(
         BallState::InFlight { shooter, power } => {
             // If ball just became InFlight, log shot release
             if state.prev_ball_holder.is_some() {
-                let player_id = players
-                    .iter()
-                    .find(|p| p.entity == *shooter)
-                    .map(|p| match p.team {
-                        Team::Left => PlayerId::L,
-                        Team::Right => PlayerId::R,
-                    });
+                let player_id =
+                    players
+                        .iter()
+                        .find(|p| p.entity == *shooter)
+                        .map(|p| match p.team {
+                            Team::Left => PlayerId::L,
+                            Team::Right => PlayerId::R,
+                        });
 
                 if let Some(pid) = player_id {
                     buffer.log(

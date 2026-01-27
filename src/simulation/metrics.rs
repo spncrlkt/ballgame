@@ -147,7 +147,9 @@ impl TournamentResult {
                 .or_insert(0) += 1;
 
             // Count overall games
-            *profile_total.entry(result.left_profile.clone()).or_insert(0) += 1;
+            *profile_total
+                .entry(result.left_profile.clone())
+                .or_insert(0) += 1;
             *profile_total
                 .entry(result.right_profile.clone())
                 .or_insert(0) += 1;
@@ -348,22 +350,21 @@ impl LevelSweepResult {
 
             self.avg_score_by_level
                 .insert(*level, total_score as f32 / total);
-            self.win_rate_by_level
-                .insert(*level, wins as f32 / total);
+            self.win_rate_by_level.insert(*level, wins as f32 / total);
         }
     }
 
     pub fn format_table(&self, level_names: &HashMap<u32, String>) -> String {
         let mut output = String::new();
-        output.push_str(&format!(
-            "\nLevel Sweep Results for {}:\n\n",
-            self.profile
-        ));
+        output.push_str(&format!("\nLevel Sweep Results for {}:\n\n", self.profile));
         output.push_str(&format!(
             "{:>5} | {:>20} | {:>10} | {:>10}\n",
             "Level", "Name", "Avg Score", "Win Rate"
         ));
-        output.push_str(&format!("{:-<5}-+-{:-<20}-+-{:-<10}-+-{:-<10}\n", "", "", "", ""));
+        output.push_str(&format!(
+            "{:-<5}-+-{:-<20}-+-{:-<10}-+-{:-<10}\n",
+            "", "", "", ""
+        ));
 
         let mut levels: Vec<_> = self.results_by_level.keys().collect();
         levels.sort();

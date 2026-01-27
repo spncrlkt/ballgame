@@ -343,11 +343,7 @@ impl NavGraph {
     /// Find the best elevated platform for the AI to navigate to when no good
     /// shooting position is found. Returns the highest reachable platform with
     /// decent shot quality.
-    pub fn find_elevated_platform(
-        &self,
-        target: Vec2,
-        min_shot_quality: f32,
-    ) -> Option<usize> {
+    pub fn find_elevated_platform(&self, target: Vec2, min_shot_quality: f32) -> Option<usize> {
         let shooting_at_left_basket = target.x < 0.0;
 
         // Find elevated platforms (not floor) with decent shot quality
@@ -474,7 +470,10 @@ pub fn rebuild_nav_graph(
     corner_ramp_query: Query<Entity, With<CornerRamp>>,
 ) {
     // Check if we need to rebuild
-    if !nav_graph.dirty && nav_graph.built_for_level_id == current_level.0 && !nav_graph.nodes.is_empty() {
+    if !nav_graph.dirty
+        && nav_graph.built_for_level_id == current_level.0
+        && !nav_graph.nodes.is_empty()
+    {
         return;
     }
 
@@ -488,7 +487,8 @@ pub fn rebuild_nav_graph(
     // Levels with platforms should have them spawned; if none found, wait for next frame
     let level_platform_count = level_platform_query.iter().count();
     // Check if current level has platforms defined
-    let level_has_platforms = level_db.get_by_id(&current_level.0)
+    let level_has_platforms = level_db
+        .get_by_id(&current_level.0)
         .map(|l| !l.platforms.is_empty())
         .unwrap_or(false);
     if level_has_platforms && level_platform_count == 0 {
@@ -515,7 +515,7 @@ pub fn rebuild_nav_graph(
         top_y: floor_y,
         platform_entity: None,
         is_floor: true,
-        shot_quality_left: 0.0,  // Will be computed after all nodes are added
+        shot_quality_left: 0.0, // Will be computed after all nodes are added
         shot_quality_right: 0.0,
         platform_role: PlatformRole::Floor,
     });
@@ -561,9 +561,13 @@ pub fn rebuild_nav_graph(
             top_y: pos.y + half_height,
             platform_entity: Some(entity),
             is_floor: false,
-            shot_quality_left: 0.0,  // Will be computed after all nodes are added
+            shot_quality_left: 0.0, // Will be computed after all nodes are added
             shot_quality_right: 0.0,
-            platform_role: if is_ramp { PlatformRole::Ramp } else { PlatformRole::ShotPosition },
+            platform_role: if is_ramp {
+                PlatformRole::Ramp
+            } else {
+                PlatformRole::ShotPosition
+            },
         };
 
         nav_graph.nodes.push(node);
@@ -676,8 +680,8 @@ fn is_trajectory_blocked(from: &NavNode, to: &NavNode, all_nodes: &[NavNode]) ->
 
         // Check if this platform is in the vertical range of the trajectory
         // Platform top must be between from and to heights (with margin for player height)
-        let platform_in_y_range = node.top_y > min_y + PLAYER_SIZE.y / 2.0
-            && node.top_y < max_y - PLAYER_SIZE.y / 2.0;
+        let platform_in_y_range =
+            node.top_y > min_y + PLAYER_SIZE.y / 2.0 && node.top_y < max_y - PLAYER_SIZE.y / 2.0;
 
         if !platform_in_y_range {
             continue;
@@ -800,10 +804,16 @@ fn calculate_edge(from: &NavNode, to: &NavNode, all_nodes: &[NavNode]) -> Option
         // Calculate drop point and landing point
         let (drop_from_x, land_on_x) = if to.center.x > from.center.x {
             // Target is to the right - drop from right edge
-            (from.right_x, to.clamp_x(from.right_x + horizontal_reach * 0.5))
+            (
+                from.right_x,
+                to.clamp_x(from.right_x + horizontal_reach * 0.5),
+            )
         } else {
             // Target is to the left - drop from left edge
-            (from.left_x, to.clamp_x(from.left_x - horizontal_reach * 0.5))
+            (
+                from.left_x,
+                to.clamp_x(from.left_x - horizontal_reach * 0.5),
+            )
         };
 
         let cost = fall_height * 0.3 + horizontal_gap * 0.5; // Drops are cheaper than jumps
@@ -827,9 +837,15 @@ fn calculate_edge(from: &NavNode, to: &NavNode, all_nodes: &[NavNode]) -> Option
             }
 
             let (jump_from_x, land_on_x) = if to.left_x > from.right_x {
-                (from.right_x - NAV_JUMP_TOLERANCE, to.left_x + NAV_JUMP_TOLERANCE)
+                (
+                    from.right_x - NAV_JUMP_TOLERANCE,
+                    to.left_x + NAV_JUMP_TOLERANCE,
+                )
             } else {
-                (from.left_x + NAV_JUMP_TOLERANCE, to.right_x - NAV_JUMP_TOLERANCE)
+                (
+                    from.left_x + NAV_JUMP_TOLERANCE,
+                    to.right_x - NAV_JUMP_TOLERANCE,
+                )
             };
 
             Some(NavEdge {
@@ -905,7 +921,12 @@ pub fn has_ceiling_above(pos: Vec2, capabilities: &AiCapabilities, nav_graph: &N
 /// Returns the closest platform edge (left or right) that the AI can move to
 /// in order to clear the ceiling and then jump.
 /// Uses AiCapabilities for physics calculations.
-pub fn find_escape_x(pos: Vec2, target_y: f32, capabilities: &AiCapabilities, nav_graph: &NavGraph) -> Option<f32> {
+pub fn find_escape_x(
+    pos: Vec2,
+    target_y: f32,
+    capabilities: &AiCapabilities,
+    nav_graph: &NavGraph,
+) -> Option<f32> {
     let platforms = crate::ai::world_model::extract_platforms_from_nav(&nav_graph.nodes);
     capabilities.find_escape_x(pos, target_y, &platforms)
 }

@@ -117,7 +117,10 @@ fn main() {
 
     for style in &config.styles {
         for (palette_idx, palette) in config.palettes.iter().enumerate() {
-            let filename = format!("assets/textures/balls/ball_{}_{}.png", style.name, palette_idx);
+            let filename = format!(
+                "assets/textures/balls/ball_{}_{}.png",
+                style.name, palette_idx
+            );
             generate_texture(&filename, &config, style, palette);
             println!("  Created: {} ({})", filename, palette.name);
         }
@@ -299,7 +302,13 @@ fn draw_half(fx: f32, palette: &Palette) -> [u8; 4] {
 }
 
 /// Wavy Half: Sinusoidal split
-fn draw_wavy_half(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+fn draw_wavy_half(
+    fx: f32,
+    fy: f32,
+    radius: f32,
+    style: &StyleConfig,
+    palette: &Palette,
+) -> [u8; 4] {
     let frequency = style.params.get("frequency").copied().unwrap_or(3.0);
     let amplitude = style.params.get("amplitude").copied().unwrap_or(0.2);
 
@@ -314,7 +323,15 @@ fn draw_wavy_half(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &
 }
 
 /// Wavy Wedges: Sinusoidal edges on wedge sections
-fn draw_wavy_wedges(_fx: f32, _fy: f32, _radius: f32, angle: f32, norm_dist: f32, style: &StyleConfig, palette: &Palette) -> [u8; 4] {
+fn draw_wavy_wedges(
+    _fx: f32,
+    _fy: f32,
+    _radius: f32,
+    angle: f32,
+    norm_dist: f32,
+    style: &StyleConfig,
+    palette: &Palette,
+) -> [u8; 4] {
     let sections = style.params.get("sections").copied().unwrap_or(4.0) as i32;
     let frequency = style.params.get("frequency").copied().unwrap_or(3.0);
     let amplitude = style.params.get("amplitude").copied().unwrap_or(0.15);
@@ -587,7 +604,11 @@ fn baseball_seam_point(t: f32) -> [f32; 3] {
     let a = 0.4;
     let theta = PI / 2.0 - (PI / 2.0 - a) * t.cos();
     let phi = t / 2.0 + a * (2.0 * t).sin();
-    [theta.sin() * phi.cos(), theta.sin() * phi.sin(), theta.cos()]
+    [
+        theta.sin() * phi.cos(),
+        theta.sin() * phi.sin(),
+        theta.cos(),
+    ]
 }
 
 /// Rotate point around Y axis
@@ -609,7 +630,9 @@ fn spherical_angle(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> f32 {
     let dot = cross[0] * a[0] + cross[1] * a[1] + cross[2] * a[2];
     let ab_len = (ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2]).sqrt();
     let ac_len = (ac[0] * ac[0] + ac[1] * ac[1] + ac[2] * ac[2]).sqrt();
-    if ab_len < 1e-10 || ac_len < 1e-10 { return 0.0; }
+    if ab_len < 1e-10 || ac_len < 1e-10 {
+        return 0.0;
+    }
     let cos_angle = (ab[0] * ac[0] + ab[1] * ac[1] + ab[2] * ac[2]) / (ab_len * ac_len);
     let sin_sign = if dot > 0.0 { 1.0 } else { -1.0 };
     sin_sign * cos_angle.clamp(-1.0, 1.0).acos()
@@ -630,7 +653,14 @@ fn which_baseball_region(point: [f32; 3]) -> bool {
 }
 
 /// Baseball: 3D sphere with proper baseball seam curve
-fn draw_baseball(fx: f32, fy: f32, radius: f32, style: &StyleConfig, palette: &Palette, swap: bool) -> [u8; 4] {
+fn draw_baseball(
+    fx: f32,
+    fy: f32,
+    radius: f32,
+    style: &StyleConfig,
+    palette: &Palette,
+    swap: bool,
+) -> [u8; 4] {
     let rotation_deg = style.params.get("rotation").copied().unwrap_or(0.0);
     let rotation = rotation_deg * PI / 180.0;
 

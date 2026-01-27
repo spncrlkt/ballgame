@@ -14,22 +14,19 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ballgame::ai::{
-    AiNavState, AiProfileDatabase, AiState, InputState, NavGraph,
-    ai_navigation_update, mark_nav_dirty_on_level_change, rebuild_nav_graph,
+    AiNavState, AiProfileDatabase, AiState, InputState, NavGraph, ai_navigation_update,
+    mark_nav_dirty_on_level_change, rebuild_nav_graph,
 };
 use ballgame::ball::{
-    Ball, BallState, CurrentPalette, apply_velocity, ball_collisions,
-    ball_follow_holder, ball_gravity, ball_player_collision, ball_spin, ball_state_update,
-    pickup_ball,
+    Ball, BallState, CurrentPalette, apply_velocity, ball_collisions, ball_follow_holder,
+    ball_gravity, ball_player_collision, ball_spin, ball_state_update, pickup_ball,
 };
 use ballgame::constants::*;
 use ballgame::levels::LevelDatabase;
 use ballgame::palettes::PaletteDatabase;
-use ballgame::player::{
-    HoldingBall, Player, Team, apply_gravity, apply_input, check_collisions,
-};
+use ballgame::player::{HoldingBall, Player, Team, apply_gravity, apply_input, check_collisions};
 use ballgame::scoring::{CurrentLevel, Score, check_scoring};
-use ballgame::shooting::{throw_ball, update_shot_charge, LastShotInfo};
+use ballgame::shooting::{LastShotInfo, throw_ball, update_shot_charge};
 use ballgame::simulation::{
     GhostOutcome, GhostPlaybackState, GhostTrial, GhostTrialResult, SimConfig, SimControl,
     ghost_input_system, load_ghost_trial, max_tick, sim_setup,
@@ -48,9 +45,11 @@ fn run_ghost_trial(
     let mut app = App::new();
 
     // Minimal plugins for headless operation
-    app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(
-        Duration::from_secs_f32(1.0 / 60.0),
-    )));
+    app.add_plugins(
+        MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f32(
+            1.0 / 60.0,
+        ))),
+    );
     app.add_plugins(bevy::transform::TransformPlugin);
 
     // Fixed timestep
@@ -63,10 +62,17 @@ fn run_ghost_trial(
     app.insert_resource(profile_db.clone());
     app.init_resource::<Score>();
     // Convert level number to level ID
-    let level_id = level_db.all()
+    let level_id = level_db
+        .all()
         .get((trial.level as usize).saturating_sub(1))
         .map(|l| l.id.clone())
-        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+        .unwrap_or_else(|| {
+            level_db
+                .all()
+                .first()
+                .map(|l| l.id.clone())
+                .unwrap_or_default()
+        });
     app.insert_resource(CurrentLevel(level_id));
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
@@ -100,7 +106,8 @@ fn run_ghost_trial(
     });
 
     // Configure AI profile for right player
-    let profile_id = profile_db.get_by_name(ai_profile)
+    let profile_id = profile_db
+        .get_by_name(ai_profile)
         .map(|p| p.id.clone())
         .unwrap_or_else(|| profile_db.default_profile().id.clone());
     app.add_systems(
@@ -232,20 +239,22 @@ fn ai_decision_for_right_only(
         ),
         With<Player>,
     >,
-    all_players: Query<
-        (
-            Entity,
-            &Transform,
-            Option<&HoldingBall>,
-        ),
-        With<Player>,
-    >,
+    all_players: Query<(Entity, &Transform, Option<&HoldingBall>), With<Player>>,
     ball_query: Query<(&Transform, &BallState), With<Ball>>,
     basket_query: Query<(&Transform, &ballgame::world::Basket)>,
 ) {
     // Filter to only process right player
-    for (entity, transform, team, mut input, ai_state, _nav_state, target_basket, holding, grounded)
-        in &mut ai_query
+    for (
+        entity,
+        transform,
+        team,
+        mut input,
+        ai_state,
+        _nav_state,
+        target_basket,
+        holding,
+        grounded,
+    ) in &mut ai_query
     {
         if *team != Team::Right {
             continue;
@@ -253,7 +262,8 @@ fn ai_decision_for_right_only(
 
         // Call the regular AI decision logic for this player
         // (Simplified version - just basic behavior)
-        let profile = profile_db.get_by_id(&ai_state.profile_id)
+        let profile = profile_db
+            .get_by_id(&ai_state.profile_id)
             .unwrap_or_else(|| profile_db.default_profile());
         let ai_pos = transform.translation.truncate();
 
@@ -398,9 +408,18 @@ fn main() {
         eprintln!("Ghost Trial Runner");
         eprintln!();
         eprintln!("Usage:");
-        eprintln!("  {} <file.ghost>                    Run single ghost trial", args[0]);
-        eprintln!("  {} <dir/> [--profile <name>]       Run all .ghost files in directory", args[0]);
-        eprintln!("  {} <dir/> --summary                Show summary only", args[0]);
+        eprintln!(
+            "  {} <file.ghost>                    Run single ghost trial",
+            args[0]
+        );
+        eprintln!(
+            "  {} <dir/> [--profile <name>]       Run all .ghost files in directory",
+            args[0]
+        );
+        eprintln!(
+            "  {} <dir/> --summary                Show summary only",
+            args[0]
+        );
         eprintln!();
         eprintln!("Options:");
         eprintln!("  --profile <name>   AI profile to test (default: v2_Balanced)");
@@ -457,9 +476,7 @@ fn main() {
             .expect("Failed to read directory")
             .filter_map(|e| e.ok())
             .map(|e| e.path())
-            .filter(|p| {
-                p.extension().map_or(false, |ext| ext == "ghost")
-            })
+            .filter(|p| p.extension().map_or(false, |ext| ext == "ghost"))
             .filter_map(|p| load_ghost_trial(&p).ok())
             .collect()
     } else {
@@ -494,7 +511,11 @@ fn main() {
         let result = run_ghost_trial(trial, &ai_profile, &level_db, &profile_db, verbose);
 
         if !summary_only && !verbose {
-            let defended = if result.ai_defended() { "defended" } else { "scored" };
+            let defended = if result.ai_defended() {
+                "defended"
+            } else {
+                "scored"
+            };
             println!("{} ({})", result.outcome, defended);
         }
 
@@ -530,13 +551,32 @@ fn main() {
         0.0
     };
 
-    println!("Defense rate: {:.1}% ({}/{})", defense_rate, defended, total);
+    println!(
+        "Defense rate: {:.1}% ({}/{})",
+        defense_rate, defended, total
+    );
     println!();
     println!("Outcomes:");
-    println!("  Ghost scored:      {} ({:.1}%)", ghost_scored, ghost_scored as f32 / total as f32 * 100.0);
-    println!("  AI stole:          {} ({:.1}%)", ai_stole, ai_stole as f32 / total as f32 * 100.0);
-    println!("  Inputs exhausted:  {} ({:.1}%)", exhausted, exhausted as f32 / total as f32 * 100.0);
-    println!("  Time limit:        {} ({:.1}%)", timeout, timeout as f32 / total as f32 * 100.0);
+    println!(
+        "  Ghost scored:      {} ({:.1}%)",
+        ghost_scored,
+        ghost_scored as f32 / total as f32 * 100.0
+    );
+    println!(
+        "  AI stole:          {} ({:.1}%)",
+        ai_stole,
+        ai_stole as f32 / total as f32 * 100.0
+    );
+    println!(
+        "  Inputs exhausted:  {} ({:.1}%)",
+        exhausted,
+        exhausted as f32 / total as f32 * 100.0
+    );
+    println!(
+        "  Time limit:        {} ({:.1}%)",
+        timeout,
+        timeout as f32 / total as f32 * 100.0
+    );
 
     // Originally scoring trials
     let originally_scored: Vec<_> = results.iter().filter(|r| r.originally_scored).collect();

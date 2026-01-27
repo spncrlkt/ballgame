@@ -89,7 +89,8 @@ mod tests {
 
     #[test]
     fn test_platform_bounds_overlap() {
-        let bounds = PlatformBounds::from_center_size(Vec2::new(100.0, 50.0), Vec2::new(80.0, 20.0));
+        let bounds =
+            PlatformBounds::from_center_size(Vec2::new(100.0, 50.0), Vec2::new(80.0, 20.0));
 
         // Position at center should overlap
         assert!(bounds.overlaps_x(100.0));

@@ -10,13 +10,16 @@ const SIZE: u32 = 256;
 const FRAMES: u32 = 120;
 const SECTIONS: u32 = 6; // Number of wedge sections
 
-const COLOR_A: [u8; 3] = [0, 255, 128];   // Green
-const COLOR_B: [u8; 3] = [255, 0, 128];   // Pink
+const COLOR_A: [u8; 3] = [0, 255, 128]; // Green
+const COLOR_B: [u8; 3] = [255, 0, 128]; // Pink
 const BORDER_COLOR: [u8; 3] = [20, 20, 20];
 const BG_COLOR: [u8; 3] = [30, 30, 35];
 
 fn main() {
-    println!("Generating wedge_{} frames ({} frames at {}x{})...", SECTIONS, FRAMES, SIZE, SIZE);
+    println!(
+        "Generating wedge_{} frames ({} frames at {}x{})...",
+        SECTIONS, FRAMES, SIZE, SIZE
+    );
 
     std::fs::create_dir_all("assets/wedge_frames").ok();
 
@@ -28,16 +31,25 @@ fn main() {
         let x_angle = (t * 2.0 * PI).sin() * 0.4; // ±0.4 radians tilt
 
         let img = render_wedge(y_angle, x_angle);
-        img.save(format!("assets/wedge_frames/frame_{:03}.png", frame)).unwrap();
+        img.save(format!("assets/wedge_frames/frame_{:03}.png", frame))
+            .unwrap();
         print!("\r  Frame {}/{}", frame + 1, FRAMES);
     }
 
     println!("\n\nCreating GIF...");
     let _ = std::process::Command::new("ffmpeg")
-        .args(["-y", "-framerate", "30",
-               "-i", "assets/wedge_frames/frame_%03d.png",
-               "-vf", "split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse",
-               "-loop", "0", "assets/wedge_rotation.gif"])
+        .args([
+            "-y",
+            "-framerate",
+            "30",
+            "-i",
+            "assets/wedge_frames/frame_%03d.png",
+            "-vf",
+            "split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse",
+            "-loop",
+            "0",
+            "assets/wedge_rotation.gif",
+        ])
         .status();
 
     println!("Done! assets/wedge_rotation.gif");
@@ -116,12 +128,16 @@ fn render_wedge(y_angle: f32, x_angle: f32) -> RgbaImage {
                 // Border region
                 let alpha = ((radius + 1.0 - dist) / 2.0).min(1.0).max(0.0);
                 let bg_blend = 1.0 - alpha;
-                img.put_pixel(x, y, Rgba([
-                    (BORDER_COLOR[0] as f32 * alpha + BG_COLOR[0] as f32 * bg_blend) as u8,
-                    (BORDER_COLOR[1] as f32 * alpha + BG_COLOR[1] as f32 * bg_blend) as u8,
-                    (BORDER_COLOR[2] as f32 * alpha + BG_COLOR[2] as f32 * bg_blend) as u8,
-                    255
-                ]));
+                img.put_pixel(
+                    x,
+                    y,
+                    Rgba([
+                        (BORDER_COLOR[0] as f32 * alpha + BG_COLOR[0] as f32 * bg_blend) as u8,
+                        (BORDER_COLOR[1] as f32 * alpha + BG_COLOR[1] as f32 * bg_blend) as u8,
+                        (BORDER_COLOR[2] as f32 * alpha + BG_COLOR[2] as f32 * bg_blend) as u8,
+                        255,
+                    ]),
+                );
             } else {
                 // Inside sphere - project to 3D surface
                 let px = fx / radius;
@@ -145,8 +161,15 @@ fn render_wedge(y_angle: f32, x_angle: f32) -> RgbaImage {
 
                 // Add subtle shading based on angle to light
                 let light_dir = [0.3f32, 0.5, 0.8];
-                let light_len = (light_dir[0]*light_dir[0] + light_dir[1]*light_dir[1] + light_dir[2]*light_dir[2]).sqrt();
-                let nl = [light_dir[0]/light_len, light_dir[1]/light_len, light_dir[2]/light_len];
+                let light_len = (light_dir[0] * light_dir[0]
+                    + light_dir[1] * light_dir[1]
+                    + light_dir[2] * light_dir[2])
+                    .sqrt();
+                let nl = [
+                    light_dir[0] / light_len,
+                    light_dir[1] / light_len,
+                    light_dir[2] / light_len,
+                ];
 
                 let dot = world_point[0] * nl[0] + world_point[1] * nl[1] + world_point[2] * nl[2];
                 let shade = 0.6 + 0.4 * dot.max(0.0);
@@ -156,19 +179,27 @@ fn render_wedge(y_angle: f32, x_angle: f32) -> RgbaImage {
                 if near_boundary(local, boundary_width) {
                     // Draw dark line at boundary
                     let line_shade = 0.3;
-                    img.put_pixel(x, y, Rgba([
-                        (r as f32 * line_shade) as u8,
-                        (g as f32 * line_shade) as u8,
-                        (b as f32 * line_shade) as u8,
-                        255
-                    ]));
+                    img.put_pixel(
+                        x,
+                        y,
+                        Rgba([
+                            (r as f32 * line_shade) as u8,
+                            (g as f32 * line_shade) as u8,
+                            (b as f32 * line_shade) as u8,
+                            255,
+                        ]),
+                    );
                 } else {
-                    img.put_pixel(x, y, Rgba([
-                        (r as f32 * shade) as u8,
-                        (g as f32 * shade) as u8,
-                        (b as f32 * shade) as u8,
-                        255
-                    ]));
+                    img.put_pixel(
+                        x,
+                        y,
+                        Rgba([
+                            (r as f32 * shade) as u8,
+                            (g as f32 * shade) as u8,
+                            (b as f32 * shade) as u8,
+                            255,
+                        ]),
+                    );
                 }
             }
         }

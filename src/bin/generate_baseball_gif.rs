@@ -16,7 +16,10 @@ const BORDER_COLOR: [u8; 3] = [20, 20, 20];
 const BG_COLOR: [u8; 3] = [30, 30, 35];
 
 fn main() {
-    println!("Generating baseball frames ({} frames at {}x{})...", FRAMES, SIZE, SIZE);
+    println!(
+        "Generating baseball frames ({} frames at {}x{})...",
+        FRAMES, SIZE, SIZE
+    );
 
     std::fs::create_dir_all("assets/baseball_frames").ok();
 
@@ -28,16 +31,25 @@ fn main() {
         let x_angle = (t * 2.0 * PI).sin() * 0.4; // ±0.4 radians tilt
 
         let img = render_baseball(y_angle, x_angle);
-        img.save(format!("assets/baseball_frames/frame_{:03}.png", frame)).unwrap();
+        img.save(format!("assets/baseball_frames/frame_{:03}.png", frame))
+            .unwrap();
         print!("\r  Frame {}/{}", frame + 1, FRAMES);
     }
 
     println!("\n\nCreating GIF...");
     let _ = std::process::Command::new("ffmpeg")
-        .args(["-y", "-framerate", "30",
-               "-i", "assets/baseball_frames/frame_%03d.png",
-               "-vf", "split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse",
-               "-loop", "0", "assets/baseball_rotation.gif"])
+        .args([
+            "-y",
+            "-framerate",
+            "30",
+            "-i",
+            "assets/baseball_frames/frame_%03d.png",
+            "-vf",
+            "split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse",
+            "-loop",
+            "0",
+            "assets/baseball_rotation.gif",
+        ])
         .status();
 
     println!("Done! assets/baseball_rotation.gif");
@@ -48,7 +60,11 @@ fn seam_point(t: f32) -> [f32; 3] {
     let a = 0.4;
     let theta = PI / 2.0 - (PI / 2.0 - a) * t.cos();
     let phi = t / 2.0 + a * (2.0 * t).sin();
-    [theta.sin() * phi.cos(), theta.sin() * phi.sin(), theta.cos()]
+    [
+        theta.sin() * phi.cos(),
+        theta.sin() * phi.sin(),
+        theta.cos(),
+    ]
 }
 
 /// Rotate point around Y axis
@@ -151,7 +167,11 @@ fn spherical_angle(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> f32 {
 }
 
 fn render_baseball(y_rotation: f32, x_rotation: f32) -> RgbaImage {
-    let mut img = RgbaImage::from_pixel(SIZE, SIZE, Rgba([BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 255]));
+    let mut img = RgbaImage::from_pixel(
+        SIZE,
+        SIZE,
+        Rgba([BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], 255]),
+    );
 
     let center = SIZE as f32 / 2.0;
     let radius = center - 20.0;

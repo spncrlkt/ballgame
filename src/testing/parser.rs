@@ -135,8 +135,7 @@ pub fn parse_test_file(path: &Path) -> Result<TestDefinition, String> {
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
 
-    toml::from_str(&content)
-        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
+    toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
 }
 
 #[cfg(test)]

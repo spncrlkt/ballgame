@@ -141,7 +141,7 @@ impl Default for CycleSelection {
             active_direction: CycleDirection::Down,
             down_option: DownOption::Composite,
             right_option: RightOption::Level,
-            ai_player_index: 0, // Start with Left player
+            ai_player_index: 0,  // Start with Left player
             menu_enabled: false, // Start disabled until player explicitly activates
         }
     }
@@ -354,8 +354,8 @@ pub fn unified_cycle_system(
             CycleDirection::Right
         };
 
-        let same_direction = cycle_selection.menu_enabled
-            && cycle_selection.active_direction == pressed_direction;
+        let same_direction =
+            cycle_selection.menu_enabled && cycle_selection.active_direction == pressed_direction;
 
         if !cycle_selection.menu_enabled || !same_direction {
             // First press or different direction - just select (no cycling)
@@ -373,7 +373,8 @@ pub fn unified_cycle_system(
                 }
                 CycleDirection::Down => {
                     cycle_selection.down_option = cycle_selection.down_option.next();
-                    current_settings.settings.down_option = cycle_selection.down_option.name().to_string();
+                    current_settings.settings.down_option =
+                        cycle_selection.down_option.name().to_string();
                     current_settings.mark_dirty();
                     info!("Cycle: Down ({})", cycle_selection.down_option.name());
                 }
@@ -383,7 +384,8 @@ pub fn unified_cycle_system(
                 }
                 CycleDirection::Right => {
                     cycle_selection.right_option = cycle_selection.right_option.next();
-                    current_settings.settings.right_option = cycle_selection.right_option.name().to_string();
+                    current_settings.settings.right_option =
+                        cycle_selection.right_option.name().to_string();
                     current_settings.mark_dirty();
                     info!("Cycle: Right ({})", cycle_selection.right_option.name());
                 }
@@ -438,7 +440,9 @@ pub fn unified_cycle_system(
                     if let Some(p) = preset_db.get_composite(idx) {
                         if let Some(level_num) = p.level {
                             // Convert 1-indexed level number to level ID
-                            if let Some(level_data) = level_db.all().get((level_num as usize).saturating_sub(1)) {
+                            if let Some(level_data) =
+                                level_db.all().get((level_num as usize).saturating_sub(1))
+                            {
                                 current_level.0 = level_data.id.clone();
                             }
                         }
@@ -516,14 +520,20 @@ pub fn unified_cycle_system(
                 } else {
                     Team::Right
                 };
-                let profile_ids: Vec<String> = profile_db.profiles().iter().map(|p| p.id.clone()).collect();
+                let profile_ids: Vec<String> =
+                    profile_db.profiles().iter().map(|p| p.id.clone()).collect();
                 let num_profiles = profile_ids.len();
                 for (mut ai_state, team) in &mut ai_query {
                     if *team == target_team {
-                        let current_idx = profile_ids.iter().position(|id| *id == ai_state.profile_id).unwrap_or(0);
+                        let current_idx = profile_ids
+                            .iter()
+                            .position(|id| *id == ai_state.profile_id)
+                            .unwrap_or(0);
                         let next_idx = (current_idx + 1) % num_profiles;
                         ai_state.profile_id = profile_ids[next_idx].clone();
-                        let profile = profile_db.get_by_id(&ai_state.profile_id).unwrap_or_else(|| profile_db.default_profile());
+                        let profile = profile_db
+                            .get_by_id(&ai_state.profile_id)
+                            .unwrap_or_else(|| profile_db.default_profile());
                         // Save to settings
                         if *team == Team::Left {
                             current_settings.settings.left_ai_profile = Some(profile.name.clone());
@@ -544,9 +554,13 @@ pub fn unified_cycle_system(
             // Level, Palette, BallStyle
             match cycle_selection.right_option {
                 RightOption::Level => {
-                    let level_ids: Vec<String> = level_db.all().iter().map(|l| l.id.clone()).collect();
+                    let level_ids: Vec<String> =
+                        level_db.all().iter().map(|l| l.id.clone()).collect();
                     let num_levels = level_ids.len();
-                    let current_idx = level_ids.iter().position(|id| *id == current_level.0).unwrap_or(0);
+                    let current_idx = level_ids
+                        .iter()
+                        .position(|id| *id == current_level.0)
+                        .unwrap_or(0);
                     if cycle_next {
                         let next_idx = (current_idx + 1) % num_levels;
                         current_level.0 = level_ids[next_idx].clone();
@@ -652,7 +666,8 @@ pub fn update_cycle_indicator(
     let mut left_human = false;
     let mut right_human = false;
     for (ai_state, team, human) in &ai_query {
-        let profile_name = profile_db.get_by_id(&ai_state.profile_id)
+        let profile_name = profile_db
+            .get_by_id(&ai_state.profile_id)
             .map(|p| p.name.clone())
             .unwrap_or_else(|| "?".to_string());
         match team {
@@ -687,7 +702,11 @@ pub fn update_cycle_indicator(
                 .map(|l| l.name.as_str())
                 .unwrap_or("?");
             let level_ids: Vec<&str> = level_db.all().iter().map(|l| l.id.as_str()).collect();
-            let display_num = level_ids.iter().position(|id| *id == current_level.0).map(|i| i + 1).unwrap_or(0);
+            let display_num = level_ids
+                .iter()
+                .position(|id| *id == current_level.0)
+                .map(|i| i + 1)
+                .unwrap_or(0);
             format!("{}/{} {}", display_num, level_db.len(), level_name)
         }
         RightOption::Palette => format!("{}", current_palette.0),
@@ -712,11 +731,7 @@ pub fn update_cycle_indicator(
         let is_selected = enabled && line_index == active_index;
 
         // Marker: ">" when selected, " " otherwise (no marker when disabled)
-        let marker = if is_selected {
-            ">"
-        } else {
-            " "
-        };
+        let marker = if is_selected { ">" } else { " " };
 
         // Font size: larger when selected
         font.font_size = if is_selected {

@@ -231,9 +231,12 @@ pub fn check_settings_reset(
         current_level.0 = current_settings.settings.level.clone();
         current_palette.0 = current_settings.settings.palette_index;
         viewport_scale.preset_index = current_settings.settings.viewport_index;
-        cycle_selection.active_direction = crate::ui::CycleDirection::from_str(&current_settings.settings.active_direction);
-        cycle_selection.down_option = crate::ui::DownOption::from_str(&current_settings.settings.down_option);
-        cycle_selection.right_option = crate::ui::RightOption::from_str(&current_settings.settings.right_option);
+        cycle_selection.active_direction =
+            crate::ui::CycleDirection::from_str(&current_settings.settings.active_direction);
+        cycle_selection.down_option =
+            crate::ui::DownOption::from_str(&current_settings.settings.down_option);
+        cycle_selection.right_option =
+            crate::ui::RightOption::from_str(&current_settings.settings.right_option);
 
         // Apply viewport change
         let (width, height, _) = crate::constants::VIEWPORT_PRESETS[viewport_scale.preset_index];
@@ -291,14 +294,21 @@ pub fn respawn_player(
 
     // Handle level cycling with IDs
     let level_ids: Vec<String> = level_db.all().iter().map(|l| l.id.clone()).collect();
-    let current_idx = level_ids.iter().position(|id| *id == current_level.0).unwrap_or(0);
+    let current_idx = level_ids
+        .iter()
+        .position(|id| *id == current_level.0)
+        .unwrap_or(0);
     let num_levels = level_ids.len();
 
     if next_level_pressed {
         let next_idx = (current_idx + 1) % num_levels;
         current_level.0 = level_ids[next_idx].clone();
     } else if prev_level_pressed {
-        let prev_idx = if current_idx == 0 { num_levels - 1 } else { current_idx - 1 };
+        let prev_idx = if current_idx == 0 {
+            num_levels - 1
+        } else {
+            current_idx - 1
+        };
         current_level.0 = level_ids[prev_idx].clone();
     }
 
@@ -330,7 +340,10 @@ pub fn respawn_player(
             commands.entity(ball_entity).despawn();
         }
 
-        let is_debug = level_db.get_by_id(&current_level.0).map(|l| l.debug).unwrap_or(false);
+        let is_debug = level_db
+            .get_by_id(&current_level.0)
+            .map(|l| l.debug)
+            .unwrap_or(false);
 
         spawn_balls(&mut commands, &ball_textures, current_palette.0, is_debug);
 
@@ -343,8 +356,7 @@ pub fn respawn_player(
                 info!("AI reset with profile: {}", profile.name);
             }
         }
-
-        }
+    }
 
     // Level change: update geometry and reset positions
     if level_changed {
@@ -375,7 +387,10 @@ pub fn respawn_player(
             commands.entity(ball_entity).despawn();
         }
 
-        let is_debug = level_db.get_by_id(&current_level.0).map(|l| l.debug).unwrap_or(false);
+        let is_debug = level_db
+            .get_by_id(&current_level.0)
+            .map(|l| l.debug)
+            .unwrap_or(false);
 
         spawn_balls(&mut commands, &ball_textures, current_palette.0, is_debug);
 
@@ -400,7 +415,10 @@ pub fn respawn_player(
             }
 
             // Update AI goals based on debug status
-            let is_debug = level_db.get_by_id(&current_level.0).map(|l| l.debug).unwrap_or(false);
+            let is_debug = level_db
+                .get_by_id(&current_level.0)
+                .map(|l| l.debug)
+                .unwrap_or(false);
             let new_goal = if is_debug {
                 AiGoal::Idle
             } else {
@@ -470,7 +488,10 @@ pub fn manage_debug_display(
         return;
     }
 
-    let is_debug = level_db.get_by_id(&current_level.0).map(|l| l.debug).unwrap_or(false);
+    let is_debug = level_db
+        .get_by_id(&current_level.0)
+        .map(|l| l.debug)
+        .unwrap_or(false);
     let has_display_balls = !display_balls.is_empty();
 
     if is_debug && !has_display_balls {
@@ -544,7 +565,10 @@ pub fn spawn_debug_display(
                 // Spawn label above ball
                 commands.spawn((
                     Text2d::new(style_name.clone()),
-                    TextFont { font_size: 10.0, ..default() },
+                    TextFont {
+                        font_size: 10.0,
+                        ..default()
+                    },
                     TextColor(TEXT_SECONDARY),
                     Transform::from_xyz(x, y + BALL_SIZE.y / 2.0 + 8.0, 3.0),
                     BallLabel,

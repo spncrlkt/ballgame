@@ -2,8 +2,8 @@
 
 use bevy::prelude::*;
 
-use crate::events::{GameEvent, PlayerId};
 use super::MatchInfo;
+use crate::events::{GameEvent, PlayerId};
 
 /// A single tick frame with positions and velocities for interpolation.
 #[derive(Debug, Clone)]

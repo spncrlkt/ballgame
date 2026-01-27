@@ -6,30 +6,30 @@ use rand::Rng;
 use std::time::Duration;
 
 use crate::ai::{
-    AiCapabilities, AiNavState, AiProfileDatabase, AiState, InputState, NavGraph, ai_decision_update,
-    ai_navigation_update, mark_nav_dirty_on_level_change, rebuild_nav_graph,
+    AiCapabilities, AiNavState, AiProfileDatabase, AiState, InputState, NavGraph,
+    ai_decision_update, ai_navigation_update, mark_nav_dirty_on_level_change, rebuild_nav_graph,
     shot_quality::evaluate_shot_quality,
 };
 use crate::ball::{
-    Ball, BallState, CurrentPalette, Velocity, ball_collisions, ball_follow_holder,
-    ball_gravity, ball_player_collision, ball_spin, ball_state_update, apply_velocity, pickup_ball,
+    Ball, BallState, CurrentPalette, Velocity, apply_velocity, ball_collisions, ball_follow_holder,
+    ball_gravity, ball_player_collision, ball_spin, ball_state_update, pickup_ball,
 };
-use crate::events::{
-    emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventBuffer, EventBus,
-    EventEmitterState, GameConfig, GameEvent,
-};
-use crate::palettes::PaletteDatabase;
 use crate::constants::*;
+use crate::events::{
+    EmitterConfig, EventBuffer, EventBus, EventEmitterState, GameConfig, GameEvent,
+    emit_game_events, snapshot_ball, snapshot_player,
+};
 use crate::levels::LevelDatabase;
+use crate::palettes::PaletteDatabase;
+use crate::player::TargetBasket;
 use crate::player::{
     HoldingBall, JumpState, Player, Team, apply_gravity, apply_input, check_collisions,
 };
 use crate::scoring::{CurrentLevel, Score, check_scoring};
-use crate::world::Basket;
-use crate::player::TargetBasket;
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
-use crate::ui::PhysicsTweaks;
 use crate::steal::{StealContest, StealCooldown, StealTracker, steal_cooldown_update};
+use crate::ui::PhysicsTweaks;
+use crate::world::Basket;
 
 use super::config::SimConfig;
 use super::control::{SimControl, SimEventBuffer};
@@ -75,7 +75,12 @@ fn get_effective_level(config: &SimConfig, level_db: &LevelDatabase, seed: u64) 
 }
 
 /// Run a single match and return the result
-pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profile_db: &AiProfileDatabase) -> MatchResult {
+pub fn run_match(
+    config: &SimConfig,
+    seed: u64,
+    level_db: &LevelDatabase,
+    profile_db: &AiProfileDatabase,
+) -> MatchResult {
     // Determine effective level (random if not specified)
     let level = get_effective_level(config, level_db, seed);
 
@@ -90,16 +95,25 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
     app.add_plugins(bevy::transform::TransformPlugin);
 
     // Set up fixed timestep for physics (1/60 second)
-    app.insert_resource(Time::<Fixed>::from_duration(Duration::from_secs_f32(1.0 / 60.0)));
+    app.insert_resource(Time::<Fixed>::from_duration(Duration::from_secs_f32(
+        1.0 / 60.0,
+    )));
 
     // Game resources
     app.insert_resource((*level_db).clone());
     app.insert_resource((*profile_db).clone());
     app.init_resource::<Score>();
     // Convert level number to level ID
-    let level_id = level_db.get((level - 1) as usize)
+    let level_id = level_db
+        .get((level - 1) as usize)
         .map(|l| l.id.clone())
-        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+        .unwrap_or_else(|| {
+            level_db
+                .all()
+                .first()
+                .map(|l| l.id.clone())
+                .unwrap_or_default()
+        });
     app.insert_resource(CurrentLevel(level_id));
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
@@ -130,44 +144,50 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
             .get((level - 1) as usize)
             .map(|l| l.name.clone())
             .unwrap_or_else(|| format!("Level {}", level));
-        event_buffer.buffer.log(0.0, GameEvent::MatchStart {
-            level,
-            level_name,
-            left_profile: config.left_profile.clone(),
-            right_profile: config.right_profile.clone(),
-            seed,
-        });
+        event_buffer.buffer.log(
+            0.0,
+            GameEvent::MatchStart {
+                level,
+                level_name,
+                left_profile: config.left_profile.clone(),
+                right_profile: config.right_profile.clone(),
+                seed,
+            },
+        );
 
         // Log game configuration (all tunable parameters)
-        event_buffer.buffer.log(0.0, GameEvent::Config(GameConfig {
-            // Physics
-            gravity_rise: GRAVITY_RISE,
-            gravity_fall: GRAVITY_FALL,
-            jump_velocity: JUMP_VELOCITY,
-            move_speed: MOVE_SPEED,
-            ground_accel: GROUND_ACCEL,
-            air_accel: AIR_ACCEL,
-            // Ball physics
-            ball_gravity: BALL_GRAVITY,
-            ball_bounce: BALL_BOUNCE,
-            ball_air_friction: BALL_AIR_FRICTION,
-            ball_ground_friction: BALL_GROUND_FRICTION,
-            // Shooting
-            shot_max_power: SHOT_MAX_POWER,
-            shot_max_speed: SHOT_MAX_SPEED,
-            shot_charge_time: SHOT_CHARGE_TIME,
-            shot_max_variance: SHOT_MAX_VARIANCE,
-            shot_min_variance: SHOT_MIN_VARIANCE,
-            // Steal
-            steal_range: STEAL_RANGE,
-            steal_success_chance: STEAL_SUCCESS_CHANCE,
-            steal_cooldown: STEAL_COOLDOWN,
-            // Presets not tracked in simulation (uses defaults)
-            preset_movement: None,
-            preset_ball: None,
-            preset_shooting: None,
-            preset_composite: None,
-        }));
+        event_buffer.buffer.log(
+            0.0,
+            GameEvent::Config(GameConfig {
+                // Physics
+                gravity_rise: GRAVITY_RISE,
+                gravity_fall: GRAVITY_FALL,
+                jump_velocity: JUMP_VELOCITY,
+                move_speed: MOVE_SPEED,
+                ground_accel: GROUND_ACCEL,
+                air_accel: AIR_ACCEL,
+                // Ball physics
+                ball_gravity: BALL_GRAVITY,
+                ball_bounce: BALL_BOUNCE,
+                ball_air_friction: BALL_AIR_FRICTION,
+                ball_ground_friction: BALL_GROUND_FRICTION,
+                // Shooting
+                shot_max_power: SHOT_MAX_POWER,
+                shot_max_speed: SHOT_MAX_SPEED,
+                shot_charge_time: SHOT_CHARGE_TIME,
+                shot_max_variance: SHOT_MAX_VARIANCE,
+                shot_min_variance: SHOT_MIN_VARIANCE,
+                // Steal
+                steal_range: STEAL_RANGE,
+                steal_success_chance: STEAL_SUCCESS_CHANCE,
+                steal_cooldown: STEAL_COOLDOWN,
+                // Presets not tracked in simulation (uses defaults)
+                preset_movement: None,
+                preset_ball: None,
+                preset_shooting: None,
+                preset_composite: None,
+            }),
+        );
     }
     app.insert_resource(event_buffer);
 
@@ -198,7 +218,14 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
             .chain(),
     );
 
-    app.add_systems(Update, (steal_cooldown_update, metrics_update, emit_simulation_events));
+    app.add_systems(
+        Update,
+        (
+            steal_cooldown_update,
+            metrics_update,
+            emit_simulation_events,
+        ),
+    );
 
     app.add_systems(
         FixedUpdate,
@@ -276,8 +303,12 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
         eprintln!(
             "WARNING: 0-0 game on level {} ({} vs {}, seed {}). \
              AI is not scoring. Left shots: {}, Right shots: {}",
-            level, config.left_profile, config.right_profile, seed,
-            left_stats.shots_attempted, right_stats.shots_attempted
+            level,
+            config.left_profile,
+            config.right_profile,
+            seed,
+            left_stats.shots_attempted,
+            right_stats.shots_attempted
         );
     }
 
@@ -285,8 +316,13 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
         eprintln!(
             "WARNING: Only {} shots in 60s on level {} ({} vs {}, seed {}). \
              AI is not shooting enough. Left: {}, Right: {}",
-            total_shots, level, config.left_profile, config.right_profile, seed,
-            left_stats.shots_attempted, right_stats.shots_attempted
+            total_shots,
+            level,
+            config.left_profile,
+            config.right_profile,
+            seed,
+            left_stats.shots_attempted,
+            right_stats.shots_attempted
         );
     }
 
@@ -319,11 +355,14 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
 
     if let Some(mut event_buffer) = app.world_mut().get_resource_mut::<SimEventBuffer>() {
         if event_buffer.enabled {
-            event_buffer.buffer.log(elapsed, GameEvent::MatchEnd {
-                score_left,
-                score_right,
-                duration: elapsed,
-            });
+            event_buffer.buffer.log(
+                elapsed,
+                GameEvent::MatchEnd {
+                    score_left,
+                    score_right,
+                    duration: elapsed,
+                },
+            );
             result.events = event_buffer.buffer.drain_events();
         }
     }
@@ -335,7 +374,19 @@ pub fn run_match(config: &SimConfig, seed: u64, level_db: &LevelDatabase, profil
 /// Uses fixed timestep for headless mode consistency
 fn metrics_update(
     mut metrics: ResMut<SimMetrics>,
-    players: Query<(Entity, &Transform, &Team, &AiState, &JumpState, &AiNavState, Option<&HoldingBall>, &TargetBasket), With<Player>>,
+    players: Query<
+        (
+            Entity,
+            &Transform,
+            &Team,
+            &AiState,
+            &JumpState,
+            &AiNavState,
+            Option<&HoldingBall>,
+            &TargetBasket,
+        ),
+        With<Player>,
+    >,
     balls: Query<(&Transform, &BallState), With<Ball>>,
     baskets: Query<(&Transform, &Basket)>,
     score: Res<Score>,
@@ -353,7 +404,9 @@ fn metrics_update(
                 // Ball is in flight - check if it was just released
                 if metrics.prev_ball_holder.is_some() {
                     // Shot was just released - record position and quality
-                    if let Ok((_, shooter_transform, shooter_team, _, _, _, _, target_basket)) = players.get(*shooter) {
+                    if let Ok((_, shooter_transform, shooter_team, _, _, _, _, target_basket)) =
+                        players.get(*shooter)
+                    {
                         let pos = shooter_transform.translation.truncate();
 
                         // Find target basket position
@@ -393,7 +446,9 @@ fn metrics_update(
     }
 
     // Track player stats
-    for (_entity, transform, team, ai_state, jump_state, nav_state, holding, _target_basket) in &players {
+    for (_entity, transform, team, ai_state, jump_state, nav_state, holding, _target_basket) in
+        &players
+    {
         let pos = transform.translation.truncate();
         let goal_name = format!("{:?}", ai_state.current_goal);
         let has_ball = holding.is_some();
@@ -552,8 +607,8 @@ fn emit_simulation_events(
     // Convert query results to snapshots
     let player_snapshots: Vec<_> = players
         .iter()
-        .map(|(entity, team, transform, velocity, charging, ai_state, steal_cooldown, holding, input_state)| {
-            snapshot_player(
+        .map(
+            |(
                 entity,
                 team,
                 transform,
@@ -563,8 +618,20 @@ fn emit_simulation_events(
                 steal_cooldown,
                 holding,
                 input_state,
-            )
-        })
+            )| {
+                snapshot_player(
+                    entity,
+                    team,
+                    transform,
+                    velocity,
+                    charging,
+                    ai_state,
+                    steal_cooldown,
+                    holding,
+                    input_state,
+                )
+            },
+        )
         .collect();
 
     let ball_snapshot = balls
@@ -591,7 +658,6 @@ fn emit_simulation_events(
     );
 }
 
-
 /// Main simulation entry point
 pub fn run_simulation(config: SimConfig) {
     // Load databases
@@ -616,8 +682,9 @@ pub fn run_simulation(config: SimConfig) {
         _ => config.db_path.clone(),
     };
 
-    let db = db_path.as_ref().map(|path| {
-        match SimDatabase::open(std::path::Path::new(path)) {
+    let db = db_path
+        .as_ref()
+        .map(|path| match SimDatabase::open(std::path::Path::new(path)) {
             Ok(db) => {
                 if !config.quiet {
                     println!("Using database: {}", path);
@@ -628,16 +695,23 @@ pub fn run_simulation(config: SimConfig) {
                 eprintln!("Warning: Failed to open database {}: {}", path, e);
                 None
             }
-        }
-    }).flatten();
+        })
+        .flatten();
 
     // Get profile list (use config.profiles if specified, otherwise all)
     let profiles: Vec<String> = if config.profiles.is_empty() {
-        profile_db.profiles().iter().map(|p| p.name.clone()).collect()
+        profile_db
+            .profiles()
+            .iter()
+            .map(|p| p.name.clone())
+            .collect()
     } else {
         // Validate that all specified profiles exist
-        let all_profile_names: std::collections::HashSet<_> =
-            profile_db.profiles().iter().map(|p| p.name.as_str()).collect();
+        let all_profile_names: std::collections::HashSet<_> = profile_db
+            .profiles()
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
         let mut valid_profiles = Vec::new();
         for name in &config.profiles {
             if all_profile_names.contains(name.as_str()) {
@@ -660,7 +734,10 @@ pub fn run_simulation(config: SimConfig) {
     // Helper to format level name for display
     let level_display = |level: Option<u32>| -> String {
         match level {
-            Some(l) => level_names.get(&l).cloned().unwrap_or_else(|| format!("Level {}", l)),
+            Some(l) => level_names
+                .get(&l)
+                .cloned()
+                .unwrap_or_else(|| format!("Level {}", l)),
             None => "Random".to_string(),
         }
     };
@@ -691,7 +768,11 @@ pub fn run_simulation(config: SimConfig) {
                 println!(
                     "Running {} matches{}: {} vs {} on {}",
                     count,
-                    if parallel_mode { format!(" (parallel, {} threads)", config.parallel) } else { String::new() },
+                    if parallel_mode {
+                        format!(" (parallel, {} threads)", config.parallel)
+                    } else {
+                        String::new()
+                    },
                     config.left_profile,
                     config.right_profile,
                     level_display(config.level)
@@ -702,7 +783,13 @@ pub fn run_simulation(config: SimConfig) {
 
             let results = if parallel_mode {
                 // Parallel execution
-                super::parallel::run_multi_match_parallel(&config, *count, base_seed, &level_db, &profile_db)
+                super::parallel::run_multi_match_parallel(
+                    &config,
+                    *count,
+                    base_seed,
+                    &level_db,
+                    &profile_db,
+                )
             } else {
                 // Sequential execution
                 let mut results = Vec::new();
@@ -758,12 +845,17 @@ pub fn run_simulation(config: SimConfig) {
 
         super::config::SimMode::Tournament { matches_per_pair } => {
             let parallel_mode = config.parallel > 0;
-            let total_matches = profiles.len() * (profiles.len() - 1) * (*matches_per_pair as usize);
+            let total_matches =
+                profiles.len() * (profiles.len() - 1) * (*matches_per_pair as usize);
 
             if !config.quiet {
                 println!(
                     "Running tournament{}: {} profiles, {} matches per pair ({} total)",
-                    if parallel_mode { format!(" (parallel, {} threads)", config.parallel) } else { String::new() },
+                    if parallel_mode {
+                        format!(" (parallel, {} threads)", config.parallel)
+                    } else {
+                        String::new()
+                    },
                     profiles.len(),
                     matches_per_pair,
                     total_matches
@@ -776,7 +868,11 @@ pub fn run_simulation(config: SimConfig) {
             if parallel_mode {
                 // Parallel execution
                 tournament.matches = super::parallel::run_tournament_parallel(
-                    &config, *matches_per_pair, base_seed, &level_db, &profile_db
+                    &config,
+                    *matches_per_pair,
+                    base_seed,
+                    &level_db,
+                    &profile_db,
                 );
             } else {
                 // Sequential execution
@@ -836,8 +932,14 @@ pub fn run_simulation(config: SimConfig) {
             if !config.quiet {
                 println!(
                     "Running level sweep{}: {} on {} levels, {} matches each",
-                    if parallel_mode { format!(" (parallel, {} threads)", config.parallel) } else { String::new() },
-                    config.left_profile, num_levels, matches_per_level
+                    if parallel_mode {
+                        format!(" (parallel, {} threads)", config.parallel)
+                    } else {
+                        String::new()
+                    },
+                    config.left_profile,
+                    num_levels,
+                    matches_per_level
                 );
             }
 
@@ -847,10 +949,18 @@ pub fn run_simulation(config: SimConfig) {
             if parallel_mode {
                 // Parallel execution - run all matches then group by level
                 let results = super::parallel::run_level_sweep_parallel(
-                    &config, *matches_per_level, base_seed, &level_db, &profile_db
+                    &config,
+                    *matches_per_level,
+                    base_seed,
+                    &level_db,
+                    &profile_db,
                 );
                 for result in results {
-                    sweep.results_by_level.entry(result.level).or_default().push(result);
+                    sweep
+                        .results_by_level
+                        .entry(result.level)
+                        .or_default()
+                        .push(result);
                 }
             } else {
                 // Sequential execution
@@ -864,12 +974,7 @@ pub fn run_simulation(config: SimConfig) {
                     for i in 0..*matches_per_level {
                         match_num += 1;
                         if !config.quiet {
-                            print!(
-                                "\rLevel {} match {}/{}...",
-                                level,
-                                i + 1,
-                                matches_per_level
-                            );
+                            print!("\rLevel {} match {}/{}...", level, i + 1, matches_per_level);
                             use std::io::Write;
                             std::io::stdout().flush().ok();
                         }
@@ -898,7 +1003,9 @@ pub fn run_simulation(config: SimConfig) {
 
             // Store in database if enabled
             if let Some(ref db) = db {
-                let all_results: Vec<_> = sweep.results_by_level.values()
+                let all_results: Vec<_> = sweep
+                    .results_by_level
+                    .values()
                     .flat_map(|v| v.iter().cloned())
                     .collect();
                 store_results_in_db(db, "level_sweep", &all_results, &config);
@@ -938,7 +1045,12 @@ fn output_result(result: &MatchResult, config: &SimConfig) {
 }
 
 /// Store match results in the database
-fn store_results_in_db(db: &SimDatabase, session_type: &str, results: &[MatchResult], config: &SimConfig) {
+fn store_results_in_db(
+    db: &SimDatabase,
+    session_type: &str,
+    results: &[MatchResult],
+    config: &SimConfig,
+) {
     // Create session
     let config_json = serde_json::to_string(config).ok();
     let session_id = match db.create_session(session_type, config_json.as_deref()) {
@@ -956,7 +1068,9 @@ fn store_results_in_db(db: &SimDatabase, session_type: &str, results: &[MatchRes
             Ok(match_id) => {
                 stored += 1;
                 if !result.events.is_empty() {
-                    if let Err(e) = db.insert_events_with_points(match_id, result.duration, &result.events) {
+                    if let Err(e) =
+                        db.insert_events_with_points(match_id, result.duration, &result.events)
+                    {
                         eprintln!("Warning: Failed to store match events: {}", e);
                     }
                 }
@@ -994,7 +1108,12 @@ mod tests {
         };
         result.events.push((0, GameEvent::ResetScores));
 
-        store_results_in_db(&db, "test", std::slice::from_ref(&result), &SimConfig::default());
+        store_results_in_db(
+            &db,
+            "test",
+            std::slice::from_ref(&result),
+            &SimConfig::default(),
+        );
 
         let match_id: i64 = db
             .conn()
@@ -1028,7 +1147,10 @@ fn run_ghost_trials(
     } else if path.extension().map_or(false, |ext| ext == "ghost") {
         vec![path.to_path_buf()]
     } else {
-        eprintln!("Error: {} is not a .ghost file or directory", path.display());
+        eprintln!(
+            "Error: {} is not a .ghost file or directory",
+            path.display()
+        );
         return;
     };
 
@@ -1038,7 +1160,11 @@ fn run_ghost_trials(
     }
 
     if !config.quiet {
-        println!("Running {} ghost trials against {}", ghost_files.len(), config.right_profile);
+        println!(
+            "Running {} ghost trials against {}",
+            ghost_files.len(),
+            config.right_profile
+        );
         println!();
     }
 
@@ -1059,7 +1185,11 @@ fn run_ghost_trials(
         let result = run_ghost_trial(config, &trial, seed, level_db, profile_db);
 
         if !config.quiet {
-            let status = if result.ai_defended() { "DEFENDED" } else { "SCORED" };
+            let status = if result.ai_defended() {
+                "DEFENDED"
+            } else {
+                "SCORED"
+            };
             println!(
                 "  {} [{}]: {} ({:.1}s, {:.0}% survival)",
                 trial.source_file,
@@ -1084,8 +1214,16 @@ fn run_ghost_trials(
     println!("=== Ghost Trial Summary ===");
     println!("AI Profile: {}", config.right_profile);
     println!("Total trials: {}", results.len());
-    println!("AI defended: {} ({:.0}%)", defended, defended as f32 / results.len() as f32 * 100.0);
-    println!("Ghost scored: {} ({:.0}%)", scored, scored as f32 / results.len() as f32 * 100.0);
+    println!(
+        "AI defended: {} ({:.0}%)",
+        defended,
+        defended as f32 / results.len() as f32 * 100.0
+    );
+    println!(
+        "Ghost scored: {} ({:.0}%)",
+        scored,
+        scored as f32 / results.len() as f32 * 100.0
+    );
 
     // Output JSON if requested
     if let Some(output_file) = &config.output_file {
@@ -1103,16 +1241,18 @@ pub fn run_ghost_trial(
     level_db: &LevelDatabase,
     profile_db: &AiProfileDatabase,
 ) -> super::ghost::GhostTrialResult {
-    use bevy::app::ScheduleRunnerPlugin;
     use super::ghost::{GhostOutcome, GhostPlaybackState, GhostTrialResult, max_tick};
+    use bevy::app::ScheduleRunnerPlugin;
 
     // Create a minimal Bevy app
     let mut app = App::new();
 
     // Minimal plugins for headless operation
-    app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(
-        Duration::from_secs_f32(1.0 / 60.0),
-    )));
+    app.add_plugins(
+        MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f32(
+            1.0 / 60.0,
+        ))),
+    );
     app.add_plugins(bevy::transform::TransformPlugin);
 
     // Use the trial's level
@@ -1123,9 +1263,16 @@ pub fn run_ghost_trial(
     app.insert_resource((*profile_db).clone());
     app.init_resource::<Score>();
     // Convert level number to level ID
-    let level_id = level_db.get((level - 1) as usize)
+    let level_id = level_db
+        .get((level - 1) as usize)
         .map(|l| l.id.clone())
-        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+        .unwrap_or_else(|| {
+            level_db
+                .all()
+                .first()
+                .map(|l| l.id.clone())
+                .unwrap_or_default()
+        });
     app.insert_resource(CurrentLevel(level_id));
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
@@ -1169,7 +1316,13 @@ pub fn run_ghost_trial(
             .chain(),
     );
 
-    app.add_systems(Update, (steal_cooldown_update, super::ghost::ghost_check_end_conditions));
+    app.add_systems(
+        Update,
+        (
+            steal_cooldown_update,
+            super::ghost::ghost_check_end_conditions,
+        ),
+    );
 
     // Ghost input and physics in FixedUpdate for consistent timing
     app.add_systems(
@@ -1238,7 +1391,8 @@ fn ghost_trial_setup(
 ) {
     use crate::ai::{AiGoal, AiNavState, AiState};
     use crate::ball::{
-        Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
+        Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
+        BallStyle,
     };
     use crate::player::{CoyoteTimer, Facing, Grounded, TargetBasket};
     use crate::shooting::ChargingShot;
@@ -1306,26 +1460,30 @@ fn ghost_trial_setup(
         ));
 
     // Spawn ball - give it to the ghost (left player)
-    let ball_entity = commands.spawn((
-        Transform::from_translation(PLAYER_SPAWN_LEFT + Vec3::new(10.0, 0.0, 0.0)),
-        Sprite {
-            custom_size: Some(BALL_SIZE),
-            ..default()
-        },
-        Ball,
-        BallState::Held(left_player), // Ghost starts with the ball
-        Velocity::default(),
-        BallSpin::default(),
-        BallPlayerContact::default(),
-        BallPulse { timer: 0.0 },
-        BallRolling(false),
-        BallShotGrace::default(),
-        BallStyle("wedges".to_string()),
-        Collider,
-    )).id();
+    let ball_entity = commands
+        .spawn((
+            Transform::from_translation(PLAYER_SPAWN_LEFT + Vec3::new(10.0, 0.0, 0.0)),
+            Sprite {
+                custom_size: Some(BALL_SIZE),
+                ..default()
+            },
+            Ball,
+            BallState::Held(left_player), // Ghost starts with the ball
+            Velocity::default(),
+            BallSpin::default(),
+            BallPlayerContact::default(),
+            BallPulse { timer: 0.0 },
+            BallRolling(false),
+            BallShotGrace::default(),
+            BallStyle("wedges".to_string()),
+            Collider,
+        ))
+        .id();
 
     // Add HoldingBall to the ghost player so they can throw
-    commands.entity(left_player).insert(HoldingBall(ball_entity));
+    commands
+        .entity(left_player)
+        .insert(HoldingBall(ball_entity));
 
     // Spawn floor
     commands.spawn((

@@ -56,7 +56,10 @@ pub fn serialize_event(time_ms: u32, event: &GameEvent) -> String {
             right_profile,
             seed,
         } => {
-            format!("{}|{}|{}|{}|{}", level, level_name, left_profile, right_profile, seed)
+            format!(
+                "{}|{}|{}|{}|{}",
+                level, level_name, left_profile, right_profile, seed
+            )
         }
         GameEvent::MatchEnd {
             score_left,
@@ -74,7 +77,11 @@ pub fn serialize_event(time_ms: u32, event: &GameEvent) -> String {
         }
         GameEvent::Pickup { player } => player.to_string(),
         GameEvent::Drop { player } => player.to_string(),
-        GameEvent::ShotStart { player, pos, quality } => {
+        GameEvent::ShotStart {
+            player,
+            pos,
+            quality,
+        } => {
             format!("{}|{}|{:.2}", player, fmt_pos(*pos), quality)
         }
         GameEvent::ShotRelease {
@@ -171,8 +178,12 @@ pub fn serialize_event(time_ms: u32, event: &GameEvent) -> String {
             from_player,
             to_player,
         } => {
-            let from = from_player.map(|p| p.to_string()).unwrap_or_else(|| "_".to_string());
-            let to = to_player.map(|p| p.to_string()).unwrap_or_else(|| "_".to_string());
+            let from = from_player
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "_".to_string());
+            let to = to_player
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "_".to_string());
             format!("{}|{}", from, to)
         }
         GameEvent::ResetAiState { player } => player.to_string(),
@@ -300,8 +311,16 @@ pub fn parse_event(line: &str) -> Option<(u32, GameEvent)> {
             pickup: data[7] == "1",
         },
         "CS" if data.len() >= 2 => GameEvent::ControlSwap {
-            from_player: if data[0] == "_" { None } else { parse_player(data[0]) },
-            to_player: if data[1] == "_" { None } else { parse_player(data[1]) },
+            from_player: if data[0] == "_" {
+                None
+            } else {
+                parse_player(data[0])
+            },
+            to_player: if data[1] == "_" {
+                None
+            } else {
+                parse_player(data[1])
+            },
         },
         "RA" if !data.is_empty() => GameEvent::ResetAiState {
             player: parse_player(data[0])?,
@@ -381,10 +400,7 @@ mod tests {
         let line = serialize_event(850, &event);
         let (ts, parsed) = parse_event(&line).unwrap();
         assert_eq!(ts, 850);
-        if let GameEvent::ShotRelease {
-            player, charge, ..
-        } = parsed
-        {
+        if let GameEvent::ShotRelease { player, charge, .. } = parsed {
             assert_eq!(player, PlayerId::R);
             assert!((charge - 0.75).abs() < 0.01);
         } else {

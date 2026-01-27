@@ -1,6 +1,7 @@
 /target
 Cargo.lock
 training.db
+.DS_Store
 
 # Claude Code
 .claude/
@@ -12,6 +13,9 @@ training.db
 /showcase/regression/current/
 /showcase/regression/diffs/
 
+# Showcase outputs (generated)
+/showcase/
+
 # Simulation/training event logs (local only)
 /logs/
 /training_logs/
@@ -22,4 +26,3 @@ training.db
 # Local settings (use templates for defaults)
 config/training_settings.json
 config/simulation_settings.json
-

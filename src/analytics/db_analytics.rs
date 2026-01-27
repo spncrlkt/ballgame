@@ -2,7 +2,7 @@
 //!
 //! Provides profile analysis, comparison, and aggregation from SQLite database.
 
-use crate::simulation::{SimDatabase, MatchFilter, ProfileStats};
+use crate::simulation::{MatchFilter, ProfileStats, SimDatabase};
 
 /// Extended profile analysis from database
 #[derive(Debug, Clone)]
@@ -141,29 +141,37 @@ impl ProfileComparison {
         let mut bests = Vec::new();
 
         // Win Rate
-        if let Some(best) = self.profiles.iter().max_by(|a, b| {
-            a.stats.win_rate().partial_cmp(&b.stats.win_rate()).unwrap()
-        }) {
+        if let Some(best) = self
+            .profiles
+            .iter()
+            .max_by(|a, b| a.stats.win_rate().partial_cmp(&b.stats.win_rate()).unwrap())
+        {
             bests.push(("Win Rate", best.stats.profile.as_str()));
         }
 
         // Goal Differential
         if let Some(best) = self.profiles.iter().max_by(|a, b| {
-            a.goal_differential.partial_cmp(&b.goal_differential).unwrap()
+            a.goal_differential
+                .partial_cmp(&b.goal_differential)
+                .unwrap()
         }) {
             bests.push(("Goal Diff", best.stats.profile.as_str()));
         }
 
         // Shot Accuracy
-        if let Some(best) = self.profiles.iter().max_by(|a, b| {
-            a.shot_accuracy.partial_cmp(&b.shot_accuracy).unwrap()
-        }) {
+        if let Some(best) = self
+            .profiles
+            .iter()
+            .max_by(|a, b| a.shot_accuracy.partial_cmp(&b.shot_accuracy).unwrap())
+        {
             bests.push(("Shot Accuracy", best.stats.profile.as_str()));
         }
 
         // Steal Rate
         if let Some(best) = self.profiles.iter().max_by(|a, b| {
-            a.steal_success_rate.partial_cmp(&b.steal_success_rate).unwrap()
+            a.steal_success_rate
+                .partial_cmp(&b.steal_success_rate)
+                .unwrap()
         }) {
             bests.push(("Steal Rate", best.stats.profile.as_str()));
         }
@@ -174,7 +182,8 @@ impl ProfileComparison {
 
 /// Analyze a profile from database results
 pub fn analyze_profile(db: &SimDatabase, profile: &str) -> Result<ProfileAnalysis, String> {
-    let stats = db.get_profile_stats(profile)
+    let stats = db
+        .get_profile_stats(profile)
         .map_err(|e| format!("Database error: {}", e))?;
 
     // Get all matches for this profile to compute additional metrics
@@ -182,12 +191,17 @@ pub fn analyze_profile(db: &SimDatabase, profile: &str) -> Result<ProfileAnalysi
         profile: Some(profile.to_string()),
         ..Default::default()
     };
-    let matches = db.query_matches(&filter)
+    let matches = db
+        .query_matches(&filter)
         .map_err(|e| format!("Database error: {}", e))?;
 
     // Compute additional metrics from match data
     let total_duration: f32 = matches.iter().map(|m| m.duration).sum();
-    let avg_duration = if matches.is_empty() { 0.0 } else { total_duration as f64 / matches.len() as f64 };
+    let avg_duration = if matches.is_empty() {
+        0.0
+    } else {
+        total_duration as f64 / matches.len() as f64
+    };
 
     // For shot accuracy and steal rate, we'd need the player_stats table
     // For now, use approximations from available data
@@ -222,9 +236,13 @@ pub fn compare_profiles(db: &SimDatabase, profiles: &[&str]) -> Result<ProfileCo
 }
 
 /// Get detailed profile stats including player_stats data
-pub fn get_detailed_profile_stats(db: &SimDatabase, profile: &str) -> Result<DetailedProfileStats, String> {
+pub fn get_detailed_profile_stats(
+    db: &SimDatabase,
+    profile: &str,
+) -> Result<DetailedProfileStats, String> {
     // First get basic stats
-    let basic = db.get_profile_stats(profile)
+    let basic = db
+        .get_profile_stats(profile)
         .map_err(|e| format!("Database error: {}", e))?;
 
     // Query player_stats for this profile
@@ -286,7 +304,8 @@ impl DetailedProfileStats {
 /// Summary of all profiles in the database
 pub fn summarize_all_profiles(db: &SimDatabase) -> Result<Vec<ProfileAnalysis>, String> {
     // Get unique profiles from matches
-    let all_matches = db.query_matches(&MatchFilter::default())
+    let all_matches = db
+        .query_matches(&MatchFilter::default())
         .map_err(|e| format!("Database error: {}", e))?;
 
     let mut profiles: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -303,9 +322,7 @@ pub fn summarize_all_profiles(db: &SimDatabase) -> Result<Vec<ProfileAnalysis>, 
     }
 
     // Sort by win rate descending
-    analyses.sort_by(|a, b| {
-        b.stats.win_rate().partial_cmp(&a.stats.win_rate()).unwrap()
-    });
+    analyses.sort_by(|a, b| b.stats.win_rate().partial_cmp(&a.stats.win_rate()).unwrap());
 
     Ok(analyses)
 }

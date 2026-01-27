@@ -44,10 +44,17 @@ pub fn replay_setup(
     );
 
     // Set current level from replay - look up by name or fall back to index
-    current_level.0 = level_db.get_by_name(&replay_data.match_info.level_name)
+    current_level.0 = level_db
+        .get_by_name(&replay_data.match_info.level_name)
         .or_else(|| level_db.get(replay_data.match_info.level as usize - 1))
         .map(|l| l.id.clone())
-        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+        .unwrap_or_else(|| {
+            level_db
+                .all()
+                .first()
+                .map(|l| l.id.clone())
+                .unwrap_or_default()
+        });
 
     // Get initial positions from first tick (or use defaults)
     let (left_pos, right_pos, ball_pos) = if let Some(first) = replay_data.ticks.first() {
@@ -241,8 +248,22 @@ pub fn replay_playback(
     let dt_secs = 0.05; // 50ms
 
     // Interpolate player positions
-    let left_pos = hermite_interp(prev.left_pos, prev.left_vel, next.left_pos, next.left_vel, t, dt_secs);
-    let right_pos = hermite_interp(prev.right_pos, prev.right_vel, next.right_pos, next.right_vel, t, dt_secs);
+    let left_pos = hermite_interp(
+        prev.left_pos,
+        prev.left_vel,
+        next.left_pos,
+        next.left_vel,
+        t,
+        dt_secs,
+    );
+    let right_pos = hermite_interp(
+        prev.right_pos,
+        prev.right_vel,
+        next.right_pos,
+        next.right_vel,
+        t,
+        dt_secs,
+    );
 
     for (mut transform, team) in &mut players {
         match team {
@@ -258,14 +279,25 @@ pub fn replay_playback(
     }
 
     // Interpolate ball position
-    let ball_pos = hermite_interp(prev.ball_pos, prev.ball_vel, next.ball_pos, next.ball_vel, t, dt_secs);
+    let ball_pos = hermite_interp(
+        prev.ball_pos,
+        prev.ball_vel,
+        next.ball_pos,
+        next.ball_vel,
+        t,
+        dt_secs,
+    );
 
     for (mut transform, mut ball_state) in &mut ball {
         transform.translation.x = ball_pos.x;
         transform.translation.y = ball_pos.y;
 
         // Update ball state from current frame
-        let current_state = if t < 0.5 { prev.ball_state } else { next.ball_state };
+        let current_state = if t < 0.5 {
+            prev.ball_state
+        } else {
+            next.ball_state
+        };
         *ball_state = match current_state {
             'H' => BallState::Held(Entity::PLACEHOLDER), // Simplified
             'I' => BallState::InFlight {

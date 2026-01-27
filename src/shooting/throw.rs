@@ -172,7 +172,8 @@ pub fn throw_ball(
 
         // Apply distance multiplier and ±10% randomness
         let speed_randomness = rng.gen_range(0.9..1.1);
-        let uncapped_speed = required_speed * distance_multiplier * speed_randomness * power_multiplier;
+        let uncapped_speed =
+            required_speed * distance_multiplier * speed_randomness * power_multiplier;
 
         // Hard cap at SHOT_HARD_CAP
         let final_speed = uncapped_speed.min(SHOT_HARD_CAP);

@@ -10,6 +10,7 @@ use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
 use std::time::Duration;
 
+use crate::ai::InputState;
 use crate::ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
     CurrentPalette, Velocity, apply_velocity, ball_collisions, ball_gravity, ball_player_collision,
@@ -27,7 +28,6 @@ use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge
 use crate::steal::{StealContest, StealCooldown, StealTracker};
 use crate::ui::PhysicsTweaks;
 use crate::world::{Basket, Collider, Platform};
-use crate::ai::InputState;
 
 use super::config::SimConfig;
 
@@ -117,21 +117,11 @@ pub fn run_shot_test(config: &SimConfig, shots_per_position: u32, level_db: &Lev
     let mut all_results = Vec::new();
 
     for (pos_idx, &pos_x) in positions.iter().enumerate() {
-        print!(
-            "Position {} (x={:+.0}): ",
-            pos_idx + 1,
-            pos_x
-        );
+        print!("Position {} (x={:+.0}): ", pos_idx + 1, pos_x);
         use std::io::Write;
         std::io::stdout().flush().ok();
 
-        let result = run_shots_at_position(
-            pos_x,
-            basket_y,
-            shots_per_position,
-            level_db,
-            level,
-        );
+        let result = run_shots_at_position(pos_x, basket_y, shots_per_position, level_db, level);
 
         println!(
             "G:{} O:{} U:{} (over/under: {:.0}%)",
@@ -197,18 +187,27 @@ fn run_shots_at_position(
     // Create ONE app for all shots at this position
     let mut app = App::new();
 
-    app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(
-        Duration::from_secs_f32(1.0 / 60.0),
-    )));
+    app.add_plugins(
+        MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f32(
+            1.0 / 60.0,
+        ))),
+    );
     app.add_plugins(bevy::transform::TransformPlugin);
 
     // Resources
     app.insert_resource((*level_db).clone());
     app.init_resource::<Score>();
     // Convert level number to level ID
-    let level_id = level_db.get((level - 1) as usize)
+    let level_id = level_db
+        .get((level - 1) as usize)
         .map(|l| l.id.clone())
-        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+        .unwrap_or_else(|| {
+            level_db
+                .all()
+                .first()
+                .map(|l| l.id.clone())
+                .unwrap_or_default()
+        });
     app.insert_resource(CurrentLevel(level_id));
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
@@ -235,9 +234,12 @@ fn run_shots_at_position(
     // Startup - spawn arena and initial entities
     let player_x_clone = pos_x;
     let level_clone = level;
-    app.add_systems(Startup, move |commands: Commands, level_db: Res<LevelDatabase>| {
-        shot_test_setup(commands, &level_db, player_x_clone, level_clone);
-    });
+    app.add_systems(
+        Startup,
+        move |commands: Commands, level_db: Res<LevelDatabase>| {
+            shot_test_setup(commands, &level_db, player_x_clone, level_clone);
+        },
+    );
 
     // Game systems
     app.add_systems(
@@ -289,12 +291,7 @@ fn run_shots_at_position(
 }
 
 /// Setup for shot test - spawns arena and initial player/ball
-fn shot_test_setup(
-    mut commands: Commands,
-    level_db: &LevelDatabase,
-    player_x: f32,
-    level: u32,
-) {
+fn shot_test_setup(mut commands: Commands, level_db: &LevelDatabase, player_x: f32, level: u32) {
     let level_idx = (level - 1) as usize;
     let level_def = level_db.get(level_idx);
 
@@ -344,7 +341,9 @@ fn shot_test_setup(
         ))
         .id();
 
-    commands.entity(player_entity).insert(HoldingBall(ball_entity));
+    commands
+        .entity(player_entity)
+        .insert(HoldingBall(ball_entity));
 
     // Spawn floor
     commands.spawn((
@@ -471,23 +470,29 @@ fn shot_test_track_ball(
 fn shot_test_reset_system(
     mut control: ResMut<ShotTestControl>,
     mut score: ResMut<Score>,
-    mut players: Query<(
-        Entity,
-        &mut Transform,
-        &mut Velocity,
-        &mut ChargingShot,
-        &mut InputState,
-        Option<&HoldingBall>,
-    ), (With<Player>, Without<Ball>)>,
-    mut balls: Query<(
-        Entity,
-        &mut Transform,
-        &mut Velocity,
-        &mut BallState,
-        &mut BallSpin,
-        &mut BallRolling,
-        &mut BallShotGrace,
-    ), (With<Ball>, Without<Player>)>,
+    mut players: Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut Velocity,
+            &mut ChargingShot,
+            &mut InputState,
+            Option<&HoldingBall>,
+        ),
+        (With<Player>, Without<Ball>),
+    >,
+    mut balls: Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut Velocity,
+            &mut BallState,
+            &mut BallSpin,
+            &mut BallRolling,
+            &mut BallShotGrace,
+        ),
+        (With<Ball>, Without<Player>),
+    >,
     mut commands: Commands,
 ) {
     if control.phase != ShotTestPhase::NextShot {
@@ -520,7 +525,9 @@ fn shot_test_reset_system(
     score.right = 0;
 
     // Reset player
-    for (player_entity, mut transform, mut velocity, mut charging, mut input, holding) in &mut players {
+    for (player_entity, mut transform, mut velocity, mut charging, mut input, holding) in
+        &mut players
+    {
         transform.translation = Vec3::new(player_x, player_y, 0.0);
         velocity.0 = Vec2::ZERO;
         charging.charge_time = 0.0;
@@ -534,7 +541,16 @@ fn shot_test_reset_system(
     }
 
     // Reset ball
-    for (ball_entity, mut transform, mut velocity, mut ball_state, mut spin, mut rolling, mut grace) in &mut balls {
+    for (
+        ball_entity,
+        mut transform,
+        mut velocity,
+        mut ball_state,
+        mut spin,
+        mut rolling,
+        mut grace,
+    ) in &mut balls
+    {
         transform.translation = Vec3::new(player_x, player_y, 0.0);
         velocity.0 = Vec2::ZERO;
         spin.0 = 0.0;
@@ -544,7 +560,9 @@ fn shot_test_reset_system(
         // Find player entity and set ball as held
         if let Some((player_entity, ..)) = players.iter().next() {
             *ball_state = BallState::Held(player_entity);
-            commands.entity(player_entity).insert(HoldingBall(ball_entity));
+            commands
+                .entity(player_entity)
+                .insert(HoldingBall(ball_entity));
         }
     }
 

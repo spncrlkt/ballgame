@@ -13,7 +13,11 @@ pub struct AssertionError {
 
 impl std::fmt::Display for AssertionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n    Expected: {}\n    Actual: {}", self.message, self.expected, self.actual)
+        write!(
+            f,
+            "{}\n    Expected: {}\n    Actual: {}",
+            self.message, self.expected, self.actual
+        )
     }
 }
 
@@ -26,7 +30,11 @@ pub struct CapturedEvent {
 }
 
 impl CapturedEvent {
-    pub fn from_game_event(frame: u64, event: &GameEvent, entity_map: &std::collections::HashMap<bevy::prelude::Entity, String>) -> Option<Self> {
+    pub fn from_game_event(
+        frame: u64,
+        event: &GameEvent,
+        entity_map: &std::collections::HashMap<bevy::prelude::Entity, String>,
+    ) -> Option<Self> {
         let (event_type, player_entity) = match event {
             GameEvent::Pickup { player } => ("Pickup".to_string(), Some(player)),
             GameEvent::Drop { player } => ("Drop".to_string(), Some(player)),
@@ -35,7 +43,9 @@ impl CapturedEvent {
             GameEvent::StealAttempt { attacker } => ("StealAttempt".to_string(), Some(attacker)),
             GameEvent::StealSuccess { attacker } => ("StealSuccess".to_string(), Some(attacker)),
             GameEvent::StealFail { attacker } => ("StealFail".to_string(), Some(attacker)),
-            GameEvent::StealOutOfRange { attacker } => ("StealOutOfRange".to_string(), Some(attacker)),
+            GameEvent::StealOutOfRange { attacker } => {
+                ("StealOutOfRange".to_string(), Some(attacker))
+            }
             GameEvent::Goal { player, .. } => ("Goal".to_string(), Some(player)),
             _ => return None,
         };
@@ -43,8 +53,14 @@ impl CapturedEvent {
         let player = player_entity.and_then(|p| {
             // Map PlayerId to entity ID string
             match p {
-                crate::events::PlayerId::L => entity_map.iter().find(|(_, id)| id.contains("left") || **id == "attacker" || **id == "p1").map(|(_, id)| id.clone()),
-                crate::events::PlayerId::R => entity_map.iter().find(|(_, id)| id.contains("right") || **id == "victim" || **id == "p2").map(|(_, id)| id.clone()),
+                crate::events::PlayerId::L => entity_map
+                    .iter()
+                    .find(|(_, id)| id.contains("left") || **id == "attacker" || **id == "p1")
+                    .map(|(_, id)| id.clone()),
+                crate::events::PlayerId::R => entity_map
+                    .iter()
+                    .find(|(_, id)| id.contains("right") || **id == "victim" || **id == "p2")
+                    .map(|(_, id)| id.clone()),
             }
         });
 
@@ -57,22 +73,28 @@ impl CapturedEvent {
 }
 
 /// Check if captured events match expected sequence
-pub fn check_sequence(expected: &[ExpectedEvent], captured: &[CapturedEvent]) -> Result<(), AssertionError> {
+pub fn check_sequence(
+    expected: &[ExpectedEvent],
+    captured: &[CapturedEvent],
+) -> Result<(), AssertionError> {
     let mut captured_idx = 0;
 
     for (i, exp) in expected.iter().enumerate() {
         // Find matching event starting from current position
-        let found = captured[captured_idx..].iter().enumerate().find(|(_, cap)| {
-            if cap.event_type != exp.event {
-                return false;
-            }
-            if let Some(ref exp_player) = exp.player {
-                if cap.player.as_ref() != Some(exp_player) {
+        let found = captured[captured_idx..]
+            .iter()
+            .enumerate()
+            .find(|(_, cap)| {
+                if cap.event_type != exp.event {
                     return false;
                 }
-            }
-            true
-        });
+                if let Some(ref exp_player) = exp.player {
+                    if cap.player.as_ref() != Some(exp_player) {
+                        return false;
+                    }
+                }
+                true
+            });
 
         match found {
             Some((offset, cap)) => {
@@ -98,13 +120,21 @@ pub fn check_sequence(expected: &[ExpectedEvent], captured: &[CapturedEvent]) ->
                 captured_idx += offset + 1;
             }
             None => {
-                let player_str = exp.player.as_ref().map(|p| format!(" (player: {})", p)).unwrap_or_default();
+                let player_str = exp
+                    .player
+                    .as_ref()
+                    .map(|p| format!(" (player: {})", p))
+                    .unwrap_or_default();
                 return Err(AssertionError {
                     message: format!("Event #{} '{}'{} not found", i + 1, exp.event, player_str),
                     expected: format!("'{}' event in sequence", exp.event),
-                    actual: format!("events after position {}: {:?}",
+                    actual: format!(
+                        "events after position {}: {:?}",
                         captured_idx,
-                        captured[captured_idx..].iter().map(|e| &e.event_type).collect::<Vec<_>>()
+                        captured[captured_idx..]
+                            .iter()
+                            .map(|e| &e.event_type)
+                            .collect::<Vec<_>>()
                     ),
                 });
             }
@@ -155,11 +185,13 @@ fn parse_check(check: &str) -> Option<(&str, &str, &str)> {
 /// Check state assertions against world state
 pub fn check_state(assertion: &StateAssertion, state: &WorldState) -> Result<(), AssertionError> {
     for check in &assertion.checks {
-        let (path, operator, expected_value) = parse_check(check).ok_or_else(|| AssertionError {
-            message: format!("Invalid check syntax: {}", check),
-            expected: "format: 'entity.property = value' or 'entity.property > value'".to_string(),
-            actual: check.clone(),
-        })?;
+        let (path, operator, expected_value) =
+            parse_check(check).ok_or_else(|| AssertionError {
+                message: format!("Invalid check syntax: {}", check),
+                expected: "format: 'entity.property = value' or 'entity.property > value'"
+                    .to_string(),
+                actual: check.clone(),
+            })?;
 
         let path_parts: Vec<&str> = path.split('.').collect();
 
@@ -213,8 +245,12 @@ pub fn check_state(assertion: &StateAssertion, state: &WorldState) -> Result<(),
             match path_parts.get(1) {
                 Some(&"x") => check_float_comparison(path, ball.x, operator, expected_value)?,
                 Some(&"y") => check_float_comparison(path, ball.y, operator, expected_value)?,
-                Some(&"velocity_x") => check_float_comparison(path, ball.velocity_x, operator, expected_value)?,
-                Some(&"velocity_y") => check_float_comparison(path, ball.velocity_y, operator, expected_value)?,
+                Some(&"velocity_x") => {
+                    check_float_comparison(path, ball.velocity_x, operator, expected_value)?
+                }
+                Some(&"velocity_y") => {
+                    check_float_comparison(path, ball.velocity_y, operator, expected_value)?
+                }
                 Some(&"state") => {
                     let expected = expected_value.trim_matches('"');
                     if ball.state != expected {
@@ -232,17 +268,24 @@ pub fn check_state(assertion: &StateAssertion, state: &WorldState) -> Result<(),
 
         // Entity checks
         let entity_id = path_parts[0];
-        let entity = state.entities.get(entity_id).ok_or_else(|| AssertionError {
-            message: format!("Entity '{}' not found", entity_id),
-            expected: format!("entity '{}'", entity_id),
-            actual: format!("available: {:?}", state.entities.keys().collect::<Vec<_>>()),
-        })?;
+        let entity = state
+            .entities
+            .get(entity_id)
+            .ok_or_else(|| AssertionError {
+                message: format!("Entity '{}' not found", entity_id),
+                expected: format!("entity '{}'", entity_id),
+                actual: format!("available: {:?}", state.entities.keys().collect::<Vec<_>>()),
+            })?;
 
         match path_parts.get(1) {
             Some(&"x") => check_float_comparison(path, entity.x, operator, expected_value)?,
             Some(&"y") => check_float_comparison(path, entity.y, operator, expected_value)?,
-            Some(&"velocity_x") => check_float_comparison(path, entity.velocity_x, operator, expected_value)?,
-            Some(&"velocity_y") => check_float_comparison(path, entity.velocity_y, operator, expected_value)?,
+            Some(&"velocity_x") => {
+                check_float_comparison(path, entity.velocity_x, operator, expected_value)?
+            }
+            Some(&"velocity_y") => {
+                check_float_comparison(path, entity.velocity_y, operator, expected_value)?
+            }
             Some(&"holding_ball") => {
                 let expected = expected_value == "true";
                 if entity.holding_ball != expected {
@@ -271,7 +314,12 @@ pub fn check_state(assertion: &StateAssertion, state: &WorldState) -> Result<(),
 }
 
 /// Check float comparison with operator
-fn check_float_comparison(path: &str, actual: f32, operator: &str, expected_str: &str) -> Result<(), AssertionError> {
+fn check_float_comparison(
+    path: &str,
+    actual: f32,
+    operator: &str,
+    expected_str: &str,
+) -> Result<(), AssertionError> {
     let value: f32 = expected_str.trim().parse().map_err(|_| AssertionError {
         message: format!("Invalid value for {}", path),
         expected: "number".to_string(),
@@ -290,7 +338,10 @@ fn check_float_comparison(path: &str, actual: f32, operator: &str, expected_str:
 
     if !pass {
         return Err(AssertionError {
-            message: format!("Check failed: {} {} {} (actual: {:.1})", path, operator, expected_str, actual),
+            message: format!(
+                "Check failed: {} {} {} (actual: {:.1})",
+                path, operator, expected_str, actual
+            ),
             expected: format!("{} {} {}", path, operator, value),
             actual: format!("{:.1}", actual),
         });

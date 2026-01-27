@@ -11,9 +11,9 @@
 use std::path::PathBuf;
 
 use ballgame::analytics::{
-    AggregateMetrics, Leaderboard, generate_suggestions, format_update_report,
-    load_targets, default_targets, update_default_profiles, parse_all_matches_from_db,
-    format_suggestions, TuningTargets, ParameterSuggestion,
+    AggregateMetrics, Leaderboard, ParameterSuggestion, TuningTargets, default_targets,
+    format_suggestions, format_update_report, generate_suggestions, load_targets,
+    parse_all_matches_from_db, update_default_profiles,
 };
 
 fn main() {
@@ -76,7 +76,10 @@ fn main() {
 
             match update_default_profiles(&constants_path, best, second) {
                 Ok((old_left, old_right)) => {
-                    println!("{}", format_update_report(&old_left, &old_right, best, second));
+                    println!(
+                        "{}",
+                        format_update_report(&old_left, &old_right, best, second)
+                    );
                 }
                 Err(e) => {
                     println!("\nFailed to update defaults: {}", e);

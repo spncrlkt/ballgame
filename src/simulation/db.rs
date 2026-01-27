@@ -7,9 +7,9 @@ use bevy::prelude::Vec2;
 use rusqlite::{Connection, OptionalExtension, Result, params};
 use std::path::Path;
 
+use super::metrics::{MatchResult, PlayerStats};
 use crate::events::{GameEvent, parse_event, serialize_event};
 use crate::replay::{MatchInfo, ReplayData, TickFrame, TimedEvent};
-use super::metrics::{MatchResult, PlayerStats};
 
 /// Database wrapper for simulation results
 pub struct SimDatabase {
@@ -127,9 +127,15 @@ impl SimDatabase {
             CREATE INDEX IF NOT EXISTS idx_points_match ON points(match_id);
             "#,
         )?;
-        let _ = self.conn.execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);
-        let _ = self.conn.execute("ALTER TABLE matches ADD COLUMN display_name TEXT", []);
-        let _ = self.conn.execute("ALTER TABLE events ADD COLUMN point_id INTEGER", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE matches ADD COLUMN display_name TEXT", []);
+        let _ = self
+            .conn
+            .execute("ALTER TABLE events ADD COLUMN point_id INTEGER", []);
         Ok(())
     }
 
@@ -242,7 +248,7 @@ impl SimDatabase {
         let mut sql = String::from(
             "SELECT id, level, level_name, left_profile, right_profile,
                     score_left, score_right, duration_secs, winner
-             FROM matches WHERE 1=1"
+             FROM matches WHERE 1=1",
         );
 
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -285,20 +291,14 @@ impl SimDatabase {
 
     /// Get match count
     pub fn match_count(&self) -> Result<u64> {
-        self.conn.query_row(
-            "SELECT COUNT(*) FROM matches",
-            [],
-            |row| row.get(0),
-        )
+        self.conn
+            .query_row("SELECT COUNT(*) FROM matches", [], |row| row.get(0))
     }
 
     /// Get session count
     pub fn session_count(&self) -> Result<u64> {
-        self.conn.query_row(
-            "SELECT COUNT(*) FROM sessions",
-            [],
-            |row| row.get(0),
-        )
+        self.conn
+            .query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))
     }
 
     /// Insert a batch of events for a match
@@ -315,7 +315,13 @@ impl SimDatabase {
     }
 
     /// Insert a single event for a match
-    pub fn insert_event(&self, match_id: i64, time_ms: u32, event_type: &str, data: &str) -> Result<()> {
+    pub fn insert_event(
+        &self,
+        match_id: i64,
+        time_ms: u32,
+        event_type: &str,
+        data: &str,
+    ) -> Result<()> {
         self.conn.execute(
             "INSERT INTO events (match_id, point_id, time_ms, event_type, data) VALUES (?1, NULL, ?2, ?3, ?4)",
             params![match_id, time_ms, event_type, data],
@@ -470,8 +476,9 @@ impl SimDatabase {
 
         for row in rows {
             let (event_id, time_ms, data) = row.map_err(|e| e.to_string())?;
-            let (_, event) = parse_event(&data)
-                .ok_or_else(|| format!("Failed to parse event {} for match {}", event_id, match_id))?;
+            let (_, event) = parse_event(&data).ok_or_else(|| {
+                format!("Failed to parse event {} for match {}", event_id, match_id)
+            })?;
 
             if time_ms > max_time_ms {
                 max_time_ms = time_ms;
@@ -800,9 +807,7 @@ impl SimDatabase {
             "SELECT event_type, COUNT(*) FROM events WHERE match_id = ?1 GROUP BY event_type ORDER BY COUNT(*) DESC"
         )?;
 
-        let rows = stmt.query_map(params![match_id], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?;
+        let rows = stmt.query_map(params![match_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
 
         rows.collect()
     }
@@ -894,14 +899,26 @@ impl SimDatabase {
         };
 
         Ok(DistanceAnalysis {
-            min_distance: if min_distance == f32::MAX { 0.0 } else { min_distance },
+            min_distance: if min_distance == f32::MAX {
+                0.0
+            } else {
+                min_distance
+            },
             avg_distance,
-            max_distance: if max_distance == f32::MIN { 0.0 } else { max_distance },
+            max_distance: if max_distance == f32::MIN {
+                0.0
+            } else {
+                max_distance
+            },
             ticks_within_60px: ticks_within_60,
             ticks_within_100px: ticks_within_100,
             ticks_within_200px: ticks_within_200,
             total_ticks,
-            closest_moment_ms: if total_ticks > 0 { Some(closest_moment_ms) } else { None },
+            closest_moment_ms: if total_ticks > 0 {
+                Some(closest_moment_ms)
+            } else {
+                None
+            },
         })
     }
 
@@ -1000,7 +1017,11 @@ impl SimDatabase {
         }
 
         // Sort by distance (closest first)
-        moments.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap_or(std::cmp::Ordering::Equal));
+        moments.sort_by(|a, b| {
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         Ok(moments)
     }
@@ -1084,7 +1105,11 @@ mod tests {
         for i in 0..3 {
             let mut result = sample_result();
             result.seed = i;
-            result.winner = if i % 2 == 0 { "left".to_string() } else { "right".to_string() };
+            result.winner = if i % 2 == 0 {
+                "left".to_string()
+            } else {
+                "right".to_string()
+            };
             db.insert_match(&session_id, &result).unwrap();
         }
 

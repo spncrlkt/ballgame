@@ -134,6 +134,20 @@ pub fn spawn_baskets(
     let left_x = -wall_inner + basket_push_in;
     let right_x = wall_inner - basket_push_in;
 
-    spawn_basket_with_rims(commands, Basket::Left, left_x, basket_y, left_basket_color, right_rim_color);
-    spawn_basket_with_rims(commands, Basket::Right, right_x, basket_y, right_basket_color, left_rim_color);
+    spawn_basket_with_rims(
+        commands,
+        Basket::Left,
+        left_x,
+        basket_y,
+        left_basket_color,
+        right_rim_color,
+    );
+    spawn_basket_with_rims(
+        commands,
+        Basket::Right,
+        right_x,
+        basket_y,
+        right_basket_color,
+        left_rim_color,
+    );
 }

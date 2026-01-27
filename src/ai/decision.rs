@@ -3,12 +3,12 @@
 use bevy::prelude::*;
 use rand::Rng;
 
+use crate::ai::navigation::{find_escape_x, has_ceiling_above};
 use crate::ai::{
-    AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, InputState, NavAction, NavGraph,
-    find_path, find_path_to_shoot,
+    AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, InputState, NavAction,
+    NavGraph, find_path, find_path_to_shoot,
     shot_quality::{evaluate_shot_quality, scale_min_quality_for_level},
 };
-use crate::ai::navigation::{find_escape_x, has_ceiling_above};
 use crate::ball::{Ball, BallState};
 use crate::constants::*;
 use crate::events::{ControllerSource, EventBus, GameEvent, PlayerId};
@@ -50,10 +50,7 @@ fn calculate_interception_position(
     let max_x = ARENA_WIDTH / 2.0 - margin;
     let min_y = ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0;
 
-    Vec2::new(
-        unclamped.x.clamp(min_x, max_x),
-        unclamped.y.max(min_y),
-    )
+    Vec2::new(unclamped.x.clamp(min_x, max_x), unclamped.y.max(min_y))
 }
 
 /// Check if a defender is positioned to block a shot trajectory
@@ -122,8 +119,16 @@ pub fn ai_navigation_update(
         return;
     }
 
-    for (ai_entity, ai_transform, team, ai_state, mut nav_state, target_basket, _holding, _grounded) in
-        &mut ai_query
+    for (
+        ai_entity,
+        ai_transform,
+        team,
+        ai_state,
+        mut nav_state,
+        target_basket,
+        _holding,
+        _grounded,
+    ) in &mut ai_query
     {
         // Skip Idle AI
         if ai_state.current_goal == AiGoal::Idle {
@@ -131,7 +136,8 @@ pub fn ai_navigation_update(
             continue;
         }
 
-        let profile = profile_db.get_by_id(&ai_state.profile_id)
+        let profile = profile_db
+            .get_by_id(&ai_state.profile_id)
             .unwrap_or_else(|| profile_db.default_profile());
         let ai_pos = ai_transform.translation.truncate();
 
@@ -162,43 +168,44 @@ pub fn ai_navigation_update(
             .map(|(t, _)| t.translation.truncate());
 
         // Calculate defensive/interception position based on opponent and own basket
-        let intercept_pos = if let (Some(opp_pos), Some(own_basket)) = (opponent_pos, own_basket_pos) {
-            // Check if opponent is significantly elevated above floor
-            let floor_y = ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0;
-            let opp_elevated = opp_pos.y > floor_y + PLAYER_SIZE.y * 2.0;
+        let intercept_pos =
+            if let (Some(opp_pos), Some(own_basket)) = (opponent_pos, own_basket_pos) {
+                // Check if opponent is significantly elevated above floor
+                let floor_y = ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0;
+                let opp_elevated = opp_pos.y > floor_y + PLAYER_SIZE.y * 2.0;
 
-            if opp_elevated {
-                // For elevated opponents, position horizontally between opponent and basket
-                // at the opponent's height level (not on the upward-pointing shot line)
-                let intercept_x = if own_basket.x < opp_pos.x {
-                    opp_pos.x - profile.pressure_distance
+                if opp_elevated {
+                    // For elevated opponents, position horizontally between opponent and basket
+                    // at the opponent's height level (not on the upward-pointing shot line)
+                    let intercept_x = if own_basket.x < opp_pos.x {
+                        opp_pos.x - profile.pressure_distance
+                    } else {
+                        opp_pos.x + profile.pressure_distance
+                    };
+                    Vec2::new(
+                        intercept_x.clamp(-ARENA_WIDTH / 2.0 + 100.0, ARENA_WIDTH / 2.0 - 100.0),
+                        opp_pos.y,
+                    )
                 } else {
-                    opp_pos.x + profile.pressure_distance
-                };
-                Vec2::new(
-                    intercept_x.clamp(-ARENA_WIDTH / 2.0 + 100.0, ARENA_WIDTH / 2.0 - 100.0),
-                    opp_pos.y,
-                )
+                    // Ground-level: use standard shot line intercept
+                    calculate_interception_position(
+                        opp_pos,
+                        own_basket,
+                        profile.pressure_distance,
+                        profile.defensive_iq,
+                    )
+                }
+            } else if let Some(opp_pos) = opponent_pos {
+                // Fallback: just get close to opponent
+                opp_pos
             } else {
-                // Ground-level: use standard shot line intercept
-                calculate_interception_position(
-                    opp_pos,
-                    own_basket,
-                    profile.pressure_distance,
-                    profile.defensive_iq,
-                )
-            }
-        } else if let Some(opp_pos) = opponent_pos {
-            // Fallback: just get close to opponent
-            opp_pos
-        } else {
-            // Fallback defensive position (old logic)
-            let defensive_y = ARENA_FLOOR_Y + 50.0;
-            match *team {
-                Team::Left => Vec2::new(-profile.defense_offset, defensive_y),
-                Team::Right => Vec2::new(profile.defense_offset, defensive_y),
-            }
-        };
+                // Fallback defensive position (old logic)
+                let defensive_y = ARENA_FLOOR_Y + 50.0;
+                match *team {
+                    Team::Left => Vec2::new(-profile.defense_offset, defensive_y),
+                    Team::Right => Vec2::new(profile.defense_offset, defensive_y),
+                }
+            };
 
         // Determine navigation target based on goal
         let desired_target: Option<Vec2> = match ai_state.current_goal {
@@ -319,8 +326,8 @@ pub fn ai_navigation_update(
         };
 
         // Check if current path is still valid
-        let path_invalid = nav_state.path_complete()
-            || (!nav_state.current_path.is_empty() && !nav_state.active);
+        let path_invalid =
+            nav_state.path_complete() || (!nav_state.current_path.is_empty() && !nav_state.active);
 
         // Update path if needed
         if needs_path_update || path_invalid {
@@ -390,7 +397,6 @@ pub fn ai_decision_update(
     ball_query: Query<(&Transform, &BallState), With<Ball>>,
     basket_query: Query<(&Transform, &Basket)>,
 ) {
-
     for (
         ai_entity,
         ai_transform,
@@ -414,7 +420,8 @@ pub fn ai_decision_update(
         }
 
         // Get AI profile for this player
-        let profile = profile_db.get_by_id(&ai_state.profile_id)
+        let profile = profile_db
+            .get_by_id(&ai_state.profile_id)
             .unwrap_or_else(|| profile_db.default_profile());
 
         // Decrement button press cooldown (simulates human mashing speed limit)
@@ -496,9 +503,9 @@ pub fn ai_decision_update(
             // If targeting left basket (x < 0): front court = left 1/3 (x < -ARENA_WIDTH/6)
             let front_court_threshold = ARENA_WIDTH / 6.0;
             let in_front_court = if target_basket_pos.x > 0.0 {
-                ai_pos.x > front_court_threshold  // Right 1/3 when targeting right
+                ai_pos.x > front_court_threshold // Right 1/3 when targeting right
             } else {
-                ai_pos.x < -front_court_threshold  // Left 1/3 when targeting left
+                ai_pos.x < -front_court_threshold // Left 1/3 when targeting left
             };
 
             // Apply front-court penalty: reduce effective shot quality when too close
@@ -510,136 +517,153 @@ pub fn ai_decision_update(
             if ai_state.ball_hold_time > 2.0 {
                 AiGoal::ChargeShot
             } else {
-            let horizontal_distance = (ai_pos.x - target_basket_pos.x).abs();
-            let basket_is_elevated = target_basket_pos.y > ai_pos.y + PLAYER_SIZE.y;
+                let horizontal_distance = (ai_pos.x - target_basket_pos.x).abs();
+                let basket_is_elevated = target_basket_pos.y > ai_pos.y + PLAYER_SIZE.y;
 
-            // For elevated baskets, use horizontal distance for range check
-            // (vertical distance doesn't matter - we're shooting UP)
-            // For baskets at same level, use full 2D distance
-            let effective_distance = if basket_is_elevated {
-                horizontal_distance
-            } else {
-                ai_pos.distance(target_basket_pos)
-            };
+                // For elevated baskets, use horizontal distance for range check
+                // (vertical distance doesn't matter - we're shooting UP)
+                // For baskets at same level, use full 2D distance
+                let effective_distance = if basket_is_elevated {
+                    horizontal_distance
+                } else {
+                    ai_pos.distance(target_basket_pos)
+                };
 
-            // Evaluate shot quality based on position (heatmap-derived)
-            // Apply front-court penalty to discourage close-range shots
-            let shot_quality = evaluate_shot_quality(ai_pos, target_basket_pos) - front_court_quality_penalty;
+                // Evaluate shot quality based on position (heatmap-derived)
+                // Apply front-court penalty to discourage close-range shots
+                let shot_quality =
+                    evaluate_shot_quality(ai_pos, target_basket_pos) - front_court_quality_penalty;
 
-            // Scale min_shot_quality based on what's achievable on this level
-            // Flat levels (max ~0.50) get lower thresholds so AI still shoots
-            let level_scaled_min = scale_min_quality_for_level(
-                profile.min_shot_quality,
-                nav_graph.level_max_shot_quality,
-            );
+                // Scale min_shot_quality based on what's achievable on this level
+                // Flat levels (max ~0.50) get lower thresholds so AI still shoots
+                let level_scaled_min = scale_min_quality_for_level(
+                    profile.min_shot_quality,
+                    nav_graph.level_max_shot_quality,
+                );
 
-            // Desperation factor: after 1 second holding ball, gradually lower threshold
-            // Ramps from 1.0 at 1s to 0.5 at 2s (when force shot kicks in)
-            // This encourages shooting sooner rather than waiting for perfect position
-            let desperation_factor = if ai_state.ball_hold_time > 1.0 {
-                1.0 - ((ai_state.ball_hold_time - 1.0) * 0.5).min(0.5)
-            } else {
-                1.0
-            };
-            let effective_min_quality = level_scaled_min * desperation_factor;
-            let quality_acceptable = shot_quality >= effective_min_quality;
+                // Desperation factor: after 1 second holding ball, gradually lower threshold
+                // Ramps from 1.0 at 1s to 0.5 at 2s (when force shot kicks in)
+                // This encourages shooting sooner rather than waiting for perfect position
+                let desperation_factor = if ai_state.ball_hold_time > 1.0 {
+                    1.0 - ((ai_state.ball_hold_time - 1.0) * 0.5).min(0.5)
+                } else {
+                    1.0
+                };
+                let effective_min_quality = level_scaled_min * desperation_factor;
+                let quality_acceptable = shot_quality >= effective_min_quality;
 
-            // Shoot if within range OR if we've reached our nav target (best position)
-            let at_nav_target = nav_state
-                .nav_target
-                .map(|t| ai_pos.distance(t) < NAV_POSITION_TOLERANCE * 2.0)
-                .unwrap_or(false);
-            let nav_complete = nav_state.path_complete() || !nav_state.active;
+                // Shoot if within range OR if we've reached our nav target (best position)
+                let at_nav_target = nav_state
+                    .nav_target
+                    .map(|t| ai_pos.distance(t) < NAV_POSITION_TOLERANCE * 2.0)
+                    .unwrap_or(false);
+                let nav_complete = nav_state.path_complete() || !nav_state.active;
 
-            // Position-based conditions to consider shooting
-            let in_shoot_range = effective_distance < profile.shoot_range;
-            let reached_target = at_nav_target && nav_complete;
+                // Position-based conditions to consider shooting
+                let in_shoot_range = effective_distance < profile.shoot_range;
+                let reached_target = at_nav_target && nav_complete;
 
-            // Safety check: don't START charging if opponent is very close (steal risk)
-            // But if already charging, COMMIT to the shot - aborting leads to steals anyway
-            // Use actual STEAL_RANGE constant * 1.5 (90px) rather than profile.steal_range
-            // which can be much larger and block shooting opportunities unnecessarily
-            let already_charging = ai_state.current_goal == AiGoal::ChargeShot;
-            let opponent_too_close = !already_charging && opponent_pos
-                .map(|opp| ai_pos.distance(opp) < STEAL_RANGE * 1.5)
-                .unwrap_or(false);
+                // Safety check: don't START charging if opponent is very close (steal risk)
+                // But if already charging, COMMIT to the shot - aborting leads to steals anyway
+                // Use actual STEAL_RANGE constant * 1.5 (90px) rather than profile.steal_range
+                // which can be much larger and block shooting opportunities unnecessarily
+                let already_charging = ai_state.current_goal == AiGoal::ChargeShot;
+                let opponent_too_close = !already_charging
+                    && opponent_pos
+                        .map(|opp| ai_pos.distance(opp) < STEAL_RANGE * 1.5)
+                        .unwrap_or(false);
 
-            // Calculate utility of seeking a better position vs shooting now
-            // Only consider seeking if current position meets basic shooting criteria
-            let should_seek = if quality_acceptable && in_shoot_range && !already_charging {
-                if let Some(best_node_idx) = nav_graph.find_best_shot_position(target_basket_pos) {
-                    let best_node = &nav_graph.nodes[best_node_idx];
-                    let best_quality = nav_graph.get_shot_quality(best_node_idx, target_basket_pos);
-                    let quality_gain = best_quality - shot_quality;
+                // Calculate utility of seeking a better position vs shooting now
+                // Only consider seeking if current position meets basic shooting criteria
+                let should_seek = if quality_acceptable && in_shoot_range && !already_charging {
+                    if let Some(best_node_idx) =
+                        nav_graph.find_best_shot_position(target_basket_pos)
+                    {
+                        let best_node = &nav_graph.nodes[best_node_idx];
+                        let best_quality =
+                            nav_graph.get_shot_quality(best_node_idx, target_basket_pos);
+                        let quality_gain = best_quality - shot_quality;
 
-                    // Only seek if there's SIGNIFICANT quality to gain (10%+ improvement)
-                    // Was 0.01 which made AI too hesitant to shoot from "good enough" spots
-                    if quality_gain > 0.10 {
-                        // Opportunity cost factors:
-                        // 1. Path cost (time/risk to reach better position)
-                        let path_cost = nav_graph.estimate_path_cost(ai_pos, best_node_idx);
-                        let path_cost_normalized = (path_cost / 400.0).min(1.0);
+                        // Only seek if there's SIGNIFICANT quality to gain (10%+ improvement)
+                        // Was 0.01 which made AI too hesitant to shoot from "good enough" spots
+                        if quality_gain > 0.10 {
+                            // Opportunity cost factors:
+                            // 1. Path cost (time/risk to reach better position)
+                            let path_cost = nav_graph.estimate_path_cost(ai_pos, best_node_idx);
+                            let path_cost_normalized = (path_cost / 400.0).min(1.0);
 
-                        // 2. Opponent pressure (closer opponent = higher cost to seek)
-                        let opponent_pressure = opponent_pos
-                            .map(|opp| 1.0 - (ai_pos.distance(opp) / 300.0).min(1.0))
-                            .unwrap_or(0.0);
+                            // 2. Opponent pressure (closer opponent = higher cost to seek)
+                            let opponent_pressure = opponent_pos
+                                .map(|opp| 1.0 - (ai_pos.distance(opp) / 300.0).min(1.0))
+                                .unwrap_or(0.0);
 
-                        // 3. Height bonus - strongly reward seeking elevated platforms
-                        // Tournament data shows elevated shots (Y > -300) have 20-35% success
-                        // vs floor shots (Y < -350) at only 3-10% success
-                        let height_above_floor = (best_node.top_y - ARENA_FLOOR_Y - 50.0).max(0.0);
-                        let height_bonus = (height_above_floor / 200.0).min(0.5) * 0.6; // Up to +0.30
+                            // 3. Height bonus - strongly reward seeking elevated platforms
+                            // Tournament data shows elevated shots (Y > -300) have 20-35% success
+                            // vs floor shots (Y < -350) at only 3-10% success
+                            let height_above_floor =
+                                (best_node.top_y - ARENA_FLOOR_Y - 50.0).max(0.0);
+                            let height_bonus = (height_above_floor / 200.0).min(0.5) * 0.6; // Up to +0.30
 
-                        // 4. Floor penalty - urgently seek height if currently at floor level
-                        // This helps even low-patience profiles climb before shooting
-                        // Increased from 0.15 to 0.25 based on tournament data showing
-                        // floor shots have 9-13% success vs elevated shots at 20-35%
-                        let current_height = ai_pos.y - ARENA_FLOOR_Y;
-                        let at_floor_level = current_height < 100.0;
-                        let floor_urgency = if at_floor_level { 0.25 } else { 0.0 };
+                            // 4. Floor penalty - urgently seek height if currently at floor level
+                            // This helps even low-patience profiles climb before shooting
+                            // Increased from 0.15 to 0.25 based on tournament data showing
+                            // floor shots have 9-13% success vs elevated shots at 20-35%
+                            let current_height = ai_pos.y - ARENA_FLOOR_Y;
+                            let at_floor_level = current_height < 100.0;
+                            let floor_urgency = if at_floor_level { 0.25 } else { 0.0 };
 
-                        // Utility = quality_gain + height_bonus + floor_urgency - opportunity_costs
-                        // Floor urgency bypasses patience scaling to help impatient profiles seek height
-                        let raw_utility = quality_gain
-                            + height_bonus
-                            - (path_cost_normalized * 0.15)
-                            - (opponent_pressure * 0.2);
-                        let seek_utility = raw_utility * profile.position_patience + floor_urgency;
+                            // Utility = quality_gain + height_bonus + floor_urgency - opportunity_costs
+                            // Floor urgency bypasses patience scaling to help impatient profiles seek height
+                            let raw_utility = quality_gain + height_bonus
+                                - (path_cost_normalized * 0.15)
+                                - (opponent_pressure * 0.2);
+                            let seek_utility =
+                                raw_utility * profile.position_patience + floor_urgency;
 
-                        // Seek if utility exceeds threshold
-                        seek_utility > profile.seek_threshold
+                            // Seek if utility exceeds threshold
+                            seek_utility > profile.seek_threshold
+                        } else {
+                            false
+                        }
                     } else {
                         false
                     }
                 } else {
                     false
-                }
-            } else {
-                false
-            };
+                };
 
-            // Only shoot if shot quality is acceptable AND position conditions are met
-            // AND opponent isn't too close (or we're already committed to the shot)
-            // AND we're not deciding to seek a better position
-            if quality_acceptable && (in_shoot_range || reached_target) && !opponent_too_close && !should_seek {
-                AiGoal::ChargeShot
-            } else if already_charging {
-                // Commit to the shot once started
-                AiGoal::ChargeShot
-            } else {
-                // Debug: log why AI isn't shooting (once per second to avoid spam)
-                if ai_state.ball_hold_time > 0.5 && (ai_state.ball_hold_time * 10.0) as u32 % 10 == 0 {
-                    info!(
-                        "AI NOT SHOOTING: quality={:.2} (need>={:.2}) ok={} | range={:.0} (need<{:.0}) ok={} | opp_dist={:.0} close={} | seek={}",
-                        shot_quality, effective_min_quality, quality_acceptable,
-                        effective_distance, profile.shoot_range, in_shoot_range,
-                        opponent_pos.map(|o| ai_pos.distance(o)).unwrap_or(999.0), opponent_too_close,
-                        should_seek
-                    );
+                // Only shoot if shot quality is acceptable AND position conditions are met
+                // AND opponent isn't too close (or we're already committed to the shot)
+                // AND we're not deciding to seek a better position
+                if quality_acceptable
+                    && (in_shoot_range || reached_target)
+                    && !opponent_too_close
+                    && !should_seek
+                {
+                    AiGoal::ChargeShot
+                } else if already_charging {
+                    // Commit to the shot once started
+                    AiGoal::ChargeShot
+                } else {
+                    // Debug: log why AI isn't shooting (once per second to avoid spam)
+                    if ai_state.ball_hold_time > 0.5
+                        && (ai_state.ball_hold_time * 10.0) as u32 % 10 == 0
+                    {
+                        info!(
+                            "AI NOT SHOOTING: quality={:.2} (need>={:.2}) ok={} | range={:.0} (need<{:.0}) ok={} | opp_dist={:.0} close={} | seek={}",
+                            shot_quality,
+                            effective_min_quality,
+                            quality_acceptable,
+                            effective_distance,
+                            profile.shoot_range,
+                            in_shoot_range,
+                            opponent_pos.map(|o| ai_pos.distance(o)).unwrap_or(999.0),
+                            opponent_too_close,
+                            should_seek
+                        );
+                    }
+                    AiGoal::AttackWithBall
                 }
-                AiGoal::AttackWithBall
-            }
             } // End of else block for forced shot after 12s
         } else if opponent_has_ball {
             // Update steal proximity tracking BEFORE goal decision
@@ -666,7 +690,8 @@ pub fn ai_decision_update(
                 // Calculate effective pressure threshold based on profile
                 // Higher aggression = tighter pressure, lower = zone defense
                 // Use larger multiplier (1.5 base) for wider PressureDefense window
-                let pressure_threshold = profile.pressure_distance * (1.5 + (1.0 - profile.aggression));
+                let pressure_threshold =
+                    profile.pressure_distance * (1.5 + (1.0 - profile.aggression));
 
                 // Determine ideal defensive goal
                 let ideal_defense = if distance_to_opponent < profile.steal_range {
@@ -885,8 +910,8 @@ pub fn ai_decision_update(
 
                         if !input.throw_held && !input.throw_released {
                             input.throw_held = true;
-                            ai_state.shot_charge_target =
-                                rand::thread_rng().gen_range(profile.charge_min..profile.charge_max);
+                            ai_state.shot_charge_target = rand::thread_rng()
+                                .gen_range(profile.charge_min..profile.charge_max);
                         } else if input.throw_held {
                             ai_state.shot_charge_target -= dt;
                             if ai_state.shot_charge_target <= 0.0 {
@@ -904,7 +929,13 @@ pub fn ai_decision_update(
 
                         // If opponent is elevated and we have a nav path, follow it
                         if height_diff > PLAYER_SIZE.y * 1.5 && nav_state.active {
-                            execute_nav_action(&mut input, &mut nav_state, ai_pos, grounded.0, &time);
+                            execute_nav_action(
+                                &mut input,
+                                &mut nav_state,
+                                ai_pos,
+                                grounded.0,
+                                &time,
+                            );
                             nav_state.update_completion();
                         } else {
                             // Direct pursuit logic for reachable opponents
@@ -916,7 +947,9 @@ pub fn ai_decision_update(
 
                             if height_diff > PLAYER_SIZE.y * 0.5 && has_ceiling && grounded.0 {
                                 // Ceiling is blocking our jump - move to escape position first
-                                if let Some(escape_x) = find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph) {
+                                if let Some(escape_x) =
+                                    find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph)
+                                {
                                     let escape_dx = escape_x - ai_pos.x;
                                     input.move_x = escape_dx.signum();
                                     // Don't jump while escaping from under ceiling
@@ -1004,7 +1037,8 @@ pub fn ai_decision_update(
 
                             // Jump continuously when on the ramp area to climb steps
                             // (ramps are designed for climbing, ceiling check not needed)
-                            let on_ramp_area = ai_pos.x.abs() > ARENA_WIDTH / 2.0 - WALL_THICKNESS - 300.0;
+                            let on_ramp_area =
+                                ai_pos.x.abs() > ARENA_WIDTH / 2.0 - WALL_THICKNESS - 300.0;
                             if on_ramp_area && grounded.0 {
                                 input.jump_buffer_timer = JUMP_BUFFER_TIME;
                                 input.jump_held = true;
@@ -1021,7 +1055,9 @@ pub fn ai_decision_update(
                             // Check if we need to escape from under a ceiling first
                             if height_diff > PLAYER_SIZE.y * 0.5 && has_ceiling && grounded.0 {
                                 // Ceiling blocking - move to escape position
-                                if let Some(escape_x) = find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph) {
+                                if let Some(escape_x) =
+                                    find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph)
+                                {
                                     let escape_dx = escape_x - ai_pos.x;
                                     input.move_x = escape_dx.signum();
                                     // Don't jump while escaping
@@ -1046,7 +1082,9 @@ pub fn ai_decision_update(
                             // Check if we need to escape from under a ceiling first
                             if height_diff > PLAYER_SIZE.y * 0.5 && has_ceiling && grounded.0 {
                                 // Ceiling blocking - move to escape position
-                                if let Some(escape_x) = find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph) {
+                                if let Some(escape_x) =
+                                    find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph)
+                                {
                                     let escape_dx = escape_x - ai_pos.x;
                                     input.move_x = escape_dx.signum();
                                     // Don't jump while escaping
@@ -1093,7 +1131,9 @@ pub fn ai_decision_update(
 
                         if dy > PLAYER_SIZE.y * 0.5 && has_ceiling && grounded.0 {
                             // Ceiling blocking - move to escape position first
-                            if let Some(escape_x) = find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph) {
+                            if let Some(escape_x) =
+                                find_escape_x(ai_pos, opp_pos.y, &capabilities, &nav_graph)
+                            {
                                 let escape_dx = escape_x - ai_pos.x;
                                 input.move_x = escape_dx.signum();
                                 // Don't jump while escaping
@@ -1421,14 +1461,11 @@ mod tests {
     /// This prevents the AI from having frame-perfect button timing.
     #[test]
     fn test_all_pickup_pressed_assignments_have_cooldown() {
-        let source = fs::read_to_string("src/ai/decision.rs")
-            .expect("Should be able to read decision.rs");
+        let source =
+            fs::read_to_string("src/ai/decision.rs").expect("Should be able to read decision.rs");
 
         // Only analyze code BEFORE the test module (exclude #[cfg(test)] section)
-        let code_to_analyze = source
-            .split("#[cfg(test)]")
-            .next()
-            .unwrap_or(&source);
+        let code_to_analyze = source.split("#[cfg(test)]").next().unwrap_or(&source);
 
         // Find all lines with `input.pickup_pressed = true`
         let violations: Vec<(usize, &str)> = code_to_analyze

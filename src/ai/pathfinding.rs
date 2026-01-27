@@ -65,11 +65,7 @@ pub struct PathResult {
 }
 
 /// Find a path from current position to target position using A*
-pub fn find_path(
-    nav_graph: &NavGraph,
-    start_pos: Vec2,
-    target_pos: Vec2,
-) -> Option<PathResult> {
+pub fn find_path(nav_graph: &NavGraph, start_pos: Vec2, target_pos: Vec2) -> Option<PathResult> {
     if nav_graph.nodes.is_empty() {
         return None;
     }
@@ -89,7 +85,8 @@ pub fn find_path(
 
     // A* search
     let mut open_set = BinaryHeap::new();
-    let mut came_from: Vec<Option<(usize, EdgeType, f32, f32, f32)>> = vec![None; nav_graph.nodes.len()];
+    let mut came_from: Vec<Option<(usize, EdgeType, f32, f32, f32)>> =
+        vec![None; nav_graph.nodes.len()];
     let mut g_scores = vec![f32::INFINITY; nav_graph.nodes.len()];
 
     let goal_pos = nav_graph.nodes[goal_node].center;
@@ -174,7 +171,8 @@ pub fn find_path_to_shoot(
     }
 
     // Find a node within shooting range that meets quality threshold
-    let goal_node = nav_graph.find_shooting_node(target_basket_pos, shoot_range, min_shot_quality)?;
+    let goal_node =
+        nav_graph.find_shooting_node(target_basket_pos, shoot_range, min_shot_quality)?;
     let goal_pos = nav_graph.nodes[goal_node].center;
 
     find_path(nav_graph, start_pos, goal_pos)

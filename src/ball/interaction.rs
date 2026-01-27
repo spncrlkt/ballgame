@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::ai::{decision::defender_in_shot_path, InputState};
+use crate::ai::{InputState, decision::defender_in_shot_path};
 use crate::ball::components::*;
 use crate::constants::*;
 use crate::player::{Facing, HoldingBall, Player, Team, Velocity};
@@ -24,7 +24,10 @@ pub fn ball_player_collision(
         ),
         With<Ball>,
     >,
-    mut player_query: Query<(Entity, &Transform, &mut Velocity, &Sprite), (With<Player>, Without<Ball>)>,
+    mut player_query: Query<
+        (Entity, &Transform, &mut Velocity, &Sprite),
+        (With<Player>, Without<Ball>),
+    >,
 ) {
     for (
         ball_transform,
@@ -54,7 +57,9 @@ pub fn ball_player_collision(
             _ => None,
         };
 
-        for (player_entity, player_transform, mut player_velocity, player_sprite) in &mut player_query {
+        for (player_entity, player_transform, mut player_velocity, player_sprite) in
+            &mut player_query
+        {
             let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
             let player_half = player_size / 2.0;
             let player_pos = player_transform.translation.truncate();
@@ -212,8 +217,7 @@ pub fn pickup_ball(
         if steal_modifier < 1.0 {
             info!(
                 "STEAL DIFFICULTY: {:?} modifier={:.2} (L{}/R{} diff={})",
-                team, steal_modifier,
-                steal_tracker.left_steals, steal_tracker.right_steals, diff
+                team, steal_modifier, steal_tracker.left_steals, steal_tracker.right_steals, diff
             );
         }
 
@@ -253,8 +257,12 @@ pub fn pickup_ball(
                 // Log the attempt with roll details
                 info!(
                     "STEAL ATTEMPT: {:?} roll={:.2} vs chance={:.2} (modifier={:.2}, attempts: L{}/R{})",
-                    team, roll, success_chance, steal_modifier,
-                    steal_tracker.left_attempts, steal_tracker.right_attempts
+                    team,
+                    roll,
+                    success_chance,
+                    steal_modifier,
+                    steal_tracker.left_attempts,
+                    steal_tracker.right_attempts
                 );
 
                 if roll < success_chance {

@@ -118,7 +118,10 @@ pub fn print_session_summary(state: &TrainingState) {
     println!("  Opponent: {} (AI)", state.ai_profile);
     println!("  Iterations: {} played", state.game_results.len());
     println!();
-    println!("  RESULTS: You {} - {} {}", player_wins, ai_wins, state.ai_profile);
+    println!(
+        "  RESULTS: You {} - {} {}",
+        player_wins, ai_wins, state.ai_profile
+    );
     println!("  TOTAL SCORE: {} - {}", total_player, total_ai);
     println!();
 

@@ -18,9 +18,9 @@ The workflow follows an iterative cycle: **Modify → Test → Analyze → Refin
 ┌─────────────────────────────────────────────────────────────┐
 │  1. VISUALIZE                                               │
 │     cargo run --bin heatmap -- score                        │
-│     - Generates scoring probability heatmap                 │
+│     - Generates per-level scoring probability heatmaps      │
 │     - Identifies "dead zones" and optimal positions         │
-│     - Output: heatmap_score.png                             │
+│     - Output: showcase/heatmaps/heatmap_score_<level>_<uuid>_<side>.png │
 ├─────────────────────────────────────────────────────────────┤
 │  2. VERIFY AI QUALITY ESTIMATES                             │
 │     Compare shot_quality.rs values to heatmap:              │
@@ -97,7 +97,7 @@ The AI uses `src/ai/shot_quality.rs` to decide when to shoot. These quality valu
 ### Verification Process
 
 1. Run `cargo run --bin heatmap -- score`
-2. Open `heatmap_score.png` and visually check the color zones
+2. Open `showcase/heatmaps/heatmap_score_<level>_<uuid>_<side>.png` and visually check the color zones
 3. Run quality analysis on test positions (see test positions above)
 4. If discrepancy > 10% in zone classification, update the quality formulas
 

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::params;
 
-use ballgame::events::{parse_event, GameEvent, PlayerId};
+use ballgame::events::{GameEvent, PlayerId, parse_event};
 use ballgame::simulation::SimDatabase;
 
 /// Input sample at a single tick
@@ -106,7 +106,11 @@ fn parse_match_from_db(db: &SimDatabase, match_id: i64) -> Vec<Drive> {
         let tick = event.time_ms;
 
         match parsed {
-            GameEvent::MatchStart { level: lvl, level_name: name, .. } => {
+            GameEvent::MatchStart {
+                level: lvl,
+                level_name: name,
+                ..
+            } => {
                 level = lvl;
                 level_name = name;
             }
@@ -221,12 +225,23 @@ fn write_ghost_trial(drive: &Drive, output_dir: &Path) -> std::io::Result<PathBu
     writeln!(file, "# Source: {}", drive.source_file)?;
     writeln!(file, "# Drive: {}", drive.drive_num)?;
     writeln!(file, "# Level: {} ({})", drive.level, drive.level_name)?;
-    writeln!(file, "# Original ticks: {} -> {}", drive.start_tick, drive.end_tick)?;
-    writeln!(file, "# Effective start: {} (+{}ms delay)", effective_start, GHOST_START_DELAY_MS)?;
+    writeln!(
+        file,
+        "# Original ticks: {} -> {}",
+        drive.start_tick, drive.end_tick
+    )?;
+    writeln!(
+        file,
+        "# Effective start: {} (+{}ms delay)",
+        effective_start, GHOST_START_DELAY_MS
+    )?;
     writeln!(file, "# End: {}", drive.end_reason)?;
     writeln!(file, "# L scored: {}", drive.l_scored)?;
     writeln!(file, "#")?;
-    writeln!(file, "# Format: tick|move_x|flags (J=jump T=throw P=pickup)")?;
+    writeln!(
+        file,
+        "# Format: tick|move_x|flags (J=jump T=throw P=pickup)"
+    )?;
     writeln!(file)?;
 
     writeln!(file, "level:{}", drive.level)?;
@@ -263,7 +278,10 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
-        eprintln!("Usage: {} --db <path> [--session <id> | --match <id>] [--output <dir>]", args[0]);
+        eprintln!(
+            "Usage: {} --db <path> [--session <id> | --match <id>] [--output <dir>]",
+            args[0]
+        );
         eprintln!();
         eprintln!("Extracts player input sequences from SQLite events as ghost trials.");
         std::process::exit(1);

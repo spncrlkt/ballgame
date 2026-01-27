@@ -146,9 +146,18 @@ impl TuningTargets {
         }
 
         // Summary
-        let ok_count = deltas.iter().filter(|d| d.status == TargetStatus::Ok).count();
-        let warn_count = deltas.iter().filter(|d| d.status == TargetStatus::Warn).count();
-        let fail_count = deltas.iter().filter(|d| d.status == TargetStatus::Fail).count();
+        let ok_count = deltas
+            .iter()
+            .filter(|d| d.status == TargetStatus::Ok)
+            .count();
+        let warn_count = deltas
+            .iter()
+            .filter(|d| d.status == TargetStatus::Warn)
+            .count();
+        let fail_count = deltas
+            .iter()
+            .filter(|d| d.status == TargetStatus::Fail)
+            .count();
 
         output.push_str(&format!(
             "\n  Summary: {} OK, {} WARN, {} FAIL\n",
@@ -201,7 +210,9 @@ fn parse_targets_toml(content: &str) -> Option<TuningTargets> {
                 match key {
                     "avg_score" => targets.avg_score = Some(target),
                     "score_differential" => targets.score_differential = Some(target),
-                    "match_duration_secs" | "match_duration" => targets.match_duration = Some(target),
+                    "match_duration_secs" | "match_duration" => {
+                        targets.match_duration = Some(target)
+                    }
                     "turnovers_per_match" => targets.turnovers_per_match = Some(target),
                     "missed_shots_per_match" => targets.missed_shots_per_match = Some(target),
                     _ => {}

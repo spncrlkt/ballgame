@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use crate::events::PlayerId;
 use super::parser::ParsedMatch;
+use crate::events::PlayerId;
 
 /// Per-profile aggregated metrics
 #[derive(Debug, Clone, Default)]
@@ -103,7 +103,8 @@ impl ProfileMetrics {
         if self.matches_played == 0 {
             0.0
         } else {
-            (self.total_goals as i32 - self.total_goals_against as i32) as f32 / self.matches_played as f32
+            (self.total_goals as i32 - self.total_goals_against as i32) as f32
+                / self.matches_played as f32
         }
     }
 
@@ -236,7 +237,8 @@ impl AggregateMetrics {
             agg.avg_missed_shots = agg.total_missed_shots as f32 / n;
 
             // Score differential
-            let total_diff: i32 = matches.iter()
+            let total_diff: i32 = matches
+                .iter()
                 .map(|m| (m.score_left as i32 - m.score_right as i32).abs())
                 .sum();
             agg.avg_score_differential = total_diff as f32 / n;

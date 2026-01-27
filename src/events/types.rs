@@ -146,10 +146,7 @@ pub enum GameEvent {
 
     // === AI State Events ===
     /// AI goal changed
-    AiGoal {
-        player: PlayerId,
-        goal: String,
-    },
+    AiGoal { player: PlayerId, goal: String },
     /// AI navigation path started
     NavStart {
         player: PlayerId,

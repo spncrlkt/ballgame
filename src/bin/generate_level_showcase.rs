@@ -6,7 +6,7 @@
 //! Run with: `cargo run --bin generate_level_showcase`
 
 use ab_glyph::{FontRef, PxScale};
-use image::{imageops, Rgba, RgbaImage};
+use image::{Rgba, RgbaImage, imageops};
 use imageproc::drawing::draw_text_mut;
 use std::fs;
 
@@ -57,8 +57,10 @@ fn main() {
     let scaled_width = (orig_width as f32 * SCALE) as u32;
     let scaled_height = (orig_height as f32 * SCALE) as u32;
 
-    println!("Original size: {}x{}, scaled to: {}x{}",
-             orig_width, orig_height, scaled_width, scaled_height);
+    println!(
+        "Original size: {}x{}, scaled to: {}x{}",
+        orig_width, orig_height, scaled_width, scaled_height
+    );
 
     // Calculate output dimensions
     let num_levels = screenshots.len() as u32;
@@ -70,7 +72,10 @@ fn main() {
     let output_width = cell_width * COLS;
     let output_height = cell_height * rows;
 
-    println!("Output size: {}x{} ({} cols x {} rows)", output_width, output_height, COLS, rows);
+    println!(
+        "Output size: {}x{} ({} cols x {} rows)",
+        output_width, output_height, COLS, rows
+    );
 
     // Create output image with dark background
     let mut showcase = RgbaImage::new(output_width, output_height);
@@ -95,7 +100,12 @@ fn main() {
         match image::open(path) {
             Ok(img) => {
                 let rgba = img.to_rgba8();
-                let resized = imageops::resize(&rgba, scaled_width, scaled_height, imageops::FilterType::Lanczos3);
+                let resized = imageops::resize(
+                    &rgba,
+                    scaled_width,
+                    scaled_height,
+                    imageops::FilterType::Lanczos3,
+                );
 
                 // Copy resized image to showcase
                 let img_x = cell_x + PADDING;
@@ -112,7 +122,15 @@ fn main() {
                 // Draw level name below screenshot
                 let text_x = cell_x + PADDING + 10;
                 let text_y = cell_y + PADDING + scaled_height + 8;
-                draw_text_mut(&mut showcase, text_color, text_x as i32, text_y as i32, scale, &font, name);
+                draw_text_mut(
+                    &mut showcase,
+                    text_color,
+                    text_x as i32,
+                    text_y as i32,
+                    scale,
+                    &font,
+                    name,
+                );
 
                 println!("  Added: {}", name);
             }

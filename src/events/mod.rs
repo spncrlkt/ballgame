@@ -22,12 +22,14 @@ mod format;
 mod sqlite_logger;
 mod types;
 
-pub use bus::{BusEvent, EventBus, LevelChangeTracker, emit_level_change_events, update_event_bus_time};
-pub use emitter::{
-    emit_game_events, snapshot_ball, snapshot_player, BallSnapshot, EmitterConfig,
-    EventEmitterState, PlayerSnapshot,
-};
 pub use buffer::EventBuffer;
+pub use bus::{
+    BusEvent, EventBus, LevelChangeTracker, emit_level_change_events, update_event_bus_time,
+};
+pub use emitter::{
+    BallSnapshot, EmitterConfig, EventEmitterState, PlayerSnapshot, emit_game_events,
+    snapshot_ball, snapshot_player,
+};
 pub use format::{parse_event, serialize_event};
 pub use sqlite_logger::{SqliteEventLogger, flush_events_to_sqlite};
 pub use types::{ControllerSource, GameConfig, GameEvent, PlayerId};

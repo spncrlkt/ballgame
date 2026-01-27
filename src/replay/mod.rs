@@ -12,12 +12,10 @@ mod ui;
 pub use data::{ReplayData, TickFrame, TimedEvent};
 pub use sqlite_loader::load_replay_from_db;
 pub use state::ReplayState;
-pub use systems::{
-    replay_input_handler, replay_playback, replay_setup,
-};
+pub use systems::{replay_input_handler, replay_playback, replay_setup};
 pub use ui::{
-    ReplayEventMarker, ReplaySpeedDisplay, ReplayTimeDisplay, ReplayTimeline,
-    PlayerGoalLabel, setup_replay_ui, update_replay_ui,
+    PlayerGoalLabel, ReplayEventMarker, ReplaySpeedDisplay, ReplayTimeDisplay, ReplayTimeline,
+    setup_replay_ui, update_replay_ui,
 };
 
 use bevy::prelude::*;

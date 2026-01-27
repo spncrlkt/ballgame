@@ -160,7 +160,9 @@ pub fn emit_level_change_events(
 ) {
     let level_id = &current_level.0;
     if level_id != &tracker.prev_level_id && !tracker.prev_level_id.is_empty() {
-        bus.emit(super::types::GameEvent::LevelChange { level_id: level_id.clone() });
+        bus.emit(super::types::GameEvent::LevelChange {
+            level_id: level_id.clone(),
+        });
     }
     tracker.prev_level_id = level_id.clone();
 }
@@ -213,7 +215,11 @@ mod tests {
 
         let events = bus.drain();
         assert_eq!(events.len(), 1);
-        if let GameEvent::ControlSwap { from_player, to_player } = &events[0].event {
+        if let GameEvent::ControlSwap {
+            from_player,
+            to_player,
+        } = &events[0].event
+        {
             assert_eq!(*from_player, Some(PlayerId::L));
             assert_eq!(*to_player, Some(PlayerId::R));
         } else {

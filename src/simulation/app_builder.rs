@@ -7,13 +7,13 @@ use bevy::app::ScheduleRunnerPlugin;
 use bevy::prelude::*;
 use std::time::Duration;
 
+use crate::ball::CurrentPalette;
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
 use crate::scoring::{CurrentLevel, Score};
 use crate::shooting::LastShotInfo;
 use crate::steal::{StealContest, StealTracker};
 use crate::ui::PhysicsTweaks;
-use crate::ball::CurrentPalette;
 
 /// Builder for creating headless Bevy apps
 pub struct HeadlessAppBuilder {
@@ -69,9 +69,9 @@ impl HeadlessAppBuilder {
             // This is critical for parallel execution to avoid hitting OS limits
             app.add_plugins(
                 MinimalPlugins
-                    .set(ScheduleRunnerPlugin::run_loop(
-                        Duration::from_secs_f32(1.0 / self.fps),
-                    ))
+                    .set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f32(
+                        1.0 / self.fps,
+                    )))
                     .set(TaskPoolPlugin {
                         task_pool_options: TaskPoolOptions::with_num_threads(1),
                     }),

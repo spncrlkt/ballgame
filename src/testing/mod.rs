@@ -8,10 +8,13 @@ pub mod input;
 pub mod parser;
 pub mod runner;
 
-pub use assertions::{check_sequence, check_state, AssertionError};
+pub use assertions::{AssertionError, check_sequence, check_state};
 pub use input::{ScriptedInputs, TestEntityId};
-pub use parser::{EntityDef, ExpectedEvent, FrameInput, InputSnapshot, StateAssertion, TestDefinition, TestExpectations, TestSetup};
-pub use runner::{run_test, TestResult};
+pub use parser::{
+    EntityDef, ExpectedEvent, FrameInput, InputSnapshot, StateAssertion, TestDefinition,
+    TestExpectations, TestSetup,
+};
+pub use runner::{TestResult, run_test};
 
 /// Default path for test scenarios
 pub const SCENARIOS_DIR: &str = "tests/scenarios";

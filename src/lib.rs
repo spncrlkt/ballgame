@@ -42,51 +42,51 @@ pub use ball::{
     StyleTextures, display_ball_wave,
 };
 pub use config_watcher::ConfigWatcher;
+pub use constants::*;
 pub use countdown::{
     CountdownText, MatchCountdown, in_countdown, not_in_countdown, spawn_countdown_text,
     trigger_countdown_on_level_change, update_countdown,
 };
 pub use events::{
-    BusEvent, ControllerSource, EventBuffer, EventBus, GameConfig,
-    GameEvent, LevelChangeTracker, PlayerId, emit_level_change_events, update_event_bus_time,
+    BusEvent, ControllerSource, EventBuffer, EventBus, GameConfig, GameEvent, LevelChangeTracker,
+    PlayerId, emit_level_change_events, update_event_bus_time,
 };
-pub use settings::{CurrentSettings, InitSettings, save_settings_system};
-pub use constants::*;
 pub use helpers::*;
 pub use input::PlayerInput;
 pub use levels::{LevelData, LevelDatabase, PlatformDef};
 pub use palettes::{PALETTES_FILE, Palette, PaletteDatabase};
 pub use player::{
-    CoyoteTimer, Facing, Grounded, HoldingBall, HumanControlled, HumanControlTarget, JumpState,
+    CoyoteTimer, Facing, Grounded, HoldingBall, HumanControlTarget, HumanControlled, JumpState,
     Player, TargetBasket, Team, Velocity,
 };
 pub use presets::{
     BallPreset, CompositePreset, CurrentPresets, MovementPreset, PRESETS_FILE, PresetDatabase,
     ShootingPreset, apply_composite_preset, apply_preset_to_tweaks,
 };
+pub use replay::{
+    MatchInfo, ReplayData, ReplayMode, ReplayState, TickFrame, TimedEvent, not_replay_active,
+    replay_active, replay_input_handler, replay_playback, replay_setup, setup_replay_ui,
+    update_replay_ui,
+};
 pub use scoring::{CurrentLevel, Score};
+pub use settings::{CurrentSettings, InitSettings, save_settings_system};
 pub use shooting::{ChargingShot, LastShotInfo};
 pub use snapshot::{
     BallSnapshot, GameSnapshot, PlayerSnapshot, ScoreSnapshot, ShotSnapshot, SnapshotConfig,
     SnapshotTriggerState,
 };
 pub use steal::{StealContest, StealCooldown, StealTracker};
-pub use ui::{
-    ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleIndicator, CycleSelection,
-    DebugSettings, DebugText, DownOption, PhysicsTweaks, RightOption, ScoreFlash, ScoreLevelText,
-    StealCooldownIndicator, StealFailFlash, StealOutOfRangeFlash, TweakPanel, TweakRow, ViewportScale,
-    VulnerableIndicator,
-};
-pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
-pub use replay::{
-    not_replay_active, replay_active, MatchInfo, ReplayData, ReplayMode, ReplayState, TickFrame,
-    TimedEvent, replay_input_handler, replay_playback, replay_setup, setup_replay_ui,
-    update_replay_ui,
-};
 pub use training::{
     GameResult, GameSummary, SessionSummary, TrainingPhase, TrainingState, Winner,
     ensure_session_dir, print_session_summary, write_session_summary,
 };
+pub use ui::{
+    ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleIndicator, CycleSelection,
+    DebugSettings, DebugText, DownOption, PhysicsTweaks, RightOption, ScoreFlash, ScoreLevelText,
+    StealCooldownIndicator, StealFailFlash, StealOutOfRangeFlash, TweakPanel, TweakRow,
+    ViewportScale, VulnerableIndicator,
+};
+pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 
 // =============================================================================
 // TRAJECTORY CALCULATION (shared with tools like heatmap generator)

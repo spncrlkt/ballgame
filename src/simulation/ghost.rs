@@ -123,7 +123,10 @@ pub fn load_ghost_trial(path: &Path) -> Result<GhostTrial, String> {
 
     let source_file = path.file_name().unwrap().to_string_lossy().to_string();
     if !path.extension().map_or(false, |ext| ext == "ghost") {
-        return Err(format!("Unsupported ghost file extension: {}", path.display()));
+        return Err(format!(
+            "Unsupported ghost file extension: {}",
+            path.display()
+        ));
     }
 
     load_from_ghost(reader, source_file)

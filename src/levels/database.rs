@@ -26,7 +26,7 @@ pub enum PlatformDef {
 /// Single level definition
 #[derive(Clone, Debug)]
 pub struct LevelData {
-    pub id: String,        // 16-char hex UUID for stable identification
+    pub id: String, // 16-char hex UUID for stable identification
     pub name: String,
     pub basket_height: f32,
     pub basket_push_in: f32, // Distance from wall inner edge to basket center
@@ -242,12 +242,16 @@ impl LevelDatabase {
 
     /// Get level by name (case-insensitive)
     pub fn get_by_name(&self, name: &str) -> Option<&LevelData> {
-        self.levels.iter().find(|l| l.name.eq_ignore_ascii_case(name))
+        self.levels
+            .iter()
+            .find(|l| l.name.eq_ignore_ascii_case(name))
     }
 
     /// Get level index by name (case-insensitive)
     pub fn index_of(&self, name: &str) -> Option<usize> {
-        self.levels.iter().position(|l| l.name.eq_ignore_ascii_case(name))
+        self.levels
+            .iter()
+            .position(|l| l.name.eq_ignore_ascii_case(name))
     }
 
     /// Get all levels as a slice

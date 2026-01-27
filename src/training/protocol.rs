@@ -68,9 +68,7 @@ impl TrainingProtocol {
                 "Full 1v1 games on random levels with comprehensive analysis"
             }
             TrainingProtocol::Pursuit => "Flat level chase test - verifies AI pursues the player",
-            TrainingProtocol::Pursuit2 => {
-                "Platform chase test - pursuit with center obstacle"
-            }
+            TrainingProtocol::Pursuit2 => "Platform chase test - pursuit with center obstacle",
         }
     }
 

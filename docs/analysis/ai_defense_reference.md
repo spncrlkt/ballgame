@@ -115,22 +115,18 @@ Parameter defaults: `rim_margin`, `paint_width`, `wing_height`, `wing_inner_offs
 
 ## Heatmap Notes (Shot/Zone Context)
 
-- `src/bin/heatmap.rs`: fixed basket height (`BASKET_HEIGHT = 600`), Monte Carlo rim sim, `SHOT_DISTANCE_VARIANCE`/`SHOT_MIN_VARIANCE`, grid `CELL_SIZE = 20` (80x45).
-- `src/ai/shot_quality.rs`: heuristic informed by heatmap runs.
-- Current heatmaps are not per-level; treat as fixed offensive reference until parameterized.
+- `src/bin/heatmap.rs` now generates per-level heatmaps using `LevelDatabase` (basket height/push-in + platforms).
+- Output lives in `showcase/heatmaps/heatmap_<type>_<level>_<uuid>.png` (score adds `_left`/`_right`) with text sidecars for numeric grids.
+- Types: speed, score, reachability (full physics), landing_safety, path_cost, line_of_sight, elevation, escape_routes.
+- Full bundles: `--full` writes `showcase/heatmaps/heatmap_full_<level>_<uuid>.png`.
+- Combined sheets: `showcase/heatmap_<type>_all.png`.
+- Change detection: `--check` compares `config/level_hashes.json` to run only new/changed levels.
 
-## Expanding Heatmap Tooling for Zone Geometry (Proposed)
+## Nav + Heatmap Integration (Current Direction)
 
-1) Parameterize by level (`--level <N>` or `--basket-height <H>`) via `LevelDatabase`.
-2) Add `SimType::Zones` (grid cell -> zone classification).
-3) Optional threat overlay (distance + zone weight + elevation).
-4) Output `heatmap_zones.png`, `heatmap_threat.png`, plus JSON sidecar (zone per cell).
-
-## Per-Level Heatmaps + Nav Integration (Planned)
-
-- Per-level heatmaps for basket height/platform layout (e.g., `heatmap_score_level_<N>.png`, `heatmap_zones_level_<N>.png`).
-- `NavGraph` enrichment: add `zone_id` or `best_shot_zone` alongside `shot_quality_left/right`.
-- AI usage: choose nav nodes by zone + shot quality; prioritize paths by zone coverage.
+- Keep `NavGraph` as the connectivity backbone.
+- Use heatmaps to score node desirability (shot quality, safety, LOS, elevation, escape).
+- AI should choose candidate nodes via nav graph, then rank with heatmap-derived scoring.
 
 ## Proposed Heatmap Data Schema (Level-Indexed)
 

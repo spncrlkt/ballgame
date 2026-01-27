@@ -11,19 +11,19 @@ pub mod world_model;
 pub use capabilities::AiCapabilities;
 pub use decision::*;
 pub use navigation::{
-    AiNavState, EdgeType, NavAction, NavEdge, NavGraph, NavNode,
-    mark_nav_dirty_on_level_change, rebuild_nav_graph,
+    AiNavState, EdgeType, NavAction, NavEdge, NavGraph, NavNode, mark_nav_dirty_on_level_change,
+    rebuild_nav_graph,
 };
 pub use pathfinding::{PathResult, find_path, find_path_to_shoot};
 pub use profiles::*;
-pub use shot_quality::{evaluate_shot_quality, SHOT_QUALITY_ACCEPTABLE, SHOT_QUALITY_GOOD};
-pub use world_model::{extract_platform_data, extract_platforms_from_nav, PlatformBounds};
+pub use shot_quality::{SHOT_QUALITY_ACCEPTABLE, SHOT_QUALITY_GOOD, evaluate_shot_quality};
+pub use world_model::{PlatformBounds, extract_platform_data, extract_platforms_from_nav};
 
 use bevy::prelude::*;
 
 use crate::events::{EventBus, GameEvent, PlayerId};
 use crate::input::PlayerInput;
-use crate::player::{HumanControlled, HumanControlTarget, Player, Team};
+use crate::player::{HumanControlTarget, HumanControlled, Player, Team};
 
 /// Per-entity input buffer used by physics systems.
 /// All players have this component - human input is copied here, AI writes directly.

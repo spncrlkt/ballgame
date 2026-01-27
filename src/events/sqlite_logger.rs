@@ -123,8 +123,10 @@ impl SqliteEventLogger {
                     *self.current_point_id.lock().ok()? = Some(point_id);
                     *self.current_point_index.lock().ok()? = 1;
                 }
-                info!("Started match {} (level: {}, profiles: {} vs {})",
-                    match_id, level_name, left_profile, right_profile);
+                info!(
+                    "Started match {} (level: {}, profiles: {} vs {})",
+                    match_id, level_name, left_profile, right_profile
+                );
                 Some(match_id)
             }
             Err(e) => {
@@ -261,8 +263,10 @@ impl SqliteEventLogger {
         if let Err(e) = result {
             warn!("Failed to end match: {}", e);
         } else {
-            info!("Ended match {} (score: {}-{}, duration: {:.1}s)",
-                match_id, score_left, score_right, duration_secs);
+            info!(
+                "Ended match {} (score: {}-{}, duration: {:.1}s)",
+                match_id, score_left, score_right, duration_secs
+            );
         }
 
         if let Some(point_id) = self.current_point_id.lock().ok().and_then(|g| *g) {
@@ -312,7 +316,8 @@ impl SqliteEventLogger {
             "SELECT COUNT(*) FROM events WHERE match_id = ?1",
             params![match_id],
             |row| row.get(0),
-        ).ok()
+        )
+        .ok()
     }
 }
 
@@ -421,7 +426,12 @@ fn short_uuid() -> String {
     full[..16].to_string()
 }
 
-fn insert_point(conn: &Connection, match_id: i64, point_index: u32, start_time_ms: u32) -> Result<i64, rusqlite::Error> {
+fn insert_point(
+    conn: &Connection,
+    match_id: i64,
+    point_index: u32,
+    start_time_ms: u32,
+) -> Result<i64, rusqlite::Error> {
     conn.execute(
         r#"INSERT INTO points (match_id, point_index, start_time_ms, end_time_ms, winner)
            VALUES (?1, ?2, ?3, NULL, NULL)"#,
@@ -430,7 +440,12 @@ fn insert_point(conn: &Connection, match_id: i64, point_index: u32, start_time_m
     Ok(conn.last_insert_rowid())
 }
 
-fn end_point(conn: &Connection, point_id: i64, end_time_ms: u32, winner: &str) -> Result<(), rusqlite::Error> {
+fn end_point(
+    conn: &Connection,
+    point_id: i64,
+    end_time_ms: u32,
+    winner: &str,
+) -> Result<(), rusqlite::Error> {
     conn.execute(
         "UPDATE points SET end_time_ms = ?1, winner = ?2 WHERE id = ?3",
         params![end_time_ms, winner, point_id],
@@ -526,12 +541,20 @@ mod tests {
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
 
         // Log some events
-        logger.log_event(100, &GameEvent::Pickup { player: PlayerId::L });
-        logger.log_event(200, &GameEvent::Goal {
-            player: PlayerId::L,
-            score_left: 1,
-            score_right: 0,
-        });
+        logger.log_event(
+            100,
+            &GameEvent::Pickup {
+                player: PlayerId::L,
+            },
+        );
+        logger.log_event(
+            200,
+            &GameEvent::Goal {
+                player: PlayerId::L,
+                score_left: 1,
+                score_right: 0,
+            },
+        );
 
         // Verify events were logged
         let count = logger.event_count().unwrap();
@@ -544,18 +567,29 @@ mod tests {
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
 
         let events = vec![
-            (100, GameEvent::Pickup { player: PlayerId::L }),
-            (150, GameEvent::ShotStart {
-                player: PlayerId::L,
-                pos: (-200.0, -350.0),
-                quality: 0.8,
-            }),
-            (200, GameEvent::ShotRelease {
-                player: PlayerId::L,
-                charge: 0.7,
-                angle: 45.0,
-                power: 600.0,
-            }),
+            (
+                100,
+                GameEvent::Pickup {
+                    player: PlayerId::L,
+                },
+            ),
+            (
+                150,
+                GameEvent::ShotStart {
+                    player: PlayerId::L,
+                    pos: (-200.0, -350.0),
+                    quality: 0.8,
+                },
+            ),
+            (
+                200,
+                GameEvent::ShotRelease {
+                    player: PlayerId::L,
+                    charge: 0.7,
+                    angle: 45.0,
+                    power: 600.0,
+                },
+            ),
         ];
 
         logger.log_events(&events);

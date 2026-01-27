@@ -8,9 +8,9 @@ use ballgame::{
     BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
     ChargeGaugeBackground, ChargeGaugeFill, ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel,
     CurrentPalette, CurrentPresets, CurrentSettings, CycleIndicator, CycleSelection, DebugSettings,
-    DebugText, DisplayBallWave, EventBus, Facing, Grounded, HumanControlled, HumanControlTarget,
+    DebugText, DisplayBallWave, EventBus, Facing, Grounded, HumanControlTarget, HumanControlled,
     InputState, JumpState, LastShotInfo, LevelChangeTracker, LevelDatabase, MatchCountdown,
-    NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks, PlayerId, Player,
+    NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerId,
     PlayerInput, PresetDatabase, Score, ScoreLevelText, SnapshotConfig, SnapshotTriggerState,
     StealContest, StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, TweakPanel,
     TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball, config_watcher,
@@ -59,21 +59,21 @@ fn main() {
     let screenshot_and_quit = args.iter().any(|a| a == "--screenshot-and-quit");
 
     // Check for --level <name> override (accepts level name, looked up at runtime)
-    let level_name_override = args.iter()
+    let level_name_override = args
+        .iter()
         .position(|a| a == "--level")
         .and_then(|i| args.get(i + 1).cloned());
 
     // Check for --viewport <width> <height> override
-    let viewport_override = args.iter()
-        .position(|a| a == "--viewport")
-        .and_then(|i| {
-            let width = args.get(i + 1).and_then(|s| s.parse::<f32>().ok())?;
-            let height = args.get(i + 2).and_then(|s| s.parse::<f32>().ok())?;
-            Some((width, height))
-        });
+    let viewport_override = args.iter().position(|a| a == "--viewport").and_then(|i| {
+        let width = args.get(i + 1).and_then(|s| s.parse::<f32>().ok())?;
+        let height = args.get(i + 2).and_then(|s| s.parse::<f32>().ok())?;
+        Some((width, height))
+    });
 
     // Check for --palette <index> override
-    let palette_override = args.iter()
+    let palette_override = args
+        .iter()
         .position(|a| a == "--palette")
         .and_then(|i| args.get(i + 1).and_then(|s| s.parse::<usize>().ok()));
 
@@ -88,14 +88,11 @@ fn main() {
         .and_then(|s| s.parse::<i64>().ok());
 
     // Check for replay timeout: --replay-timeout <secs>
-    let replay_timeout_secs = args
-        .iter()
-        .position(|a| a == "--replay-timeout")
-        .map(|i| {
-            args.get(i + 1)
-                .and_then(|s| s.parse::<f32>().ok())
-                .unwrap_or(DEFAULT_REPLAY_TIMEOUT_SECS)
-        });
+    let replay_timeout_secs = args.iter().position(|a| a == "--replay-timeout").map(|i| {
+        args.get(i + 1)
+            .and_then(|s| s.parse::<f32>().ok())
+            .unwrap_or(DEFAULT_REPLAY_TIMEOUT_SECS)
+    });
 
     // Load persistent settings (uses defaults if file doesn't exist)
     let current_settings = CurrentSettings::default();
@@ -136,7 +133,13 @@ fn main() {
         .as_ref()
         .and_then(|s| resolve_level_id(s))
         .or_else(|| resolve_level_id(&current_settings.settings.level))
-        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+        .unwrap_or_else(|| {
+            level_db
+                .all()
+                .first()
+                .map(|l| l.id.clone())
+                .unwrap_or_default()
+        });
 
     // Extract values from loaded settings for resource initialization
     let loaded_viewport_index = current_settings.settings.viewport_index;
@@ -208,7 +211,9 @@ fn main() {
         .insert_resource(CurrentPalette(loaded_palette_index))
         .init_resource::<PhysicsTweaks>()
         .init_resource::<LastShotInfo>()
-        .insert_resource(ViewportScale { preset_index: loaded_viewport_index })
+        .insert_resource(ViewportScale {
+            preset_index: loaded_viewport_index,
+        })
         .insert_resource(CycleSelection {
             active_direction: ui::CycleDirection::from_str(&loaded_active_direction),
             down_option: ui::DownOption::from_str(&loaded_down_option),
@@ -260,11 +265,13 @@ fn main() {
         // Countdown system - always runs to update timer and text
         .add_systems(
             Update,
-            countdown::update_countdown
-                .run_if(replay::not_replay_active),
+            countdown::update_countdown.run_if(replay::not_replay_active),
         )
         // Event bus time update (runs every frame for timestamping)
-        .add_systems(Update, update_event_bus_time.run_if(replay::not_replay_active))
+        .add_systems(
+            Update,
+            update_event_bus_time.run_if(replay::not_replay_active),
+        )
         // Input systems must run in order: capture -> copy -> swap -> nav graph -> nav -> AI
         // Only runs when NOT in countdown and NOT in replay mode
         .add_systems(
@@ -282,13 +289,25 @@ fn main() {
                 .run_if(replay::not_replay_active.and(countdown::not_in_countdown)),
         )
         // Settings reset (double-click Start) - must run before respawn
-        .add_systems(Update, player::check_settings_reset.run_if(replay::not_replay_active))
+        .add_systems(
+            Update,
+            player::check_settings_reset.run_if(replay::not_replay_active),
+        )
         // Core Update systems - split to avoid tuple issues with respawn_player
-        .add_systems(Update, player::respawn_player.run_if(replay::not_replay_active))
+        .add_systems(
+            Update,
+            player::respawn_player.run_if(replay::not_replay_active),
+        )
         // Emit level change events for auditability (runs after systems that change level)
-        .add_systems(Update, emit_level_change_events.run_if(replay::not_replay_active))
+        .add_systems(
+            Update,
+            emit_level_change_events.run_if(replay::not_replay_active),
+        )
         // Countdown trigger on level change (only in manual game mode)
-        .add_systems(Update, countdown::trigger_countdown_on_level_change.run_if(replay::not_replay_active))
+        .add_systems(
+            Update,
+            countdown::trigger_countdown_on_level_change.run_if(replay::not_replay_active),
+        )
         .add_systems(
             Update,
             (
@@ -300,11 +319,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            (
-                ui::update_debug_text,
-                ui::update_score_level_text,
-            )
-                .run_if(replay::not_replay_active),
+            (ui::update_debug_text, ui::update_score_level_text).run_if(replay::not_replay_active),
         )
         .add_systems(
             Update,
@@ -351,7 +366,10 @@ fn main() {
                 .run_if(replay::not_replay_active),
         )
         // Settings persistence - save when dirty
-        .add_systems(Update, save_settings_system.run_if(replay::not_replay_active))
+        .add_systems(
+            Update,
+            save_settings_system.run_if(replay::not_replay_active),
+        )
         .add_systems(Update, replay_timeout.run_if(replay::replay_active))
         .add_systems(
             FixedUpdate,
@@ -432,11 +450,15 @@ fn setup(
     let level_data = level_db.get_by_id(&current_level.0);
 
     // Load AI profile IDs for players (use name lookup, fall back to first profile)
-    let left_ai_profile_id = current_settings.settings.left_ai_profile.as_ref()
+    let left_ai_profile_id = current_settings
+        .settings
+        .left_ai_profile
+        .as_ref()
         .and_then(|name| profile_db.get_by_name(name))
         .map(|p| p.id.clone())
         .unwrap_or_else(|| profile_db.default_profile().id.clone());
-    let right_ai_profile_id = profile_db.get_by_name(&current_settings.settings.right_ai_profile)
+    let right_ai_profile_id = profile_db
+        .get_by_name(&current_settings.settings.right_ai_profile)
         .map(|p| p.id.clone())
         .unwrap_or_else(|| profile_db.default_profile().id.clone());
 
@@ -644,7 +666,10 @@ fn setup(
         let ball_style_name = if ball_textures.get(loaded_style).is_some() {
             loaded_style.clone()
         } else {
-            ball_textures.default_style().cloned().unwrap_or_else(|| "wedges".to_string())
+            ball_textures
+                .default_style()
+                .cloned()
+                .unwrap_or_else(|| "wedges".to_string())
         };
         if let Some(textures) = ball_textures.get(&ball_style_name) {
             commands.spawn((
@@ -672,7 +697,12 @@ fn setup(
     world::spawn_walls(&mut commands, initial_palette.platforms);
 
     // Spawn level platforms for the loaded level
-    levels::spawn_level_platforms(&mut commands, &level_db, &current_level.0, initial_palette.platforms);
+    levels::spawn_level_platforms(
+        &mut commands,
+        &level_db,
+        &current_level.0,
+        initial_palette.platforms,
+    );
 
     // Baskets with rims (shared spawning function)
     let initial_level = level_data;
@@ -755,7 +785,11 @@ fn setup(
             },
             TextLayout::new_with_justify(Justify::Left),
             TextColor(TEXT_ACCENT),
-            Transform::from_xyz(cycle_base_x, cycle_base_y - (i as f32 * cycle_line_spacing), 1.0),
+            Transform::from_xyz(
+                cycle_base_x,
+                cycle_base_y - (i as f32 * cycle_line_spacing),
+                1.0,
+            ),
             CycleIndicator(i),
         ));
     }
@@ -822,10 +856,7 @@ fn setup(
 }
 
 /// Setup system for replay mode - loads replay data
-fn replay_load_file(
-    mut commands: Commands,
-    replay_mode: Res<replay::ReplayMode>,
-) {
+fn replay_load_file(mut commands: Commands, replay_mode: Res<replay::ReplayMode>) {
     let replay_result = if let Some(match_id) = replay_mode.match_id {
         replay::load_replay_from_db(Path::new(DEFAULT_REPLAY_DB), match_id)
             .map_err(|e| format!("Failed to load replay from DB match {}: {}", match_id, e))

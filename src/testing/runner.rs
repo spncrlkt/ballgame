@@ -8,30 +8,30 @@ use std::time::Duration;
 use crate::ai::InputState;
 use crate::ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
-    CurrentPalette, Velocity, ball_collisions, ball_follow_holder, ball_gravity,
-    ball_player_collision, ball_spin, ball_state_update, apply_velocity, pickup_ball,
+    CurrentPalette, Velocity, apply_velocity, ball_collisions, ball_follow_holder, ball_gravity,
+    ball_player_collision, ball_spin, ball_state_update, pickup_ball,
 };
 use crate::constants::*;
+use crate::events::EventBus;
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
 use crate::player::{
     CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, TargetBasket, Team,
     apply_gravity, apply_input, check_collisions,
 };
-use crate::events::EventBus;
 use crate::scoring::{CurrentLevel, Score, check_scoring};
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
 use crate::steal::{StealContest, StealCooldown, StealTracker, steal_cooldown_update};
 use crate::ui::PhysicsTweaks;
-use crate::world::{Basket, Collider, Platform, spawn_floor, spawn_walls, spawn_baskets};
+use crate::world::{Basket, Collider, Platform, spawn_baskets, spawn_floor, spawn_walls};
 
+use super::TEST_LEVELS_FILE;
 use super::assertions::{
-    check_sequence, check_state, AssertionError, BallState as AssertionBallState, CapturedEvent,
-    EntityState, WorldState,
+    AssertionError, BallState as AssertionBallState, CapturedEvent, EntityState, WorldState,
+    check_sequence, check_state,
 };
 use super::input::{ScriptedInputs, TestEntityId};
 use super::parser::{EntityDef, TestDefinition};
-use super::{TEST_LEVELS_FILE};
 
 /// Result of running a test
 #[derive(Debug)]
@@ -120,13 +120,16 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
     // Create minimal Bevy app
     let mut app = App::new();
 
-    app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(
-        Duration::from_secs_f32(1.0 / 60.0),
-    )));
+    app.add_plugins(
+        MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f32(
+            1.0 / 60.0,
+        ))),
+    );
     app.add_plugins(bevy::transform::TransformPlugin);
 
     // Get level ID before moving level_db into app
-    let level_id = level_db.get(level_idx)
+    let level_id = level_db
+        .get(level_idx)
         .map(|l| l.id.clone())
         .unwrap_or_default();
 
@@ -165,9 +168,21 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
 
     // Startup
     let entities_clone = test.setup.entities.clone();
-    app.add_systems(Startup, move |commands: Commands, level_db: Res<LevelDatabase>, current_level: Res<CurrentLevel>, mut capture: ResMut<EventCapture>| {
-        test_setup(commands, &level_db, &current_level, &entities_clone, &mut capture);
-    });
+    app.add_systems(
+        Startup,
+        move |commands: Commands,
+              level_db: Res<LevelDatabase>,
+              current_level: Res<CurrentLevel>,
+              mut capture: ResMut<EventCapture>| {
+            test_setup(
+                commands,
+                &level_db,
+                &current_level,
+                &entities_clone,
+                &mut capture,
+            );
+        },
+    );
 
     // Game systems - Update for event capture and end check
     app.add_systems(Update, (event_capture, test_end_check));
@@ -226,7 +241,9 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
                     }
 
                     // Move to next state check
-                    app.world_mut().resource_mut::<TestControl>().next_state_check += 1;
+                    app.world_mut()
+                        .resource_mut::<TestControl>()
+                        .next_state_check += 1;
                 }
             }
         }
@@ -241,7 +258,9 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
     {
         let result = app.world().resource::<StateAssertionResult>();
         if let Some(ref error) = result.error {
-            return TestResult::Fail { error: error.clone() };
+            return TestResult::Fail {
+                error: error.clone(),
+            };
         }
     }
 
@@ -259,7 +278,9 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
         return TestResult::Fail { error: e };
     }
 
-    TestResult::Pass { frames: final_frame }
+    TestResult::Pass {
+        frames: final_frame,
+    }
 }
 
 /// Setup system for test
@@ -343,8 +364,16 @@ fn test_setup(
                 facing,
                 holding_ball,
             } => {
-                let team_enum = if team == "left" { Team::Left } else { Team::Right };
-                let target = if team == "left" { Basket::Right } else { Basket::Left };
+                let team_enum = if team == "left" {
+                    Team::Left
+                } else {
+                    Team::Right
+                };
+                let target = if team == "left" {
+                    Basket::Right
+                } else {
+                    Basket::Left
+                };
 
                 let entity = commands
                     .spawn((
@@ -375,7 +404,12 @@ fn test_setup(
                     ball_holder = Some((entity, id.clone()));
                 }
             }
-            EntityDef::Ball { x, y, velocity_x, velocity_y } => {
+            EntityDef::Ball {
+                x,
+                y,
+                velocity_x,
+                velocity_y,
+            } => {
                 commands.spawn((
                     Transform::from_translation(Vec3::new(*x, *y, 0.0)),
                     Sprite {
@@ -417,7 +451,9 @@ fn test_setup(
             ))
             .id();
 
-        commands.entity(holder_entity).insert(HoldingBall(ball_entity));
+        commands
+            .entity(holder_entity)
+            .insert(HoldingBall(ball_entity));
         capture.prev_ball_holder = Some(holder_entity);
     }
 }
@@ -524,7 +560,11 @@ fn event_capture(
 
         // Steal detection - detect when cooldown jumps up significantly
         let current_cooldown = steal_cooldown.0;
-        let prev_cooldown = capture.prev_steal_cooldowns.get(&entity).copied().unwrap_or(0.0);
+        let prev_cooldown = capture
+            .prev_steal_cooldowns
+            .get(&entity)
+            .copied()
+            .unwrap_or(0.0);
 
         // Detect out-of-range attempts (shorter cooldown ~0.2s)
         if steal_contest.out_of_range_timer > 0.0
@@ -559,7 +599,9 @@ fn event_capture(
                 });
             }
         }
-        capture.prev_steal_cooldowns.insert(entity, current_cooldown);
+        capture
+            .prev_steal_cooldowns
+            .insert(entity, current_cooldown);
     }
 
     // Detect shot release (ball becomes InFlight)
@@ -576,7 +618,9 @@ fn event_capture(
             }
         } else if matches!(ball_state, BallState::Free) && capture.prev_ball_holder.is_some() {
             // Ball was dropped
-            let player_id = capture.prev_ball_holder.and_then(|e| capture.entity_map.get(&e).cloned());
+            let player_id = capture
+                .prev_ball_holder
+                .and_then(|e| capture.entity_map.get(&e).cloned());
             capture.events.push(CapturedEvent {
                 frame,
                 event_type: "Drop".to_string(),

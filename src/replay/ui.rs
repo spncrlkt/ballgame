@@ -61,10 +61,7 @@ pub struct PlayerGoalLabel(pub Team);
 pub struct ReplayControlsText;
 
 /// Setup the replay UI (called once when replay starts)
-pub fn setup_replay_ui(
-    mut commands: Commands,
-    replay_data: Res<ReplayData>,
-) {
+pub fn setup_replay_ui(mut commands: Commands, replay_data: Res<ReplayData>) {
     let timeline_y = ARENA_FLOOR_Y - 60.0;
     let timeline_width = ARENA_WIDTH - 100.0;
     let timeline_height = 8.0;
@@ -97,14 +94,17 @@ pub fn setup_replay_ui(
         for event in &replay_data.events {
             let marker_type = match &event.event {
                 GameEvent::Goal { .. } => Some(EventMarkerType::Goal),
-                GameEvent::StealSuccess { .. } | GameEvent::StealFail { .. } => Some(EventMarkerType::Steal),
+                GameEvent::StealSuccess { .. } | GameEvent::StealFail { .. } => {
+                    Some(EventMarkerType::Steal)
+                }
                 GameEvent::Pickup { .. } => Some(EventMarkerType::Pickup),
                 GameEvent::AiGoal { .. } => Some(EventMarkerType::AiGoal),
                 _ => None,
             };
 
             if let Some(marker_type) = marker_type {
-                let x_offset = (event.time_ms as f32 / duration) * timeline_width - timeline_width / 2.0;
+                let x_offset =
+                    (event.time_ms as f32 / duration) * timeline_width - timeline_width / 2.0;
                 commands.spawn((
                     Sprite {
                         color: marker_type.color(),
@@ -209,8 +209,22 @@ pub fn update_replay_ui(
     mut time_display: Query<&mut Text2d, (With<ReplayTimeDisplay>, Without<ReplaySpeedDisplay>)>,
     mut speed_display: Query<&mut Text2d, (With<ReplaySpeedDisplay>, Without<ReplayTimeDisplay>)>,
     mut progress: Query<(&mut Transform, &mut Sprite), With<ReplayTimelineProgress>>,
-    mut goal_labels: Query<(&mut Text2d, &mut Transform, &PlayerGoalLabel), (Without<ReplayTimeDisplay>, Without<ReplaySpeedDisplay>, Without<ReplayTimelineProgress>)>,
-    players: Query<(&Transform, &Team), (With<crate::player::Player>, Without<ReplayTimelineProgress>, Without<PlayerGoalLabel>)>,
+    mut goal_labels: Query<
+        (&mut Text2d, &mut Transform, &PlayerGoalLabel),
+        (
+            Without<ReplayTimeDisplay>,
+            Without<ReplaySpeedDisplay>,
+            Without<ReplayTimelineProgress>,
+        ),
+    >,
+    players: Query<
+        (&Transform, &Team),
+        (
+            With<crate::player::Player>,
+            Without<ReplayTimelineProgress>,
+            Without<PlayerGoalLabel>,
+        ),
+    >,
 ) {
     // Update time display
     for mut text in &mut time_display {
@@ -244,7 +258,8 @@ pub fn update_replay_ui(
             if *team == label.0 {
                 // Position above player
                 transform.translation.x = player_transform.translation.x;
-                transform.translation.y = player_transform.translation.y + PLAYER_SIZE.y / 2.0 + 25.0;
+                transform.translation.y =
+                    player_transform.translation.y + PLAYER_SIZE.y / 2.0 + 25.0;
 
                 // Get current AI goal
                 let player_id = match team {

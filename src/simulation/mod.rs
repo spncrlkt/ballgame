@@ -17,6 +17,20 @@ pub mod shot_test;
 pub use app_builder::HeadlessAppBuilder;
 pub use config::{SimConfig, SimMode};
 pub use control::{SimControl, SimEventBuffer};
+pub use db::{
+    ClosestMoment,
+    // Analysis types
+    DistanceAnalysis,
+    EventRecord,
+    GoalTransition,
+    InputAnalysis,
+    MatchEventStats,
+    MatchFilter,
+    MatchSummary,
+    ProfileStats,
+    SessionSummary,
+    SimDatabase,
+};
 pub use ghost::{
     GhostOutcome, GhostPlaybackState, GhostTrial, GhostTrialResult, InputSample,
     ghost_check_end_conditions, ghost_input_system, load_ghost_trial, max_tick,
@@ -24,10 +38,4 @@ pub use ghost::{
 pub use metrics::{MatchResult, PlayerStats, SimMetrics, TournamentResult};
 pub use runner::{run_match, run_simulation};
 pub use setup::{sim_setup, spawn_corner_steps};
-pub use shot_test::{run_shot_test, ShotOutcome};
-pub use db::{
-    SimDatabase, ProfileStats, MatchFilter, MatchSummary, EventRecord,
-    // Analysis types
-    DistanceAnalysis, InputAnalysis, ClosestMoment, GoalTransition,
-    SessionSummary, MatchEventStats,
-};
+pub use shot_test::{ShotOutcome, run_shot_test};

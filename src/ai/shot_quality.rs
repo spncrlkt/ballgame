@@ -159,7 +159,11 @@ mod tests {
         let basket = Vec2::new(-600.0, 0.0);
         let shooter = Vec2::new(-400.0, 150.0); // Above and to the right (in front)
         let quality = evaluate_shot_quality(shooter, basket);
-        assert!(quality >= SHOT_QUALITY_GOOD, "Above+front should be good: {}", quality);
+        assert!(
+            quality >= SHOT_QUALITY_GOOD,
+            "Above+front should be good: {}",
+            quality
+        );
     }
 
     #[test]

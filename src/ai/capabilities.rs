@@ -96,8 +96,8 @@ impl AiCapabilities {
             let plat_top = center.y + size.y / 2.0;
 
             // Check horizontal overlap
-            let overlaps_x = pos.x + player_half_width > plat_left
-                && pos.x - player_half_width < plat_right;
+            let overlaps_x =
+                pos.x + player_half_width > plat_left && pos.x - player_half_width < plat_right;
 
             if !overlaps_x {
                 continue;

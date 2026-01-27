@@ -81,8 +81,8 @@ impl Default for AiProfile {
             defensive_iq: 0.5,
             steal_reaction_time: 0.2, // ~200ms like typical human reaction
             button_presses_per_sec: 12.0, // ~12 presses/sec (typical human mashing)
-            position_patience: 1.0, // Moderate willingness to seek better positions
-            seek_threshold: 0.10, // Moderate threshold for seeking
+            position_patience: 1.0,   // Moderate willingness to seek better positions
+            seek_threshold: 0.10,     // Moderate threshold for seeking
         }
     }
 }

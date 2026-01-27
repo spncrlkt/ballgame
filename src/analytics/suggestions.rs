@@ -19,10 +19,7 @@ impl ParameterSuggestion {
     pub fn format(&self) -> String {
         format!(
             "  {}. {} {} ({})",
-            self.priority,
-            self.change,
-            self.parameter,
-            self.reason
+            self.priority, self.change, self.parameter, self.reason
         )
     }
 }

@@ -6,30 +6,30 @@
 //!   cargo run --bin training
 //!   cargo run --bin training -- --games 3 --profile Aggressive
 
-use ballgame::ui::spawn_steal_indicators;
-use ballgame::{
-    AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact,
-    BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
-    ChargeGaugeBackground, ChargeGaugeFill, ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette,
-    DebugSettings, EventBuffer, EventBus, Facing, GameConfig, GameEvent, Grounded, HoldingBall,
-    HumanControlled, HumanControlTarget, InputState, JumpState, LastShotInfo, LevelChangeTracker,
-    LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase, PhysicsTweaks,
-    PlayerId, Player, PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown, StealTracker,
-    StyleTextures, TargetBasket, Team, Velocity, ai, ball, constants::*, countdown, helpers::*,
-    emit_level_change_events, input, levels, player, scoring, shooting, spawn_countdown_text,
-    steal, update_event_bus_time, world,
-};
 use ballgame::events::{
-    emit_game_events, snapshot_ball, snapshot_player, EmitterConfig, EventEmitterState,
-    SqliteEventLogger,
+    EmitterConfig, EventEmitterState, SqliteEventLogger, emit_game_events, snapshot_ball,
+    snapshot_player,
 };
+use ballgame::simulation::SimDatabase;
 use ballgame::training::{
     LevelSelector, TrainingMode, TrainingPhase, TrainingProtocol, TrainingSettings, TrainingState,
     analyze_pursuit_session_from_db, analyze_session_from_db, ensure_session_dir,
     format_pursuit_analysis_markdown, generate_claude_prompt, print_session_summary,
     write_analysis_files, write_session_summary,
 };
-use ballgame::simulation::SimDatabase;
+use ballgame::ui::spawn_steal_indicators;
+use ballgame::{
+    AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact,
+    BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
+    ChargeGaugeBackground, ChargeGaugeFill, ChargingShot, CoyoteTimer, CurrentLevel,
+    CurrentPalette, DebugSettings, EventBuffer, EventBus, Facing, GameConfig, GameEvent, Grounded,
+    HoldingBall, HumanControlTarget, HumanControlled, InputState, JumpState, LastShotInfo,
+    LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase,
+    PhysicsTweaks, Player, PlayerId, PlayerInput, Score, SnapshotConfig, StealContest,
+    StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, Velocity, ai, ball,
+    constants::*, countdown, emit_level_change_events, helpers::*, input, levels, player, scoring,
+    shooting, spawn_countdown_text, steal, update_event_bus_time, world,
+};
 use bevy::{camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
@@ -72,7 +72,10 @@ fn create_sqlite_logger() -> SqliteEventLogger {
             logger
         }
         Err(e) => {
-            warn!("Failed to create SQLite logger ({}), using disabled logger", e);
+            warn!(
+                "Failed to create SQLite logger ({}), using disabled logger",
+                e
+            );
             SqliteEventLogger::disabled()
         }
     }
@@ -163,7 +166,8 @@ fn main() {
                 // Find level by name (case-insensitive)
                 (0..level_db.len())
                     .find(|&i| {
-                        level_db.get(i)
+                        level_db
+                            .get(i)
                             .map(|l| l.name.to_lowercase() == name.to_lowercase())
                             .unwrap_or(false)
                     })
@@ -186,7 +190,9 @@ fn main() {
                 let level = level_db.get(i);
                 let is_debug = level.map(|l| l.debug).unwrap_or(true);
                 let level_name = level.map(|l| l.name.clone()).unwrap_or_default();
-                let is_excluded = settings.exclude_levels.iter()
+                let is_excluded = settings
+                    .exclude_levels
+                    .iter()
                     .any(|exc| level_name.to_lowercase() == exc.to_lowercase());
                 !is_debug && !is_excluded
             })
@@ -208,7 +214,10 @@ fn main() {
         return;
     }
 
-    println!("Starting iteration 1/{} on {}", settings.iterations, training_state.current_level_name);
+    println!(
+        "Starting iteration 1/{} on {}",
+        settings.iterations, training_state.current_level_name
+    );
     println!();
 
     // Viewport setup from settings
@@ -216,19 +225,21 @@ fn main() {
     let (viewport_width, viewport_height, _) = VIEWPORT_PRESETS[viewport_index];
 
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                resolution: bevy::window::WindowResolution::new(
-                    viewport_width as u32,
-                    viewport_height as u32,
-                )
-                .with_scale_factor_override(1.0),
-                title: "Ballgame - Training Mode".into(),
-                resizable: false,
+        .add_plugins(
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: bevy::window::WindowResolution::new(
+                        viewport_width as u32,
+                        viewport_height as u32,
+                    )
+                    .with_scale_factor_override(1.0),
+                    title: "Ballgame - Training Mode".into(),
+                    resizable: false,
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }))
+        )
         .insert_resource(ClearColor(initial_bg))
         .insert_resource(palette_db)
         .insert_resource(level_db)
@@ -358,7 +369,9 @@ fn give_ball_to_human(
                 ball_transform.translation.x = player_transform.translation.x;
                 ball_transform.translation.y = player_transform.translation.y;
                 *ball_state = BallState::Held(player_entity);
-                commands.entity(player_entity).insert(HoldingBall(ball_entity));
+                commands
+                    .entity(player_entity)
+                    .insert(HoldingBall(ball_entity));
                 break;
             }
         }
@@ -406,10 +419,17 @@ fn training_setup(
     sqlite_logger: Res<SqliteEventLogger>,
 ) {
     // Set current level from training state (convert level number to level ID)
-    let level_id = level_db.all()
+    let level_id = level_db
+        .all()
         .get((training_state.current_level as usize).saturating_sub(1))
         .map(|l| l.id.clone())
-        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+        .unwrap_or_else(|| {
+            level_db
+                .all()
+                .first()
+                .map(|l| l.id.clone())
+                .unwrap_or_default()
+        });
     current_level.0 = level_id;
 
     // Camera
@@ -428,10 +448,17 @@ fn training_setup(
     let initial_palette = palette_db.get(0).expect("No palettes loaded");
 
     // Get level ID from training state
-    let level_id = level_db.all()
+    let level_id = level_db
+        .all()
         .get((training_state.current_level as usize).saturating_sub(1))
         .map(|l| l.id.clone())
-        .unwrap_or_else(|| level_db.all().first().map(|l| l.id.clone()).unwrap_or_default());
+        .unwrap_or_else(|| {
+            level_db
+                .all()
+                .first()
+                .map(|l| l.id.clone())
+                .unwrap_or_default()
+        });
 
     // Find AI profile ID
     let ai_profile_id = profile_db
@@ -500,7 +527,10 @@ fn training_setup(
     let gauge_x = -PLAYER_SIZE.x / 4.0;
     let gauge_bg = commands
         .spawn((
-            Sprite::from_color(Color::BLACK, Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT)),
+            Sprite::from_color(
+                Color::BLACK,
+                Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT),
+            ),
             Transform::from_xyz(gauge_x, 0.0, 0.5),
             ChargeGaugeBackground,
         ))
@@ -523,7 +553,10 @@ fn training_setup(
     let right_gauge_x = PLAYER_SIZE.x / 4.0;
     let right_gauge_bg = commands
         .spawn((
-            Sprite::from_color(Color::BLACK, Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT)),
+            Sprite::from_color(
+                Color::BLACK,
+                Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT),
+            ),
             Transform::from_xyz(right_gauge_x, 0.0, 0.5),
             ChargeGaugeBackground,
         ))
@@ -585,27 +618,31 @@ fn training_setup(
             (BALL_SPAWN, BallState::Free)
         };
 
-        let ball_entity = commands.spawn((
-            Sprite {
-                image: textures.textures[0].clone(),
-                custom_size: Some(BALL_SIZE),
-                ..default()
-            },
-            Transform::from_translation(ball_spawn_pos),
-            Ball,
-            ball_state,
-            Velocity::default(),
-            BallPlayerContact::default(),
-            BallPulse::default(),
-            BallRolling::default(),
-            BallShotGrace::default(),
-            BallSpin::default(),
-            BallStyle::new(&ball_style_name),
-        )).id();
+        let ball_entity = commands
+            .spawn((
+                Sprite {
+                    image: textures.textures[0].clone(),
+                    custom_size: Some(BALL_SIZE),
+                    ..default()
+                },
+                Transform::from_translation(ball_spawn_pos),
+                Ball,
+                ball_state,
+                Velocity::default(),
+                BallPlayerContact::default(),
+                BallPulse::default(),
+                BallRolling::default(),
+                BallShotGrace::default(),
+                BallSpin::default(),
+                BallStyle::new(&ball_style_name),
+            ))
+            .id();
 
         if training_settings.drive_mode {
             // Give the human player the ball
-            commands.entity(left_player).insert(HoldingBall(ball_entity));
+            commands
+                .entity(left_player)
+                .insert(HoldingBall(ball_entity));
         }
     }
 
@@ -632,14 +669,21 @@ fn training_setup(
     ));
 
     // Level platforms
-    levels::spawn_level_platforms(&mut commands, &level_db, &level_id, initial_palette.platforms);
+    levels::spawn_level_platforms(
+        &mut commands,
+        &level_db,
+        &level_id,
+        initial_palette.platforms,
+    );
 
     // Baskets
     let initial_level = level_db.get_by_id(&level_id);
     let basket_y = initial_level
         .map(|l| ARENA_FLOOR_Y + l.basket_height)
         .unwrap_or(ARENA_FLOOR_Y + 400.0);
-    let basket_push_in = initial_level.map(|l| l.basket_push_in).unwrap_or(BASKET_PUSH_IN);
+    let basket_push_in = initial_level
+        .map(|l| l.basket_push_in)
+        .unwrap_or(BASKET_PUSH_IN);
     let (left_basket_x, right_basket_x) = basket_x_from_offset(basket_push_in);
 
     let rim_outer_height = BASKET_SIZE.y * 0.5;
@@ -657,19 +701,28 @@ fn training_setup(
         ))
         .with_children(|parent| {
             parent.spawn((
-                Sprite::from_color(initial_palette.right_rim, Vec2::new(RIM_THICKNESS, rim_outer_height)),
+                Sprite::from_color(
+                    initial_palette.right_rim,
+                    Vec2::new(RIM_THICKNESS, rim_outer_height),
+                ),
                 Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             parent.spawn((
-                Sprite::from_color(initial_palette.right_rim, Vec2::new(RIM_THICKNESS, rim_inner_height)),
+                Sprite::from_color(
+                    initial_palette.right_rim,
+                    Vec2::new(RIM_THICKNESS, rim_inner_height),
+                ),
                 Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             parent.spawn((
-                Sprite::from_color(initial_palette.right_rim, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
+                Sprite::from_color(
+                    initial_palette.right_rim,
+                    Vec2::new(rim_bottom_width, RIM_THICKNESS),
+                ),
                 Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
                 Platform,
                 BasketRim,
@@ -685,19 +738,28 @@ fn training_setup(
         ))
         .with_children(|parent| {
             parent.spawn((
-                Sprite::from_color(initial_palette.left_rim, Vec2::new(RIM_THICKNESS, rim_inner_height)),
+                Sprite::from_color(
+                    initial_palette.left_rim,
+                    Vec2::new(RIM_THICKNESS, rim_inner_height),
+                ),
                 Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             parent.spawn((
-                Sprite::from_color(initial_palette.left_rim, Vec2::new(RIM_THICKNESS, rim_outer_height)),
+                Sprite::from_color(
+                    initial_palette.left_rim,
+                    Vec2::new(RIM_THICKNESS, rim_outer_height),
+                ),
                 Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
                 Platform,
                 BasketRim,
             ));
             parent.spawn((
-                Sprite::from_color(initial_palette.left_rim, Vec2::new(rim_bottom_width, RIM_THICKNESS)),
+                Sprite::from_color(
+                    initial_palette.left_rim,
+                    Vec2::new(rim_bottom_width, RIM_THICKNESS),
+                ),
                 Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
                 Platform,
                 BasketRim,
@@ -705,10 +767,18 @@ fn training_setup(
         });
 
     // Corner ramps
-    let initial_step_count = initial_level.map(|l| l.step_count).unwrap_or(CORNER_STEP_COUNT);
-    let initial_corner_height = initial_level.map(|l| l.corner_height).unwrap_or(CORNER_STEP_TOTAL_HEIGHT);
-    let initial_corner_width = initial_level.map(|l| l.corner_width).unwrap_or(CORNER_STEP_TOTAL_WIDTH);
-    let initial_step_push_in = initial_level.map(|l| l.step_push_in).unwrap_or(STEP_PUSH_IN);
+    let initial_step_count = initial_level
+        .map(|l| l.step_count)
+        .unwrap_or(CORNER_STEP_COUNT);
+    let initial_corner_height = initial_level
+        .map(|l| l.corner_height)
+        .unwrap_or(CORNER_STEP_TOTAL_HEIGHT);
+    let initial_corner_width = initial_level
+        .map(|l| l.corner_width)
+        .unwrap_or(CORNER_STEP_TOTAL_WIDTH);
+    let initial_step_push_in = initial_level
+        .map(|l| l.step_push_in)
+        .unwrap_or(STEP_PUSH_IN);
     levels::spawn_corner_ramps(
         &mut commands,
         initial_step_count,
@@ -722,9 +792,14 @@ fn training_setup(
     commands.spawn((
         Text2d::new(format!(
             "Game {}/{} | {} | You 0 - 0 AI",
-            training_state.game_number, training_state.games_total, training_state.current_level_name
+            training_state.game_number,
+            training_state.games_total,
+            training_state.current_level_name
         )),
-        TextFont { font_size: 20.0, ..default() },
+        TextFont {
+            font_size: 20.0,
+            ..default()
+        },
         TextLayout::new_with_justify(Justify::Center),
         TextColor(TEXT_PRIMARY),
         Transform::from_xyz(0.0, ARENA_HEIGHT / 2.0 - 30.0, 1.0),
@@ -860,10 +935,7 @@ fn training_state_machine(
 
                 println!(
                     "Iteration {} complete: {} ({}-{})",
-                    training_state.game_number,
-                    outcome,
-                    score.left,
-                    score.right
+                    training_state.game_number, outcome, score.left, score.right
                 );
             }
         }
@@ -885,9 +957,11 @@ fn training_state_machine(
                     if let Some(fixed_level_name) = training_state.protocol.fixed_level() {
                         // Protocol specifies a fixed level - keep using it
                         // Level is already set, just ensure current_level matches
-                        if let Some((idx, level_data)) = level_db.all().iter().enumerate().find(|(_, l)| {
-                            l.name.to_lowercase() == fixed_level_name.to_lowercase()
-                        }) {
+                        if let Some((idx, level_data)) =
+                            level_db.all().iter().enumerate().find(|(_, l)| {
+                                l.name.to_lowercase() == fixed_level_name.to_lowercase()
+                            })
+                        {
                             training_state.current_level = (idx + 1) as u32;
                             training_state.current_level_name = fixed_level_name.to_string();
                             current_level.0 = level_data.id.clone();
@@ -895,7 +969,8 @@ fn training_state_machine(
                     } else {
                         // Pick new random level
                         // Filter out debug levels and Pit (too hard for training)
-                        let training_levels: Vec<(usize, &ballgame::levels::LevelData)> = level_db.all()
+                        let training_levels: Vec<(usize, &ballgame::levels::LevelData)> = level_db
+                            .all()
                             .iter()
                             .enumerate()
                             .filter(|(_, l)| {
@@ -905,7 +980,9 @@ fn training_state_machine(
                             })
                             .collect();
 
-                        if let Some(&(idx, level_data)) = training_levels.choose(&mut rand::thread_rng()) {
+                        if let Some(&(idx, level_data)) =
+                            training_levels.choose(&mut rand::thread_rng())
+                        {
                             training_state.current_level = (idx + 1) as u32;
                             training_state.current_level_name = level_data.name.clone();
                             current_level.0 = level_data.id.clone();
@@ -973,11 +1050,16 @@ fn training_state_machine(
 
             // Run standard analysis (same for all protocols)
             println!("\nAnalyzing training session...");
-            let analysis = training_state.sqlite_session_id.as_deref().and_then(|session_id| {
-                SimDatabase::open(std::path::Path::new("db/training.db"))
-                    .ok()
-                    .and_then(|db| analyze_session_from_db(&db, session_id, training_state.protocol))
-            });
+            let analysis = training_state
+                .sqlite_session_id
+                .as_deref()
+                .and_then(|session_id| {
+                    SimDatabase::open(std::path::Path::new("db/training.db"))
+                        .ok()
+                        .and_then(|db| {
+                            analyze_session_from_db(&db, session_id, training_state.protocol)
+                        })
+                });
 
             if let Some(ref analysis) = analysis {
                 if let Err(e) = write_analysis_files(&training_state.session_dir, analysis) {
@@ -991,11 +1073,15 @@ fn training_state_machine(
             match training_state.protocol {
                 TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => {
                     // Pursuit-specific analysis (in addition to standard)
-                    let pursuit_analysis = training_state.sqlite_session_id.as_deref().and_then(|session_id| {
-                        SimDatabase::open(std::path::Path::new("db/training.db"))
-                            .ok()
-                            .and_then(|db| analyze_pursuit_session_from_db(&db, session_id))
-                    });
+                    let pursuit_analysis =
+                        training_state
+                            .sqlite_session_id
+                            .as_deref()
+                            .and_then(|session_id| {
+                                SimDatabase::open(std::path::Path::new("db/training.db"))
+                                    .ok()
+                                    .and_then(|db| analyze_pursuit_session_from_db(&db, session_id))
+                            });
 
                     if let Some(pursuit_analysis) = pursuit_analysis {
                         // Write pursuit analysis
@@ -1035,8 +1121,7 @@ fn training_state_machine(
                 TrainingProtocol::AdvancedPlatform => {
                     if let Some(ref analysis) = analysis {
                         // Print Claude prompt to terminal
-                        let prompt =
-                            generate_claude_prompt(&training_state.session_dir, analysis);
+                        let prompt = generate_claude_prompt(&training_state.session_dir, analysis);
                         println!("\n{}", prompt);
                     } else {
                         eprintln!("No analysis available for Claude prompt.");
@@ -1119,8 +1204,8 @@ fn emit_training_events(
     // Convert query results to snapshots
     let player_snapshots: Vec<_> = players
         .iter()
-        .map(|(entity, team, transform, velocity, charging, ai_state, steal_cooldown, holding, input_state)| {
-            snapshot_player(
+        .map(
+            |(
                 entity,
                 team,
                 transform,
@@ -1130,8 +1215,20 @@ fn emit_training_events(
                 steal_cooldown,
                 holding,
                 input_state,
-            )
-        })
+            )| {
+                snapshot_player(
+                    entity,
+                    team,
+                    transform,
+                    velocity,
+                    charging,
+                    ai_state,
+                    steal_cooldown,
+                    holding,
+                    input_state,
+                )
+            },
+        )
         .collect();
 
     let ball_snapshot = balls
@@ -1212,12 +1309,17 @@ fn check_pause_restart(
     settings: Res<TrainingSettings>,
     mut current_level: ResMut<CurrentLevel>,
     mut players: Query<(Entity, &mut Transform, &Team), With<Player>>,
-    mut balls: Query<(Entity, &mut Transform, &mut BallState, &mut Velocity), (With<Ball>, Without<Player>)>,
+    mut balls: Query<
+        (Entity, &mut Transform, &mut BallState, &mut Velocity),
+        (With<Ball>, Without<Player>),
+    >,
     sqlite_logger: Res<SqliteEventLogger>,
 ) {
     // Check for Start button (keyboard P or gamepad Start)
     let start_pressed = keyboard.just_pressed(KeyCode::KeyP)
-        || gamepads.iter().any(|gp| gp.just_pressed(GamepadButton::Start));
+        || gamepads
+            .iter()
+            .any(|gp| gp.just_pressed(GamepadButton::Start));
 
     if !start_pressed {
         return;
@@ -1246,9 +1348,12 @@ fn check_pause_restart(
     if let Some(fixed_level_name) = training_state.protocol.fixed_level() {
         // Protocol specifies a fixed level - keep using it
         println!("\nRestarting iteration on {}...", fixed_level_name);
-        if let Some((idx, level_data)) = level_db.all().iter().enumerate().find(|(_, l)| {
-            l.name.to_lowercase() == fixed_level_name.to_lowercase()
-        }) {
+        if let Some((idx, level_data)) = level_db
+            .all()
+            .iter()
+            .enumerate()
+            .find(|(_, l)| l.name.to_lowercase() == fixed_level_name.to_lowercase())
+        {
             training_state.current_level = (idx + 1) as u32;
             training_state.current_level_name = fixed_level_name.to_string();
             current_level.0 = level_data.id.clone();
@@ -1257,7 +1362,8 @@ fn check_pause_restart(
         println!("\nRestarting game with new level...");
 
         // Pick new random level (excluding debug and Pit)
-        let training_levels: Vec<(usize, &ballgame::levels::LevelData)> = level_db.all()
+        let training_levels: Vec<(usize, &ballgame::levels::LevelData)> = level_db
+            .all()
             .iter()
             .enumerate()
             .filter(|(_, l)| {
@@ -1302,7 +1408,9 @@ fn check_pause_restart(
                 ball_transform.translation.y = PLAYER_SPAWN_LEFT.y;
                 *ball_state = BallState::Held(left_player);
                 velocity.0 = Vec2::ZERO;
-                commands.entity(left_player).insert(HoldingBall(ball_entity));
+                commands
+                    .entity(left_player)
+                    .insert(HoldingBall(ball_entity));
             }
         } else {
             ball_transform.translation = BALL_SPAWN;
@@ -1349,8 +1457,6 @@ fn check_pause_restart(
 
     println!(
         "Game {}/{} on {}",
-        training_state.game_number,
-        training_state.games_total,
-        training_state.current_level_name
+        training_state.game_number, training_state.games_total, training_state.current_level_name
     );
 }

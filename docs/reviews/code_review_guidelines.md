@@ -749,7 +749,7 @@ cargo run --bin simulate -- --tournament 5 --parallel 8
 cargo run --bin simulate -- --shot-test 30 --level 3
 # Target: 40-60% over/under ratio
 
-# Generate heatmap for scoring positions
+# Generate per-level scoring heatmaps
 cargo run --bin heatmap -- score
 ```
 

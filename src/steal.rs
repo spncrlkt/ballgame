@@ -78,9 +78,9 @@ impl StealTracker {
         }
 
         // Calculate adjustment steps (0 to 6 steps beyond threshold)
-        let steps_beyond = (abs_diff - STEAL_DIFFICULTY_THRESHOLD).min(
-            STEAL_DIFFICULTY_MAX - STEAL_DIFFICULTY_THRESHOLD,
-        ) as f32;
+        let steps_beyond = (abs_diff - STEAL_DIFFICULTY_THRESHOLD)
+            .min(STEAL_DIFFICULTY_MAX - STEAL_DIFFICULTY_THRESHOLD)
+            as f32;
         let max_steps = (STEAL_DIFFICULTY_MAX - STEAL_DIFFICULTY_THRESHOLD) as f32;
 
         // adjustment goes from 0.0 to 1.0 over the range

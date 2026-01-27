@@ -10,7 +10,9 @@ use std::path::Path;
 use bevy::prelude::warn;
 use chrono::Local;
 
-use crate::simulation::db::{SimDatabase, MatchSummary, DistanceAnalysis, InputAnalysis, GoalTransition};
+use crate::simulation::db::{
+    DistanceAnalysis, GoalTransition, InputAnalysis, MatchSummary, SimDatabase,
+};
 
 /// Per-game analysis metrics
 #[derive(Debug, Clone, Default)]
@@ -334,7 +336,10 @@ pub fn analyze_session_from_db(
     let mut aggregate = AggregateStats::default();
 
     // Get AI profile from first match
-    let ai_profile = matches.first().map(|m| m.right_profile.clone()).unwrap_or_else(|| "Unknown".to_string());
+    let ai_profile = matches
+        .first()
+        .map(|m| m.right_profile.clone())
+        .unwrap_or_else(|| "Unknown".to_string());
 
     // Analyze each match
     for (idx, match_info) in matches.iter().enumerate() {
@@ -385,7 +390,11 @@ pub fn analyze_session_from_db(
 }
 
 /// Analyze a single game from SQLite database
-fn analyze_game_from_db(db: &SimDatabase, match_info: &MatchSummary, game_number: u32) -> GameAnalysis {
+fn analyze_game_from_db(
+    db: &SimDatabase,
+    match_info: &MatchSummary,
+    game_number: u32,
+) -> GameAnalysis {
     let match_id = match_info.id;
 
     // Get event statistics
@@ -403,8 +412,14 @@ fn analyze_game_from_db(db: &SimDatabase, match_info: &MatchSummary, game_number
     // Build shot stats from events
     let shots = if let Some(_stats) = &event_stats {
         // Count shots and goals by player from events
-        let shot_events = db.get_events_by_type(match_id, "SR").ok().unwrap_or_default();
-        let goal_events = db.get_events_by_type(match_id, "G").ok().unwrap_or_default();
+        let shot_events = db
+            .get_events_by_type(match_id, "SR")
+            .ok()
+            .unwrap_or_default();
+        let goal_events = db
+            .get_events_by_type(match_id, "G")
+            .ok()
+            .unwrap_or_default();
 
         let (human_shots, ai_shots) = count_events_by_player(&shot_events);
         let (human_goals, ai_goals) = count_events_by_player(&goal_events);
@@ -421,8 +436,14 @@ fn analyze_game_from_db(db: &SimDatabase, match_info: &MatchSummary, game_number
 
     // Build steal stats from events
     let steals = {
-        let steal_attempt_events = db.get_events_by_type(match_id, "SA").ok().unwrap_or_default();
-        let steal_success_events = db.get_events_by_type(match_id, "S+").ok().unwrap_or_default();
+        let steal_attempt_events = db
+            .get_events_by_type(match_id, "SA")
+            .ok()
+            .unwrap_or_default();
+        let steal_success_events = db
+            .get_events_by_type(match_id, "S+")
+            .ok()
+            .unwrap_or_default();
 
         let (human_attempts, ai_attempts) = count_events_by_player(&steal_attempt_events);
         let (human_successes, ai_successes) = count_events_by_player(&steal_success_events);
@@ -486,7 +507,10 @@ fn count_events_by_player(events: &[crate::simulation::db::EventRecord]) -> (u32
 
 /// Calculate possession stats from tick events in database
 fn calculate_possession_from_db(db: &SimDatabase, match_id: i64) -> PossessionStats {
-    let tick_events = db.get_events_by_type(match_id, "T").ok().unwrap_or_default();
+    let tick_events = db
+        .get_events_by_type(match_id, "T")
+        .ok()
+        .unwrap_or_default();
 
     if tick_events.is_empty() {
         return PossessionStats::default();
@@ -512,8 +536,10 @@ fn calculate_possession_from_db(db: &SimDatabase, match_id: i64) -> PossessionSt
                     parse_pos_simple(parts[5]),
                     parse_pos_simple(parts[7]),
                 ) {
-                    let left_dist = (ball_pos.0 - left_pos.0).powi(2) + (ball_pos.1 - left_pos.1).powi(2);
-                    let right_dist = (ball_pos.0 - right_pos.0).powi(2) + (ball_pos.1 - right_pos.1).powi(2);
+                    let left_dist =
+                        (ball_pos.0 - left_pos.0).powi(2) + (ball_pos.1 - left_pos.1).powi(2);
+                    let right_dist =
+                        (ball_pos.0 - right_pos.0).powi(2) + (ball_pos.1 - right_pos.1).powi(2);
 
                     if left_dist < right_dist {
                         human_ticks += 1;
@@ -529,7 +555,10 @@ fn calculate_possession_from_db(db: &SimDatabase, match_id: i64) -> PossessionSt
     }
 
     // Count pickups from P events
-    let pickup_events = db.get_events_by_type(match_id, "P").ok().unwrap_or_default();
+    let pickup_events = db
+        .get_events_by_type(match_id, "P")
+        .ok()
+        .unwrap_or_default();
     let (human_pickups, ai_pickups) = count_events_by_player(&pickup_events);
 
     let total = (human_ticks + ai_ticks + free_ticks) as f32;
@@ -559,7 +588,10 @@ fn parse_pos_simple(s: &str) -> Option<(f32, f32)> {
 }
 
 /// Build AI behavior stats from goal transitions
-fn build_ai_behavior_from_transitions(transitions: &[GoalTransition], duration_secs: f32) -> AiBehaviorStats {
+fn build_ai_behavior_from_transitions(
+    transitions: &[GoalTransition],
+    duration_secs: f32,
+) -> AiBehaviorStats {
     let mut goal_distribution: HashMap<String, u32> = HashMap::new();
     let mut goal_time_breakdown: HashMap<String, f32> = HashMap::new();
     let mut goal_transitions_count = 0u32;
@@ -586,7 +618,9 @@ fn build_ai_behavior_from_transitions(transitions: &[GoalTransition], duration_s
         // Calculate time spent in previous goal
         if let Some((prev_goal, prev_time)) = last_goal {
             let duration = (time_ms - prev_time) as f32 / 1000.0;
-            *goal_time_breakdown.entry(prev_goal.to_string()).or_insert(0.0) += duration;
+            *goal_time_breakdown
+                .entry(prev_goal.to_string())
+                .or_insert(0.0) += duration;
 
             if duration > longest_goal_duration_secs {
                 longest_goal_duration_secs = duration;
@@ -618,7 +652,9 @@ fn build_ai_behavior_from_transitions(transitions: &[GoalTransition], duration_s
     // Account for time from last goal to match end
     if let Some((last_goal_name, last_time)) = last_goal {
         let duration = (match_end_ms.saturating_sub(last_time)) as f32 / 1000.0;
-        *goal_time_breakdown.entry(last_goal_name.to_string()).or_insert(0.0) += duration;
+        *goal_time_breakdown
+            .entry(last_goal_name.to_string())
+            .or_insert(0.0) += duration;
 
         if duration > longest_goal_duration_secs {
             longest_goal_duration_secs = duration;
@@ -746,7 +782,9 @@ fn analyze_movement_from_ticks(db: &SimDatabase, match_id: i64) -> Option<Moveme
         }
         prev_right_pos = Some((rx, ry));
 
-        if let (Some((lx, ly)), Some(prev_dist), Some(prev_ms)) = (left_pos, prev_distance, prev_time_ms) {
+        if let (Some((lx, ly)), Some(prev_dist), Some(prev_ms)) =
+            (left_pos, prev_distance, prev_time_ms)
+        {
             let distance = ((rx - lx).powi(2) + (ry - ly).powi(2)).sqrt();
             let dt = (event.time_ms.saturating_sub(prev_ms)) as f32 / 1000.0;
             if dt > 0.0 {
@@ -851,7 +889,11 @@ pub fn analyze_pursuit_session_from_db(
     if analysis.iterations > 0 {
         analysis.avg_distance = total_distance / analysis.iterations as f32;
         analysis.avg_closing_rate = total_closing_rate / analysis.iterations as f32;
-        analysis.min_distance = if min_distance == f32::MAX { 0.0 } else { min_distance };
+        analysis.min_distance = if min_distance == f32::MAX {
+            0.0
+        } else {
+            min_distance
+        };
     }
 
     analysis.pursuit_score = analysis.calculate_pursuit_score();
@@ -961,7 +1003,9 @@ pub fn format_pursuit_analysis_markdown(analysis: &PursuitAnalysis) -> String {
 
     // Specific issues
     if analysis.avg_closing_rate < 0.0 {
-        md.push_str("\n- **Issue:** Negative closing rate - AI is falling behind instead of chasing.\n");
+        md.push_str(
+            "\n- **Issue:** Negative closing rate - AI is falling behind instead of chasing.\n",
+        );
     }
     if analysis.total_stuck_time_secs > 5.0 {
         md.push_str(&format!(
@@ -970,7 +1014,9 @@ pub fn format_pursuit_analysis_markdown(analysis: &PursuitAnalysis) -> String {
         ));
     }
     if analysis.timeouts > analysis.iterations / 2 {
-        md.push_str("\n- **Issue:** Majority of iterations timed out - AI not reaching the player.\n");
+        md.push_str(
+            "\n- **Issue:** Majority of iterations timed out - AI not reaching the player.\n",
+        );
     }
 
     md
@@ -1410,9 +1456,7 @@ fn format_analysis_markdown(analysis: &SessionAnalysis) -> String {
         if !behavior.goal_time_breakdown.is_empty() {
             md.push_str("\n**Goal Time Breakdown:**\n");
             let mut goals: Vec<_> = behavior.goal_time_breakdown.iter().collect();
-            goals.sort_by(|a, b| {
-                b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal)
-            });
+            goals.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
             for (goal, time) in goals {
                 let pct = if game.duration_secs > 0.0 {
                     (*time / game.duration_secs) * 100.0
@@ -1426,7 +1470,9 @@ fn format_analysis_markdown(analysis: &SessionAnalysis) -> String {
         if !behavior.dominant_goal.is_empty() {
             md.push_str(&format!(
                 "\n**Dominant Goal:** {} ({:.1}s, longest stretch: {:.1}s)\n",
-                behavior.dominant_goal, behavior.dominant_goal_time, behavior.longest_goal_duration_secs
+                behavior.dominant_goal,
+                behavior.dominant_goal_time,
+                behavior.longest_goal_duration_secs
             ));
         }
 
@@ -1521,7 +1567,11 @@ pub fn generate_claude_prompt(session_dir: &Path, analysis: &SessionAnalysis) ->
     let notes: Vec<_> = analysis
         .games
         .iter()
-        .filter_map(|g| g.notes.as_ref().map(|n| format!("Game {}: {}", g.game_number, n)))
+        .filter_map(|g| {
+            g.notes
+                .as_ref()
+                .map(|n| format!("Game {}: {}", g.game_number, n))
+        })
         .collect();
     if !notes.is_empty() {
         prompt.push_str("### Player Notes\n");
@@ -1532,8 +1582,12 @@ pub fn generate_claude_prompt(session_dir: &Path, analysis: &SessionAnalysis) ->
     }
 
     prompt.push_str("### Request\n");
-    prompt.push_str("1. Read the analysis.md file for full metrics (includes AI Movement Analysis section)\n");
-    prompt.push_str("2. Focus on movement issues: stuck patterns, monotonic movement, negative closing rate\n");
+    prompt.push_str(
+        "1. Read the analysis.md file for full metrics (includes AI Movement Analysis section)\n",
+    );
+    prompt.push_str(
+        "2. Focus on movement issues: stuck patterns, monotonic movement, negative closing rate\n",
+    );
     prompt.push_str("3. Examine AI code in `src/ai/` (decision.rs, goals.rs, navigation.rs)\n");
     prompt.push_str("4. Check goal time breakdown - is AI spending too long in wrong goals?\n");
     prompt.push_str("5. Suggest specific code changes to improve AI tracking/positioning\n");

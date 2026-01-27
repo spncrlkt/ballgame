@@ -14,8 +14,8 @@ use crate::ai::AiState;
 use crate::ball::{Ball, BallState, CurrentPalette};
 use crate::player::{HoldingBall, HumanControlled, Player, Team, Velocity};
 use crate::scoring::{CurrentLevel, Score};
-use crate::steal::StealContest;
 use crate::shooting::LastShotInfo;
+use crate::steal::StealContest;
 use crate::world::Basket;
 
 /// Directory where snapshots are saved
@@ -198,7 +198,10 @@ pub fn snapshot_trigger_system(
     }
 
     // Check for level change
-    if config.on_level_change && current_level.0 != trigger_state.prev_level_id && !trigger_state.prev_level_id.is_empty() {
+    if config.on_level_change
+        && current_level.0 != trigger_state.prev_level_id
+        && !trigger_state.prev_level_id.is_empty()
+    {
         trigger = Some(format!("level_change_{}", current_level.0));
     }
 
@@ -221,35 +224,40 @@ pub fn snapshot_trigger_system(
         }
 
         // Build snapshot data
-        let ball_snapshot = ball_query.iter().next().map(|(transform, velocity, state)| {
-            // Find which team is holding the ball (if any)
-            let holder_team = player_query
-                .iter()
-                .find(|(_, _, _, _, holding, _)| holding.is_some())
-                .map(|(_, _, team, _, _, _)| format!("{:?}", team));
+        let ball_snapshot = ball_query
+            .iter()
+            .next()
+            .map(|(transform, velocity, state)| {
+                // Find which team is holding the ball (if any)
+                let holder_team = player_query
+                    .iter()
+                    .find(|(_, _, _, _, holding, _)| holding.is_some())
+                    .map(|(_, _, team, _, _, _)| format!("{:?}", team));
 
-            BallSnapshot {
-                position: (transform.translation.x, transform.translation.y),
-                velocity: (velocity.0.x, velocity.0.y),
-                state: format!("{:?}", state),
-                holder_team,
-            }
-        });
+                BallSnapshot {
+                    position: (transform.translation.x, transform.translation.y),
+                    velocity: (velocity.0.x, velocity.0.y),
+                    state: format!("{:?}", state),
+                    holder_team,
+                }
+            });
 
         let players: Vec<PlayerSnapshot> = player_query
             .iter()
-            .map(|(transform, velocity, team, human, holding, ai_state)| PlayerSnapshot {
-                team: format!("{:?}", team),
-                position: (transform.translation.x, transform.translation.y),
-                velocity: (velocity.0.x, velocity.0.y),
-                is_human: human.is_some(),
-                holding_ball: holding.is_some(),
-                ai_goal: if human.is_none() {
-                    Some(format!("{:?}", ai_state.current_goal))
-                } else {
-                    None
+            .map(
+                |(transform, velocity, team, human, holding, ai_state)| PlayerSnapshot {
+                    team: format!("{:?}", team),
+                    position: (transform.translation.x, transform.translation.y),
+                    velocity: (velocity.0.x, velocity.0.y),
+                    is_human: human.is_some(),
+                    holding_ball: holding.is_some(),
+                    ai_goal: if human.is_none() {
+                        Some(format!("{:?}", ai_state.current_goal))
+                    } else {
+                        None
+                    },
                 },
-            })
+            )
             .collect();
 
         let shot_snapshot = if last_shot.target.is_some() {
@@ -330,12 +338,19 @@ pub fn snapshot_trigger_system(
 }
 
 /// Toggle snapshot system on/off with F2 key
-pub fn toggle_snapshot_system(keyboard: Res<ButtonInput<KeyCode>>, mut config: ResMut<SnapshotConfig>) {
+pub fn toggle_snapshot_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut config: ResMut<SnapshotConfig>,
+) {
     if keyboard.just_pressed(KeyCode::F2) {
         config.enabled = !config.enabled;
         info!(
             "Snapshot system: {}",
-            if config.enabled { "ENABLED" } else { "DISABLED" }
+            if config.enabled {
+                "ENABLED"
+            } else {
+                "DISABLED"
+            }
         );
     }
 }
@@ -397,29 +412,32 @@ pub fn manual_snapshot(
     }
 
     // Build snapshot data (same as trigger system)
-    let ball_snapshot = ball_query.iter().next().map(|(transform, velocity, state)| {
-        BallSnapshot {
+    let ball_snapshot = ball_query
+        .iter()
+        .next()
+        .map(|(transform, velocity, state)| BallSnapshot {
             position: (transform.translation.x, transform.translation.y),
             velocity: (velocity.0.x, velocity.0.y),
             state: format!("{:?}", state),
             holder_team: None,
-        }
-    });
+        });
 
     let players: Vec<PlayerSnapshot> = player_query
         .iter()
-        .map(|(transform, velocity, team, human, holding, ai_state)| PlayerSnapshot {
-            team: format!("{:?}", team),
-            position: (transform.translation.x, transform.translation.y),
-            velocity: (velocity.0.x, velocity.0.y),
-            is_human: human.is_some(),
-            holding_ball: holding.is_some(),
-            ai_goal: if human.is_none() {
-                Some(format!("{:?}", ai_state.current_goal))
-            } else {
-                None
+        .map(
+            |(transform, velocity, team, human, holding, ai_state)| PlayerSnapshot {
+                team: format!("{:?}", team),
+                position: (transform.translation.x, transform.translation.y),
+                velocity: (velocity.0.x, velocity.0.y),
+                is_human: human.is_some(),
+                holding_ball: holding.is_some(),
+                ai_goal: if human.is_none() {
+                    Some(format!("{:?}", ai_state.current_goal))
+                } else {
+                    None
+                },
             },
-        })
+        )
         .collect();
 
     let shot_snapshot = if last_shot.target.is_some() {

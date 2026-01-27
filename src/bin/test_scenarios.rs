@@ -10,7 +10,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use ballgame::testing::{parser::parse_test_file, runner::run_test, TestResult, SCENARIOS_DIR};
+use ballgame::testing::{SCENARIOS_DIR, TestResult, parser::parse_test_file, runner::run_test};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -52,9 +52,7 @@ fn main() {
     let mut current_category = String::new();
 
     for test_path in &tests {
-        let rel_path = test_path
-            .strip_prefix(scenarios_path)
-            .unwrap_or(test_path);
+        let rel_path = test_path.strip_prefix(scenarios_path).unwrap_or(test_path);
 
         // Print category header
         if let Some(parent) = rel_path.parent() {
@@ -132,10 +130,7 @@ fn discover_tests_recursive(
         } else if path.extension().map(|e| e == "toml").unwrap_or(false) {
             // Check filter
             if let Some(f) = filter {
-                let rel = path
-                    .strip_prefix(base)
-                    .unwrap_or(&path)
-                    .to_string_lossy();
+                let rel = path.strip_prefix(base).unwrap_or(&path).to_string_lossy();
 
                 if !rel.contains(f) {
                     continue;

@@ -38,11 +38,11 @@ pub struct InitSettings {
 impl Default for InitSettings {
     fn default() -> Self {
         Self {
-            viewport_index: 2,              // 1440p default
-            palette_index: 0,               // Aurora (first palette)
-            level: String::new(),           // Empty = use first level
+            viewport_index: 2,    // 1440p default
+            palette_index: 0,     // Aurora (first palette)
+            level: String::new(), // Empty = use first level
             ball_style: "wedges".to_string(),
-            left_ai_profile: None,          // Human controlled
+            left_ai_profile: None, // Human controlled
             right_ai_profile: "Balanced".to_string(),
             active_direction: "Down".to_string(),
             down_option: "Composite".to_string(),
@@ -61,18 +61,16 @@ impl InitSettings {
         }
 
         match fs::read_to_string(path) {
-            Ok(content) => {
-                match serde_json::from_str(&content) {
-                    Ok(settings) => {
-                        info!("Loaded settings from {}", SETTINGS_FILE);
-                        settings
-                    }
-                    Err(e) => {
-                        warn!("Failed to parse init_settings.json: {}, using defaults", e);
-                        Self::default()
-                    }
+            Ok(content) => match serde_json::from_str(&content) {
+                Ok(settings) => {
+                    info!("Loaded settings from {}", SETTINGS_FILE);
+                    settings
                 }
-            }
+                Err(e) => {
+                    warn!("Failed to parse init_settings.json: {}, using defaults", e);
+                    Self::default()
+                }
+            },
             Err(e) => {
                 warn!("Failed to read init_settings.json: {}, using defaults", e);
                 Self::default()

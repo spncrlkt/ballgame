@@ -23,7 +23,8 @@ const FONT_DATA: &[u8] = include_bytes!("/System/Library/Fonts/Helvetica.ttc");
 /// Calculate color coverage percentage for a ball texture.
 /// Returns (left_color_percent, right_color_percent) based on dominant colors.
 fn calculate_coverage(ball: &RgbaImage) -> (f32, f32) {
-    let mut color_counts: std::collections::HashMap<(u8, u8, u8), u32> = std::collections::HashMap::new();
+    let mut color_counts: std::collections::HashMap<(u8, u8, u8), u32> =
+        std::collections::HashMap::new();
     let mut total_opaque = 0u32;
 
     // Count pixels by color (ignoring transparency and black border)
@@ -61,10 +62,12 @@ fn calculate_coverage(ball: &RgbaImage) -> (f32, f32) {
     for (color, count) in counts {
         let dist1 = ((color.0 as i32 - color1.0 as i32).abs() as u32
             + (color.1 as i32 - color1.1 as i32).abs() as u32
-            + (color.2 as i32 - color1.2 as i32).abs() as u32) / 3;
+            + (color.2 as i32 - color1.2 as i32).abs() as u32)
+            / 3;
         let dist2 = ((color.0 as i32 - color2.0 as i32).abs() as u32
             + (color.1 as i32 - color2.1 as i32).abs() as u32
-            + (color.2 as i32 - color2.2 as i32).abs() as u32) / 3;
+            + (color.2 as i32 - color2.2 as i32).abs() as u32)
+            / 3;
 
         if dist1 <= threshold || dist1 < dist2 {
             cluster1_count += count;
@@ -120,26 +123,58 @@ fn main() {
 
     // Draw palette names in header
     for (col, &palette_idx) in SHOWCASE_PALETTES.iter().enumerate() {
-        let palette_name = palette_names.get(palette_idx).map(|s| s.as_str()).unwrap_or("?");
+        let palette_name = palette_names
+            .get(palette_idx)
+            .map(|s| s.as_str())
+            .unwrap_or("?");
         let x = style_label_width + PADDING + (col as u32) * (BALL_SIZE + PADDING) + 10;
         let y = 12;
-        draw_text_mut(&mut showcase, text_color, x as i32, y, small_scale, &font, palette_name);
+        draw_text_mut(
+            &mut showcase,
+            text_color,
+            x as i32,
+            y,
+            small_scale,
+            &font,
+            palette_name,
+        );
     }
 
     // Draw coverage header
     let coverage_x = style_label_width + PADDING + (cols) * (BALL_SIZE + PADDING) + 5;
-    draw_text_mut(&mut showcase, text_color, coverage_x as i32, 12, small_scale, &font, "L% / R%");
+    draw_text_mut(
+        &mut showcase,
+        text_color,
+        coverage_x as i32,
+        12,
+        small_scale,
+        &font,
+        "L% / R%",
+    );
 
     // Load and place each ball texture
     for (row, style_name) in style_names.iter().enumerate() {
         // Draw style name label
-        let label_y = palette_label_height + PADDING + (row as u32) * (BALL_SIZE + PADDING) + BALL_SIZE / 2 - 9;
-        draw_text_mut(&mut showcase, text_color, 8, label_y as i32, scale, &font, style_name);
+        let label_y =
+            palette_label_height + PADDING + (row as u32) * (BALL_SIZE + PADDING) + BALL_SIZE / 2
+                - 9;
+        draw_text_mut(
+            &mut showcase,
+            text_color,
+            8,
+            label_y as i32,
+            scale,
+            &font,
+            style_name,
+        );
 
         let mut row_coverage: Option<(f32, f32)> = None;
 
         for (col, &palette_idx) in SHOWCASE_PALETTES.iter().enumerate() {
-            let filename = format!("assets/textures/balls/ball_{}_{}.png", style_name, palette_idx);
+            let filename = format!(
+                "assets/textures/balls/ball_{}_{}.png",
+                style_name, palette_idx
+            );
 
             match image::open(&filename) {
                 Ok(ball_img) => {
@@ -151,9 +186,7 @@ fn main() {
                     }
 
                     // Calculate position
-                    let x = style_label_width
-                        + PADDING
-                        + (col as u32) * (BALL_SIZE + PADDING);
+                    let x = style_label_width + PADDING + (col as u32) * (BALL_SIZE + PADDING);
                     let y = palette_label_height + PADDING + (row as u32) * (BALL_SIZE + PADDING);
 
                     // Copy ball texture to showcase with alpha blending
@@ -185,8 +218,20 @@ fn main() {
         // Draw coverage percentage for this row
         if let Some((left_pct, right_pct)) = row_coverage {
             let coverage_text = format!("{:.0}/{:.0}", left_pct, right_pct);
-            let cov_y = palette_label_height + PADDING + (row as u32) * (BALL_SIZE + PADDING) + BALL_SIZE / 2 - 9;
-            draw_text_mut(&mut showcase, text_color, coverage_x as i32, cov_y as i32, scale, &font, &coverage_text);
+            let cov_y = palette_label_height
+                + PADDING
+                + (row as u32) * (BALL_SIZE + PADDING)
+                + BALL_SIZE / 2
+                - 9;
+            draw_text_mut(
+                &mut showcase,
+                text_color,
+                coverage_x as i32,
+                cov_y as i32,
+                scale,
+                &font,
+                &coverage_text,
+            );
         }
     }
 
@@ -233,8 +278,7 @@ fn load_style_names() -> Vec<String> {
 }
 
 fn load_palette_names() -> Vec<String> {
-    let content =
-        fs::read_to_string("config/palettes.txt").expect("Could not read palettes.txt");
+    let content = fs::read_to_string("config/palettes.txt").expect("Could not read palettes.txt");
 
     let mut palettes = Vec::new();
     for line in content.lines() {
