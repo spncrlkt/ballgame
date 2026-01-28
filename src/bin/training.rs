@@ -6,15 +6,17 @@
 //!   cargo run --bin training
 //!   cargo run --bin training -- --games 3 --profile Aggressive
 
+use ballgame::debug_logging::DebugLogConfig;
 use ballgame::events::{
-    EmitterConfig, EventEmitterState, SqliteEventLogger, emit_game_events, snapshot_ball,
-    snapshot_player,
+    BasketSnapshot, DebugSampleBuffer, EmitterConfig, EventEmitterState, SqliteEventLogger,
+    emit_game_events, flush_debug_samples_to_sqlite, push_debug_samples, snapshot_ball,
+    snapshot_player, tick_frame_from_time,
 };
 use ballgame::simulation::SimDatabase;
 use ballgame::training::{
     LevelSelector, TrainingMode, TrainingPhase, TrainingProtocol, TrainingSettings, TrainingState,
     analyze_pursuit_session_from_db, analyze_session_from_db, ensure_session_dir,
-    format_pursuit_analysis_markdown, generate_claude_prompt, print_session_summary,
+    format_pursuit_analysis_markdown, generate_analysis_request, print_session_summary,
     write_analysis_files, write_session_summary,
 };
 use ballgame::ui::spawn_steal_indicators;
@@ -65,7 +67,21 @@ fn load_ball_style_names() -> Vec<String> {
 fn create_sqlite_logger() -> SqliteEventLogger {
     // Ensure db directory exists
     std::fs::create_dir_all("db").ok();
-    let db_path = std::path::Path::new("db/training.db");
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let db_path_buf = format!("db/training_{}.db", timestamp);
+    let db_path = std::path::Path::new(&db_path_buf);
+    let latest_path = std::path::Path::new("db/training.db");
+    if let Err(e) = std::fs::remove_file(latest_path) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            warn!("Failed to remove existing training.db symlink: {}", e);
+        }
+    }
+    let link_target = std::env::current_dir()
+        .map(|cwd| cwd.join(&db_path_buf))
+        .unwrap_or_else(|_| db_path.to_path_buf());
+    if let Err(e) = std::os::unix::fs::symlink(&link_target, latest_path) {
+        warn!("Failed to update training.db symlink: {}", e);
+    }
     match SqliteEventLogger::new(db_path, "training") {
         Ok(logger) => {
             info!("SQLite event logger initialized: {:?}", db_path);
@@ -224,6 +240,10 @@ fn main() {
     let viewport_index = settings.viewport_index.min(VIEWPORT_PRESETS.len() - 1);
     let (viewport_width, viewport_height, _) = VIEWPORT_PRESETS[viewport_index];
 
+    let args: Vec<String> = std::env::args().collect();
+    let debug_config = DebugLogConfig::load_with_args(&args);
+    debug_config.apply_env();
+
     App::new()
         .add_plugins(
             DefaultPlugins.set(WindowPlugin {
@@ -270,12 +290,15 @@ fn main() {
         .insert_resource(EventBus::new())
         .insert_resource(HumanControlTarget(Some(PlayerId::L))) // Left player is human
         .init_resource::<LevelChangeTracker>()
+        .insert_resource(debug_config)
+        .init_resource::<DebugSampleBuffer>()
         // SQLite event logger - central hub for event storage
         .insert_resource(create_sqlite_logger())
         // Startup systems
         .add_systems(Startup, training_setup)
         // Event bus time update (runs every frame for timestamping)
         .add_systems(Update, update_event_bus_time)
+        .add_systems(Update, flush_debug_samples_to_sqlite)
         // Input systems chain - paused when game is paused
         .add_systems(
             Update,
@@ -339,6 +362,7 @@ fn main() {
                 shooting::throw_ball,
                 scoring::check_scoring,
                 give_ball_to_human,
+                collect_training_debug_samples,
             )
                 .chain()
                 .run_if(countdown::not_in_countdown)
@@ -350,6 +374,35 @@ fn main() {
 /// Run condition: game is not paused
 fn not_paused(training_state: Res<TrainingState>) -> bool {
     training_state.phase != TrainingPhase::Paused
+}
+
+fn collect_training_debug_samples(
+    debug_config: Res<DebugLogConfig>,
+    training_state: Res<TrainingState>,
+    current_level: Res<CurrentLevel>,
+    mut buffer: ResMut<DebugSampleBuffer>,
+    players: Query<
+        (
+            &Team,
+            &Transform,
+            &Velocity,
+            &InputState,
+            &Grounded,
+            &JumpState,
+            &CoyoteTimer,
+            &Facing,
+            Option<&AiNavState>,
+            Option<&HumanControlled>,
+        ),
+        With<Player>,
+    >,
+) {
+    if !debug_config.enabled || training_state.phase != TrainingPhase::Playing {
+        return;
+    }
+    let time_ms = (training_state.game_elapsed * 1000.0) as u32;
+    let tick_frame = tick_frame_from_time(time_ms);
+    push_debug_samples(&mut buffer, time_ms, tick_frame, &current_level.0, &players);
 }
 
 /// Give the ball to the human player (left team) after scoring
@@ -1127,11 +1180,12 @@ fn training_state_machine(
                 }
                 TrainingProtocol::AdvancedPlatform => {
                     if let Some(ref analysis) = analysis {
-                        // Print Claude prompt to terminal
-                        let prompt = generate_claude_prompt(&training_state.session_dir, analysis);
+                        // Print analysis request to terminal
+                        let prompt =
+                            generate_analysis_request(&training_state.session_dir, analysis);
                         println!("\n{}", prompt);
                     } else {
-                        eprintln!("No analysis available for Claude prompt.");
+                        eprintln!("No analysis available for analysis request.");
                     }
                 }
             }
@@ -1245,7 +1299,7 @@ fn emit_training_events(
 
     let basket_snapshots: Vec<_> = baskets
         .iter()
-        .map(|(transform, basket)| crate::events::BasketSnapshot {
+        .map(|(transform, basket)| BasketSnapshot {
             basket: *basket,
             position: (transform.translation.x, transform.translation.y),
         })

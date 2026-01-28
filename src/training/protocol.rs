@@ -30,10 +30,13 @@ pub enum TrainingProtocol {
     Pursuit2,
 }
 
+// TODO: add a shooting training protocol for basket position calculations.
+
 impl TrainingProtocol {
     /// Parse protocol from string (case-insensitive)
     pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
+        let normalized = s.trim().to_lowercase().replace('_', "-").replace(' ', "-");
+        match normalized.as_str() {
             "advanced-platform" | "advancedplatform" | "advanced" | "platform" => {
                 Some(TrainingProtocol::AdvancedPlatform)
             }
@@ -169,6 +172,10 @@ mod tests {
         );
         assert_eq!(
             TrainingProtocol::from_str("advanced-platform"),
+            Some(TrainingProtocol::AdvancedPlatform)
+        );
+        assert_eq!(
+            TrainingProtocol::from_str("advanced_platform"),
             Some(TrainingProtocol::AdvancedPlatform)
         );
         assert_eq!(

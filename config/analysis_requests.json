@@ -72,6 +72,49 @@
           "notes": null
         }
       ]
+    },
+    {
+      "name": "training_debug_overview",
+      "description": "Training debug overview queries (debug_events vs events)",
+      "db_path": null,
+      "db_label": null,
+      "queries": [
+        {
+          "name": "debug_event_count",
+          "sql": "SELECT COUNT(*) AS debug_events FROM debug_events",
+          "notes": null
+        },
+        {
+          "name": "events_count",
+          "sql": "SELECT COUNT(*) AS events FROM events",
+          "notes": null
+        },
+        {
+          "name": "debug_by_level",
+          "sql": "SELECT level_id, COUNT(*) AS samples FROM debug_events GROUP BY level_id ORDER BY samples DESC",
+          "notes": null
+        },
+        {
+          "name": "debug_by_control",
+          "sql": "SELECT human_controlled, COUNT(*) AS samples FROM debug_events GROUP BY human_controlled",
+          "notes": "human_controlled=1 for human, 0 for AI"
+        },
+        {
+          "name": "debug_time_range",
+          "sql": "SELECT MIN(time_ms) AS min_time_ms, MAX(time_ms) AS max_time_ms FROM debug_events",
+          "notes": null
+        },
+        {
+          "name": "debug_without_events",
+          "sql": "SELECT COUNT(*) AS debug_without_event FROM debug_events d LEFT JOIN events e ON e.match_id = d.match_id AND e.tick_frame = d.tick_frame WHERE e.id IS NULL",
+          "notes": null
+        },
+        {
+          "name": "events_without_debug",
+          "sql": "SELECT COUNT(*) AS events_without_debug FROM events e LEFT JOIN debug_events d ON d.match_id = e.match_id AND d.tick_frame = e.tick_frame WHERE d.id IS NULL",
+          "notes": null
+        }
+      ]
     }
   ]
 }

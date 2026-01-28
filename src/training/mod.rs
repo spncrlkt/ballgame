@@ -8,7 +8,7 @@ mod state;
 
 pub use analysis::{
     PursuitAnalysis, PursuitIterationStats, SessionAnalysis, analyze_pursuit_session_from_db,
-    analyze_session_from_db, format_pursuit_analysis_markdown, generate_claude_prompt,
+    analyze_session_from_db, format_pursuit_analysis_markdown, generate_analysis_request,
     write_analysis_files,
 };
 pub use protocol::{ProtocolConfig, TrainingProtocol};

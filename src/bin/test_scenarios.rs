@@ -82,7 +82,9 @@ fn main() {
         };
 
         // Run test
-        let result = run_test(&test_def);
+        let args: Vec<String> = env::args().collect();
+        let debug_config = ballgame::DebugLogConfig::load_with_args(&args);
+        let result = run_test(&test_def, debug_config);
 
         match &result {
             TestResult::Pass { .. } => passed += 1,

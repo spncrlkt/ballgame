@@ -1,0 +1,101 @@
+{
+  "source": "hybrid M4/J1 sweep",
+  "baseline_constants": {
+    "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.5,
+    "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.9,
+    "HEATMAP_LOS_MARGIN_DEFAULT": 0.05
+  },
+  "baseline_profile_fields": [
+    "min_shot_quality",
+    "seek_threshold",
+    "position_patience",
+    "charge_min",
+    "charge_max"
+  ],
+  "variants": [
+    {
+      "id": "M4",
+      "label": "endpoint",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.9,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.5,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.3
+      },
+      "profile_deltas": {
+        "position_patience": -1.2,
+        "seek_threshold": 0.35,
+        "min_shot_quality": -0.15
+      }
+    },
+    {
+      "id": "J1",
+      "label": "endpoint",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.05,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.58,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.22
+      },
+      "profile_deltas": {
+        "min_shot_quality": -0.08,
+        "seek_threshold": 0.12,
+        "position_patience": -0.3
+      }
+    },
+    {
+      "id": "H1",
+      "label": "hybrid_high_weight_loose_los",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.8,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.58,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.24
+      },
+      "profile_deltas": {
+        "position_patience": -0.9,
+        "seek_threshold": 0.25,
+        "min_shot_quality": -0.1
+      }
+    },
+    {
+      "id": "H2",
+      "label": "hybrid_mid_weight_tighter_los",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.7,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.65,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.2
+      },
+      "profile_deltas": {
+        "position_patience": -0.8,
+        "seek_threshold": 0.22,
+        "min_shot_quality": -0.08
+      }
+    },
+    {
+      "id": "H3",
+      "label": "hybrid_mid_weight_looser_margin",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.75,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.6,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.28
+      },
+      "profile_deltas": {
+        "position_patience": -1.0,
+        "seek_threshold": 0.28,
+        "min_shot_quality": -0.12
+      }
+    },
+    {
+      "id": "H4",
+      "label": "hybrid_lower_weight_strict_los",
+      "constants": {
+        "HEATMAP_SCORE_WEIGHT_DEFAULT": 0.6,
+        "HEATMAP_LOS_THRESHOLD_DEFAULT": 0.7,
+        "HEATMAP_LOS_MARGIN_DEFAULT": 0.18
+      },
+      "profile_deltas": {
+        "position_patience": -0.6,
+        "seek_threshold": 0.18,
+        "min_shot_quality": -0.06
+      }
+    }
+  ]
+}

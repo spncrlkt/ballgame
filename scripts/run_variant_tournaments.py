@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+# TODO: Add a file lock around src/constants.rs and config/ai_profiles.txt edits to prevent concurrent runs clobbering each other.
+# TODO: Include baseline summary + percent deltas in the report header for quicker scans.
+# TODO: Add charge duration delta and possession delta to each variant summary block.
+# TODO: Update top-3 ranking to include shot% and match duration (not just goals/shots/scoreless).
+# TODO: Emit per-level deltas vs baseline; Skyway regressions are easy to miss.
+# TODO: Follow-up matrix around H4:
+#   - Keep H4 constants, tweak LOS margin: 0.18 -> 0.22.
+#   - Keep H4 constants, tweak min_shot_quality: +0.02 and +0.04.
+#   - Keep H4 constants, tweak seek_threshold: -0.03 and -0.05.
+#   - Run smaller sweep first (matches-per-pair 2, same profiles), then re-run best 2 with matches-per-pair 4.
 import argparse
 import json
 import os

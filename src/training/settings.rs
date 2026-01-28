@@ -164,7 +164,10 @@ impl TrainingSettings {
                                 self.time_limit_secs = protocol.default_time_limit();
                             }
                         } else {
-                            eprintln!("Warning: Unknown protocol '{}', using default", val);
+                            eprintln!(
+                                "Warning: Unknown protocol '{}', using default (advanced-platform, pursuit, pursuit2)",
+                                val
+                            );
                         }
                         i += 1;
                     }
@@ -315,6 +318,7 @@ OPTIONS:
     --viewport N               Viewport preset index (default: 2)
     --palette N                Color palette index (default: 0)
     --ball-style NAME          Ball visual style (default: random)
+    --debug-log                Enable debug sample logging to SQLite
     -h, --help                 Show this help
 
 SETTINGS FILES:

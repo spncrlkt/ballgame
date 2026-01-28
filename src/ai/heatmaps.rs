@@ -1,9 +1,9 @@
 //! Heatmap loading and sampling for AI decision making
 
 use bevy::prelude::*;
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::env;
 
 use crate::constants::{
     ARENA_HEIGHT, ARENA_WIDTH, HEATMAP_CELL_SIZE, HEATMAP_GRID_HEIGHT, HEATMAP_GRID_WIDTH,
@@ -120,7 +120,10 @@ pub fn load_heatmaps_on_level_change(
         .get_by_id(&current_level.0)
         .or_else(|| level_db.get_by_name(&current_level.0))
     else {
-        panic!("Heatmaps: current level '{}' not found in database", current_level.0);
+        panic!(
+            "Heatmaps: current level '{}' not found in database",
+            current_level.0
+        );
     };
 
     let safe_name = sanitize_level_name(level.name.as_str());
@@ -220,13 +223,8 @@ pub fn load_heatmaps_on_level_change(
 }
 
 fn load_heatmap_grid(path: &Path) -> HeatmapGrid {
-    let data = fs::read_to_string(path).unwrap_or_else(|err| {
-        panic!(
-            "Heatmaps: failed to read {}: {}",
-            path.display(),
-            err
-        )
-    });
+    let data = fs::read_to_string(path)
+        .unwrap_or_else(|err| panic!("Heatmaps: failed to read {}: {}", path.display(), err));
 
     let mut lines = data.lines();
     let mut value_scale = 1.0;
@@ -287,7 +285,12 @@ fn load_heatmap_grid(path: &Path) -> HeatmapGrid {
     grid
 }
 
-fn resolve_heatmap_path(label: &str, safe_name: &str, level_id: &str, side: Option<&str>) -> PathBuf {
+fn resolve_heatmap_path(
+    label: &str,
+    safe_name: &str,
+    level_id: &str,
+    side: Option<&str>,
+) -> PathBuf {
     let base = match side {
         Some(side) => format!("heatmap_{}_{}_{}_{}", label, safe_name, level_id, side),
         None => format!("heatmap_{}_{}_{}", label, safe_name, level_id),
@@ -325,15 +328,11 @@ fn resolve_heatmap_path(label: &str, safe_name: &str, level_id: &str, side: Opti
         1 => matches.remove(0),
         0 => panic!(
             "Heatmaps: missing {} heatmap for level '{}' (expected {}, fallback by name failed)",
-            label,
-            safe_name,
-            base
+            label, safe_name, base
         ),
         _ => panic!(
             "Heatmaps: multiple {} heatmaps matched for level '{}' ({:?})",
-            label,
-            safe_name,
-            matches
+            label, safe_name, matches
         ),
     }
 }
@@ -399,11 +398,7 @@ mod tests {
             ARENA_HEIGHT / 2.0 - HEATMAP_CELL_SIZE as f32 * 0.5,
         );
         let sample = grid.sample_world(sample_pos);
-        assert!(
-            (sample - 0.5).abs() < 0.001,
-            "expected 0.5, got {}",
-            sample
-        );
+        assert!((sample - 0.5).abs() < 0.001, "expected 0.5, got {}", sample);
 
         let _ = fs::remove_file(&path);
     }

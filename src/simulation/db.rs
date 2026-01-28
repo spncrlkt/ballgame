@@ -181,21 +181,25 @@ impl SimDatabase {
         let _ = self
             .conn
             .execute("ALTER TABLE sessions ADD COLUMN run_elapsed_secs REAL", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN matches_planned INTEGER", []);
+        let _ = self.conn.execute(
+            "ALTER TABLE sessions ADD COLUMN matches_planned INTEGER",
+            [],
+        );
         let _ = self
             .conn
             .execute("ALTER TABLE sessions ADD COLUMN matches_played INTEGER", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN duration_limit_secs REAL", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN stalemate_timeout_secs REAL", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN parallel_threads INTEGER", []);
+        let _ = self.conn.execute(
+            "ALTER TABLE sessions ADD COLUMN duration_limit_secs REAL",
+            [],
+        );
+        let _ = self.conn.execute(
+            "ALTER TABLE sessions ADD COLUMN stalemate_timeout_secs REAL",
+            [],
+        );
+        let _ = self.conn.execute(
+            "ALTER TABLE sessions ADD COLUMN parallel_threads INTEGER",
+            [],
+        );
         let _ = self
             .conn
             .execute("ALTER TABLE sessions ADD COLUMN run_timeout_secs REAL", []);
@@ -208,12 +212,14 @@ impl SimDatabase {
         let _ = self
             .conn
             .execute("ALTER TABLE sessions ADD COLUMN levels_count INTEGER", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN matches_per_pair INTEGER", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN matches_per_level INTEGER", []);
+        let _ = self.conn.execute(
+            "ALTER TABLE sessions ADD COLUMN matches_per_pair INTEGER",
+            [],
+        );
+        let _ = self.conn.execute(
+            "ALTER TABLE sessions ADD COLUMN matches_per_level INTEGER",
+            [],
+        );
         let _ = self
             .conn
             .execute("ALTER TABLE matches ADD COLUMN display_name TEXT", []);
@@ -303,7 +309,12 @@ impl SimDatabase {
         )?;
         let row = stmt
             .query_row(
-                params![mode, parallel_threads, duration_limit_secs, stalemate_timeout_secs],
+                params![
+                    mode,
+                    parallel_threads,
+                    duration_limit_secs,
+                    stalemate_timeout_secs
+                ],
                 |row| {
                     let sessions: i64 = row.get(0)?;
                     let matches: Option<i64> = row.get(1)?;

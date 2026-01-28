@@ -62,6 +62,9 @@ pub struct SimConfig {
     pub profiles: Vec<String>,
     /// Levels to use for matches (empty = all non-debug levels)
     pub levels: Vec<u32>,
+    /// Enable debug sample logging
+    #[serde(default)]
+    pub debug_log: bool,
 }
 
 impl Default for SimConfig {
@@ -83,6 +86,7 @@ impl Default for SimConfig {
             db_path: None,
             profiles: Vec::new(), // Empty = all profiles
             levels: Vec::new(),   // Empty = all non-debug levels
+            debug_log: false,
         }
     }
 }
@@ -198,6 +202,9 @@ impl SimConfig {
                         config.run_timeout_secs = args[i + 1].parse().ok();
                         i += 1;
                     }
+                }
+                "--debug-log" => {
+                    config.debug_log = true;
                 }
                 "--score-limit" => {
                     if i + 1 < args.len() {
@@ -325,6 +332,7 @@ OPTIONS:
     --quiet, -q         Suppress progress output
     --parallel <N>      Run simulations in parallel with N threads
     --db <FILE>         Store results in SQLite database
+    --debug-log         Enable debug sample logging (if supported)
     --help, -h          Show this help
 
 EXAMPLES:

@@ -59,6 +59,7 @@ Training Tools → AI Quality → MVP (playable) → V0 (polished) → V1 (multi
 *Polished core + levels - ready to share*
 
 **Polish:**
+- [ ] Debug capture cleanup (flag/config audit, schema finalize, sampling validation)
 - [ ] UI fix flash on score color
 - [ ] D-pad menu UX improvements
 - [ ] Viewport testing at all resolutions

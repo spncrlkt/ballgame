@@ -17,6 +17,7 @@
 
 mod buffer;
 mod bus;
+mod debug;
 mod emitter;
 mod format;
 mod sqlite_logger;
@@ -26,10 +27,13 @@ pub use buffer::EventBuffer;
 pub use bus::{
     BusEvent, EventBus, LevelChangeTracker, emit_level_change_events, update_event_bus_time,
 };
+pub use debug::{
+    DEBUG_TICK_MS, DebugSample, DebugSampleBuffer, push_debug_samples, tick_frame_from_time,
+};
 pub use emitter::{
     BallSnapshot, BasketSnapshot, EmitterConfig, EventEmitterState, PlayerSnapshot,
     emit_game_events, snapshot_ball, snapshot_player,
 };
 pub use format::{parse_event, serialize_event};
-pub use sqlite_logger::{SqliteEventLogger, flush_events_to_sqlite};
+pub use sqlite_logger::{SqliteEventLogger, flush_debug_samples_to_sqlite, flush_events_to_sqlite};
 pub use types::{ControllerSource, GameConfig, GameEvent, PlayerId};

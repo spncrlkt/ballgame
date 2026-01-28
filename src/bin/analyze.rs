@@ -12,9 +12,10 @@ use std::path::PathBuf;
 
 use ballgame::analytics::{
     AggregateMetrics, AnalysisQuery, AnalysisRequest, AnalysisRequestFile, Leaderboard,
-    ParameterSuggestion, TuningTargets, default_targets, format_suggestions, format_update_report,
-    generate_suggestions, load_targets, parse_all_matches_from_db, run_event_audit,
-    run_focused_analysis, run_request, update_default_profiles,
+    ParameterSuggestion, TrainingDebugReport, TuningTargets, default_targets, format_suggestions,
+    format_update_report, generate_suggestions, load_targets, parse_all_matches_from_db,
+    run_event_audit, run_focused_analysis, run_request, run_training_debug_analysis,
+    update_default_profiles,
 };
 
 fn main() {
@@ -26,10 +27,15 @@ fn main() {
     }
 
     if config.request_list {
-        let requests = AnalysisRequestFile::load(&config.requests_file)
-            .unwrap_or(AnalysisRequestFile { requests: Vec::new() });
+        let requests =
+            AnalysisRequestFile::load(&config.requests_file).unwrap_or(AnalysisRequestFile {
+                requests: Vec::new(),
+            });
         if requests.requests.is_empty() {
-            println!("No analysis requests found in {}", config.requests_file.display());
+            println!(
+                "No analysis requests found in {}",
+                config.requests_file.display()
+            );
         } else {
             println!("Analysis requests in {}:", config.requests_file.display());
             for req in requests.requests {
@@ -51,8 +57,10 @@ fn main() {
                 std::process::exit(1);
             }
         };
-        let mut requests = AnalysisRequestFile::load(&config.requests_file)
-            .unwrap_or(AnalysisRequestFile { requests: Vec::new() });
+        let mut requests =
+            AnalysisRequestFile::load(&config.requests_file).unwrap_or(AnalysisRequestFile {
+                requests: Vec::new(),
+            });
         let query_name = config
             .request_query_name
             .clone()
@@ -85,8 +93,10 @@ fn main() {
     }
 
     if let Some(name) = &config.request_name {
-        let requests = AnalysisRequestFile::load(&config.requests_file)
-            .unwrap_or(AnalysisRequestFile { requests: Vec::new() });
+        let requests =
+            AnalysisRequestFile::load(&config.requests_file).unwrap_or(AnalysisRequestFile {
+                requests: Vec::new(),
+            });
         let request = requests
             .requests
             .iter()
@@ -117,6 +127,37 @@ fn main() {
             std::process::exit(1);
         }
         println!("Request report written to {}", output_path.display());
+        return;
+    }
+
+    if let Some(db_path) = &config.training_db {
+        let output_dir = config
+            .training_output
+            .clone()
+            .unwrap_or_else(|| default_training_output_dir(db_path));
+        if let Err(e) = std::fs::create_dir_all(&output_dir) {
+            eprintln!(
+                "Failed to create training output directory {}: {}",
+                output_dir.display(),
+                e
+            );
+            std::process::exit(1);
+        }
+        let report = run_training_debug_analysis(db_path, &output_dir)
+            .map_err(|e| format!("{e}"))
+            .unwrap_or_else(|e| {
+                eprintln!("Failed to run training debug analysis: {}", e);
+                std::process::exit(1);
+            });
+        let report_path = output_dir.join(default_training_report_name(&report));
+        if let Err(e) = std::fs::write(&report_path, report.to_markdown()) {
+            eprintln!("Failed to write training report: {}", e);
+            std::process::exit(1);
+        }
+        println!(
+            "Training debug analysis written to {}",
+            report_path.display()
+        );
         return;
     }
 
@@ -253,6 +294,8 @@ struct AnalyzeConfig {
     audit_output: Option<PathBuf>,
     focused_db: Option<PathBuf>,
     focused_output: Option<PathBuf>,
+    training_db: Option<PathBuf>,
+    training_output: Option<PathBuf>,
     request_name: Option<String>,
     request_output: Option<PathBuf>,
     request_db: Option<PathBuf>,
@@ -277,6 +320,8 @@ impl Default for AnalyzeConfig {
             audit_output: None,
             focused_db: None,
             focused_output: None,
+            training_db: None,
+            training_output: None,
             request_name: None,
             request_output: None,
             request_db: None,
@@ -315,10 +360,8 @@ impl AnalyzeConfig {
                 }
                 "--event-audit" => {
                     if i + 2 < args.len() {
-                        config.event_audit = Some((
-                            PathBuf::from(&args[i + 1]),
-                            PathBuf::from(&args[i + 2]),
-                        ));
+                        config.event_audit =
+                            Some((PathBuf::from(&args[i + 1]), PathBuf::from(&args[i + 2])));
                         i += 2;
                     }
                 }
@@ -337,6 +380,18 @@ impl AnalyzeConfig {
                 "--focused-output" => {
                     if i + 1 < args.len() {
                         config.focused_output = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--training-db" => {
+                    if i + 1 < args.len() {
+                        config.training_db = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--training-output" => {
+                    if i + 1 < args.len() {
+                        config.training_output = Some(PathBuf::from(&args[i + 1]));
                         i += 1;
                     }
                 }
@@ -433,6 +488,8 @@ OPTIONS:
     --audit-output <FILE> Write event audit report to file (default: notes/analysis_runs/...)
     --focused <DB>       Run focused analysis on a single DB
     --focused-output <FILE> Write focused report to file (default: notes/analysis_runs/...)
+    --training-db <DB>   Run training debug analysis on a training DB
+    --training-output <DIR> Output directory for training analysis (default: training_logs/session_x/analysis)
     --request <NAME>     Run a stored SQL analysis request
     --request-output <FILE> Write request report to file (default: notes/analysis_runs/...)
     --request-db <DB>    Override DB path for a request
@@ -461,6 +518,9 @@ EXAMPLES:
 
     # Focused analysis: deep dive on a single DB
     cargo run --bin analyze -- --focused db/current.db
+
+    # Training debug analysis
+    cargo run --bin analyze -- --training-db db/training_YYYYMMDD_HHMMSS.db
 
     # Run a stored analysis request
     cargo run --bin analyze -- --request focused_core --request-db db/current.db
@@ -512,4 +572,31 @@ fn default_request_output_path(name: &str) -> PathBuf {
         "notes/analysis_runs/request_{}_{}.md",
         name, timestamp
     ))
+}
+
+fn default_training_output_dir(db_path: &PathBuf) -> PathBuf {
+    let session_dir = infer_training_session_dir(db_path)
+        .unwrap_or_else(|| PathBuf::from("training_logs").join("analysis_unknown"));
+    session_dir.join("analysis")
+}
+
+fn infer_training_session_dir(db_path: &PathBuf) -> Option<PathBuf> {
+    let mut resolved = db_path.clone();
+    if db_path.file_name().and_then(|n| n.to_str()) == Some("training.db") {
+        if let Ok(target) = std::fs::read_link(db_path) {
+            resolved = target;
+        }
+    }
+    let file_name = resolved.file_stem()?.to_string_lossy();
+    let timestamp = file_name.strip_prefix("training_")?;
+    Some(PathBuf::from("training_logs").join(format!("session_{}", timestamp)))
+}
+
+fn default_training_report_name(report: &TrainingDebugReport) -> String {
+    if let Some(session_id) = &report.session_id {
+        format!("training_debug_{}.md", session_id)
+    } else {
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        format!("training_debug_{}.md", timestamp)
+    }
 }

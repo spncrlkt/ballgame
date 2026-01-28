@@ -62,7 +62,7 @@ Sessions are saved to `training_logs/session_YYYYMMDD_HHMMSS/`:
 training_logs/session_20260125_143022/
 ├── summary.json
 ├── analysis.md
-└── claude_prompt_20260125_143022.txt
+└── analysis_request_20260125_143022.md
 ```
 
 ## Post-Session Analysis
@@ -72,6 +72,9 @@ Each training iteration is a complete drive (you start with the ball). No extrac
 ```bash
 # Analyze events from SQLite
 cargo run --bin analyze -- training.db
+
+# Training debug analysis (writes to training_logs/session_<timestamp>/analysis)
+cargo run --bin analyze -- --training-db db/training.db
 ```
 
 ## Controls

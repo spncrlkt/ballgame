@@ -6,11 +6,11 @@
 use bevy::prelude::*;
 
 use super::{EventBuffer, GameEvent, PlayerId};
+use crate::ai::evaluate_shot_quality;
 use crate::{
     AiState, BallState, Basket, ChargingShot, HoldingBall, InputState, LastShotInfo, Score,
     StealContest, StealCooldown, TargetBasket, Team, Velocity,
 };
-use crate::ai::evaluate_shot_quality;
 
 /// Configuration for event emission behavior
 #[derive(Debug, Clone)]
@@ -379,7 +379,9 @@ fn emit_possession_events(
                 .find(|b| b.basket == player.target_basket)
                 .map(|b| Vec2::new(b.position.0, b.position.1));
             let quality = target_pos
-                .map(|pos| evaluate_shot_quality(Vec2::new(player.position.0, player.position.1), pos))
+                .map(|pos| {
+                    evaluate_shot_quality(Vec2::new(player.position.0, player.position.1), pos)
+                })
                 .unwrap_or(0.0);
             buffer.log(
                 elapsed,

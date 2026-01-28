@@ -68,7 +68,8 @@ const SQL_AVG_SHOT_QUALITY: &str = "SELECT AVG(avg_shot_quality) FROM player_sta
 const SQL_SHOT_START: &str = "SELECT match_id, time_ms, data FROM events WHERE event_type = 'SS'";
 const SQL_SHOT_RELEASE: &str = "SELECT match_id, time_ms, data FROM events WHERE event_type = 'SR'";
 const SQL_MATCH_LEVELS: &str = "SELECT id, level_name FROM matches";
-const SQL_AI_GOAL: &str = "SELECT match_id, COUNT(*) FROM events WHERE event_type = 'AG' GROUP BY match_id";
+const SQL_AI_GOAL: &str =
+    "SELECT match_id, COUNT(*) FROM events WHERE event_type = 'AG' GROUP BY match_id";
 const SQL_STEAL_ATTEMPT: &str =
     "SELECT match_id, COUNT(*) FROM events WHERE event_type = 'SA' GROUP BY match_id";
 const SQL_EVENTS: &str = "SELECT event_type, COUNT(*) FROM events GROUP BY event_type";
@@ -224,7 +225,9 @@ pub fn run_focused_analysis(db_path: &Path) -> Result<FocusedReport> {
 
     let mut events = HashMap::new();
     let mut stmt = conn.prepare(SQL_EVENTS)?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
     for row in rows {
         let (code, count) = row?;
         events.insert(code, count);
@@ -272,14 +275,26 @@ pub fn run_focused_analysis(db_path: &Path) -> Result<FocusedReport> {
     let mut ss = HashMap::<(i64, Option<String>), Vec<i64>>::new();
     let mut sr = HashMap::<(i64, Option<String>), Vec<i64>>::new();
     let mut stmt = conn.prepare(SQL_SHOT_START)?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?)))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
     for row in rows {
         let (mid, time_ms, data) = row?;
         let player = parse_event_player(&data);
         ss.entry((mid, player)).or_default().push(time_ms);
     }
     let mut stmt = conn.prepare(SQL_SHOT_RELEASE)?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?)))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
     for row in rows {
         let (mid, time_ms, data) = row?;
         let player = parse_event_player(&data);
@@ -316,7 +331,9 @@ pub fn run_focused_analysis(db_path: &Path) -> Result<FocusedReport> {
 
     let mut match_levels = HashMap::<i64, String>::new();
     let mut stmt = conn.prepare(SQL_MATCH_LEVELS)?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
     for row in rows {
         let (match_id, level_name) = row?;
         match_levels.insert(match_id, level_name);
@@ -333,8 +350,7 @@ pub fn run_focused_analysis(db_path: &Path) -> Result<FocusedReport> {
     })?;
     for row in rows {
         let (match_id, time_ms, data) = row?;
-        if let (Some(player), Some(pos)) =
-            (parse_event_player(&data), parse_shot_start_pos(&data))
+        if let (Some(player), Some(pos)) = (parse_event_player(&data), parse_shot_start_pos(&data))
         {
             shot_starts
                 .entry((match_id, player))
@@ -354,8 +370,7 @@ pub fn run_focused_analysis(db_path: &Path) -> Result<FocusedReport> {
     })?;
     for row in rows {
         let (match_id, time_ms, data) = row?;
-        if let (Some(player), Some(charge)) =
-            (parse_event_player(&data), parse_shot_charge(&data))
+        if let (Some(player), Some(charge)) = (parse_event_player(&data), parse_shot_charge(&data))
         {
             shot_releases
                 .entry((match_id, player))
@@ -380,7 +395,9 @@ pub fn run_focused_analysis(db_path: &Path) -> Result<FocusedReport> {
         };
         let target_y = *basket_y;
         let mut starts = starts;
-        let mut releases = shot_releases.remove(&(match_id, player)).unwrap_or_default();
+        let mut releases = shot_releases
+            .remove(&(match_id, player))
+            .unwrap_or_default();
         starts.sort_by_key(|(time, _)| *time);
         releases.sort_by_key(|(time, _)| *time);
         let mut j = 0usize;
@@ -464,7 +481,9 @@ pub fn run_focused_analysis(db_path: &Path) -> Result<FocusedReport> {
 
     let mut low_shot_levels = Vec::new();
     let mut stmt = conn.prepare(SQL_LOW_SHOT_LEVELS)?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
     for row in rows {
         low_shot_levels.push(row?);
     }
@@ -535,7 +554,10 @@ impl FocusedReport {
         out.push_str(&format!("- Goals/match: {:.3}\n", self.goals_per_match));
         out.push_str(&format!("- Shots/match: {:.3}\n", self.shots_per_match));
         out.push_str(&format!("- Shot%: {:.3}\n", self.shot_pct));
-        out.push_str(&format!("- Avg shot quality: {:.3}\n", self.avg_shot_quality));
+        out.push_str(&format!(
+            "- Avg shot quality: {:.3}\n",
+            self.avg_shot_quality
+        ));
         out.push_str(&format!("- Scoreless rate: {:.3}\n", self.scoreless_rate));
         if let Some(rate) = self.steal_success_rate {
             out.push_str(&format!("- Steal success rate: {:.3}\n", rate));
@@ -548,7 +570,10 @@ impl FocusedReport {
         out.push_str("## Shot Quality Distribution (from SS events)\n");
         out.push_str(&format!(
             "- avg {:.3} | med {:.3} | p10 {:?} | p90 {:?}\n",
-            self.shot_quality.avg, self.shot_quality.med, self.shot_quality.p10, self.shot_quality.p90
+            self.shot_quality.avg,
+            self.shot_quality.med,
+            self.shot_quality.p10,
+            self.shot_quality.p90
         ));
         out.push_str("\n");
 

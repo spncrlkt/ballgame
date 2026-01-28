@@ -549,9 +549,9 @@ pub fn ai_decision_update(
 
                 // Evaluate shot quality based on position (heatmap-derived)
                 // Apply front-court penalty to discourage close-range shots
-                let base_quality =
-                    (evaluate_shot_quality(ai_pos, target_basket_pos) - front_court_quality_penalty)
-                        .clamp(0.0, 1.0);
+                let base_quality = (evaluate_shot_quality(ai_pos, target_basket_pos)
+                    - front_court_quality_penalty)
+                    .clamp(0.0, 1.0);
                 let score_heatmap = heatmaps.score_for_basket(target_basket_type, ai_pos);
                 let heatmap_multiplier =
                     1.0 + (HEATMAP_SCORE_WEIGHT_DEFAULT * level_score_weight * score_heatmap);

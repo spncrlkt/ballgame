@@ -8,8 +8,10 @@ use rusqlite::{Connection, params};
 use std::path::Path;
 use std::sync::Mutex;
 
+use super::debug::{DEBUG_TICK_MS, DebugSample, DebugSampleBuffer};
 use super::format::serialize_event;
 use super::types::GameEvent;
+use crate::debug_logging::DebugLogConfig;
 
 /// Resource for logging events to SQLite
 ///
@@ -160,9 +162,10 @@ impl SqliteEventLogger {
         let data = serialize_event(time_ms, event);
         let event_type = event.type_code();
 
+        let tick_frame = (time_ms / DEBUG_TICK_MS) as i64;
         if let Err(e) = conn.execute(
-            "INSERT INTO events (match_id, point_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![match_id, point_id, time_ms, event_type, data],
+            "INSERT INTO events (match_id, point_id, time_ms, tick_frame, event_type, data) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![match_id, point_id, time_ms, tick_frame, event_type, data],
         ) {
             warn!("Failed to log event: {}", e);
             return;
@@ -206,10 +209,11 @@ impl SqliteEventLogger {
         for (time_ms, event) in events {
             let data = serialize_event(*time_ms, event);
             let event_type = event.type_code();
+            let tick_frame = (*time_ms / DEBUG_TICK_MS) as i64;
 
             if conn.execute(
-                "INSERT INTO events (match_id, point_id, time_ms, event_type, data) VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![match_id, point_id, time_ms, event_type, data],
+                "INSERT INTO events (match_id, point_id, time_ms, tick_frame, event_type, data) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![match_id, point_id, time_ms, tick_frame, event_type, data],
             ).is_err() {
                 let _ = conn.execute("ROLLBACK", []);
                 return;
@@ -226,6 +230,67 @@ impl SqliteEventLogger {
         }
 
         let _ = conn.execute("COMMIT", []);
+    }
+
+    pub fn log_debug_samples(&self, samples: &[DebugSample]) {
+        if !self.enabled || samples.is_empty() {
+            return;
+        }
+        let match_id = match self.current_match_id.lock() {
+            Ok(guard) => match *guard {
+                Some(id) => id,
+                None => return,
+            },
+            Err(_) => return,
+        };
+
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        let mut stmt = match conn.prepare(
+            "INSERT INTO debug_events (match_id, time_ms, tick_frame, player, pos_x, pos_y, vel_x, vel_y, input_move_x, input_jump, grounded, is_jumping, coyote_timer, jump_buffer_timer, facing, nav_active, nav_path_index, nav_action, level_id, human_controlled) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("Failed to prepare debug insert: {}", e);
+                return;
+            }
+        };
+
+        for sample in samples {
+            let player = sample.player.to_string();
+            let input_jump = if sample.input_jump { 1 } else { 0 };
+            let grounded = if sample.grounded { 1 } else { 0 };
+            let is_jumping = if sample.is_jumping { 1 } else { 0 };
+            let nav_active = if sample.nav_active { 1 } else { 0 };
+            let human_controlled = if sample.human_controlled { 1 } else { 0 };
+            if let Err(e) = stmt.execute(params![
+                match_id,
+                sample.time_ms,
+                sample.tick_frame as i64,
+                player,
+                sample.pos_x,
+                sample.pos_y,
+                sample.vel_x,
+                sample.vel_y,
+                sample.input_move_x,
+                input_jump,
+                grounded,
+                is_jumping,
+                sample.coyote_timer,
+                sample.jump_buffer_timer,
+                sample.facing,
+                nav_active,
+                sample.nav_path_index,
+                sample.nav_action,
+                sample.level_id,
+                human_controlled,
+            ]) {
+                warn!("Failed to log debug sample: {}", e);
+            }
+        }
     }
 
     /// End the current match and record final scores
@@ -387,8 +452,35 @@ fn init_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
             match_id INTEGER REFERENCES matches(id),
             point_id INTEGER REFERENCES points(id),
             time_ms INTEGER NOT NULL,
+            tick_frame INTEGER NOT NULL DEFAULT 0,
             event_type TEXT NOT NULL,
             data TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Debug sample table for manual reachability capture
+        CREATE TABLE IF NOT EXISTS debug_events (
+            id INTEGER PRIMARY KEY,
+            match_id INTEGER REFERENCES matches(id),
+            time_ms INTEGER NOT NULL,
+            tick_frame INTEGER NOT NULL,
+            player TEXT NOT NULL,
+            pos_x REAL NOT NULL,
+            pos_y REAL NOT NULL,
+            vel_x REAL NOT NULL,
+            vel_y REAL NOT NULL,
+            input_move_x REAL NOT NULL,
+            input_jump INTEGER NOT NULL,
+            grounded INTEGER NOT NULL,
+            is_jumping INTEGER NOT NULL,
+            coyote_timer REAL NOT NULL,
+            jump_buffer_timer REAL NOT NULL,
+            facing REAL NOT NULL,
+            nav_active INTEGER NOT NULL,
+            nav_path_index INTEGER NOT NULL,
+            nav_action TEXT,
+            level_id TEXT NOT NULL,
+            human_controlled INTEGER NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -396,13 +488,18 @@ fn init_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_events_point ON events(point_id);
         CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
         CREATE INDEX IF NOT EXISTS idx_events_time ON events(match_id, time_ms);
+        CREATE INDEX IF NOT EXISTS idx_events_tick ON events(match_id, tick_frame);
         CREATE INDEX IF NOT EXISTS idx_points_match ON points(match_id);
+        CREATE INDEX IF NOT EXISTS idx_debug_match ON debug_events(match_id);
+        CREATE INDEX IF NOT EXISTS idx_debug_time ON debug_events(match_id, time_ms);
+        CREATE INDEX IF NOT EXISTS idx_debug_tick ON debug_events(match_id, tick_frame);
         "#,
     )?;
 
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);
     let _ = conn.execute("ALTER TABLE matches ADD COLUMN display_name TEXT", []);
     let _ = conn.execute("ALTER TABLE events ADD COLUMN point_id INTEGER", []);
+    let _ = conn.execute("ALTER TABLE events ADD COLUMN tick_frame INTEGER", []);
     Ok(())
 }
 
@@ -501,6 +598,30 @@ pub fn flush_events_to_sqlite(
     let events = event_bus.export_events();
     if !events.is_empty() {
         logger.log_events(&events);
+    }
+}
+
+/// System to flush debug samples to SQLite.
+pub fn flush_debug_samples_to_sqlite(
+    config: Res<DebugLogConfig>,
+    mut buffer: ResMut<DebugSampleBuffer>,
+    logger: Option<Res<SqliteEventLogger>>,
+) {
+    if !config.enabled {
+        buffer.samples.clear();
+        return;
+    }
+    let Some(logger) = logger else {
+        buffer.samples.clear();
+        return;
+    };
+    if !logger.is_enabled() {
+        buffer.samples.clear();
+        return;
+    }
+    if !buffer.samples.is_empty() {
+        logger.log_debug_samples(&buffer.samples);
+        buffer.samples.clear();
     }
 }
 

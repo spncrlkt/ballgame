@@ -51,8 +51,8 @@ impl AnalysisRequestFile {
     }
 
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
-        let json = serde_json::to_string_pretty(self)
-            .unwrap_or_else(|_| "{\"requests\":[]}".to_string());
+        let json =
+            serde_json::to_string_pretty(self).unwrap_or_else(|_| "{\"requests\":[]}".to_string());
         fs::write(path, json)
     }
 
@@ -158,7 +158,14 @@ impl AnalysisRunReport {
             }
             out.push_str(&query.columns.join(" | "));
             out.push_str("\n");
-            out.push_str(&query.columns.iter().map(|_| "---").collect::<Vec<_>>().join(" | "));
+            out.push_str(
+                &query
+                    .columns
+                    .iter()
+                    .map(|_| "---")
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+            );
             out.push_str("\n");
             if query.rows.is_empty() {
                 out.push_str("_No rows_\n\n");

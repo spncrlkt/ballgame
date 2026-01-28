@@ -802,7 +802,10 @@ fn run_full_bundle(levels: &[&ballgame::LevelData]) {
             .cloned()
             .collect();
         combine_heatmaps(&left, "showcase/heatmap_line_of_sight_left_all_overlay.png");
-        combine_heatmaps(&right, "showcase/heatmap_line_of_sight_right_all_overlay.png");
+        combine_heatmaps(
+            &right,
+            "showcase/heatmap_line_of_sight_right_all_overlay.png",
+        );
     }
 }
 

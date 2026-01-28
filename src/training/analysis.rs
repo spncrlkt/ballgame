@@ -1,6 +1,6 @@
 //! Automated post-training analysis
 //!
-//! Generates analysis reports and Claude prompts from training session data.
+//! Generates analysis reports and AI analysis request templates from training session data.
 
 use std::collections::HashMap;
 use std::fs;
@@ -1256,14 +1256,14 @@ pub fn write_analysis_files(session_dir: &Path, analysis: &SessionAnalysis) -> i
     let md_path = session_dir.join("analysis.md");
     fs::write(&md_path, md_content)?;
 
-    // Write claude prompt file
-    let prompt = generate_claude_prompt(session_dir, analysis);
+    // Write analysis request template
+    let prompt = generate_analysis_request(session_dir, analysis);
     let timestamp = Local::now().format("%Y%m%d_%H%M").to_string();
-    let prompt_path = session_dir.join(format!("claude_prompt_{}.txt", timestamp));
+    let prompt_path = session_dir.join(format!("analysis_request_{}.md", timestamp));
     fs::write(&prompt_path, prompt)?;
 
     println!("Analysis written to: {}", md_path.display());
-    println!("Claude prompt written to: {}", prompt_path.display());
+    println!("Analysis request written to: {}", prompt_path.display());
 
     Ok(())
 }
@@ -1500,11 +1500,11 @@ fn format_analysis_markdown(analysis: &SessionAnalysis) -> String {
     md
 }
 
-/// Generate a Claude prompt for AI analysis
-pub fn generate_claude_prompt(session_dir: &Path, analysis: &SessionAnalysis) -> String {
+/// Generate an AI analysis request template.
+pub fn generate_analysis_request(session_dir: &Path, analysis: &SessionAnalysis) -> String {
     let mut prompt = String::new();
 
-    prompt.push_str("## Training Session Analysis Request\n\n");
+    prompt.push_str("# Training Session Analysis Request\n\n");
     prompt.push_str(&format!(
         "**Protocol:** {} - {}\n\n",
         analysis.protocol, analysis.protocol_description
@@ -1519,7 +1519,7 @@ pub fn generate_claude_prompt(session_dir: &Path, analysis: &SessionAnalysis) ->
         session_dir.display()
     ));
 
-    prompt.push_str("### Session Overview\n");
+    prompt.push_str("## Session Overview\n");
     prompt.push_str(&format!(
         "- Games: {} | Human Wins: {} | AI Wins: {}\n",
         analysis.aggregate.total_games, analysis.aggregate.human_wins, analysis.aggregate.ai_wins
@@ -1541,7 +1541,7 @@ pub fn generate_claude_prompt(session_dir: &Path, analysis: &SessionAnalysis) ->
     ));
 
     // Movement summary
-    prompt.push_str("### Movement Summary\n");
+    prompt.push_str("## Movement Summary\n");
     for game in &analysis.games {
         let mv = &game.ai_movement;
         prompt.push_str(&format!(
@@ -1556,7 +1556,7 @@ pub fn generate_claude_prompt(session_dir: &Path, analysis: &SessionAnalysis) ->
 
     // Weaknesses
     if !analysis.weaknesses.is_empty() {
-        prompt.push_str("### Identified Weaknesses\n");
+        prompt.push_str("## Identified Weaknesses\n");
         for weakness in &analysis.weaknesses {
             prompt.push_str(&format!("- {}\n", weakness));
         }
@@ -1574,24 +1574,24 @@ pub fn generate_claude_prompt(session_dir: &Path, analysis: &SessionAnalysis) ->
         })
         .collect();
     if !notes.is_empty() {
-        prompt.push_str("### Player Notes\n");
+        prompt.push_str("## Player Notes\n");
         for note in &notes {
             prompt.push_str(&format!("- {}\n", note));
         }
         prompt.push('\n');
     }
 
-    prompt.push_str("### Request\n");
+    prompt.push_str("## Request\n");
     prompt.push_str(
-        "1. Read the analysis.md file for full metrics (includes AI Movement Analysis section)\n",
+        "1. Read the analysis.md file for full metrics (includes AI Movement Analysis section).\n",
     );
     prompt.push_str(
-        "2. Focus on movement issues: stuck patterns, monotonic movement, negative closing rate\n",
+        "2. Focus on movement issues: stuck patterns, monotonic movement, negative closing rate.\n",
     );
-    prompt.push_str("3. Examine AI code in `src/ai/` (decision.rs, goals.rs, navigation.rs)\n");
+    prompt.push_str("3. Examine AI code in `src/ai/` (decision.rs, goals.rs, navigation.rs).\n");
     prompt.push_str("4. Check goal time breakdown - is AI spending too long in wrong goals?\n");
-    prompt.push_str("5. Suggest specific code changes to improve AI tracking/positioning\n");
-    prompt.push_str("6. Recommend ai_profiles.txt parameter adjustments if relevant\n");
+    prompt.push_str("5. Suggest specific code changes to improve AI tracking/positioning.\n");
+    prompt.push_str("6. Recommend ai_profiles.txt parameter adjustments if relevant.\n");
 
     prompt
 }

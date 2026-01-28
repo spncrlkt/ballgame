@@ -7,17 +7,16 @@ use ballgame::{
     AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact,
     BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
     ChargeGaugeBackground, ChargeGaugeFill, ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel,
-    CurrentPalette, CurrentPresets, CurrentSettings, CycleIndicator, CycleSelection, DebugSettings,
-    DebugText, DisplayBallWave, EventBus, Facing, Grounded, HumanControlTarget, HumanControlled,
-    InputState, JumpState, LastShotInfo, LevelChangeTracker, LevelDatabase, MatchCountdown,
-    NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerId,
-    PlayerInput, PresetDatabase, Score, ScoreLevelText, SnapshotConfig, SnapshotTriggerState,
-    StealContest, StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, TweakPanel,
-    TweakPanelState, TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks, ball,
-    config_watcher,
-    constants::*, countdown, display_ball_wave, emit_level_change_events, input, levels, player,
-    replay, save_settings_system, scoring, shooting, snapshot, spawn_countdown_text, steal, tuning,
-    ui, update_event_bus_time, world,
+    CurrentPalette, CurrentPresets, CurrentSettings, CycleIndicator, CycleSelection,
+    DebugLogConfig, DebugSettings, DebugText, DisplayBallWave, EventBus, Facing, Grounded,
+    HumanControlTarget, HumanControlled, InputState, JumpState, LastShotInfo, LevelChangeTracker,
+    LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase,
+    PhysicsTweaks, Player, PlayerId, PlayerInput, PresetDatabase, Score, ScoreLevelText,
+    SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown, StealTracker, StyleTextures,
+    TargetBasket, Team, TweakPanel, TweakPanelState, TweakRow, Velocity, ViewportScale, ai,
+    apply_preset_to_tweaks, ball, config_watcher, constants::*, countdown, display_ball_wave,
+    emit_level_change_events, input, levels, player, replay, save_settings_system, scoring,
+    shooting, snapshot, spawn_countdown_text, steal, tuning, ui, update_event_bus_time, world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
@@ -179,6 +178,10 @@ fn main() {
         (w, h)
     };
 
+    let args: Vec<String> = std::env::args().collect();
+    let debug_config = DebugLogConfig::load_with_args(&args);
+    debug_config.apply_env();
+
     App::new()
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
@@ -210,6 +213,7 @@ fn main() {
         .init_resource::<Score>()
         .insert_resource(CurrentLevel(loaded_level_id))
         .insert_resource(CurrentPalette(loaded_palette_index))
+        .insert_resource(debug_config)
         .init_resource::<PhysicsTweaks>()
         .init_resource::<TweakPanelState>()
         .init_resource::<LastShotInfo>()

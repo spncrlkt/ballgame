@@ -22,6 +22,7 @@ use ballgame::ball::{
     ball_gravity, ball_player_collision, ball_spin, ball_state_update, pickup_ball,
 };
 use ballgame::constants::*;
+use ballgame::debug_logging::DebugLogConfig;
 use ballgame::levels::LevelDatabase;
 use ballgame::palettes::PaletteDatabase;
 use ballgame::player::{HoldingBall, Player, Team, apply_gravity, apply_input, check_collisions};
@@ -41,6 +42,7 @@ fn run_ghost_trial(
     level_db: &LevelDatabase,
     profile_db: &AiProfileDatabase,
     verbose: bool,
+    debug_log: bool,
 ) -> GhostTrialResult {
     let mut app = App::new();
 
@@ -74,6 +76,10 @@ fn run_ghost_trial(
                 .unwrap_or_default()
         });
     app.insert_resource(CurrentLevel(level_id));
+    let mut debug_config = DebugLogConfig::load();
+    debug_config.enabled = debug_log;
+    debug_config.apply_env();
+    app.insert_resource(debug_config);
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<NavGraph>();
@@ -404,6 +410,8 @@ fn ghost_check_end(
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    let debug_config = DebugLogConfig::load_with_args(&args);
+    debug_config.apply_env();
 
     if args.len() < 2 {
         eprintln!("Ghost Trial Runner");
@@ -509,7 +517,14 @@ fn main() {
             std::io::Write::flush(&mut std::io::stdout()).ok();
         }
 
-        let result = run_ghost_trial(trial, &ai_profile, &level_db, &profile_db, verbose);
+        let result = run_ghost_trial(
+            trial,
+            &ai_profile,
+            &level_db,
+            &profile_db,
+            verbose,
+            debug_config.enabled,
+        );
 
         if !summary_only && !verbose {
             let defended = if result.ai_defended() {

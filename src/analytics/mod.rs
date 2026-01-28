@@ -13,6 +13,7 @@ pub mod parser;
 mod requests;
 pub mod suggestions;
 mod targets;
+mod training_debug;
 
 pub use db_analytics::{
     DetailedProfileStats, ProfileAnalysis, ProfileComparison, analyze_profile, compare_profiles,
@@ -24,6 +25,9 @@ pub use focused_analysis::run_focused_analysis;
 pub use leaderboard::{Leaderboard, ProfileRanking};
 pub use metrics::{AggregateMetrics, ProfileMetrics};
 pub use parser::{ParsedMatch, parse_all_matches_from_db, parse_match_from_db};
-pub use requests::{AnalysisRequest, AnalysisRequestFile, AnalysisRunReport, AnalysisQuery, run_request};
+pub use requests::{
+    AnalysisQuery, AnalysisRequest, AnalysisRequestFile, AnalysisRunReport, run_request,
+};
 pub use suggestions::{ParameterSuggestion, format_suggestions, generate_suggestions};
 pub use targets::{TargetDelta, TargetStatus, TuningTargets, default_targets, load_targets};
+pub use training_debug::{TrainingDebugReport, run_training_debug_analysis};

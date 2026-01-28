@@ -19,8 +19,8 @@ training.db                              # SQLite database with all events
 training_logs/
 └── session_YYYYMMDD_HHMMSS/
     ├── summary.json                     # Session summary
-    ├── analysis.md                      # Human-readable report
-    └── claude_prompt_YYYYMMDD_HHMM.txt  # AI review prompt
+    ├── analysis.md                       # Human-readable report
+    └── analysis_request_YYYYMMDD_HHMM.md # AI review request template
 ```
 
 ## Quick SQL Analysis

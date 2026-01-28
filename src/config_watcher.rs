@@ -189,7 +189,10 @@ pub fn check_config_changes(
         match load_gameplay_tuning_from_file(GAMEPLAY_TUNING_FILE) {
             Ok(tuning) => {
                 tuning.apply_to(&mut tweaks);
-                info!("Auto-reloaded gameplay tuning from {}", GAMEPLAY_TUNING_FILE);
+                info!(
+                    "Auto-reloaded gameplay tuning from {}",
+                    GAMEPLAY_TUNING_FILE
+                );
             }
             Err(err) => {
                 warn!("Failed to reload gameplay tuning: {}", err);

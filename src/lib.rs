@@ -7,6 +7,8 @@ pub mod analytics;
 pub mod config_watcher;
 pub mod constants;
 pub mod countdown;
+pub mod debug_logging;
+pub use debug_logging::DebugLogConfig;
 pub mod events;
 pub mod helpers;
 pub mod replay;
@@ -81,14 +83,13 @@ pub use training::{
     GameResult, GameSummary, SessionSummary, TrainingPhase, TrainingState, Winner,
     ensure_session_dir, print_session_summary, write_session_summary,
 };
+pub use tuning::{GAMEPLAY_TUNING_FILE, GameplayTuning, PhysicsTweaks};
 pub use ui::{
     ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleIndicator, CycleSelection,
     DebugSettings, DebugText, DownOption, RightOption, ScoreFlash, ScoreLevelText,
     StealCooldownIndicator, StealFailFlash, StealOutOfRangeFlash, TweakPanel, TweakPanelState,
-    TweakRow,
-    ViewportScale, VulnerableIndicator,
+    TweakRow, ViewportScale, VulnerableIndicator,
 };
-pub use tuning::{GameplayTuning, PhysicsTweaks, GAMEPLAY_TUNING_FILE};
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 
 // =============================================================================

@@ -15,6 +15,7 @@ use crate::ball::{
     ball_gravity, ball_player_collision, ball_spin, ball_state_update, pickup_ball,
 };
 use crate::constants::*;
+use crate::debug_logging::DebugLogConfig;
 use crate::events::{
     EmitterConfig, EventBuffer, EventBus, EventEmitterState, GameConfig, GameEvent,
     emit_game_events, snapshot_ball, snapshot_player,
@@ -192,6 +193,12 @@ pub fn run_match(
     }
     app.insert_resource(event_buffer);
 
+    let mut debug_config = DebugLogConfig::load();
+    if config.debug_log {
+        debug_config.enabled = true;
+    }
+    debug_config.apply_env();
+
     // Simulation resources
     app.insert_resource(SimControl {
         config: config.clone(),
@@ -199,6 +206,7 @@ pub fn run_match(
         current_seed: seed,
     });
     app.insert_resource(SimMetrics::new());
+    app.insert_resource(debug_config);
 
     // Startup system
     app.add_systems(Startup, (tuning::load_global_tuning_system, sim_setup));
@@ -689,7 +697,12 @@ pub fn run_simulation(config: SimConfig) {
     // Initialize database if requested
     // For tournaments, auto-generate a timestamped db to ensure fresh data (unless estimating)
     let db_path = if config.est_run_time {
-        Some(config.db_path.clone().unwrap_or_else(|| "db/sim.db".to_string()))
+        Some(
+            config
+                .db_path
+                .clone()
+                .unwrap_or_else(|| "db/sim.db".to_string()),
+        )
     } else {
         match &config.mode {
             super::config::SimMode::Tournament { .. } => {
@@ -856,7 +869,13 @@ pub fn run_simulation(config: SimConfig) {
                     None,
                     effective_run_timeout,
                 );
-                store_results_in_db(db, "single", std::slice::from_ref(&result), &config, Some(&run_stats));
+                store_results_in_db(
+                    db,
+                    "single",
+                    std::slice::from_ref(&result),
+                    &config,
+                    Some(&run_stats),
+                );
             }
         }
 
@@ -1065,7 +1084,13 @@ pub fn run_simulation(config: SimConfig) {
                     None,
                     effective_run_timeout,
                 );
-                store_results_in_db(db, "tournament", &tournament.matches, &config, Some(&run_stats));
+                store_results_in_db(
+                    db,
+                    "tournament",
+                    &tournament.matches,
+                    &config,
+                    Some(&run_stats),
+                );
             }
 
             if let Some(output_file) = &config.output_file {
@@ -1217,14 +1242,26 @@ fn plan_run(
 ) -> (String, i64, Option<i64>, Option<i64>) {
     match &config.mode {
         super::config::SimMode::Single => ("single".to_string(), 1, None, None),
-        super::config::SimMode::MultiMatch { count } => ("multi_match".to_string(), *count as i64, None, None),
+        super::config::SimMode::MultiMatch { count } => {
+            ("multi_match".to_string(), *count as i64, None, None)
+        }
         super::config::SimMode::Tournament { matches_per_pair } => {
             let total = profiles_count * (profiles_count - 1) * (*matches_per_pair as i64);
-            ("tournament".to_string(), total, Some(*matches_per_pair as i64), None)
+            (
+                "tournament".to_string(),
+                total,
+                Some(*matches_per_pair as i64),
+                None,
+            )
         }
         super::config::SimMode::LevelSweep { matches_per_level } => {
             let total = levels_count * (*matches_per_level as i64);
-            ("level_sweep".to_string(), total, None, Some(*matches_per_level as i64))
+            (
+                "level_sweep".to_string(),
+                total,
+                None,
+                Some(*matches_per_level as i64),
+            )
         }
         super::config::SimMode::Regression => ("regression".to_string(), 0, None, None),
         super::config::SimMode::ShotTest { .. } => ("shot_test".to_string(), 0, None, None),
@@ -1527,7 +1564,10 @@ pub fn run_ghost_trial(
     app.insert_resource(SimMetrics::new());
 
     // Startup system - custom setup for ghost trials
-    app.add_systems(Startup, (tuning::load_global_tuning_system, ghost_trial_setup));
+    app.add_systems(
+        Startup,
+        (tuning::load_global_tuning_system, ghost_trial_setup),
+    );
     app.add_systems(PostStartup, |mut nav_graph: ResMut<NavGraph>| {
         nav_graph.dirty = true;
     });

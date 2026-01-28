@@ -13,7 +13,8 @@ const SQL_EVENT_COUNTS: &str = "SELECT event_type, COUNT(*) FROM events GROUP BY
 const SQL_MATCH_COUNTS: &str = "SELECT COUNT(*) FROM matches";
 const SQL_AVG_DURATION: &str = "SELECT AVG(duration_secs) FROM matches";
 const SQL_GOALS_PER_MATCH: &str = "SELECT AVG(score_left + score_right) FROM matches";
-const SQL_SCORELESS_RATE: &str = "SELECT AVG(CASE WHEN score_left + score_right = 0 THEN 1.0 ELSE 0.0 END) FROM matches";
+const SQL_SCORELESS_RATE: &str =
+    "SELECT AVG(CASE WHEN score_left + score_right = 0 THEN 1.0 ELSE 0.0 END) FROM matches";
 const SQL_SHOTS_TOTAL: &str = "SELECT SUM(shots_attempted), SUM(shots_made) FROM player_stats";
 const SQL_AVG_SHOT_QUALITY: &str = "SELECT AVG(avg_shot_quality) FROM player_stats";
 const SQL_EVENT_COUNTS_PER_MATCH: &str =
@@ -31,10 +32,8 @@ const SQL_LOW_SHOT_LEVELS: &str = r#"
 "#;
 const SQL_POSSESSION_SUM: &str =
     "SELECT match_id, SUM(possession_time) FROM player_stats GROUP BY match_id";
-const SQL_SHOT_START: &str =
-    "SELECT match_id, time_ms, data FROM events WHERE event_type = 'SS'";
-const SQL_SHOT_RELEASE: &str =
-    "SELECT match_id, time_ms, data FROM events WHERE event_type = 'SR'";
+const SQL_SHOT_START: &str = "SELECT match_id, time_ms, data FROM events WHERE event_type = 'SS'";
+const SQL_SHOT_RELEASE: &str = "SELECT match_id, time_ms, data FROM events WHERE event_type = 'SR'";
 
 #[derive(Debug, Clone)]
 pub struct StatSummary {
@@ -148,7 +147,6 @@ fn parse_shot_charge(data: &str) -> Option<f64> {
     parts.get(3).and_then(|v| v.parse::<f64>().ok())
 }
 
-
 fn audit_db(path: &Path) -> Result<DbAudit> {
     let conn = Connection::open(path)?;
     let match_count: i64 = conn.query_row(SQL_MATCH_COUNTS, [], |row| row.get(0))?;
@@ -173,7 +171,9 @@ fn audit_db(path: &Path) -> Result<DbAudit> {
 
     let mut events = HashMap::new();
     let mut stmt = conn.prepare(SQL_EVENT_COUNTS)?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
     for row in rows {
         let (code, count) = row?;
         events.insert(code, count);
@@ -205,14 +205,26 @@ fn audit_db(path: &Path) -> Result<DbAudit> {
     let mut ss = HashMap::<(i64, Option<String>), Vec<i64>>::new();
     let mut sr = HashMap::<(i64, Option<String>), Vec<i64>>::new();
     let mut stmt = conn.prepare(SQL_SHOT_START)?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?)))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
     for row in rows {
         let (mid, time_ms, data) = row?;
         let player = parse_event_player(&data);
         ss.entry((mid, player)).or_default().push(time_ms);
     }
     let mut stmt = conn.prepare(SQL_SHOT_RELEASE)?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?)))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
     for row in rows {
         let (mid, time_ms, data) = row?;
         let player = parse_event_player(&data);
@@ -239,7 +251,9 @@ fn audit_db(path: &Path) -> Result<DbAudit> {
 
     let mut low_shot_levels = Vec::new();
     let mut stmt = conn.prepare(SQL_LOW_SHOT_LEVELS)?;
-    let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
     for row in rows {
         low_shot_levels.push(row?);
     }
@@ -355,11 +369,20 @@ impl AuditReport {
             "- Scoreless rate: base {:.3} | current {:.3}\n",
             self.base.scoreless_rate, self.current.scoreless_rate
         ));
-        if let (Some(b), Some(c)) = (self.base.steal_success_rate, self.current.steal_success_rate) {
-            out.push_str(&format!("- Steal success rate: base {:.3} | current {:.3}\n", b, c));
+        if let (Some(b), Some(c)) = (
+            self.base.steal_success_rate,
+            self.current.steal_success_rate,
+        ) {
+            out.push_str(&format!(
+                "- Steal success rate: base {:.3} | current {:.3}\n",
+                b, c
+            ));
         }
         if let (Some(b), Some(c)) = (self.base.nav_complete_rate, self.current.nav_complete_rate) {
-            out.push_str(&format!("- Nav complete rate: base {:.3} | current {:.3}\n", b, c));
+            out.push_str(&format!(
+                "- Nav complete rate: base {:.3} | current {:.3}\n",
+                b, c
+            ));
         }
         out.push_str("\n");
 

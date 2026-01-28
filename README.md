@@ -13,6 +13,14 @@ cargo run --release    # Play with optimizations
 - [`docs/guides/HOW_TO_PLAY.md`](docs/guides/HOW_TO_PLAY.md) - Controls and gameplay
 - [`docs/guides/TRAINING.md`](docs/guides/TRAINING.md) - Training mode setup and analysis workflow
 
+- TODO: polish the following: Getting started: you'll need to autogenerate heat maps for training and analysis. - here are the following generated files, showing game progress
+---
+  - showcase/ball_styles_showcase.png
+  - showcase/level_showcase.png
+  - showcase/heatmap_speed_all.png
+  - showcase/heatmap_speed_all_overlay.png
+  - showcase/heatmaps/heatmap_stats.txt
+
 ---
 
 ## All Binaries

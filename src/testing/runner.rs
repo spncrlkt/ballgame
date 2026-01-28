@@ -12,6 +12,7 @@ use crate::ball::{
     ball_player_collision, ball_spin, ball_state_update, pickup_ball,
 };
 use crate::constants::*;
+use crate::debug_logging::DebugLogConfig;
 use crate::events::EventBus;
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
@@ -73,7 +74,7 @@ struct StateAssertionResult {
 }
 
 /// Run a single test and return the result
-pub fn run_test(test: &TestDefinition) -> TestResult {
+pub fn run_test(test: &TestDefinition, debug_config: DebugLogConfig) -> TestResult {
     // Load test levels
     let level_db = LevelDatabase::load_from_file(TEST_LEVELS_FILE);
 
@@ -145,6 +146,7 @@ pub fn run_test(test: &TestDefinition) -> TestResult {
     app.insert_resource(CurrentPalette(0));
     app.init_resource::<PaletteDatabase>();
     app.insert_resource(EventBus::new());
+    app.insert_resource(debug_config);
     // Collect state check frames
     let state_check_frames: Vec<u64> = {
         let mut frames: Vec<u64> = test.expect.state.iter().map(|s| s.after_frame).collect();
