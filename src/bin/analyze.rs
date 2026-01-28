@@ -10,6 +10,8 @@
 
 use std::path::PathBuf;
 
+use rusqlite::Connection;
+
 use ballgame::analytics::{
     AggregateMetrics, AnalysisQuery, AnalysisRequest, AnalysisRequestFile, Leaderboard,
     ParameterSuggestion, TrainingDebugReport, TuningTargets, default_targets, format_suggestions,
@@ -575,9 +577,33 @@ fn default_request_output_path(name: &str) -> PathBuf {
 }
 
 fn default_training_output_dir(db_path: &PathBuf) -> PathBuf {
+    if is_combined_training_db(db_path) {
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        return PathBuf::from(format!("training_logs/combined_{}/analysis", timestamp));
+    }
     let session_dir = infer_training_session_dir(db_path)
         .unwrap_or_else(|| PathBuf::from("training_logs").join("analysis_unknown"));
     session_dir.join("analysis")
+}
+
+fn is_combined_training_db(db_path: &PathBuf) -> bool {
+    if db_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map(|name| name.contains("combined"))
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    training_session_count(db_path).unwrap_or(1) > 1
+}
+
+fn training_session_count(db_path: &PathBuf) -> Option<usize> {
+    let conn = Connection::open(db_path).ok()?;
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))
+        .ok()?;
+    Some(count as usize)
 }
 
 fn infer_training_session_dir(db_path: &PathBuf) -> Option<PathBuf> {

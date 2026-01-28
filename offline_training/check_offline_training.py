@@ -15,6 +15,7 @@ PROFILES_FILE = ROOT / "config" / "ai_profiles.txt"
 HEATMAP_DIR = ROOT / "showcase" / "heatmaps"
 DEBUG_CONFIG = ROOT / "config" / "debug_logging.json"
 TRAINING_SETTINGS = ROOT / "config" / "training_settings.json"
+DEFAULT_LIST = ROOT / "offline_training" / "db_list.txt"
 
 RE_LEVELS_HEADER = re.compile(r"^Non-debug levels to cover$", re.IGNORECASE)
 RE_PROFILES_HEADER = re.compile(r"^Profiles \(top 4 from rankings\)$", re.IGNORECASE)
@@ -270,6 +271,22 @@ def main():
     else:
         ok = False
         print(f"FAIL: {debug_msg}")
+
+    list_path = DEFAULT_LIST
+    if list_path.exists():
+        entries = [
+            line
+            for line in list_path.read_text().splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        if entries:
+            print(f"PASS: offline DB list has {len(entries)} entries")
+        else:
+            ok = False
+            print("FAIL: offline DB list is empty")
+    else:
+        ok = False
+        print(f"FAIL: offline DB list missing: {list_path}")
 
     print("\nResult:", "PASS" if ok else "FAIL")
     return 0 if ok else 1

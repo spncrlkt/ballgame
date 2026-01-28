@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use image::{Rgb, RgbImage};
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 
 use crate::constants::{
     ARENA_HEIGHT, ARENA_WIDTH, HEATMAP_CELL_SIZE, HEATMAP_GRID_HEIGHT, HEATMAP_GRID_WIDTH,
