@@ -14,7 +14,7 @@ training.db
 /showcase/regression/diffs/
 
 # Showcase outputs (generated)
-/showcase/
+/showcase/heatmaps
 
 # Simulation/training event logs (local only)
 /logs/
