@@ -1,12 +1,14 @@
 {
   "_comment": "TEMPLATE - Copy to training_settings.json for local customization",
 
+  "protocol": "advanced-platform",
   "mode": "Goal",
-  "iterations": 1,
+  "iterations": 3,
   "win_score": 1,
-  "ai_profile": "v4_Pat_50",
-  "level": "Skyway",
-  "exclude_levels": ["Pit", "Bunker"],
+  "ai_profile": "v7_Disruptor_Patient",
+  "level": null,
+  "exclude_levels": [],
+  "offline_levels_file": "offline_training/offline_levels.txt",
 
   "viewport_index": 2,
   "palette_index": 4,

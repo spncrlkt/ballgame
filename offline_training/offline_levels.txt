@@ -1,0 +1,12 @@
+Islands
+Slopes
+Tower
+Arena
+Skyway
+Terraces
+Catwalk
+Bunker
+Pit
+Twin Towers
+Pursuit Arena
+Pursuit Arena 2

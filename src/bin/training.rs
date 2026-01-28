@@ -36,6 +36,7 @@ use bevy::{camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 use world::{Basket, BasketRim, Collider, Platform};
 
 /// Path to ball options file
@@ -63,8 +64,57 @@ fn load_ball_style_names() -> Vec<String> {
     styles
 }
 
+#[derive(Resource, Clone)]
+struct AllowedTrainingLevels(Option<Vec<String>>);
+
+fn load_allowed_levels(settings: &TrainingSettings) -> Option<Vec<String>> {
+    let Some(path) = &settings.offline_levels_file else {
+        return None;
+    };
+    let path = Path::new(path);
+    let Ok(content) = fs::read_to_string(path) else {
+        warn!(
+            "Failed to read offline levels file {}, ignoring",
+            path.display()
+        );
+        return None;
+    };
+    let levels: Vec<String> = content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| line.to_lowercase())
+        .collect();
+    if levels.is_empty() {
+        warn!("Offline levels file {} was empty, ignoring", path.display());
+        None
+    } else {
+        Some(levels)
+    }
+}
+
+fn level_allowed(
+    level_name: &str,
+    settings: &TrainingSettings,
+    allowed_levels: Option<&[String]>,
+) -> bool {
+    let is_excluded = settings
+        .exclude_levels
+        .iter()
+        .any(|exc| level_name.eq_ignore_ascii_case(exc));
+    if is_excluded {
+        return false;
+    }
+    match allowed_levels {
+        Some(list) => list
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(level_name)),
+        None => true,
+    }
+}
+
 /// Create the SQLite event logger for training
-fn create_sqlite_logger() -> SqliteEventLogger {
+fn create_sqlite_logger() -> (SqliteEventLogger, String) {
     // Ensure db directory exists
     std::fs::create_dir_all("db").ok();
     let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
@@ -85,20 +135,49 @@ fn create_sqlite_logger() -> SqliteEventLogger {
     match SqliteEventLogger::new(db_path, "training") {
         Ok(logger) => {
             info!("SQLite event logger initialized: {:?}", db_path);
-            logger
+            (logger, db_path_buf)
         }
         Err(e) => {
             warn!(
                 "Failed to create SQLite logger ({}), using disabled logger",
                 e
             );
-            SqliteEventLogger::disabled()
+            (SqliteEventLogger::disabled(), db_path_buf)
         }
+    }
+}
+
+fn append_offline_db_path(db_path: &str) {
+    let list_path = Path::new("offline_training/db_list.txt");
+    if let Some(parent) = list_path.parent() {
+        if let Err(err) = std::fs::create_dir_all(parent) {
+            warn!("Failed to create offline_training dir: {}", err);
+            return;
+        }
+    }
+    let existing = std::fs::read_to_string(list_path).unwrap_or_default();
+    if existing
+        .lines()
+        .any(|line| line.trim().starts_with(db_path))
+    {
+        warn!("Offline DB list already contains {}", db_path);
+        return;
+    }
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+    let line = format!("{}  # {}\n", db_path, timestamp);
+    if let Err(err) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(list_path)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, line.as_bytes()))
+    {
+        warn!("Failed to append offline DB path: {}", err);
     }
 }
 
 fn main() {
     let settings = TrainingSettings::from_args();
+    let allowed_levels = load_allowed_levels(&settings);
 
     println!("========================================");
     println!("       TRAINING MODE");
@@ -205,12 +284,10 @@ fn main() {
             .filter(|&i| {
                 let level = level_db.get(i);
                 let is_debug = level.map(|l| l.debug).unwrap_or(true);
+                let is_regression = level.map(|l| l.regression).unwrap_or(true);
                 let level_name = level.map(|l| l.name.clone()).unwrap_or_default();
-                let is_excluded = settings
-                    .exclude_levels
-                    .iter()
-                    .any(|exc| level_name.to_lowercase() == exc.to_lowercase());
-                !is_debug && !is_excluded
+                let allowed = level_allowed(&level_name, &settings, allowed_levels.as_deref());
+                !is_debug && !is_regression && allowed
             })
             .map(|i| (i + 1) as u32)
             .collect();
@@ -244,6 +321,11 @@ fn main() {
     let debug_config = DebugLogConfig::load_with_args(&args);
     debug_config.apply_env();
 
+    let (sqlite_logger, db_path_buf) = create_sqlite_logger();
+    if settings.offline_levels_file.is_some() {
+        append_offline_db_path(&db_path_buf);
+    }
+
     App::new()
         .add_plugins(
             DefaultPlugins.set(WindowPlugin {
@@ -264,6 +346,7 @@ fn main() {
         .insert_resource(palette_db)
         .insert_resource(level_db)
         .insert_resource(settings)
+        .insert_resource(AllowedTrainingLevels(allowed_levels))
         .insert_resource(training_state)
         .init_resource::<PlayerInput>()
         .init_resource::<TweakPanelState>()
@@ -293,7 +376,7 @@ fn main() {
         .insert_resource(debug_config)
         .init_resource::<DebugSampleBuffer>()
         // SQLite event logger - central hub for event storage
-        .insert_resource(create_sqlite_logger())
+        .insert_resource(sqlite_logger)
         // Startup systems
         .add_systems(Startup, training_setup)
         // Event bus time update (runs every frame for timestamping)
@@ -934,6 +1017,8 @@ fn training_state_machine(
     mut steal_tracker: ResMut<StealTracker>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
     mut countdown: ResMut<MatchCountdown>,
+    training_settings: Res<TrainingSettings>,
+    allowed_levels: Res<AllowedTrainingLevels>,
     balls: Query<&BallState, With<Ball>>,
     time: Res<Time>,
     mut app_exit: MessageWriter<AppExit>,
@@ -1028,15 +1113,20 @@ fn training_state_machine(
                         }
                     } else {
                         // Pick new random level
-                        // Filter out debug levels and Pit (too hard for training)
+                        // Filter out debug/regression levels and explicit excludes
                         let training_levels: Vec<(usize, &ballgame::levels::LevelData)> = level_db
                             .all()
                             .iter()
                             .enumerate()
                             .filter(|(_, l)| {
                                 let is_debug = l.debug;
-                                let is_pit = l.name.to_lowercase() == "pit";
-                                !is_debug && !is_pit
+                                let is_regression = l.regression;
+                                let allowed = level_allowed(
+                                    &l.name,
+                                    &training_settings,
+                                    allowed_levels.0.as_deref(),
+                                );
+                                !is_debug && !is_regression && allowed
                             })
                             .collect();
 
@@ -1383,6 +1473,7 @@ fn check_pause_restart(
     mut countdown: ResMut<MatchCountdown>,
     level_db: Res<LevelDatabase>,
     settings: Res<TrainingSettings>,
+    allowed_levels: Res<AllowedTrainingLevels>,
     mut current_level: ResMut<CurrentLevel>,
     mut players: Query<(Entity, &mut Transform, &Team), With<Player>>,
     mut balls: Query<
@@ -1437,15 +1528,16 @@ fn check_pause_restart(
     } else {
         println!("\nRestarting game with new level...");
 
-        // Pick new random level (excluding debug and Pit)
+        // Pick new random level (excluding debug/regression and explicit excludes)
         let training_levels: Vec<(usize, &ballgame::levels::LevelData)> = level_db
             .all()
             .iter()
             .enumerate()
             .filter(|(_, l)| {
                 let is_debug = l.debug;
-                let is_pit = l.name.to_lowercase() == "pit";
-                !is_debug && !is_pit
+                let is_regression = l.regression;
+                let allowed = level_allowed(&l.name, &settings, allowed_levels.0.as_deref());
+                !is_debug && !is_regression && allowed
             })
             .collect();
 

@@ -13,8 +13,8 @@ def iter_db_paths(args):
             raise FileNotFoundError(f"List file not found: {list_path}")
         for line in list_path.read_text().splitlines():
             line = line.strip()
-            if line:
-                yield Path(line)
+            if line and not line.startswith("#"):
+                yield Path(line.split("#", 1)[0].strip())
     for db in args.dbs:
         yield Path(db)
 

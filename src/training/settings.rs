@@ -60,6 +60,8 @@ pub struct TrainingSettings {
     pub level: Option<LevelSelector>,
     /// Levels to exclude from randomization
     pub exclude_levels: Vec<String>,
+    /// Optional allowlist file for offline training levels
+    pub offline_levels_file: Option<String>,
 
     /// RNG seed for determinism (null = random)
     pub seed: Option<u64>,
@@ -89,6 +91,7 @@ impl Default for TrainingSettings {
             ai_profile: "Balanced".to_string(),
             level: None,
             exclude_levels: vec!["Pit".to_string()],
+            offline_levels_file: None,
             seed: None,
             time_limit_secs: None,
             first_point_timeout_secs: None,

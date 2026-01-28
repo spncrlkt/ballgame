@@ -11,6 +11,7 @@
 - the ai steals too easily and it is too hard for me to steal. lets set up a training protocol for stealing only with a flat level and normal baskets no stairs. we'll play for 60 seconds and record steal attempts and successful steals. make sure we are logging enough information to analyze the fairness of player stealing vs ai stealing.
 - the platforming and understanding of steps and platforms are still inefficient. lets set up a training protocol for steps and platforming. make the level look like Skyway. 
 - check where symlinks would help for newest outputs (e.g., latest training DB, latest tournament DB).
+- parallelize heatmap generation (per-level + per-type) to reduce offline workflow time.
 
 ## Code Review Available (2026-01-25)
 

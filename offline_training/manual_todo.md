@@ -1,4 +1,4 @@
-# Offline Manual Training Checklist (60 min)
+# Offline Manual Training Checklist (~72 min)
 
 Goal: capture high-quality debug traces for reachability heatmaps, LOS/shot gating, AI navigation quirks, and profile tuning signals.
 
@@ -19,13 +19,27 @@ Non-debug levels to cover
 - Bunker
 - Pit
 - Twin Towers
+- Pursuit Arena
+- Pursuit Arena 2
 
 ## Time budget (educated guess)
 - Target per level: ~6 minutes
   - 3 min reachability sweep
   - 2 min LOS + shot quality checks
   - 1 min AI chase / nav stress
-- Total: ~60 minutes for 10 levels
+- Total: ~72 minutes for 12 levels
+
+## Use training settings (avoid CLI repeats)
+1) Copy the template once: `cp config/training_settings.template.json config/training_settings.json`
+2) For each level/profile, update these fields in `config/training_settings.json`:
+   - `level`
+   - `ai_profile`
+   - Keep `offline_levels_file` pointing to `offline_training/offline_levels.txt`
+3) Launch training with no extra flags:
+```
+cargo run --bin training
+```
+4) Offline DB list is appended automatically when `offline_levels_file` is set.
 
 ## Per-level run template
 Run one short session per level (goal mode, 3 iterations). Rotate profiles per level in order.
@@ -33,6 +47,26 @@ Run one short session per level (goal mode, 3 iterations). Rotate profiles per l
 Command template:
 ```
 cargo run --bin training -- --protocol advanced_platform --mode goal --iterations 3 --level "<LEVEL_NAME>" --profile <PROFILE>
+```
+
+## Heatmap prereq (offline training levels)
+Run once before the session:
+```
+for type in speed score landing_safety line_of_sight elevation; do
+  cargo run --bin heatmap -- --type "$type" \
+    --level "Islands" \
+    --level "Slopes" \
+    --level "Tower" \
+    --level "Arena" \
+    --level "Skyway" \
+    --level "Terraces" \
+    --level "Catwalk" \
+    --level "Bunker" \
+    --level "Pit" \
+    --level "Twin Towers" \
+    --level "Pursuit Arena" \
+    --level "Pursuit Arena 2"
+done
 ```
 
 ### Level rotation plan (basic cycle repeats every 4 levels)
@@ -46,6 +80,8 @@ cargo run --bin training -- --protocol advanced_platform --mode goal --iteration
 8) Bunker — v7_Fortress_Aggro
 9) Pit — v7_Disruptor_Patient
 10) Twin Towers — v7_Anchor_Stealer
+11) Pursuit Arena — v7_Opportunist_Patient
+12) Pursuit Arena 2 — v7_Fortress_Aggro
 
 ## Per-level tasks (do these every level)
 ### 1) Reachability sweep (~3 min)
@@ -73,6 +109,25 @@ cargo run --bin analyze -- --training-db db/training.db
 ## End-of-hour wrap
 - Skim the latest training debug reports under `training_logs/session_*/analysis/`.
 - Note any obvious missing heatmaps or low-contrast warnings.
+- Merge all offline DBs for a combined report:
+```
+python3 offline_training/merge_training_dbs.py --list offline_training/db_list.txt --out db/combined_offline_training.db
+cargo run --bin analyze -- --training-db db/combined_offline_training.db
+```
+
+## Quick notes (fill per level)
+- Islands:
+- Slopes:
+- Tower:
+- Arena:
+- Skyway:
+- Terraces:
+- Catwalk:
+- Bunker:
+- Pit:
+- Twin Towers:
+- Pursuit Arena:
+- Pursuit Arena 2:
 
 ---
 
@@ -98,6 +153,13 @@ cargo run --bin analyze -- --training-db db/training.db
 Options:
 - `--training-db <DB>`
 - `--training-output <DIR>`
+
+## Merge offline training DBs (combined report)
+Example:
+```
+python3 offline_training/merge_training_dbs.py --list offline_training/db_list.txt --out db/combined_offline_training.db
+cargo run --bin analyze -- --training-db db/combined_offline_training.db
+```
 
 ## Heatmaps (per level)
 Example:

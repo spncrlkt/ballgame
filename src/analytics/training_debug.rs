@@ -202,12 +202,14 @@ pub struct TrainingDebugReport {
     pub db_path: String,
     pub session_id: Option<String>,
     pub session_type: Option<String>,
+    pub session_count: usize,
     pub match_count: usize,
     pub sample_count: usize,
     pub event_count: usize,
     pub debug_event_count: usize,
     pub debug_without_event: usize,
     pub event_without_debug: usize,
+    pub per_session: Vec<SessionSummaryRow>,
     per_level: Vec<LevelDebugReport>,
 }
 
@@ -222,6 +224,12 @@ impl TrainingDebugReport {
         if let Some(session_type) = &self.session_type {
             out.push_str(&format!("Session Type: `{}`\n\n", session_type));
         }
+        if self.session_count > 1 {
+            out.push_str(&format!(
+                "Sessions combined: **{}**\n\n",
+                self.session_count
+            ));
+        }
         out.push_str("## Data Consistency\n\n");
         out.push_str(&format!("- Matches: {}\n", self.match_count));
         out.push_str(&format!("- Events: {}\n", self.event_count));
@@ -234,6 +242,25 @@ impl TrainingDebugReport {
             "- Events without matching debug tick: {}\n\n",
             self.event_without_debug
         ));
+
+        if !self.per_session.is_empty() {
+            out.push_str("## Session Summary\n\n");
+            out.push_str("| Session | Created | Type | Matches | Events | Debug | Levels |\n");
+            out.push_str("|---------|---------|------|---------|--------|-------|--------|\n");
+            for row in &self.per_session {
+                out.push_str(&format!(
+                    "| {} | {} | {} | {} | {} | {} | {} |\n",
+                    row.session_id,
+                    row.created_at,
+                    row.session_type,
+                    row.matches,
+                    row.events,
+                    row.debug_events,
+                    row.levels
+                ));
+            }
+            out.push_str("\n");
+        }
 
         for level in &self.per_level {
             out.push_str(&format!(
@@ -305,6 +332,17 @@ impl TrainingDebugReport {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SessionSummaryRow {
+    pub session_id: String,
+    pub created_at: String,
+    pub session_type: String,
+    pub matches: usize,
+    pub events: usize,
+    pub debug_events: usize,
+    pub levels: usize,
+}
+
 struct HeatmapGrid {
     values: Vec<f32>,
 }
@@ -364,18 +402,31 @@ pub fn run_training_debug_analysis(
 ) -> AnyResult<TrainingDebugReport> {
     let conn = Connection::open(db_path)?;
 
-    let (session_id, session_type) = conn
-        .query_row(
-            "SELECT id, session_type FROM sessions ORDER BY created_at DESC LIMIT 1",
-            [],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-        )
-        .optional()?
-        .unwrap_or((String::new(), String::new()));
+    let mut sessions = Vec::new();
+    let mut stmt =
+        conn.prepare("SELECT id, created_at, session_type FROM sessions ORDER BY created_at")?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+    for row in rows {
+        sessions.push(row?);
+    }
+
+    let session_count = sessions.len();
+    let (session_id, _created_at, session_type) =
+        sessions
+            .last()
+            .cloned()
+            .unwrap_or((String::new(), String::new(), String::new()));
+    let session_filter = if session_count > 1 { "" } else { &session_id };
     let match_count: usize = conn
         .query_row(
             "SELECT COUNT(*) FROM matches WHERE (?1 = '') OR session_id = ?1",
-            [&session_id],
+            [session_filter],
             |row| row.get::<_, i64>(0),
         )
         .unwrap_or(0) as usize;
@@ -383,7 +434,7 @@ pub fn run_training_debug_analysis(
     let event_count: usize = conn
         .query_row(
             "SELECT COUNT(*) FROM events e WHERE (?1 = '') OR e.match_id IN (SELECT id FROM matches WHERE session_id = ?1)",
-            [&session_id],
+            [session_filter],
             |row| row.get::<_, i64>(0),
         )
         .unwrap_or(0) as usize;
@@ -391,7 +442,7 @@ pub fn run_training_debug_analysis(
     let debug_event_count: usize = conn
         .query_row(
             "SELECT COUNT(*) FROM debug_events d WHERE (?1 = '') OR d.match_id IN (SELECT id FROM matches WHERE session_id = ?1)",
-            [&session_id],
+            [session_filter],
             |row| row.get::<_, i64>(0),
         )
         .unwrap_or(0) as usize;
@@ -399,7 +450,7 @@ pub fn run_training_debug_analysis(
     let debug_without_event: usize = conn
         .query_row(
             "SELECT COUNT(*) FROM debug_events d LEFT JOIN events e ON e.match_id = d.match_id AND e.tick_frame = d.tick_frame WHERE e.id IS NULL AND ((?1 = '') OR d.match_id IN (SELECT id FROM matches WHERE session_id = ?1))",
-            [&session_id],
+            [session_filter],
             |row| row.get::<_, i64>(0),
         )
         .unwrap_or(0) as usize;
@@ -407,7 +458,7 @@ pub fn run_training_debug_analysis(
     let event_without_debug: usize = conn
         .query_row(
             "SELECT COUNT(*) FROM events e LEFT JOIN debug_events d ON d.match_id = e.match_id AND d.tick_frame = e.tick_frame WHERE d.id IS NULL AND ((?1 = '') OR e.match_id IN (SELECT id FROM matches WHERE session_id = ?1))",
-            [&session_id],
+            [session_filter],
             |row| row.get::<_, i64>(0),
         )
         .unwrap_or(0) as usize;
@@ -415,7 +466,7 @@ pub fn run_training_debug_analysis(
     let mut match_level_names: HashMap<i64, String> = HashMap::new();
     let mut stmt =
         conn.prepare("SELECT id, level_name FROM matches WHERE (?1 = '') OR session_id = ?1")?;
-    let rows = stmt.query_map([&session_id], |row| {
+    let rows = stmt.query_map([session_filter], |row| {
         Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
     })?;
     for row in rows {
@@ -433,7 +484,7 @@ pub fn run_training_debug_analysis(
     let mut stmt = conn.prepare(
         "SELECT match_id, time_ms, tick_frame, player, pos_x, pos_y, vel_x, vel_y, input_move_x, input_jump, grounded, is_jumping, coyote_timer, jump_buffer_timer, facing, nav_active, nav_path_index, nav_action, level_id, human_controlled FROM debug_events WHERE (?1 = '') OR match_id IN (SELECT id FROM matches WHERE session_id = ?1) ORDER BY level_id, match_id, time_ms",
     )?;
-    let rows = stmt.query_map([&session_id], |row| {
+    let rows = stmt.query_map([session_filter], |row| {
         Ok(DebugSample {
             match_id: row.get(0)?,
             time_ms: row.get(1)?,
@@ -536,24 +587,71 @@ pub fn run_training_debug_analysis(
 
     per_level.sort_by(|a, b| a.level_name.cmp(&b.level_name));
 
+    let mut per_session = Vec::new();
+    for (sid, created_at, sess_type) in sessions {
+        let matches: usize = conn
+            .query_row(
+                "SELECT COUNT(*) FROM matches WHERE session_id = ?1",
+                [sid.as_str()],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0) as usize;
+        let events: usize = conn
+            .query_row(
+                "SELECT COUNT(*) FROM events WHERE match_id IN (SELECT id FROM matches WHERE session_id = ?1)",
+                [sid.as_str()],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0) as usize;
+        let debug_events: usize = conn
+            .query_row(
+                "SELECT COUNT(*) FROM debug_events WHERE match_id IN (SELECT id FROM matches WHERE session_id = ?1)",
+                [sid.as_str()],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0) as usize;
+        let levels: usize = conn
+            .query_row(
+                "SELECT COUNT(DISTINCT level_name) FROM matches WHERE session_id = ?1",
+                [sid.as_str()],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0) as usize;
+        per_session.push(SessionSummaryRow {
+            session_id: sid,
+            created_at,
+            session_type: sess_type,
+            matches,
+            events,
+            debug_events,
+            levels,
+        });
+    }
+
     Ok(TrainingDebugReport {
         db_path: db_path.display().to_string(),
-        session_id: if session_id.is_empty() {
+        session_id: if session_count > 1 {
+            None
+        } else if session_id.is_empty() {
             None
         } else {
             Some(session_id)
         },
-        session_type: if session_type.is_empty() {
+        session_type: if session_count > 1 {
+            None
+        } else if session_type.is_empty() {
             None
         } else {
             Some(session_type)
         },
+        session_count,
         match_count,
         sample_count: debug_event_count,
         event_count,
         debug_event_count,
         debug_without_event,
         event_without_debug,
+        per_session,
         per_level,
     })
 }
