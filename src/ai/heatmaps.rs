@@ -26,6 +26,13 @@ impl HeatmapGrid {
         }
     }
 
+    /// Create a new grid with all cells set to the given value.
+    fn new_with_value(value: f32) -> Self {
+        Self {
+            values: vec![value; (HEATMAP_GRID_WIDTH * HEATMAP_GRID_HEIGHT) as usize],
+        }
+    }
+
     fn index(cx: u32, cy: u32) -> usize {
         (cy * HEATMAP_GRID_WIDTH + cx) as usize
     }
@@ -104,6 +111,13 @@ impl HeatmapBundle {
             Basket::Right => self.line_of_sight_right.sample_world(pos),
         }
     }
+
+    /// Sample reachability at a world position.
+    /// Returns 0.0-1.0 where 0.0 = never visited, 1.0 = frequently visited.
+    /// If no reachability data exists, returns the default value (0.5).
+    pub fn reachability_at(&self, pos: Vec2) -> f32 {
+        self.reachability.sample_world(pos)
+    }
 }
 
 /// Load all heatmaps for the current level when the level changes.
@@ -167,6 +181,8 @@ pub fn load_heatmaps_on_level_change(
     let reachability = if skip_reachability {
         HeatmapGrid::new()
     } else {
+        // Strict mode: panic if reachability data is missing
+        // Set BALLGAME_SKIP_REACHABILITY_HEATMAPS=1 to bypass during development
         load_heatmap_grid(&resolve_heatmap_path(
             "reachability",
             &safe_name,
@@ -222,9 +238,31 @@ pub fn load_heatmaps_on_level_change(
     };
 }
 
+/// Load a heatmap grid from a file, or return a default grid with neutral values if file is missing.
 fn load_heatmap_grid(path: &Path) -> HeatmapGrid {
-    let data = fs::read_to_string(path)
-        .unwrap_or_else(|err| panic!("Heatmaps: failed to read {}: {}", path.display(), err));
+    load_heatmap_grid_with_default(path, None)
+}
+
+/// Load a heatmap grid with a fallback default value if the file is missing.
+/// If `default_value` is Some, returns a grid filled with that value on file error.
+/// If `default_value` is None, panics on file error (strict mode).
+fn load_heatmap_grid_with_default(path: &Path, default_value: Option<f32>) -> HeatmapGrid {
+    let data = match fs::read_to_string(path) {
+        Ok(data) => data,
+        Err(err) => {
+            if let Some(default) = default_value {
+                warn!(
+                    "Heatmaps: file not found {}: {}, using default value {}",
+                    path.display(),
+                    err,
+                    default
+                );
+                return HeatmapGrid::new_with_value(default);
+            } else {
+                panic!("Heatmaps: failed to read {}: {}", path.display(), err);
+            }
+        }
+    };
 
     let mut lines = data.lines();
     let mut value_scale = 1.0;
@@ -275,11 +313,27 @@ fn load_heatmap_grid(path: &Path) -> HeatmapGrid {
     }
 
     if filled.iter().any(|v| !v) {
-        panic!(
-            "Heatmaps: {} missing {} cells",
-            path.display(),
-            filled.iter().filter(|v| !**v).count()
-        );
+        let missing = filled.iter().filter(|v| !**v).count();
+        if let Some(default) = default_value {
+            warn!(
+                "Heatmaps: {} missing {} cells, filling with default {}",
+                path.display(),
+                missing,
+                default
+            );
+            // Fill missing cells with default value
+            for (idx, is_filled) in filled.iter().enumerate() {
+                if !is_filled {
+                    grid.values[idx] = default;
+                }
+            }
+        } else {
+            panic!(
+                "Heatmaps: {} missing {} cells",
+                path.display(),
+                missing
+            );
+        }
     }
 
     grid

@@ -227,6 +227,123 @@ pub fn sim_setup(
     }
 }
 
+/// Minimal level setup for tests (no SimControl required)
+/// Only spawns level geometry: floor, walls, platforms, corner steps, baskets
+pub fn level_geometry_setup(
+    mut commands: Commands,
+    level_db: Res<LevelDatabase>,
+    current_level: Res<CurrentLevel>,
+) {
+    // Spawn arena floor
+    commands.spawn((
+        Sprite {
+            custom_size: Some(Vec2::new(ARENA_WIDTH - WALL_THICKNESS * 2.0, 40.0)),
+            ..default()
+        },
+        Transform::from_xyz(0.0, ARENA_FLOOR_Y, 0.0),
+        Platform,
+        Collider,
+    ));
+
+    // Spawn walls
+    commands.spawn((
+        Sprite {
+            custom_size: Some(Vec2::new(WALL_THICKNESS, 5000.0)),
+            ..default()
+        },
+        Transform::from_xyz(-ARENA_WIDTH / 2.0 + WALL_THICKNESS / 2.0, 2000.0, 0.0),
+        Platform,
+        Collider,
+    ));
+    commands.spawn((
+        Sprite {
+            custom_size: Some(Vec2::new(WALL_THICKNESS, 5000.0)),
+            ..default()
+        },
+        Transform::from_xyz(ARENA_WIDTH / 2.0 - WALL_THICKNESS / 2.0, 2000.0, 0.0),
+        Platform,
+        Collider,
+    ));
+
+    // Spawn level platforms
+    if let Some(level) = level_db.get_by_id(&current_level.0) {
+        for platform in &level.platforms {
+            match platform {
+                crate::levels::PlatformDef::Mirror { x, y, width } => {
+                    // Left
+                    commands.spawn((
+                        Sprite {
+                            custom_size: Some(Vec2::new(*width, 20.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(-x, ARENA_FLOOR_Y + y, 0.0),
+                        Platform,
+                        Collider,
+                        crate::world::LevelPlatform,
+                    ));
+                    // Right
+                    commands.spawn((
+                        Sprite {
+                            custom_size: Some(Vec2::new(*width, 20.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(*x, ARENA_FLOOR_Y + y, 0.0),
+                        Platform,
+                        Collider,
+                        crate::world::LevelPlatform,
+                    ));
+                }
+                crate::levels::PlatformDef::Center { y, width } => {
+                    commands.spawn((
+                        Sprite {
+                            custom_size: Some(Vec2::new(*width, 20.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(0.0, ARENA_FLOOR_Y + y, 0.0),
+                        Platform,
+                        Collider,
+                        crate::world::LevelPlatform,
+                    ));
+                }
+            }
+        }
+
+        // Spawn corner steps if level has them
+        if level.step_count > 0 {
+            spawn_corner_steps(
+                &mut commands,
+                level.step_count,
+                level.corner_height,
+                level.corner_width,
+                level.step_push_in,
+            );
+        }
+
+        // Spawn baskets (baskets need Sprite for scoring check)
+        let basket_y = ARENA_FLOOR_Y + level.basket_height;
+        let wall_inner = ARENA_WIDTH / 2.0 - WALL_THICKNESS;
+        let left_basket_x = -wall_inner + level.basket_push_in;
+        let right_basket_x = wall_inner - level.basket_push_in;
+
+        commands.spawn((
+            Sprite {
+                custom_size: Some(BASKET_SIZE),
+                ..default()
+            },
+            Transform::from_xyz(left_basket_x, basket_y, 0.0),
+            Basket::Left,
+        ));
+        commands.spawn((
+            Sprite {
+                custom_size: Some(BASKET_SIZE),
+                ..default()
+            },
+            Transform::from_xyz(right_basket_x, basket_y, 0.0),
+            Basket::Right,
+        ));
+    }
+}
+
 /// Spawn corner steps for simulation (matching the main game's behavior)
 pub fn spawn_corner_steps(
     commands: &mut Commands,

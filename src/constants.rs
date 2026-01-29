@@ -205,6 +205,9 @@ pub const NAV_JUMP_TOLERANCE: f32 = 8.0;
 pub const NAV_PATH_RECALC_DISTANCE: f32 = 100.0;
 /// Minimum distance to walk before executing jump (ensures momentum)
 pub const NAV_JUMP_APPROACH_DISTANCE: f32 = 20.0;
+/// Minimum reachability value for AI to consider a shooting position
+/// Areas with reachability below this threshold are skipped (likely unreachable/problematic)
+pub const MIN_REACHABILITY_FOR_SHOT: f32 = 0.1;
 // =============================================================================
 // AI DEFENSIVE BEHAVIOR
 // =============================================================================

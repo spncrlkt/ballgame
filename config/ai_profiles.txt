@@ -1049,7 +1049,7 @@ charge_min: 0.40
 charge_max: 0.90
 steal_range: 80
 defense_offset: 350
-min_shot_quality: 0.42
+min_shot_quality: 0.25
 pressure_distance: 150
 aggression: 0.55
 defensive_iq: 0.70
@@ -1085,7 +1085,7 @@ charge_min: 0.35
 charge_max: 0.80
 steal_range: 140
 defense_offset: 180
-min_shot_quality: 0.38
+min_shot_quality: 0.22
 pressure_distance: 60
 aggression: 0.45
 defensive_iq: 0.88
@@ -1125,7 +1125,7 @@ charge_min: 0.50
 charge_max: 1.10
 steal_range: 60
 defense_offset: 400
-min_shot_quality: 0.55
+min_shot_quality: 0.30
 pressure_distance: 200
 aggression: 0.28
 defensive_iq: 0.92
@@ -1291,7 +1291,7 @@ charge_min: 0.55
 charge_max: 0.85
 steal_range: 100
 defense_offset: 320
-min_shot_quality: 0.40
+min_shot_quality: 0.25
 pressure_distance: 140
 aggression: 0.42
 defensive_iq: 0.78

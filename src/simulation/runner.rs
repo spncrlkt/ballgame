@@ -228,14 +228,8 @@ pub fn run_match(
             .chain(),
     );
 
-    app.add_systems(
-        Update,
-        (
-            steal_cooldown_update,
-            metrics_update,
-            emit_simulation_events,
-        ),
-    );
+    // Note: steal_cooldown_update is only in FixedUpdate to avoid double-ticking
+    app.add_systems(Update, (metrics_update, emit_simulation_events));
 
     app.add_systems(
         FixedUpdate,
@@ -1221,6 +1215,14 @@ pub fn run_simulation(config: SimConfig) {
         super::config::SimMode::GhostTrial { path } => {
             run_ghost_trials(&config, path, &level_db, &profile_db);
         }
+
+        super::config::SimMode::MultihopTest => {
+            run_multihop_tests(&config, &level_db, &profile_db);
+        }
+
+        super::config::SimMode::ReachabilityTest { samples, db_path } => {
+            run_reachability_tests(&config, *samples, db_path, &level_db, &profile_db);
+        }
     }
 }
 
@@ -1266,6 +1268,10 @@ fn plan_run(
         super::config::SimMode::Regression => ("regression".to_string(), 0, None, None),
         super::config::SimMode::ShotTest { .. } => ("shot_test".to_string(), 0, None, None),
         super::config::SimMode::GhostTrial { .. } => ("ghost_trial".to_string(), 0, None, None),
+        super::config::SimMode::MultihopTest => ("multihop_test".to_string(), 0, None, None),
+        super::config::SimMode::ReachabilityTest { .. } => {
+            ("reachability_test".to_string(), 0, None, None)
+        }
     }
 }
 
@@ -1344,6 +1350,201 @@ fn store_results_in_db(
         if let Err(e) = db.update_session_stats(&session_id, stats) {
             eprintln!("Warning: Failed to store run stats: {}", e);
         }
+    }
+}
+
+/// Run multi-hop platform reachability tests for all levels
+fn run_multihop_tests(
+    config: &SimConfig,
+    level_db: &LevelDatabase,
+    profile_db: &AiProfileDatabase,
+) {
+    use super::app_builder::HeadlessAppBuilder;
+    use super::multihop_test::run_multihop_test;
+    use super::setup::level_geometry_setup;
+
+    if !config.quiet {
+        println!("Running multi-hop platform reachability tests...");
+        println!();
+    }
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    // Get list of levels to test
+    // Priority: config.level (singular/CLI) > config.levels (plural/file) > all non-debug levels
+    // This ensures --level CLI flag takes precedence over settings file
+    let levels_to_test: Vec<u32> = if let Some(level) = config.level {
+        vec![level]
+    } else if !config.levels.is_empty() {
+        config.levels.clone()
+    } else {
+        (1..=level_db.len() as u32)
+            .filter(|&level| {
+                if let Some(lvl) = level_db.get((level - 1) as usize) {
+                    !lvl.debug && lvl.name != "Pit"
+                } else {
+                    false
+                }
+            })
+            .collect()
+    };
+
+    for level_num in levels_to_test {
+        let level = match level_db.get((level_num - 1) as usize) {
+            Some(l) => l,
+            None => continue,
+        };
+
+        // Build a headless app to get the NavGraph for this level
+        let mut app = HeadlessAppBuilder::new()
+            .with_level_db(level_db.clone())
+            .with_profile_db(profile_db.clone())
+            .with_level(&level.id)
+            .with_ai()
+            .build();
+
+        // Add level geometry setup system to spawn platforms
+        app.add_systems(Startup, level_geometry_setup);
+
+        // Run startup and enough update frames to build the NavGraph
+        // (rebuild_delay is set to 3 on level change, needs 4+ frames)
+        app.finish();
+        app.cleanup();
+        for _ in 0..5 {
+            app.update();
+        }
+
+        // Get the NavGraph
+        let nav_graph = app.world().resource::<NavGraph>();
+
+        // Run the test
+        let result = run_multihop_test(nav_graph, &level.name, &level.id);
+
+        if !config.quiet {
+            println!("{}", result.format());
+        }
+
+        if result.passed() {
+            passed += 1;
+        } else {
+            failed += 1;
+        }
+    }
+
+    // Summary
+    println!();
+    println!("=== Multi-Hop Test Summary ===");
+    println!("Passed: {}", passed);
+    println!("Failed: {}", failed);
+
+    // Exit with appropriate code
+    if failed > 0 {
+        std::process::exit(1);
+    }
+}
+
+/// Run reachability tests against exploration data
+fn run_reachability_tests(
+    config: &SimConfig,
+    samples: u32,
+    db_path: &str,
+    level_db: &LevelDatabase,
+    profile_db: &AiProfileDatabase,
+) {
+    use super::app_builder::HeadlessAppBuilder;
+    use super::reachability_test::run_reachability_test;
+    use super::setup::level_geometry_setup;
+
+    if !config.quiet {
+        println!(
+            "Running reachability tests ({} samples per level)...",
+            samples
+        );
+        println!("Database: {}", db_path);
+        println!();
+    }
+
+    let mut passed = 0;
+    let mut failed = 0;
+    let mut skipped = 0;
+
+    // Get list of levels to test
+    // Priority: config.level (singular/CLI) > config.levels (plural/file) > all non-debug levels
+    // This ensures --level CLI flag takes precedence over settings file
+    let levels_to_test: Vec<u32> = if let Some(level) = config.level {
+        vec![level]
+    } else if !config.levels.is_empty() {
+        config.levels.clone()
+    } else {
+        (1..=level_db.len() as u32)
+            .filter(|&level| {
+                if let Some(lvl) = level_db.get((level - 1) as usize) {
+                    !lvl.debug && lvl.name != "Pit"
+                } else {
+                    false
+                }
+            })
+            .collect()
+    };
+
+    for level_num in levels_to_test {
+        let level = match level_db.get((level_num - 1) as usize) {
+            Some(l) => l,
+            None => continue,
+        };
+
+        // Build a headless app to get the NavGraph and HeatmapBundle for this level
+        let mut app = HeadlessAppBuilder::new()
+            .with_level_db(level_db.clone())
+            .with_profile_db(profile_db.clone())
+            .with_level(&level.id)
+            .with_ai()
+            .build();
+
+        // Add level geometry setup system to spawn platforms
+        app.add_systems(Startup, level_geometry_setup);
+
+        // Run startup and enough update frames to build the NavGraph
+        // (rebuild_delay is set to 3 on level change, needs 4+ frames)
+        app.finish();
+        app.cleanup();
+        for _ in 0..5 {
+            app.update();
+        }
+
+        // Get the NavGraph and HeatmapBundle
+        let nav_graph = app.world().resource::<NavGraph>();
+        let heatmaps = app.world().resource::<HeatmapBundle>();
+
+        // Run the test
+        let result = run_reachability_test(nav_graph, heatmaps, &level.name, &level.id, db_path, samples);
+
+        if !config.quiet {
+            println!("{}", result.format());
+        }
+
+        if result.skipped() {
+            skipped += 1;
+        } else if result.passed() {
+            passed += 1;
+        } else {
+            failed += 1;
+        }
+    }
+
+    // Summary
+    println!();
+    println!("=== Reachability Test Summary ===");
+    println!("Passed: {}", passed);
+    println!("Failed: {}", failed);
+    println!("Skipped (no data): {}", skipped);
+
+    // Exit with appropriate code
+    if failed > 0 {
+        std::process::exit(1);
+    } else if skipped > 0 && passed == 0 {
+        std::process::exit(2); // All skipped
     }
 }
 
@@ -1585,13 +1786,8 @@ pub fn run_ghost_trial(
             .chain(),
     );
 
-    app.add_systems(
-        Update,
-        (
-            steal_cooldown_update,
-            super::ghost::ghost_check_end_conditions,
-        ),
-    );
+    // Note: steal_cooldown_update is only in FixedUpdate to avoid double-ticking
+    app.add_systems(Update, super::ghost::ghost_check_end_conditions);
 
     // Ghost input and physics in FixedUpdate for consistent timing
     app.add_systems(

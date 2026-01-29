@@ -7,6 +7,29 @@ use std::time::Instant;
 
 use super::protocol::TrainingProtocol;
 
+/// Collects position data for reachability heatmap export
+pub struct ReachabilityCollector {
+    pub level_id: String,
+    pub level_name: String,
+    pub start_time: Instant,
+    pub positions: Vec<(f32, f32)>,
+}
+
+impl ReachabilityCollector {
+    pub fn new(level_id: String, level_name: String) -> Self {
+        Self {
+            level_id,
+            level_name,
+            start_time: Instant::now(),
+            positions: Vec::with_capacity(1000),
+        }
+    }
+
+    pub fn elapsed_secs(&self) -> f32 {
+        self.start_time.elapsed().as_secs_f32()
+    }
+}
+
 /// Training session phase
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TrainingPhase {
@@ -99,6 +122,8 @@ pub struct TrainingState {
     pub level_sequence: Vec<usize>,
     /// Current position in level_sequence
     pub level_sequence_index: usize,
+    /// Reachability position collector (for auto-export heatmaps)
+    pub reachability_collector: Option<ReachabilityCollector>,
 }
 
 impl Default for TrainingState {
@@ -127,6 +152,7 @@ impl Default for TrainingState {
             first_point_timeout_secs: None,
             level_sequence: Vec::new(),
             level_sequence_index: 0,
+            reachability_collector: None,
         }
     }
 }

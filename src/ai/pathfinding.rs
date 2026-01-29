@@ -276,7 +276,7 @@ fn reconstruct_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ai::navigation::{NavNode, PlatformRole};
+    use crate::ai::navigation::{NavNode, PlatformRole, PlatformSource};
 
     fn create_test_graph() -> NavGraph {
         // Simple test: floor and one platform above
@@ -292,6 +292,8 @@ mod tests {
                 shot_quality_left: 0.5,
                 shot_quality_right: 0.5,
                 platform_role: PlatformRole::Floor,
+                reachability: 0.5,
+                source: PlatformSource::Floor,
             },
             NavNode {
                 id: 1,
@@ -304,6 +306,8 @@ mod tests {
                 shot_quality_left: 0.6,
                 shot_quality_right: 0.6,
                 platform_role: PlatformRole::ShotPosition,
+                reachability: 0.5,
+                source: PlatformSource::Center { y: 200.0, width: 200.0 },
             },
         ];
 
@@ -334,6 +338,7 @@ mod tests {
             built_for_level_id: String::new(), // Test value
             rebuild_delay: 0,
             level_max_shot_quality: 0.5, // Test value
+            level_geometry: crate::ai::navigation::LevelGeometry::default(),
         }
     }
 

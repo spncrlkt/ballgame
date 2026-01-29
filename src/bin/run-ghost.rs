@@ -144,8 +144,8 @@ fn run_ghost_trial(
     // Ghost input system (runs for left player)
     app.add_systems(Update, ghost_input_system);
 
-    // Steal cooldown and end condition check
-    app.add_systems(Update, (steal_cooldown_update, ghost_check_end));
+    // End condition check (steal_cooldown_update is only in FixedUpdate to avoid double-ticking)
+    app.add_systems(Update, ghost_check_end);
 
     // Physics
     app.add_systems(

@@ -23,6 +23,19 @@ pub enum SimMode {
         /// Path to ghost trial file or directory
         path: String,
     },
+    /// Multi-hop platform reachability test
+    /// Tests that NavGraph correctly chains edges for platforms only reachable
+    /// via intermediate hops from the floor
+    MultihopTest,
+    /// Random point reachability validation
+    /// Samples random test points from exploration data and verifies that
+    /// NavGraph can path to positions that players have actually reached
+    ReachabilityTest {
+        /// Number of random samples to test per level
+        samples: u32,
+        /// Path to SQLite database with exploration data
+        db_path: String,
+    },
 }
 
 /// Configuration for a simulation run
@@ -263,6 +276,31 @@ impl SimConfig {
                         i += 1;
                     }
                 }
+                "--multihop-test" => {
+                    config.mode = SimMode::MultihopTest;
+                }
+                "--reachability-test" => {
+                    // Default samples and db_path, can be overridden with --samples and --db
+                    let samples = 50; // Default, will be overridden if --samples specified
+                    let db_path = config
+                        .db_path
+                        .clone()
+                        .unwrap_or_else(|| "db/training.db".to_string());
+                    config.mode = SimMode::ReachabilityTest { samples, db_path };
+                }
+                "--samples" => {
+                    if i + 1 < args.len() {
+                        let samples = args[i + 1].parse().unwrap_or(50);
+                        // Update samples if we're in ReachabilityTest mode
+                        if let SimMode::ReachabilityTest { db_path, .. } = &config.mode {
+                            config.mode = SimMode::ReachabilityTest {
+                                samples,
+                                db_path: db_path.clone(),
+                            };
+                        }
+                        i += 1;
+                    }
+                }
                 "--seed" => {
                     if i + 1 < args.len() {
                         config.seed = args[i + 1].parse().ok();
@@ -286,7 +324,15 @@ impl SimConfig {
                 }
                 "--db" => {
                     if i + 1 < args.len() {
-                        config.db_path = Some(args[i + 1].clone());
+                        let new_db_path = args[i + 1].clone();
+                        config.db_path = Some(new_db_path.clone());
+                        // Also update ReachabilityTest mode if active
+                        if let SimMode::ReachabilityTest { samples, .. } = &config.mode {
+                            config.mode = SimMode::ReachabilityTest {
+                                samples: *samples,
+                                db_path: new_db_path,
+                            };
+                        }
                         i += 1;
                     }
                 }
@@ -327,6 +373,9 @@ OPTIONS:
     --regression        Compare to baseline metrics
     --shot-test [N]     Shot accuracy test (N shots per position, default: 30)
     --ghost <PATH>      Run ghost trials from file or directory
+    --multihop-test     Test NavGraph multi-hop platform reachability
+    --reachability-test Validate NavGraph against exploration data
+    --samples <N>       Number of samples for reachability test (default: 50)
     --seed <N>          RNG seed for reproducibility
     --output <FILE>     Output JSON to file (default: stdout)
     --quiet, -q         Suppress progress output

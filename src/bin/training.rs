@@ -15,10 +15,10 @@ use ballgame::events::{
 };
 use ballgame::simulation::SimDatabase;
 use ballgame::training::{
-    LevelSelector, TrainingMode, TrainingPhase, TrainingProtocol, TrainingSettings, TrainingState,
-    analyze_pursuit_session_from_db, analyze_session_from_db, ensure_session_dir,
-    format_pursuit_analysis_markdown, generate_analysis_request, print_session_summary,
-    write_analysis_files, write_session_summary,
+    LevelSelector, ReachabilityCollector, TrainingMode, TrainingPhase, TrainingProtocol,
+    TrainingSettings, TrainingState, analyze_pursuit_session_from_db, analyze_session_from_db,
+    ensure_session_dir, format_pursuit_analysis_markdown, generate_analysis_request,
+    print_session_summary, write_analysis_files, write_session_summary,
 };
 use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
@@ -257,10 +257,37 @@ fn main() {
     if settings.protocol.iterates_all_levels() {
         // Reachability protocol: iterate through all non-debug levels sequentially
         training_state.init_level_sequence(&level_db);
-        if let Some(first_level_idx) = training_state.current_sequence_level() {
-            if let Some(level_data) = level_db.get(first_level_idx) {
-                training_state.current_level = (first_level_idx + 1) as u32;
+
+        // If -l flag provided, find that level in the sequence and start there
+        if let Some(ref level_selector) = settings.level {
+            let target_idx = match level_selector {
+                LevelSelector::Number(n) => (*n as usize).saturating_sub(1),
+                LevelSelector::Name(name) => level_db
+                    .all()
+                    .iter()
+                    .position(|l| l.name.to_lowercase() == name.to_lowercase())
+                    .unwrap_or(0),
+            };
+
+            // Find this level's position in the sequence
+            if let Some(seq_pos) = training_state
+                .level_sequence
+                .iter()
+                .position(|&i| i == target_idx)
+            {
+                training_state.level_sequence_index = seq_pos;
+            }
+        }
+
+        if let Some(level_idx) = training_state.current_sequence_level() {
+            if let Some(level_data) = level_db.get(level_idx) {
+                training_state.current_level = (level_idx + 1) as u32;
                 training_state.current_level_name = level_data.name.clone();
+                // Initialize reachability collector for this level
+                training_state.reachability_collector = Some(ReachabilityCollector::new(
+                    level_data.id.clone(),
+                    level_data.name.clone(),
+                ));
             }
         }
     } else if let Some(ref level_selector) = settings.level {
@@ -418,7 +445,7 @@ fn main() {
         // Core Update systems - split to avoid tuple issues
         // Note: respawn_player is NOT used in training mode - we have our own setup
         // and restart logic via check_pause_restart
-        .add_systems(Update, steal::steal_cooldown_update)
+        // Note: steal_cooldown_update is only in FixedUpdate (not here) to avoid double-ticking
         // Level change event emission
         .add_systems(Update, emit_level_change_events)
         .add_systems(
@@ -465,6 +492,7 @@ fn main() {
                 scoring::check_scoring,
                 give_ball_to_human,
                 collect_training_debug_samples,
+                collect_reachability_positions,
             )
                 .chain()
                 .run_if(countdown::not_in_countdown)
@@ -505,6 +533,29 @@ fn collect_training_debug_samples(
     let time_ms = (training_state.game_elapsed * 1000.0) as u32;
     let tick_frame = tick_frame_from_time(time_ms);
     push_debug_samples(&mut buffer, time_ms, tick_frame, &current_level.0, &players);
+}
+
+/// Collect human player positions for reachability heatmap (Reachability protocol only)
+fn collect_reachability_positions(
+    mut training_state: ResMut<TrainingState>,
+    players: Query<(&Transform, Option<&HumanControlled>), With<Player>>,
+) {
+    // Only collect during Playing phase for Reachability protocol
+    if training_state.phase != TrainingPhase::Playing
+        || !training_state.protocol.iterates_all_levels()
+    {
+        return;
+    }
+
+    // Collect human player position
+    if let Some(ref mut collector) = training_state.reachability_collector {
+        for (transform, human) in &players {
+            if human.is_some() {
+                let pos = transform.translation;
+                collector.positions.push((pos.x, pos.y));
+            }
+        }
+    }
 }
 
 /// Give the ball to the human player (left team) after scoring
@@ -1514,6 +1565,83 @@ fn flush_training_events_to_sqlite(
     flush_training_events_buffer(&mut event_buffer, &sqlite_logger);
 }
 
+/// Export reachability heatmap data to CSV file
+fn export_reachability_heatmap(collector: &ReachabilityCollector) {
+    use std::io::Write;
+
+    const CELL_SIZE: f32 = 20.0;
+    const GRID_WIDTH: usize = 80;
+    const GRID_HEIGHT: usize = 45;
+
+    // Build visit count grid
+    let mut grid = vec![0u32; GRID_WIDTH * GRID_HEIGHT];
+
+    for &(x, y) in &collector.positions {
+        let cx = ((x + ARENA_WIDTH / 2.0) / CELL_SIZE).floor() as i32;
+        let cy = ((ARENA_HEIGHT / 2.0 - y) / CELL_SIZE).floor() as i32;
+
+        if cx >= 0 && cy >= 0 && (cx as usize) < GRID_WIDTH && (cy as usize) < GRID_HEIGHT {
+            let idx = cy as usize * GRID_WIDTH + cx as usize;
+            grid[idx] += 1;
+        }
+    }
+
+    // Find max for normalization
+    let max_count = grid.iter().max().copied().unwrap_or(1).max(1);
+
+    // Sanitize level name
+    let safe_name = sanitize_level_name(&collector.level_name);
+
+    // Ensure output directory exists
+    fs::create_dir_all("showcase/heatmaps").ok();
+
+    // Write CSV
+    let path = format!(
+        "showcase/heatmaps/heatmap_reachability_{}_{}.txt",
+        safe_name, collector.level_id
+    );
+
+    let Ok(mut file) = fs::File::create(&path) else {
+        eprintln!("Failed to create heatmap file: {}", path);
+        return;
+    };
+
+    if writeln!(file, "x,y,value").is_err() {
+        eprintln!("Failed to write heatmap header");
+        return;
+    }
+
+    for cy in 0..GRID_HEIGHT {
+        for cx in 0..GRID_WIDTH {
+            let world_x = (cx as f32 + 0.5) * CELL_SIZE - ARENA_WIDTH / 2.0;
+            let world_y = ARENA_HEIGHT / 2.0 - (cy as f32 + 0.5) * CELL_SIZE;
+            let count = grid[cy * GRID_WIDTH + cx];
+            let value = if count > 0 {
+                count as f32 / max_count as f32
+            } else {
+                0.0
+            };
+            let _ = writeln!(file, "{:.2},{:.2},{:.3}", world_x, world_y, value);
+        }
+    }
+}
+
+/// Sanitize level name for use in filenames
+fn sanitize_level_name(name: &str) -> String {
+    let mut out = String::new();
+    let mut last_was_underscore = false;
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_was_underscore = false;
+        } else if !last_was_underscore {
+            out.push('_');
+            last_was_underscore = true;
+        }
+    }
+    out.trim_matches('_').to_string()
+}
+
 /// Check for level advance input (Reachability protocol only)
 /// For now: LB quits the session (TODO: later will advance to next level)
 fn check_advance_level(
@@ -1540,6 +1668,25 @@ fn check_advance_level(
     // Consume both flags to prevent swap behavior
     input.advance_level_pressed = false;
     input.swap_pressed = false;
+
+    // Export reachability heatmap if sufficient exploration time
+    if let Some(collector) = training_state.reachability_collector.take() {
+        if collector.elapsed_secs() >= 10.0 {
+            export_reachability_heatmap(&collector);
+            println!(
+                "  Exported reachability heatmap: {} ({:.1}s, {} samples)",
+                collector.level_name,
+                collector.elapsed_secs(),
+                collector.positions.len()
+            );
+        } else {
+            println!(
+                "  Skipped heatmap: {} ({:.1}s < 10s threshold)",
+                collector.level_name,
+                collector.elapsed_secs()
+            );
+        }
+    }
 
     // Log match end for current level
     event_buffer.buffer.log(
@@ -1568,13 +1715,32 @@ fn check_advance_level(
 fn check_escape_quit(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut app_exit: MessageWriter<AppExit>,
-    training_state: Res<TrainingState>,
+    mut training_state: ResMut<TrainingState>,
     score: Res<Score>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
     sqlite_logger: Res<SqliteEventLogger>,
 ) {
     if keyboard.just_pressed(KeyCode::Escape) {
         println!("\nTraining session cancelled by user.");
+
+        // Export reachability heatmap if sufficient exploration time (for Reachability protocol)
+        if let Some(collector) = training_state.reachability_collector.take() {
+            if collector.elapsed_secs() >= 10.0 {
+                export_reachability_heatmap(&collector);
+                println!(
+                    "  Exported reachability heatmap: {} ({:.1}s, {} samples)",
+                    collector.level_name,
+                    collector.elapsed_secs(),
+                    collector.positions.len()
+                );
+            } else {
+                println!(
+                    "  Skipped heatmap: {} ({:.1}s < 10s threshold)",
+                    collector.level_name,
+                    collector.elapsed_secs()
+                );
+            }
+        }
 
         // End current match in SQLite if one is active
         if training_state.phase == TrainingPhase::Playing

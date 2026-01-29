@@ -13,8 +13,8 @@ pub use capabilities::AiCapabilities;
 pub use decision::*;
 pub use heatmaps::{HeatmapBundle, load_heatmaps_on_level_change};
 pub use navigation::{
-    AiNavState, EdgeType, NavAction, NavEdge, NavGraph, NavNode, mark_nav_dirty_on_level_change,
-    rebuild_nav_graph,
+    AiNavState, EdgeType, LevelGeometry, NavAction, NavEdge, NavGraph, NavNode, PlatformSource,
+    mark_nav_dirty_on_level_change, rebuild_nav_graph,
 };
 pub use pathfinding::{PathResult, find_path, find_path_to_shoot};
 pub use profiles::*;

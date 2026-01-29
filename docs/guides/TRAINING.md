@@ -33,6 +33,7 @@ cargo run --bin training -- -l 3                # Force level 3
 - `advanced-platform` - Full 1v1 games on random levels (default)
 - `pursuit` - Flat level chase test (verifies AI pursues player)
 - `pursuit2` - Platform chase test (pursuit with center obstacle)
+- `reachability` - Solo level exploration for coverage mapping (see below)
 
 **Modes:**
 - `goal` - Each iteration ends after one goal, then resets
@@ -86,7 +87,71 @@ training_logs/session_20260125_143022/
 | Jump | Space/W | A (South) |
 | Pickup/Steal | E | X (West) |
 | Throw (hold) | F | RB |
+| Next Level (reachability) | Q | LB |
 | Quit | Escape | - |
+
+## Reachability Protocol
+
+Solo exploration mode for generating coverage heatmaps. No AI opponent - just explore each level to map reachable areas.
+
+### Quick Start
+
+```bash
+# Explore all levels sequentially (starts at Arena)
+BALLGAME_SKIP_REACHABILITY_HEATMAPS=1 cargo run --bin training -- --protocol reachability
+
+# Start at a specific level (skips earlier levels)
+BALLGAME_SKIP_REACHABILITY_HEATMAPS=1 cargo run --bin training -- --protocol reachability -l "Open Floor"
+BALLGAME_SKIP_REACHABILITY_HEATMAPS=1 cargo run --bin training -- --protocol reachability -l 4
+```
+
+The `BALLGAME_SKIP_REACHABILITY_HEATMAPS=1` env var skips expensive heatmap regeneration during training.
+
+### Workflow
+
+1. **Explore** - Move around the level, visiting all reachable areas
+2. **Advance** - Press LB/Q when done with current level
+3. **Repeat** - Continue through all levels (or quit with Escape)
+
+### Data Pipeline
+
+Position data flows from training to heatmaps:
+
+```
+Training Session → debug_events table → export script → heatmap .txt files
+```
+
+1. **Collect data**: Run reachability training sessions
+2. **Check samples**: Query `debug_events` for coverage
+   ```bash
+   sqlite3 db/training.db "SELECT level_id, COUNT(*) FROM debug_events WHERE human_controlled=1 GROUP BY level_id;"
+   ```
+3. **Export heatmaps**: Generate `.txt` files for AI use
+   ```bash
+   python3 scripts/export_reachability.py db/training.db
+   ```
+4. **Output**: `showcase/heatmaps/heatmap_reachability_{level}_{id}.txt`
+
+### Combining Sessions
+
+Multiple training sessions can be combined for better coverage:
+
+```bash
+# List sessions to combine
+ls db/training_*.db
+
+# Combine into offline_training/db_list.txt and merge
+# (see offline_training workflow)
+```
+
+### Minimum Samples
+
+The export script requires 100+ samples per level by default:
+
+```bash
+# Export with lower threshold
+python3 scripts/export_reachability.py db/training.db --min-samples 50
+```
 
 ## SQL Analysis
 
@@ -163,6 +228,12 @@ GROUP BY right_profile;
 
 - **player_stats** - Aggregate stats per player per match
   - Shots, goals, steals, possession time, etc.
+
+- **debug_events** - Per-tick player state (for reachability analysis)
+  - `match_id`, `time_ms`, `tick_frame`
+  - `player`, `pos_x`, `pos_y`, `vel_x`, `vel_y`
+  - `level_id`, `human_controlled`
+  - `nav_active`, `nav_path_index`, `nav_action`
 
 ### Event Types
 

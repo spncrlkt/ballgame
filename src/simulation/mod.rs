@@ -9,7 +9,9 @@ pub mod control;
 pub mod db;
 pub mod ghost;
 pub mod metrics;
+pub mod multihop_test;
 pub mod parallel;
+pub mod reachability_test;
 pub mod runner;
 pub mod setup;
 pub mod shot_test;
@@ -37,5 +39,5 @@ pub use ghost::{
 };
 pub use metrics::{MatchResult, PlayerStats, SimMetrics, TournamentResult};
 pub use runner::{run_match, run_simulation};
-pub use setup::{sim_setup, spawn_corner_steps};
+pub use setup::{level_geometry_setup, sim_setup, spawn_corner_steps};
 pub use shot_test::{ShotOutcome, run_shot_test};

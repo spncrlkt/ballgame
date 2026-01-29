@@ -16,4 +16,4 @@ pub use session::{
     GameSummary, SessionSummary, ensure_session_dir, print_session_summary, write_session_summary,
 };
 pub use settings::{LevelSelector, TrainingMode, TrainingSettings};
-pub use state::{GameResult, TrainingPhase, TrainingState, Winner};
+pub use state::{GameResult, ReachabilityCollector, TrainingPhase, TrainingState, Winner};

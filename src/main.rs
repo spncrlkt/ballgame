@@ -319,11 +319,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            (
-                steal::steal_cooldown_update,
-                ui::toggle_debug,
-                config_watcher::check_config_changes,
-            )
+            (ui::toggle_debug, config_watcher::check_config_changes)
                 .run_if(replay::not_replay_active),
         )
         .add_systems(

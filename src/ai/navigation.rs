@@ -6,11 +6,39 @@
 use bevy::prelude::*;
 
 use crate::ai::capabilities::AiCapabilities;
+use crate::ai::heatmaps::HeatmapBundle;
 use crate::ai::shot_quality::evaluate_shot_quality;
 use crate::constants::*;
-use crate::levels::LevelDatabase;
+use crate::levels::{LevelDatabase, LevelData, PlatformDef};
 use crate::scoring::CurrentLevel;
 use crate::world::{BasketRim, CornerRamp, LevelPlatform, Platform};
+
+/// Source of a platform from level config
+#[derive(Clone, Debug, PartialEq)]
+pub enum PlatformSource {
+    /// Main arena floor
+    Floor,
+    /// Corner ramp step (from steps: config)
+    CornerRamp,
+    /// Center platform (from center: config)
+    Center { y: f32, width: f32 },
+    /// Mirrored platform (from mirror: config) - tracks which side
+    Mirror {
+        x: f32,
+        y: f32,
+        width: f32,
+        is_left: bool,
+    },
+}
+
+/// Summary of level geometry from config (for AI reasoning)
+#[derive(Clone, Debug, Default)]
+pub struct LevelGeometry {
+    pub basket_height: f32,
+    pub basket_push_in: f32,
+    pub step_count: usize,
+    pub platform_count: usize, // center + mirrored platforms
+}
 
 /// A node in the navigation graph representing a walkable surface
 #[derive(Clone, Debug)]
@@ -35,6 +63,11 @@ pub struct NavNode {
     pub shot_quality_right: f32,
     /// Classification of this platform's role
     pub platform_role: PlatformRole,
+    /// Reachability confidence from player exploration (0.0-1.0)
+    /// 0.0 = never visited, 1.0 = frequently visited, 0.5 = neutral/no data
+    pub reachability: f32,
+    /// Config source of this platform (for AI reasoning)
+    pub source: PlatformSource,
 }
 
 impl NavNode {
@@ -109,6 +142,8 @@ pub struct NavGraph {
     pub rebuild_delay: u8,
     /// Maximum achievable shot quality on this level (for scaling AI thresholds)
     pub level_max_shot_quality: f32,
+    /// Level geometry from config (for AI reasoning)
+    pub level_geometry: LevelGeometry,
 }
 
 impl NavGraph {
@@ -146,7 +181,11 @@ impl NavGraph {
     /// Find the best node from which to shoot at a target basket position.
     /// Takes `min_shot_quality` to filter out positions where shot quality is too low
     /// (e.g., directly under the basket where shots are nearly impossible).
-    /// Uses pre-computed shot quality values for efficiency.
+    /// Uses pre-computed shot quality and reachability values for optimal selection.
+    ///
+    /// The combined score weighs both shot quality and reachability:
+    /// - Positions that are both high-quality AND reliably reachable are preferred
+    /// - Low reachability (never visited) indicates potentially problematic areas
     pub fn find_shooting_node(
         &self,
         target: Vec2,
@@ -157,7 +196,7 @@ impl NavGraph {
         let shooting_at_left_basket = target.x < 0.0;
 
         // Find all nodes within shooting range of target that meet quality threshold
-        // Skip DeadZone nodes
+        // Skip DeadZone nodes and areas with very low reachability
         let mut candidates: Vec<(usize, f32, f32)> = self
             .nodes
             .iter()
@@ -165,6 +204,12 @@ impl NavGraph {
             .filter_map(|(i, node)| {
                 // Skip dead zones
                 if node.platform_role == PlatformRole::DeadZone {
+                    return None;
+                }
+
+                // Skip areas with very low reachability (< 0.1)
+                // These are likely unreachable or problematic areas
+                if node.reachability < MIN_REACHABILITY_FOR_SHOT {
                     return None;
                 }
 
@@ -177,7 +222,11 @@ impl NavGraph {
                         node.shot_quality_right
                     };
                     if quality >= min_shot_quality {
-                        Some((i, dist, quality))
+                        // Combined score = shot_quality * reachability_factor
+                        // Reachability factor: 0.5 + 0.5 * reachability
+                        // This gives range [0.5, 1.0] so high reachability is bonus, not requirement
+                        let combined_score = quality * (0.5 + 0.5 * node.reachability);
+                        Some((i, dist, combined_score))
                     } else {
                         None
                     }
@@ -187,9 +236,9 @@ impl NavGraph {
             })
             .collect();
 
-        // Sort by quality (higher = better), then by distance (closer = better)
+        // Sort by combined score (higher = better), then by distance (closer = better)
         candidates.sort_by(|a, b| {
-            b.2.partial_cmp(&a.2) // Quality descending
+            b.2.partial_cmp(&a.2) // Combined score descending
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.1.partial_cmp(&b.1).unwrap()) // Distance ascending
         });
@@ -198,15 +247,20 @@ impl NavGraph {
             return Some(*i);
         }
 
-        // No platform within shoot_range meeting quality threshold - find the best quality one
+        // No platform within shoot_range meeting quality threshold - find the best score one
         // even if outside range, so AI navigates toward a usable shooting position
-        // Skip DeadZone nodes
+        // Skip DeadZone nodes and very low reachability areas
         self.nodes
             .iter()
             .enumerate()
             .filter_map(|(i, node)| {
                 // Skip dead zones
                 if node.platform_role == PlatformRole::DeadZone {
+                    return None;
+                }
+
+                // Skip areas with very low reachability
+                if node.reachability < MIN_REACHABILITY_FOR_SHOT {
                     return None;
                 }
 
@@ -217,12 +271,14 @@ impl NavGraph {
                     node.shot_quality_right
                 };
                 if quality >= min_shot_quality {
-                    Some((i, quality))
+                    // Combined score for long-range selection
+                    let combined_score = quality * (0.5 + 0.5 * node.reachability);
+                    Some((i, combined_score))
                 } else {
                     None
                 }
             })
-            .max_by(|(_, q1), (_, q2)| q1.partial_cmp(q2).unwrap())
+            .max_by(|(_, s1), (_, s2)| s1.partial_cmp(s2).unwrap())
             .map(|(i, _)| i)
     }
 
@@ -462,6 +518,7 @@ pub fn rebuild_nav_graph(
     mut nav_graph: ResMut<NavGraph>,
     current_level: Res<CurrentLevel>,
     level_db: Res<LevelDatabase>,
+    heatmaps: Res<HeatmapBundle>,
     platform_query: Query<
         (Entity, &Transform, &Sprite, Option<&CornerRamp>),
         (With<Platform>, Without<BasketRim>),
@@ -502,6 +559,19 @@ pub fn rebuild_nav_graph(
     nav_graph.nodes.clear();
     nav_graph.edges.clear();
 
+    // Load level config for matching platforms to their definitions
+    let level_config = level_db.get_by_id(&current_level.0);
+
+    // Store level geometry summary for AI reasoning
+    nav_graph.level_geometry = LevelGeometry {
+        basket_height: level_config.map(|l| l.basket_height).unwrap_or(400.0),
+        basket_push_in: level_config
+            .map(|l| l.basket_push_in)
+            .unwrap_or(BASKET_PUSH_IN),
+        step_count: level_config.map(|l| l.step_count).unwrap_or(0),
+        platform_count: level_config.map(|l| l.platforms.len()).unwrap_or(0),
+    };
+
     // Create floor node
     let floor_left = -ARENA_WIDTH / 2.0 + WALL_THICKNESS;
     let floor_right = ARENA_WIDTH / 2.0 - WALL_THICKNESS;
@@ -518,6 +588,8 @@ pub fn rebuild_nav_graph(
         shot_quality_left: 0.0, // Will be computed after all nodes are added
         shot_quality_right: 0.0,
         platform_role: PlatformRole::Floor,
+        reachability: 0.5, // Will be computed after all nodes are added
+        source: PlatformSource::Floor,
     });
 
     // Collect level platforms and corner ramps
@@ -553,6 +625,13 @@ pub fn rebuild_nav_graph(
         let left_x = pos.x - half_width;
         let right_x = pos.x + half_width;
 
+        // Determine platform source from config
+        let source = if is_ramp {
+            PlatformSource::CornerRamp
+        } else {
+            match_platform_to_config(pos, level_config)
+        };
+
         let node = NavNode {
             id: nav_graph.nodes.len(),
             center: Vec2::new(pos.x, pos.y + half_height),
@@ -568,12 +647,14 @@ pub fn rebuild_nav_graph(
             } else {
                 PlatformRole::ShotPosition
             },
+            reachability: 0.5, // Will be computed after all nodes are added
+            source,
         };
 
         nav_graph.nodes.push(node);
     }
 
-    // Pre-compute shot qualities for all nodes
+    // Pre-compute shot qualities and reachability for all nodes
     // Basket positions are at ±BASKET_PUSH_IN from arena edges
     let basket_x_offset = ARENA_WIDTH / 2.0 - WALL_THICKNESS - BASKET_PUSH_IN;
     let basket_y = ARENA_FLOOR_Y + BASKET_SIZE.y / 2.0 + 200.0; // Approximate basket center height
@@ -584,6 +665,8 @@ pub fn rebuild_nav_graph(
         node.shot_quality_left = evaluate_shot_quality(node.center, left_basket);
         node.shot_quality_right = evaluate_shot_quality(node.center, right_basket);
         node.platform_role = classify_platform_role(node);
+        // Sample reachability from heatmap at node center
+        node.reachability = heatmaps.reachability_at(node.center);
     }
 
     // Calculate level's max achievable shot quality (for AI threshold scaling)
@@ -607,7 +690,13 @@ pub fn rebuild_nav_graph(
             let to = &nav_graph.nodes[j];
 
             // Check if we can reach node j from node i
-            if let Some(edge) = calculate_edge(from, to, &nav_graph.nodes) {
+            if let Some(mut edge) = calculate_edge(from, to, &nav_graph.nodes) {
+                // Apply reachability penalty to edge cost
+                // High reachability (1.0) = no penalty, Low (0.0) = 2x cost
+                // This discourages paths to areas players rarely visit
+                let reachability_penalty = 2.0 - to.reachability;
+                edge.cost *= reachability_penalty;
+
                 nav_graph.edges[i].push(edge);
             }
         }
@@ -643,8 +732,17 @@ pub fn rebuild_nav_graph(
                 format!("{}->{}({})", node.id, e.to_node, edge_type)
             })
             .collect();
+        let source_str = match &node.source {
+            PlatformSource::Floor => "Floor".to_string(),
+            PlatformSource::CornerRamp => "Ramp".to_string(),
+            PlatformSource::Center { y, width } => format!("Center({y},{width})"),
+            PlatformSource::Mirror { x, y, width, is_left } => {
+                let side = if *is_left { "L" } else { "R" };
+                format!("Mirror{side}({x},{y},{width})")
+            }
+        };
         debug!(
-            "  Node {}: {:?} @ ({:.0}, {:.0}) x:[{:.0}, {:.0}] role={} edges=[{}]",
+            "  Node {}: {:?} @ ({:.0}, {:.0}) x:[{:.0}, {:.0}] role={} source={} edges=[{}]",
             node.id,
             if node.is_floor { "FLOOR" } else { "PLAT" },
             node.center.x,
@@ -652,6 +750,7 @@ pub fn rebuild_nav_graph(
             node.left_x,
             node.right_x,
             role_str,
+            source_str,
             edge_summary.join(", ")
         );
     }
@@ -738,7 +837,7 @@ fn calculate_edge(from: &NavNode, to: &NavNode, all_nodes: &[NavNode]) -> Option
             return None; // Can't reach this height
         }
 
-        let time_to_height = (v - discriminant.sqrt()) / g;
+        let time_to_height = (v + discriminant.sqrt()) / g;
         let horizontal_reach = MOVE_SPEED * time_to_height;
 
         // Check if we can reach horizontally
@@ -876,24 +975,75 @@ fn calculate_edge(from: &NavNode, to: &NavNode, all_nodes: &[NavNode]) -> Option
     }
 }
 
-/// Classify a platform's role based on its shot quality
-fn classify_platform_role(node: &NavNode) -> PlatformRole {
-    // Preserve floor and ramp designations
-    if node.is_floor {
-        return PlatformRole::Floor;
+/// Match a spawned platform entity to its config definition.
+/// Uses position matching since entities don't store their config source directly.
+fn match_platform_to_config(pos: Vec3, level_config: Option<&LevelData>) -> PlatformSource {
+    let Some(config) = level_config else {
+        // Fallback when no config available
+        return PlatformSource::Center {
+            y: pos.y - ARENA_FLOOR_Y,
+            width: 100.0,
+        };
+    };
+
+    for platform_def in &config.platforms {
+        match platform_def {
+            PlatformDef::Center { y, width } => {
+                // Center platforms spawn at x=0, y=ARENA_FLOOR_Y + y
+                let config_y = ARENA_FLOOR_Y + y;
+                if pos.x.abs() < 1.0 && (pos.y - config_y).abs() < 5.0 {
+                    return PlatformSource::Center { y: *y, width: *width };
+                }
+            }
+            PlatformDef::Mirror { x, y, width } => {
+                // Mirror platforms spawn at -x and +x, y=ARENA_FLOOR_Y + y
+                let config_y = ARENA_FLOOR_Y + y;
+                if (pos.y - config_y).abs() < 5.0 {
+                    // Check left side
+                    if (pos.x - (-x)).abs() < 5.0 {
+                        return PlatformSource::Mirror {
+                            x: *x,
+                            y: *y,
+                            width: *width,
+                            is_left: true,
+                        };
+                    }
+                    // Check right side
+                    if (pos.x - x).abs() < 5.0 {
+                        return PlatformSource::Mirror {
+                            x: *x,
+                            y: *y,
+                            width: *width,
+                            is_left: false,
+                        };
+                    }
+                }
+            }
+        }
     }
 
-    let best_quality = node.shot_quality_left.max(node.shot_quality_right);
-    let worst_quality = node.shot_quality_left.min(node.shot_quality_right);
+    // No match found - shouldn't happen if config is correct, use fallback
+    PlatformSource::Center {
+        y: pos.y - ARENA_FLOOR_Y,
+        width: 100.0,
+    }
+}
 
-    if worst_quality < 0.25 {
-        // Bad for at least one basket - mark as dead zone
-        PlatformRole::DeadZone
-    } else if best_quality >= 0.55 {
-        PlatformRole::ShotPosition
-    } else {
-        // Keep existing role (Ramp for corner steps, or default)
-        PlatformRole::Ramp
+/// Classify a platform's role based on its source and shot quality.
+/// Source-based classification ensures config-grounded behavior.
+fn classify_platform_role(node: &NavNode) -> PlatformRole {
+    match &node.source {
+        PlatformSource::Floor => PlatformRole::Floor,
+        PlatformSource::CornerRamp => PlatformRole::Ramp,
+        PlatformSource::Center { .. } | PlatformSource::Mirror { .. } => {
+            // Level platforms: ShotPosition or DeadZone based on shot quality
+            let worst_quality = node.shot_quality_left.min(node.shot_quality_right);
+            if worst_quality < 0.25 {
+                PlatformRole::DeadZone
+            } else {
+                PlatformRole::ShotPosition
+            }
+        }
     }
 }
 
