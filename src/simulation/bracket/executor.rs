@@ -9,7 +9,6 @@ use crate::levels::LevelDatabase;
 
 use super::types::{BracketMatchResult, BracketState, GameResult, MatchFormat};
 use crate::simulation::config::SimConfig;
-use crate::simulation::parallel::MatchConfig;
 use crate::simulation::runner::run_match;
 
 /// Executor for running bracket tournaments
@@ -82,6 +81,17 @@ impl<'a> BracketExecutor<'a> {
 
     /// Run the entire bracket tournament
     pub fn run_tournament(&mut self, bracket: &mut BracketState) {
+        self.run_tournament_with_db(bracket, None, &None, None);
+    }
+
+    /// Run the entire bracket tournament with optional database logging
+    pub fn run_tournament_with_db(
+        &mut self,
+        bracket: &mut BracketState,
+        db: Option<&crate::simulation::db::SimDatabase>,
+        session_id: &Option<String>,
+        tournament_id: Option<i64>,
+    ) {
         while !bracket.is_complete {
             let ready_ids = bracket.ready_match_ids();
 
@@ -115,12 +125,21 @@ impl<'a> BracketExecutor<'a> {
                 break;
             }
 
-            self.execute_round(bracket, &ready_ids);
+            self.execute_round_with_db(bracket, &ready_ids, db, session_id, tournament_id);
         }
     }
 
-    /// Execute all matches in a round (in parallel if configured)
-    fn execute_round(&mut self, bracket: &mut BracketState, match_ids: &[u32]) {
+    /// Execute all matches in a round with optional database logging
+    fn execute_round_with_db(
+        &mut self,
+        bracket: &mut BracketState,
+        match_ids: &[u32],
+        db: Option<&crate::simulation::db::SimDatabase>,
+        session_id: &Option<String>,
+        tournament_id: Option<i64>,
+    ) {
+        use crate::simulation::db::{BracketGameData, BracketMatchData};
+
         if !self.quiet {
             let first_match = bracket.get_match(match_ids[0]);
             if let Some(m) = first_match {
@@ -142,7 +161,7 @@ impl<'a> BracketExecutor<'a> {
                 let p2_idx = m.players[1]?;
                 let p1 = &bracket.entries[p1_idx];
                 let p2 = &bracket.entries[p2_idx];
-                Some((id, p1.profile_name.clone(), p2.profile_name.clone()))
+                Some((id, p1_idx, p2_idx, p1.profile_name.clone(), p2.profile_name.clone(), m.side, m.round, m.match_in_round))
             })
             .collect();
 
@@ -151,44 +170,48 @@ impl<'a> BracketExecutor<'a> {
         let total_games = match_infos.len() * games_per_match as usize;
         let seeds: Vec<u64> = (0..total_games).map(|_| self.next_seed()).collect();
 
-        // Execute all matches in parallel
-        let results: Vec<(u32, BracketMatchResult)> = if self.base_config.parallel > 0 {
+        // Determine if we should log to DB
+        let should_log = db.is_some() && session_id.is_some() && tournament_id.is_some();
+
+        // Execute all matches (with DB logging if enabled)
+        let results: Vec<(u32, usize, usize, BracketMatchResult, super::types::BracketSide, u32, u32)> = if self.base_config.parallel > 0 {
             match_infos
                 .par_iter()
                 .enumerate()
-                .map(|(match_idx, (match_id, p1_name, p2_name))| {
+                .map(|(match_idx, (match_id, p1_idx, p2_idx, p1_name, p2_name, side, round, match_in_round))| {
                     let seed_start = match_idx * games_per_match as usize;
                     let match_seeds = &seeds[seed_start..seed_start + games_per_match as usize];
-                    let result = self.execute_bracket_match_parallel(
-                        p1_name,
-                        p2_name,
-                        &bracket.format,
-                        match_seeds,
-                    );
-                    (*match_id, result)
+                    let result = if should_log {
+                        self.execute_bracket_match_parallel_with_db(p1_name, p2_name, &bracket.format, match_seeds)
+                    } else {
+                        self.execute_bracket_match_parallel(p1_name, p2_name, &bracket.format, match_seeds)
+                    };
+                    (*match_id, *p1_idx, *p2_idx, result, *side, *round, *match_in_round)
                 })
                 .collect()
         } else {
             match_infos
                 .iter()
                 .enumerate()
-                .map(|(match_idx, (match_id, p1_name, p2_name))| {
+                .map(|(match_idx, (match_id, p1_idx, p2_idx, p1_name, p2_name, side, round, match_in_round))| {
                     let seed_start = match_idx * games_per_match as usize;
                     let match_seeds = &seeds[seed_start..seed_start + games_per_match as usize];
-                    let result =
-                        self.execute_bracket_match(p1_name, p2_name, &bracket.format, match_seeds);
-                    (*match_id, result)
+                    let result = if should_log {
+                        self.execute_bracket_match_with_db(p1_name, p2_name, &bracket.format, match_seeds)
+                    } else {
+                        self.execute_bracket_match(p1_name, p2_name, &bracket.format, match_seeds)
+                    };
+                    (*match_id, *p1_idx, *p2_idx, result, *side, *round, *match_in_round)
                 })
                 .collect()
         };
 
-        // Record results (sequential to avoid borrow issues)
-        for (match_id, result) in results {
+        // Record results and store to database
+        for (match_id, p1_idx, p2_idx, result, side, round, match_in_round) in results {
             // Print result if not quiet
             if !self.quiet {
-                let m = bracket.get_match(match_id).unwrap();
-                let p1_name = &bracket.entries[m.players[0].unwrap()].profile_name;
-                let p2_name = &bracket.entries[m.players[1].unwrap()].profile_name;
+                let p1_name = &bracket.entries[p1_idx].profile_name;
+                let p2_name = &bracket.entries[p2_idx].profile_name;
                 let winner_name = if result.winner_index == 0 {
                     p1_name
                 } else {
@@ -202,6 +225,74 @@ impl<'a> BracketExecutor<'a> {
                     result.player1_wins,
                     result.player2_wins
                 );
+            }
+
+            // Store to database if enabled
+            if let (Some(db), Some(sid), Some(tid)) = (db, session_id.as_ref(), tournament_id) {
+                // Insert bracket_match record
+                let side_str = format!("{:?}", side);
+                let match_data = BracketMatchData {
+                    bracket_match_id: match_id,
+                    side: side_str,
+                    round,
+                    match_in_round,
+                    player1_entry_idx: Some(p1_idx),
+                    player2_entry_idx: Some(p2_idx),
+                    player1_wins: result.player1_wins,
+                    player2_wins: result.player2_wins,
+                    winner_idx: Some(if result.winner_index == 0 { p1_idx } else { p2_idx }),
+                };
+
+                match db.insert_bracket_match(tid, &match_data) {
+                    Ok(bracket_match_db_id) => {
+                        // Insert each game
+                        for (game_idx, game) in result.games.iter().enumerate() {
+                            // First, insert the full match result to get a match_id
+                            let db_match_id = if let Some(ref match_result) = game.match_result {
+                                match db.insert_match(sid, match_result) {
+                                    Ok(mid) => {
+                                        // Store events with points
+                                        if !match_result.events.is_empty() {
+                                            if let Err(e) = db.insert_events_with_points(
+                                                mid,
+                                                match_result.duration,
+                                                &match_result.events,
+                                            ) {
+                                                eprintln!("Warning: Failed to store game events: {}", e);
+                                            }
+                                        }
+                                        mid
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Warning: Failed to insert match: {}", e);
+                                        0
+                                    }
+                                }
+                            } else {
+                                0
+                            };
+
+                            // Insert bracket_game record
+                            let game_data = BracketGameData {
+                                game_index: game_idx as u32,
+                                level: game.level,
+                                level_name: game.level_name.clone(),
+                                player1_score: game.player1_score,
+                                player2_score: game.player2_score,
+                                winner: game.winner,
+                                duration_secs: game.duration,
+                                seed: game.seed,
+                            };
+
+                            if let Err(e) = db.insert_bracket_game(bracket_match_db_id, db_match_id, &game_data) {
+                                eprintln!("Warning: Failed to insert bracket game: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Failed to insert bracket match: {}", e);
+                    }
+                }
             }
 
             bracket.record_result(match_id, result);
@@ -299,6 +390,18 @@ impl<'a> BracketExecutor<'a> {
         format: &MatchFormat,
         seed: u64,
     ) -> GameResult {
+        self.execute_game_with_db(p1_name, p2_name, format, seed, false)
+    }
+
+    /// Execute a single game, optionally preserving full match result for DB logging
+    fn execute_game_with_db(
+        &self,
+        p1_name: &str,
+        p2_name: &str,
+        format: &MatchFormat,
+        seed: u64,
+        preserve_match_result: bool,
+    ) -> GameResult {
         let level = self.get_level(seed);
         let level_name = self
             .level_db
@@ -306,20 +409,24 @@ impl<'a> BracketExecutor<'a> {
             .map(|l| l.name.clone())
             .unwrap_or_else(|| format!("Level {}", level));
 
-        let config = MatchConfig {
-            base_config: SimConfig {
-                duration_limit: format.duration_limit,
-                score_limit: format.score_limit,
-                quiet: true, // Always quiet for individual games
-                ..self.base_config.clone()
-            },
-            level,
+        // Enable event logging if we need to preserve match results
+        let mut config = SimConfig {
+            duration_limit: format.duration_limit,
+            score_limit: format.score_limit,
+            quiet: true, // Always quiet for individual games
             left_profile: p1_name.to_string(),
             right_profile: p2_name.to_string(),
-            seed,
+            level: Some(level),
+            ..self.base_config.clone()
         };
 
-        let result = run_match(&config.base_config, seed, self.level_db, self.profile_db);
+        // Enable db_path to trigger event logging when preserving
+        if preserve_match_result && config.db_path.is_none() {
+            // Set a dummy path to enable event buffer - we won't write to disk
+            config.db_path = Some(String::new());
+        }
+
+        let result = run_match(&config, seed, self.level_db, self.profile_db);
 
         let winner = if result.score_left > result.score_right {
             1
@@ -332,12 +439,99 @@ impl<'a> BracketExecutor<'a> {
 
         GameResult {
             level,
-            level_name,
+            level_name: level_name.clone(),
             player1_score: result.score_left,
             player2_score: result.score_right,
             winner,
             duration: result.duration,
             seed,
+            match_result: if preserve_match_result {
+                Some(result)
+            } else {
+                None
+            },
+        }
+    }
+
+    /// Execute a single bracket match (best of N games) - sequential version with DB logging
+    pub fn execute_bracket_match_with_db(
+        &self,
+        p1_name: &str,
+        p2_name: &str,
+        format: &MatchFormat,
+        seeds: &[u64],
+    ) -> BracketMatchResult {
+        let wins_needed = format.wins_needed();
+        let mut p1_wins = 0u32;
+        let mut p2_wins = 0u32;
+        let mut games = Vec::new();
+
+        for &seed in seeds {
+            if p1_wins >= wins_needed || p2_wins >= wins_needed {
+                break;
+            }
+
+            let game_result = self.execute_game_with_db(p1_name, p2_name, format, seed, true);
+            if game_result.winner == 1 {
+                p1_wins += 1;
+            } else {
+                p2_wins += 1;
+            }
+            games.push(game_result);
+        }
+
+        let winner_index = if p1_wins >= wins_needed { 0 } else { 1 };
+
+        BracketMatchResult {
+            games,
+            player1_wins: p1_wins,
+            player2_wins: p2_wins,
+            winner_index,
+            loser_index: 1 - winner_index,
+        }
+    }
+
+    /// Execute a single bracket match (best of N games) - parallel version with DB logging
+    pub fn execute_bracket_match_parallel_with_db(
+        &self,
+        p1_name: &str,
+        p2_name: &str,
+        format: &MatchFormat,
+        seeds: &[u64],
+    ) -> BracketMatchResult {
+        // Run all games in parallel (speculative)
+        let all_games: Vec<GameResult> = seeds
+            .par_iter()
+            .map(|&seed| self.execute_game_with_db(p1_name, p2_name, format, seed, true))
+            .collect();
+
+        // Determine winner by taking games in order until one player has enough wins
+        let wins_needed = format.wins_needed();
+        let mut p1_wins = 0u32;
+        let mut p2_wins = 0u32;
+        let mut games = Vec::new();
+
+        for game in all_games {
+            if p1_wins >= wins_needed || p2_wins >= wins_needed {
+                break;
+            }
+
+            if game.winner == 1 {
+                p1_wins += 1;
+            } else {
+                p2_wins += 1;
+            }
+            games.push(game);
+        }
+
+        let winner_index = if p1_wins >= wins_needed { 0 } else { 1 };
+
+        BracketMatchResult {
+            games,
+            player1_wins: p1_wins,
+            player2_wins: p2_wins,
+            winner_index,
+            loser_index: 1 - winner_index,
         }
     }
 }

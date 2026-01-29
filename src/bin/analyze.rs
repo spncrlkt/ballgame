@@ -16,8 +16,8 @@ use ballgame::analytics::{
     AggregateMetrics, AnalysisQuery, AnalysisRequest, AnalysisRequestFile, Leaderboard,
     ParameterSuggestion, TrainingDebugReport, TuningTargets, default_targets, format_suggestions,
     format_update_report, generate_suggestions, load_targets, parse_all_matches_from_db,
-    run_event_audit, run_focused_analysis, run_request, run_training_debug_analysis,
-    update_default_profiles,
+    run_bracket_analysis, run_event_audit, run_focused_analysis, run_request,
+    run_training_debug_analysis, update_default_profiles,
 };
 
 fn main() {
@@ -210,6 +210,49 @@ fn main() {
         return;
     }
 
+    // Bracket tournament analysis
+    if config.bracket_analysis {
+        let db_path = &config.bracket_db.clone().unwrap_or(config.db_path.clone());
+        let output_dir = config
+            .bracket_output
+            .clone()
+            .unwrap_or_else(default_bracket_output_dir);
+        let rankings_file = config.bracket_rankings.as_deref();
+
+        match run_bracket_analysis(db_path, &output_dir, rankings_file) {
+            Ok(report) => {
+                // Print summary to console
+                println!("\n=== Bracket Tournament Analysis ===\n");
+                println!("Tournament ID: {}", report.tournament.id);
+                println!("Format: Best of {} (First to {})",
+                    report.tournament.format_best_of,
+                    report.tournament.format_score_limit);
+                println!("Entrants: {}", report.tournament.entrant_count);
+                if let Some(ref champion) = report.tournament.champion_profile {
+                    println!("Champion: {}", champion);
+                }
+                println!("Total Games: {} ({} events)", report.total_games, report.total_events);
+                println!("\nTop Standings:");
+                println!("{:<4} {:<24} {:>8} {:>10}", "Rank", "Profile", "Match", "Game");
+                println!("{:-<4} {:-<24} {:->8} {:->10}", "", "", "", "");
+                for standing in report.standings.iter().take(10) {
+                    println!("{:<4} {:<24} {:>3}-{:<3} {:>4}-{:<4}",
+                        standing.final_placement.unwrap_or(0),
+                        &standing.profile_name[..standing.profile_name.len().min(24)],
+                        standing.match_wins,
+                        standing.match_losses,
+                        standing.game_wins,
+                        standing.game_losses);
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to run bracket analysis: {}", e);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+
     // Parse all event logs from SQLite
     println!("Parsing SQLite events from {}...", config.db_path.display());
     let matches = parse_all_matches_from_db(&config.db_path);
@@ -308,6 +351,10 @@ struct AnalyzeConfig {
     request_desc: Option<String>,
     request_query_name: Option<String>,
     request_db_label: Option<String>,
+    bracket_analysis: bool,
+    bracket_db: Option<PathBuf>,
+    bracket_output: Option<PathBuf>,
+    bracket_rankings: Option<PathBuf>,
     update_defaults: bool,
     show_help: bool,
 }
@@ -334,6 +381,10 @@ impl Default for AnalyzeConfig {
             request_desc: None,
             request_query_name: None,
             request_db_label: None,
+            bracket_analysis: false,
+            bracket_db: None,
+            bracket_output: None,
+            bracket_rankings: None,
             update_defaults: false,
             show_help: false,
         }
@@ -454,6 +505,27 @@ impl AnalyzeConfig {
                         i += 1;
                     }
                 }
+                "--bracket" => {
+                    config.bracket_analysis = true;
+                }
+                "--bracket-db" => {
+                    if i + 1 < args.len() {
+                        config.bracket_db = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--bracket-output" => {
+                    if i + 1 < args.len() {
+                        config.bracket_output = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--bracket-rankings" => {
+                    if i + 1 < args.len() {
+                        config.bracket_rankings = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
                 "--update-defaults" => {
                     config.update_defaults = true;
                 }
@@ -502,6 +574,10 @@ OPTIONS:
     --request-desc <TEXT> Description for --request-add
     --request-query-name <NAME> Query name for --request-add (default: query)
     --request-db-label <LABEL> Label stored with request DB
+    --bracket           Analyze most recent bracket tournament
+    --bracket-db <DB>   Override DB path for bracket analysis
+    --bracket-output <DIR> Output directory for bracket reports
+    --bracket-rankings <FILE> Export standings to rankings file
     --update-defaults   Update default profiles in src/constants.rs
     --help, -h          Show this help
 
@@ -529,6 +605,12 @@ EXAMPLES:
 
     # Add a new stored request
     cargo run --bin analyze -- --request-add my_query --request-sql "SELECT COUNT(*) FROM matches"
+
+    # Bracket tournament analysis (uses most recent bracket DB in db/)
+    cargo run --bin analyze -- --bracket
+
+    # Bracket analysis with specific DB and rankings export
+    cargo run --bin analyze -- --bracket --bracket-db db/bracket_20260129_143022.db --bracket-rankings config/rankings.txt
 
 TARGETS FILE FORMAT (TOML):
     [targets]
@@ -625,4 +707,8 @@ fn default_training_report_name(report: &TrainingDebugReport) -> String {
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
         format!("training_debug_{}.md", timestamp)
     }
+}
+
+fn default_bracket_output_dir() -> PathBuf {
+    PathBuf::from("notes/analysis_runs/bracket")
 }

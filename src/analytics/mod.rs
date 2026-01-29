@@ -3,6 +3,7 @@
 //! Provides tools for parsing event logs, computing metrics,
 //! generating leaderboards, and suggesting parameter changes.
 
+mod bracket_analysis;
 pub mod db_analytics;
 mod defaults;
 mod event_audit;
@@ -31,3 +32,7 @@ pub use requests::{
 pub use suggestions::{ParameterSuggestion, format_suggestions, generate_suggestions};
 pub use targets::{TargetDelta, TargetStatus, TuningTargets, default_targets, load_targets};
 pub use training_debug::{TrainingDebugReport, run_training_debug_analysis};
+pub use bracket_analysis::{
+    BracketReport, BracketStanding, BracketTournament, list_bracket_tournaments,
+    load_bracket_tournament, load_latest_bracket, run_bracket_analysis,
+};

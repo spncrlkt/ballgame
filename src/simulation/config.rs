@@ -328,10 +328,16 @@ impl SimConfig {
                     } else {
                         64
                     };
+                    // Use existing score_limit if set, otherwise default to 5
+                    let game_score_limit = if config.score_limit > 0 {
+                        config.score_limit
+                    } else {
+                        5
+                    };
                     config.mode = SimMode::Bracket {
                         entrants,
                         best_of: 3,
-                        game_score_limit: 5,
+                        game_score_limit,
                         seeding: BracketSeedingConfig::Random,
                     };
                 }

@@ -167,6 +167,65 @@ impl SimDatabase {
             CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
             CREATE INDEX IF NOT EXISTS idx_events_time ON events(match_id, time_ms);
             CREATE INDEX IF NOT EXISTS idx_points_match ON points(match_id);
+
+            -- Bracket tournament tables
+            CREATE TABLE IF NOT EXISTS bracket_tournaments (
+                id INTEGER PRIMARY KEY,
+                session_id TEXT REFERENCES sessions(id),
+                format_best_of INTEGER NOT NULL,
+                format_score_limit INTEGER NOT NULL,
+                format_duration_limit REAL NOT NULL,
+                seeding_method TEXT NOT NULL,
+                entrant_count INTEGER NOT NULL,
+                champion_profile TEXT,
+                is_complete INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS bracket_entries (
+                id INTEGER PRIMARY KEY,
+                tournament_id INTEGER REFERENCES bracket_tournaments(id),
+                entry_index INTEGER NOT NULL,
+                profile_name TEXT NOT NULL,
+                seed INTEGER NOT NULL,
+                final_placement INTEGER,
+                match_wins INTEGER DEFAULT 0,
+                match_losses INTEGER DEFAULT 0,
+                game_wins INTEGER DEFAULT 0,
+                game_losses INTEGER DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS bracket_matches (
+                id INTEGER PRIMARY KEY,
+                tournament_id INTEGER REFERENCES bracket_tournaments(id),
+                bracket_match_id INTEGER NOT NULL,
+                side TEXT NOT NULL,
+                round INTEGER NOT NULL,
+                match_in_round INTEGER NOT NULL,
+                player1_entry_idx INTEGER,
+                player2_entry_idx INTEGER,
+                player1_wins INTEGER,
+                player2_wins INTEGER,
+                winner_idx INTEGER
+            );
+
+            CREATE TABLE IF NOT EXISTS bracket_games (
+                id INTEGER PRIMARY KEY,
+                bracket_match_id INTEGER REFERENCES bracket_matches(id),
+                game_index INTEGER NOT NULL,
+                match_id INTEGER REFERENCES matches(id),
+                level INTEGER NOT NULL,
+                level_name TEXT NOT NULL,
+                player1_score INTEGER NOT NULL,
+                player2_score INTEGER NOT NULL,
+                winner INTEGER NOT NULL,
+                duration_secs REAL NOT NULL,
+                seed INTEGER NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_bracket_tournaments_session ON bracket_tournaments(session_id);
+            CREATE INDEX IF NOT EXISTS idx_bracket_entries_tournament ON bracket_entries(tournament_id);
+            CREATE INDEX IF NOT EXISTS idx_bracket_matches_tournament ON bracket_matches(tournament_id);
+            CREATE INDEX IF NOT EXISTS idx_bracket_games_match ON bracket_games(bracket_match_id);
             "#,
         )?;
         let _ = self
@@ -1236,6 +1295,206 @@ impl SimDatabase {
         });
 
         Ok(moments)
+    }
+}
+
+//=============================================================================
+// Bracket Tournament Methods
+//=============================================================================
+
+/// Data for creating a bracket tournament
+pub struct BracketTournamentData {
+    pub format_best_of: u32,
+    pub format_score_limit: u32,
+    pub format_duration_limit: f32,
+    pub seeding_method: String,
+    pub entrant_count: u32,
+}
+
+/// Data for a bracket entry
+pub struct BracketEntryData {
+    pub entry_index: usize,
+    pub profile_name: String,
+    pub seed: u32,
+    pub final_placement: Option<u32>,
+    pub match_wins: u32,
+    pub match_losses: u32,
+    pub game_wins: u32,
+    pub game_losses: u32,
+}
+
+/// Data for a bracket match
+pub struct BracketMatchData {
+    pub bracket_match_id: u32,
+    pub side: String,
+    pub round: u32,
+    pub match_in_round: u32,
+    pub player1_entry_idx: Option<usize>,
+    pub player2_entry_idx: Option<usize>,
+    pub player1_wins: u32,
+    pub player2_wins: u32,
+    pub winner_idx: Option<usize>,
+}
+
+/// Data for a bracket game
+pub struct BracketGameData {
+    pub game_index: u32,
+    pub level: u32,
+    pub level_name: String,
+    pub player1_score: u32,
+    pub player2_score: u32,
+    pub winner: u8,
+    pub duration_secs: f32,
+    pub seed: u64,
+}
+
+impl SimDatabase {
+    /// Create a bracket tournament and return its ID
+    pub fn create_bracket_tournament(
+        &self,
+        session_id: &str,
+        data: &BracketTournamentData,
+    ) -> Result<i64> {
+        self.conn.execute(
+            r#"INSERT INTO bracket_tournaments
+               (session_id, format_best_of, format_score_limit, format_duration_limit,
+                seeding_method, entrant_count, is_complete)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0)"#,
+            params![
+                session_id,
+                data.format_best_of,
+                data.format_score_limit,
+                data.format_duration_limit as f64,
+                data.seeding_method,
+                data.entrant_count,
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Insert bracket entries for a tournament
+    pub fn insert_bracket_entries(
+        &self,
+        tournament_id: i64,
+        entries: &[BracketEntryData],
+    ) -> Result<()> {
+        let mut stmt = self.conn.prepare(
+            r#"INSERT INTO bracket_entries
+               (tournament_id, entry_index, profile_name, seed, final_placement,
+                match_wins, match_losses, game_wins, game_losses)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+        )?;
+
+        for entry in entries {
+            stmt.execute(params![
+                tournament_id,
+                entry.entry_index as i64,
+                entry.profile_name,
+                entry.seed,
+                entry.final_placement,
+                entry.match_wins,
+                entry.match_losses,
+                entry.game_wins,
+                entry.game_losses,
+            ])?;
+        }
+
+        Ok(())
+    }
+
+    /// Insert a bracket match and return its database ID
+    pub fn insert_bracket_match(
+        &self,
+        tournament_id: i64,
+        data: &BracketMatchData,
+    ) -> Result<i64> {
+        self.conn.execute(
+            r#"INSERT INTO bracket_matches
+               (tournament_id, bracket_match_id, side, round, match_in_round,
+                player1_entry_idx, player2_entry_idx, player1_wins, player2_wins, winner_idx)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+            params![
+                tournament_id,
+                data.bracket_match_id,
+                data.side,
+                data.round,
+                data.match_in_round,
+                data.player1_entry_idx.map(|i| i as i64),
+                data.player2_entry_idx.map(|i| i as i64),
+                data.player1_wins,
+                data.player2_wins,
+                data.winner_idx.map(|i| i as i64),
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Insert a bracket game (links to full match record)
+    pub fn insert_bracket_game(
+        &self,
+        bracket_match_db_id: i64,
+        match_id: i64,
+        data: &BracketGameData,
+    ) -> Result<i64> {
+        self.conn.execute(
+            r#"INSERT INTO bracket_games
+               (bracket_match_id, game_index, match_id, level, level_name,
+                player1_score, player2_score, winner, duration_secs, seed)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+            params![
+                bracket_match_db_id,
+                data.game_index,
+                match_id,
+                data.level,
+                data.level_name,
+                data.player1_score,
+                data.player2_score,
+                data.winner,
+                data.duration_secs as f64,
+                data.seed as i64,
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Update a bracket entry's stats
+    pub fn update_bracket_entry(
+        &self,
+        tournament_id: i64,
+        entry_index: usize,
+        data: &BracketEntryData,
+    ) -> Result<()> {
+        self.conn.execute(
+            r#"UPDATE bracket_entries
+               SET final_placement = ?1, match_wins = ?2, match_losses = ?3,
+                   game_wins = ?4, game_losses = ?5
+               WHERE tournament_id = ?6 AND entry_index = ?7"#,
+            params![
+                data.final_placement,
+                data.match_wins,
+                data.match_losses,
+                data.game_wins,
+                data.game_losses,
+                tournament_id,
+                entry_index as i64,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Mark a bracket tournament as complete
+    pub fn complete_bracket_tournament(
+        &self,
+        tournament_id: i64,
+        champion_profile: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            r#"UPDATE bracket_tournaments
+               SET is_complete = 1, champion_profile = ?1
+               WHERE id = ?2"#,
+            params![champion_profile, tournament_id],
+        )?;
+        Ok(())
     }
 }
 

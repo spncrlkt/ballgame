@@ -116,6 +116,9 @@ pub struct GameResult {
     pub duration: f32,
     /// RNG seed used
     pub seed: u64,
+    /// Full match result for database logging (skipped in JSON serialization)
+    #[serde(skip)]
+    pub match_result: Option<crate::simulation::metrics::MatchResult>,
 }
 
 /// Result of a bracket match (best of N games)

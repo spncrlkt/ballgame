@@ -1,0 +1,9 @@
+# Tournament Rankings (20260129_133214)
+# Generated: 2026-01-29 13:32:14
+# Format: 1 matches per pair
+#
+# Rank | Profile                  |  Wins | Losses | WinRate
+# -----+--------------------------+-------+--------+--------
+     1 | v11_Blend_A              |     3 |      1 |  75.0%
+     2 | v1_Rusher                |     2 |      2 |  50.0%
+     3 | v2_Rusher                |     1 |      3 |  25.0%

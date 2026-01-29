@@ -1095,6 +1095,15 @@ pub fn run_simulation(config: SimConfig) {
                 std::fs::write(output_file, json).expect("Failed to write output");
                 println!("Results written to {}", output_file);
             }
+
+            // Export rankings file
+            let rankings_path = std::path::Path::new("config/tournament_rankings.txt");
+            if let Err(e) = export_tournament_rankings(&tournament, rankings_path, *matches_per_pair)
+            {
+                eprintln!("Warning: Failed to export rankings: {}", e);
+            } else if !config.quiet {
+                println!("Rankings exported to {}", rankings_path.display());
+            }
         }
 
         super::config::SimMode::LevelSweep { matches_per_level } => {
@@ -1589,12 +1598,13 @@ fn run_bracket_tournament(
     seeding_config: &super::bracket::BracketSeedingConfig,
     level_db: &LevelDatabase,
     profile_db: &AiProfileDatabase,
-    _db: Option<&SimDatabase>,
+    external_db: Option<&SimDatabase>,
 ) {
     use super::bracket::{
         format_standings, pad_to_power_of_2, seed_entries, select_profiles, BracketExecutor,
         BracketState, MatchFormat, SeedingMethod,
     };
+    use super::db::{BracketEntryData, BracketTournamentData};
 
     let start = std::time::Instant::now();
     let base_seed = config.seed.unwrap_or_else(|| rand::thread_rng().r#gen());
@@ -1641,6 +1651,12 @@ fn run_bracket_tournament(
 
     // Seed the bracket
     let seeding_method: SeedingMethod = seeding_config.clone().into();
+    let seeding_method_str = match &seeding_method {
+        SeedingMethod::Random => "random".to_string(),
+        SeedingMethod::Warmup { .. } => "warmup".to_string(),
+        SeedingMethod::Manual => "manual".to_string(),
+        SeedingMethod::DatabaseOrder => "database_order".to_string(),
+    };
     let mut entries = seed_entries(
         &profiles_for_bracket,
         &seeding_method,
@@ -1671,9 +1687,92 @@ fn run_bracket_tournament(
         println!();
     }
 
-    // Run the tournament
+    // Set up database logging
+    // Auto-create timestamped DB if not provided externally
+    let db_path = if external_db.is_some() {
+        None
+    } else {
+        std::fs::create_dir_all("db").ok();
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        Some(format!("db/bracket_{}.db", timestamp))
+    };
+
+    let owned_db = db_path.as_ref().and_then(|path| {
+        match SimDatabase::open(std::path::Path::new(path)) {
+            Ok(db) => {
+                if !config.quiet {
+                    println!("Using database: {}", path);
+                }
+                Some(db)
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to open database {}: {}", path, e);
+                None
+            }
+        }
+    });
+
+    let db: Option<&SimDatabase> = external_db.or(owned_db.as_ref());
+
+    // Create session and tournament record
+    let (session_id, tournament_id) = if let Some(db) = db {
+        let config_json = serde_json::to_string(config).ok();
+        match db.create_session("bracket", config_json.as_deref()) {
+            Ok(sid) => {
+                let tournament_data = BracketTournamentData {
+                    format_best_of: best_of,
+                    format_score_limit: game_score_limit,
+                    format_duration_limit: config.duration_limit,
+                    seeding_method: seeding_method_str,
+                    entrant_count: bracket_size as u32,
+                };
+                match db.create_bracket_tournament(&sid, &tournament_data) {
+                    Ok(tid) => {
+                        // Insert initial entries
+                        let entry_data: Vec<BracketEntryData> = bracket
+                            .entries
+                            .iter()
+                            .enumerate()
+                            .map(|(i, e)| BracketEntryData {
+                                entry_index: i,
+                                profile_name: e.profile_name.clone(),
+                                seed: e.seed,
+                                final_placement: None,
+                                match_wins: 0,
+                                match_losses: 0,
+                                game_wins: 0,
+                                game_losses: 0,
+                            })
+                            .collect();
+                        if let Err(e) = db.insert_bracket_entries(tid, &entry_data) {
+                            eprintln!("Warning: Failed to insert bracket entries: {}", e);
+                        }
+                        (Some(sid), Some(tid))
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Failed to create bracket tournament: {}", e);
+                        (None, None)
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to create session: {}", e);
+                (None, None)
+            }
+        }
+    } else {
+        (None, None)
+    };
+
+    // Run the tournament with DB logging enabled
     let mut executor = BracketExecutor::new(level_db, profile_db, config, base_seed);
-    executor.run_tournament(&mut bracket);
+
+    // Run tournament with DB logging
+    if db.is_some() && session_id.is_some() && tournament_id.is_some() {
+        executor.run_tournament_with_db(&mut bracket, db, &session_id, tournament_id);
+    } else {
+        executor.run_tournament(&mut bracket);
+    }
 
     // Print results
     let standings = format_standings(&bracket);
@@ -1684,8 +1783,178 @@ fn run_bracket_tournament(
         println!("Elapsed time: {:.1}s", elapsed);
     }
 
-    // TODO: Store in database if enabled
-    // This requires adding bracket-specific tables (see db.rs task)
+    // Update final entry stats and mark tournament complete
+    if let (Some(db), Some(tid)) = (db, tournament_id) {
+        // Update entry stats
+        for (i, entry) in bracket.entries.iter().enumerate() {
+            let entry_data = BracketEntryData {
+                entry_index: i,
+                profile_name: entry.profile_name.clone(),
+                seed: entry.seed,
+                final_placement: entry.final_placement,
+                match_wins: entry.match_wins,
+                match_losses: entry.match_losses,
+                game_wins: entry.game_wins,
+                game_losses: entry.game_losses,
+            };
+            if let Err(e) = db.update_bracket_entry(tid, i, &entry_data) {
+                eprintln!("Warning: Failed to update bracket entry {}: {}", i, e);
+            }
+        }
+
+        // Mark tournament complete
+        let champion_name = bracket
+            .champion
+            .map(|idx| bracket.entries[idx].profile_name.as_str());
+        if let Err(e) = db.complete_bracket_tournament(tid, champion_name) {
+            eprintln!("Warning: Failed to complete bracket tournament: {}", e);
+        }
+
+        if !config.quiet {
+            if let Some(path) = &db_path {
+                println!("Tournament results saved to {}", path);
+            }
+        }
+
+        // Export rankings file
+        let rankings_path = std::path::Path::new("config/bracket_rankings.txt");
+        if let Err(e) = export_bracket_rankings(&bracket, rankings_path, best_of, game_score_limit) {
+            eprintln!("Warning: Failed to export rankings: {}", e);
+        } else if !config.quiet {
+            println!("Rankings exported to {}", rankings_path.display());
+        }
+    }
+}
+
+/// Export bracket standings to a rankings file
+fn export_bracket_rankings(
+    bracket: &super::bracket::BracketState,
+    path: &std::path::Path,
+    best_of: u32,
+    score_limit: u32,
+) -> std::io::Result<()> {
+    use std::io::Write;
+
+    // Sort entries by match wins desc, then game wins desc
+    let mut sorted_entries: Vec<_> = bracket.entries.iter().enumerate().collect();
+    sorted_entries.sort_by(|a, b| {
+        b.1.match_wins
+            .cmp(&a.1.match_wins)
+            .then(b.1.game_wins.cmp(&a.1.game_wins))
+            .then(a.1.game_losses.cmp(&b.1.game_losses))
+    });
+
+    let mut content = String::new();
+    content.push_str(&format!(
+        "# Bracket Rankings (Tournament {})\n",
+        chrono::Local::now().format("%Y%m%d_%H%M%S")
+    ));
+    content.push_str(&format!(
+        "# Generated: {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+    ));
+    content.push_str(&format!("# Format: BO{} FT{}\n", best_of, score_limit));
+    content.push_str("#\n");
+    content.push_str("# Rank | Profile                  | Match W-L | Game W-L\n");
+    content.push_str("# -----+--------------------------+-----------+---------\n");
+
+    for (_idx, entry) in &sorted_entries {
+        let rank = entry.final_placement.unwrap_or(0);
+        content.push_str(&format!(
+            "{:>6} | {:<24} | {:>4}-{:<4} | {:>3}-{:<3}\n",
+            rank,
+            entry.profile_name,
+            entry.match_wins,
+            entry.match_losses,
+            entry.game_wins,
+            entry.game_losses,
+        ));
+    }
+
+    // Ensure parent directory exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let mut file = std::fs::File::create(path)?;
+    file.write_all(content.as_bytes())
+}
+
+/// Export tournament (round-robin) standings to a rankings file
+fn export_tournament_rankings(
+    tournament: &super::metrics::TournamentResult,
+    path: &std::path::Path,
+    matches_per_pair: u32,
+) -> std::io::Result<()> {
+    use std::io::Write;
+
+    // Count wins and losses per profile
+    let mut profile_stats: std::collections::HashMap<String, (u32, u32)> =
+        std::collections::HashMap::new();
+
+    for result in &tournament.matches {
+        profile_stats
+            .entry(result.left_profile.clone())
+            .or_insert((0, 0));
+        profile_stats
+            .entry(result.right_profile.clone())
+            .or_insert((0, 0));
+
+        match result.winner.as_str() {
+            "left" => {
+                profile_stats.get_mut(&result.left_profile).unwrap().0 += 1;
+                profile_stats.get_mut(&result.right_profile).unwrap().1 += 1;
+            }
+            "right" => {
+                profile_stats.get_mut(&result.right_profile).unwrap().0 += 1;
+                profile_stats.get_mut(&result.left_profile).unwrap().1 += 1;
+            }
+            _ => {} // tie
+        }
+    }
+
+    // Sort by wins desc, then losses asc
+    let mut sorted: Vec<_> = profile_stats.into_iter().collect();
+    sorted.sort_by(|a, b| b.1 .0.cmp(&a.1 .0).then(a.1 .1.cmp(&b.1 .1)));
+
+    let mut content = String::new();
+    content.push_str(&format!(
+        "# Tournament Rankings ({})\n",
+        chrono::Local::now().format("%Y%m%d_%H%M%S")
+    ));
+    content.push_str(&format!(
+        "# Generated: {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+    ));
+    content.push_str(&format!("# Format: {} matches per pair\n", matches_per_pair));
+    content.push_str("#\n");
+    content.push_str("# Rank | Profile                  |  Wins | Losses | WinRate\n");
+    content.push_str("# -----+--------------------------+-------+--------+--------\n");
+
+    for (rank, (profile, (wins, losses))) in sorted.iter().enumerate() {
+        let total = wins + losses;
+        let win_rate = if total > 0 {
+            *wins as f32 / total as f32 * 100.0
+        } else {
+            0.0
+        };
+        content.push_str(&format!(
+            "{:>6} | {:<24} | {:>5} | {:>6} | {:>5.1}%\n",
+            rank + 1,
+            profile,
+            wins,
+            losses,
+            win_rate,
+        ));
+    }
+
+    // Ensure parent directory exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let mut file = std::fs::File::create(path)?;
+    file.write_all(content.as_bytes())
 }
 
 #[cfg(test)]
