@@ -1,4 +1,4 @@
-# AI Profiles - Evolution v4 (59 profiles)
+# AI Profiles - Evolution v11 (67 profiles)
 #
 # DEPRECATION POLICY: Never remove profiles from this file.
 # Mark deprecated profiles with "# DEPRECATED" comment instead.
@@ -9,34 +9,40 @@
 #   v2 = Top 4 from 25-profile tournament
 #   v3 = 50 variants, winner: v3_Rush_Patient (26.9%)
 #   v4 = 50 new variants based on v3 learnings
+#   v5-v6 = Experimental playstyles (Sniper, Brawler, Fortress, etc.)
+#   v7 = Single parameter variants from top performers
+#   v8-v9 = Randomized from successful parameter ranges
+#   v10 = Randomized from top v8/v9 performers
+#   v11 = Blends of top v10 performers (v10_Rand_E + v10_Rand_B)
 #
 # Key learnings applied:
-#   - Sweet spot: aggression 0.85-0.95, patience 0.40-0.55, min_quality 0.22-0.30
-#   - Charge time: 0.25-0.35 min, 0.55-0.75 max
-#   - Sniper/high-quality builds consistently fail
-#   - Mathematical interpolation between winners works well
-#   - Rush lineage dominates - lean into it
+#   - Sweet spot: aggression 0.79-0.84, patience 0.44-0.50
+#   - Tight pressure distance (50-54) dominates
+#   - Fast steal reaction time (0.07) is critical
+#   - Patient/defensive strategies underperform against pressure
+#   - E-leaning pressure profiles win tournaments
 
 # =============================================================================
 # DEFAULT PROFILE (first profile = fallback when profile not found)
+# Top performer from V11 tournament (45.2% win rate)
 # =============================================================================
 
-profile: v4_Pat_50
-id: 70ae91d03ac88f56
-position_tolerance: 15
-shoot_range: 555
-charge_min: 0.29
-charge_max: 0.70
-steal_range: 130
-defense_offset: 245
-min_shot_quality: 0.020000000000000004
-pressure_distance: 170
-aggression: 0.86
-defensive_iq: 0.56
-steal_reaction_time: 0.12
-button_presses_per_sec: 13
-position_patience: -0.14999999999999997
-seek_threshold: 0.41000000000000003
+profile: v11_Blend_A
+id: g7h8i9j0k1110001
+position_tolerance: 23
+shoot_range: 498
+charge_min: 0.27
+charge_max: 0.53
+steal_range: 160
+defense_offset: 178
+min_shot_quality: 0.21
+pressure_distance: 52
+aggression: 0.82
+defensive_iq: 0.68
+steal_reaction_time: 0.07
+button_presses_per_sec: 16
+position_patience: 0.48
+seek_threshold: 0.14
 
 # =============================================================================
 # HISTORICAL CHAMPIONS (preserved for comparison)
@@ -1829,3 +1835,137 @@ steal_reaction_time: 0.10
 button_presses_per_sec: 14
 position_patience: 0.62
 seek_threshold: 0.11
+
+# =============================================================================
+# v11 BLENDS - Mixing top V10 performers (v10_Rand_E and v10_Rand_B)
+# E traits: pressure 54, aggression 0.80, steal_time 0.07, patience 0.46, def_iq 0.66
+# B traits: patience 0.60, shoot_range 510, def_iq 0.74, charge_max 0.56, aggression 0.74, pressure 66
+# =============================================================================
+
+# v11_Blend_A moved to top of file as default profile
+
+# v11_Blend_B: B-leaning patience (higher patience, better def_iq)
+profile: v11_Blend_B
+id: g7h8i9j0k1110002
+position_tolerance: 22
+shoot_range: 508
+charge_min: 0.29
+charge_max: 0.56
+steal_range: 152
+defense_offset: 195
+min_shot_quality: 0.22
+pressure_distance: 64
+aggression: 0.75
+defensive_iq: 0.72
+steal_reaction_time: 0.08
+button_presses_per_sec: 14
+position_patience: 0.58
+seek_threshold: 0.12
+
+# v11_Blend_C: 50/50 hybrid (equal blend of E and B)
+profile: v11_Blend_C
+id: g7h8i9j0k1110003
+position_tolerance: 23
+shoot_range: 502
+charge_min: 0.28
+charge_max: 0.54
+steal_range: 156
+defense_offset: 186
+min_shot_quality: 0.21
+pressure_distance: 60
+aggression: 0.77
+defensive_iq: 0.70
+steal_reaction_time: 0.08
+button_presses_per_sec: 15
+position_patience: 0.53
+seek_threshold: 0.13
+
+# v11_Blend_D: E pressure + B range (tight pressure, wider shoot range)
+profile: v11_Blend_D
+id: g7h8i9j0k1110004
+position_tolerance: 24
+shoot_range: 510
+charge_min: 0.27
+charge_max: 0.54
+steal_range: 162
+defense_offset: 180
+min_shot_quality: 0.21
+pressure_distance: 54
+aggression: 0.79
+defensive_iq: 0.68
+steal_reaction_time: 0.07
+button_presses_per_sec: 16
+position_patience: 0.50
+seek_threshold: 0.14
+
+# v11_Blend_E: B defense + E steals (fast steals, high def_iq)
+profile: v11_Blend_E
+id: g7h8i9j0k1110005
+position_tolerance: 22
+shoot_range: 505
+charge_min: 0.29
+charge_max: 0.55
+steal_range: 158
+defense_offset: 188
+min_shot_quality: 0.22
+pressure_distance: 62
+aggression: 0.76
+defensive_iq: 0.74
+steal_reaction_time: 0.07
+button_presses_per_sec: 15
+position_patience: 0.56
+seek_threshold: 0.12
+
+# v11_Blend_F: Max aggression blend (highest aggression, tightest pressure)
+profile: v11_Blend_F
+id: g7h8i9j0k1110006
+position_tolerance: 24
+shoot_range: 496
+charge_min: 0.26
+charge_max: 0.52
+steal_range: 165
+defense_offset: 172
+min_shot_quality: 0.20
+pressure_distance: 50
+aggression: 0.84
+defensive_iq: 0.66
+steal_reaction_time: 0.07
+button_presses_per_sec: 17
+position_patience: 0.44
+seek_threshold: 0.15
+
+# v11_Blend_G: Max defense blend (highest def_iq, most patience)
+profile: v11_Blend_G
+id: g7h8i9j0k1110007
+position_tolerance: 21
+shoot_range: 510
+charge_min: 0.30
+charge_max: 0.57
+steal_range: 148
+defense_offset: 202
+min_shot_quality: 0.23
+pressure_distance: 68
+aggression: 0.72
+defensive_iq: 0.76
+steal_reaction_time: 0.08
+button_presses_per_sec: 14
+position_patience: 0.62
+seek_threshold: 0.11
+
+# v11_Blend_H: Balanced optimal (average of all E+B params)
+profile: v11_Blend_H
+id: g7h8i9j0k1110008
+position_tolerance: 23
+shoot_range: 502
+charge_min: 0.28
+charge_max: 0.54
+steal_range: 157
+defense_offset: 187
+min_shot_quality: 0.21
+pressure_distance: 60
+aggression: 0.77
+defensive_iq: 0.70
+steal_reaction_time: 0.08
+button_presses_per_sec: 15
+position_patience: 0.53
+seek_threshold: 0.13
