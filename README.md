@@ -13,6 +13,7 @@ cargo run --release    # Play with optimizations
 **Guides:**
 - [`docs/guides/HOW_TO_PLAY.md`](docs/guides/HOW_TO_PLAY.md) - Controls and gameplay
 - [`docs/guides/TRAINING.md`](docs/guides/TRAINING.md) - Training mode setup and analysis workflow
+- [`docs/guides/WORKFLOWS.md`](docs/guides/WORKFLOWS.md) - Multi-step development workflows
 
 ## Quick Reference
 
