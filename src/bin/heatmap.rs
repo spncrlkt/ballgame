@@ -445,22 +445,14 @@ fn main() {
                 GRID_HEIGHT,
                 CELL_SIZE
             );
-<<<<<<< HEAD
-            run_single_kind(kind, &eligible_levels, &physics);
-=======
-            run_single_kind(kind, &eligible_levels, config.trial_count);
->>>>>>> 5cd437a (heatmap fast / accurate options)
+run_single_kind(kind, &eligible_levels, &physics, config.trial_count);
         }
         HeatmapMode::Full => {
             println!(
                 "Generating full heatmap bundle: {}x{} cells ({} pixels)",
                 GRID_WIDTH, GRID_HEIGHT, CELL_SIZE
             );
-<<<<<<< HEAD
-            run_full_bundle(&eligible_levels, &physics);
-=======
-            run_full_bundle(&eligible_levels, config.trial_count);
->>>>>>> 5cd437a (heatmap fast / accurate options)
+run_full_bundle(&eligible_levels, &physics, config.trial_count);
             if config.check && config.level_filter.is_empty() {
                 save_level_hashes(&level_hashes);
             }
@@ -604,11 +596,7 @@ fn select_target_levels<'a>(
     levels
 }
 
-<<<<<<< HEAD
-fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], physics: &PhysicsConfig) {
-=======
-fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], trial_count: u32) {
->>>>>>> 5cd437a (heatmap fast / accurate options)
+fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], physics: &PhysicsConfig, trial_count: u32) {
     let mut generated = Vec::new();
     let mut generated_overlays = Vec::new();
 
@@ -693,11 +681,8 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], trial_cou
                 &platform_rects,
                 None,
                 Some(&overlay),
-<<<<<<< HEAD
                 physics,
-=======
                 trial_count,
->>>>>>> 5cd437a (heatmap fast / accurate options)
             );
             generated.push(image_path);
             generated_overlays.push(overlay_path(
@@ -729,11 +714,7 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], trial_cou
     }
 }
 
-<<<<<<< HEAD
-fn run_full_bundle(levels: &[&ballgame::LevelData], physics: &PhysicsConfig) {
-=======
-fn run_full_bundle(levels: &[&ballgame::LevelData], trial_count: u32) {
->>>>>>> 5cd437a (heatmap fast / accurate options)
+fn run_full_bundle(levels: &[&ballgame::LevelData], physics: &PhysicsConfig, trial_count: u32) {
     let mut per_kind: HashMap<HeatmapKind, Vec<String>> = HashMap::new();
     let mut per_kind_overlays: HashMap<HeatmapKind, Vec<String>> = HashMap::new();
 
@@ -842,11 +823,8 @@ fn run_full_bundle(levels: &[&ballgame::LevelData], trial_count: u32) {
                     &platform_rects,
                     Some(&reachability),
                     Some(&overlay),
-<<<<<<< HEAD
                     physics,
-=======
                     trial_count,
->>>>>>> 5cd437a (heatmap fast / accurate options)
                 );
                 level_images.push(image_path.clone());
                 per_kind.entry(kind).or_default().push(image_path);
@@ -922,11 +900,8 @@ fn generate_heatmap_for_kind(
     platform_rects: &[PlatformRect],
     reachability_cache: Option<&HeatmapGrid>,
     overlay: Option<&LevelOverlayContext<'_>>,
-<<<<<<< HEAD
     physics: &PhysicsConfig,
-=======
     trial_count: u32,
->>>>>>> 5cd437a (heatmap fast / accurate options)
 ) -> String {
     let mut owned_reachability = None;
 
