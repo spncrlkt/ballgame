@@ -95,6 +95,10 @@ pub struct TrainingState {
     pub time_limit_secs: Option<f32>,
     /// Timeout if no score within this many seconds (None = no timeout)
     pub first_point_timeout_secs: Option<f32>,
+    /// Ordered list of level indices for sequential iteration (Reachability protocol)
+    pub level_sequence: Vec<usize>,
+    /// Current position in level_sequence
+    pub level_sequence_index: usize,
 }
 
 impl Default for TrainingState {
@@ -121,9 +125,13 @@ impl Default for TrainingState {
             transition_timer: 0.0,
             time_limit_secs: None,
             first_point_timeout_secs: None,
+            level_sequence: Vec::new(),
+            level_sequence_index: 0,
         }
     }
 }
+
+use crate::levels::LevelDatabase;
 
 impl TrainingState {
     /// Create a new training state with specified games and AI profile
@@ -199,5 +207,33 @@ impl TrainingState {
     /// Check if session is complete
     pub fn is_complete(&self) -> bool {
         self.game_number > self.games_total
+    }
+
+    /// Initialize level sequence for sequential iteration (Reachability protocol)
+    /// Builds ordered list of non-debug level indices
+    pub fn init_level_sequence(&mut self, level_db: &LevelDatabase) {
+        self.level_sequence = level_db
+            .all()
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| !l.debug && !l.regression)
+            .map(|(i, _)| i)
+            .collect();
+        self.level_sequence_index = 0;
+
+        // Set games_total to match level count
+        self.games_total = self.level_sequence.len() as u32;
+    }
+
+    /// Advance to next level in sequence (for Reachability protocol)
+    /// Returns true if there are more levels, false if sequence is complete
+    pub fn advance_to_next_level(&mut self) -> bool {
+        self.level_sequence_index += 1;
+        self.level_sequence_index < self.level_sequence.len()
+    }
+
+    /// Get current level index from sequence (0-based)
+    pub fn current_sequence_level(&self) -> Option<usize> {
+        self.level_sequence.get(self.level_sequence_index).copied()
     }
 }

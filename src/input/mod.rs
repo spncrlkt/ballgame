@@ -17,6 +17,7 @@ pub struct PlayerInput {
     pub throw_held: bool,       // R shoulder - charging throw
     pub throw_released: bool,   // R shoulder released - execute throw
     pub swap_pressed: bool,     // L shoulder / Q key - swap which player you control
+    pub advance_level_pressed: bool, // L shoulder / Q key - advance to next level (Reachability)
 }
 
 /// Runs in Update to capture input state before it's cleared.
@@ -97,12 +98,14 @@ pub fn capture_input(
     input.throw_held = throw_held_now;
 
     // Swap control (L shoulder / Q key) - accumulate until consumed
+    // Also triggers advance_level for Reachability protocol
     if keyboard.just_pressed(KeyCode::KeyQ)
         || gamepads
             .iter()
             .any(|gp| gp.just_pressed(GamepadButton::LeftTrigger))
     {
         input.swap_pressed = true;
+        input.advance_level_pressed = true;
     }
 
     // Emit ControllerInput event to EventBus for auditability

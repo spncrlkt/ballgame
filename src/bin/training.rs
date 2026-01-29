@@ -1,10 +1,11 @@
 //! Training Mode Binary
 //!
-//! Play 5 consecutive 1v1 games against AI with comprehensive logging.
+//! Play 1v1 games against AI with comprehensive logging.
+//! Default: 3 iterations, first point wins (goal mode).
 //!
 //! Usage:
 //!   cargo run --bin training
-//!   cargo run --bin training -- --games 3 --profile Aggressive
+//!   cargo run --bin training -- --iterations 5 --profile Aggressive
 
 use ballgame::debug_logging::DebugLogConfig;
 use ballgame::events::{
@@ -252,8 +253,17 @@ fn main() {
     training_state.time_limit_secs = settings.time_limit_secs;
     training_state.first_point_timeout_secs = settings.first_point_timeout_secs;
 
-    // Pick level - either fixed from settings or random
-    if let Some(ref level_selector) = settings.level {
+    // Pick level - either fixed from settings, sequential (Reachability), or random
+    if settings.protocol.iterates_all_levels() {
+        // Reachability protocol: iterate through all non-debug levels sequentially
+        training_state.init_level_sequence(&level_db);
+        if let Some(first_level_idx) = training_state.current_sequence_level() {
+            if let Some(level_data) = level_db.get(first_level_idx) {
+                training_state.current_level = (first_level_idx + 1) as u32;
+                training_state.current_level_name = level_data.name.clone();
+            }
+        }
+    } else if let Some(ref level_selector) = settings.level {
         // Resolve level selector to number
         let fixed_level = match level_selector {
             LevelSelector::Number(n) => *n,
@@ -307,10 +317,18 @@ fn main() {
         return;
     }
 
-    println!(
-        "Starting iteration 1/{} on {}",
-        settings.iterations, training_state.current_level_name
-    );
+    if settings.protocol.iterates_all_levels() {
+        println!(
+            "Reachability exploration: {}",
+            training_state.current_level_name
+        );
+        println!("  Explore the level, press LB/Q when done");
+    } else {
+        println!(
+            "Starting iteration 1/{} on {}",
+            settings.iterations, training_state.current_level_name
+        );
+    }
     println!();
 
     // Viewport setup from settings
@@ -417,6 +435,7 @@ fn main() {
         .add_systems(
             Update,
             (
+                check_advance_level,
                 emit_training_events,
                 training_state_machine,
                 update_training_hud,
@@ -638,11 +657,24 @@ fn training_setup(
         ))
         .id();
 
-    // Right player - AI controlled
+    // Right player - AI controlled (or Idle for solo mode)
+    let ai_initial_goal = if training_settings.protocol.is_solo_mode() {
+        AiGoal::Idle
+    } else {
+        AiGoal::ChaseBall
+    };
+
+    // Position AI off-screen in solo mode (still exists for entity queries)
+    let right_spawn = if training_settings.protocol.is_solo_mode() {
+        Vec3::new(ARENA_WIDTH + 500.0, 0.0, 0.0) // Off-screen right
+    } else {
+        PLAYER_SPAWN_RIGHT
+    };
+
     let right_player = commands
         .spawn((
             Sprite::from_color(initial_palette.right, PLAYER_SIZE),
-            Transform::from_translation(PLAYER_SPAWN_RIGHT),
+            Transform::from_translation(right_spawn),
             Player,
             Velocity::default(),
             Grounded(false),
@@ -657,7 +689,7 @@ fn training_setup(
             Team::Right,
             InputState::default(),
             AiState {
-                current_goal: AiGoal::ChaseBall,
+                current_goal: ai_initial_goal,
                 profile_id: ai_profile_id.clone(),
                 ..default()
             },
@@ -1028,11 +1060,17 @@ fn training_state_machine(
 ) {
     match training_state.phase {
         TrainingPhase::WaitingToStart => {
-            // Wait for first ball pickup to start timer
-            for ball_state in &balls {
-                if matches!(ball_state, BallState::Held(_)) {
-                    training_state.start_game_timer();
-                    break;
+            // Reachability: start immediately (player has ball)
+            // Others: wait for first ball pickup to start timer
+            if training_state.protocol.iterates_all_levels() {
+                // Start immediately for exploration mode
+                training_state.start_game_timer();
+            } else {
+                for ball_state in &balls {
+                    if matches!(ball_state, BallState::Held(_)) {
+                        training_state.start_game_timer();
+                        break;
+                    }
                 }
             }
         }
@@ -1040,6 +1078,12 @@ fn training_state_machine(
         TrainingPhase::Playing => {
             training_state.update_elapsed();
             event_buffer.elapsed = training_state.game_elapsed;
+
+            // Reachability: no win condition - player decides when to advance via LB
+            if training_state.protocol.iterates_all_levels() {
+                // Level transitions handled by check_advance_level system
+                return;
+            }
 
             // Check win condition: score reached OR time limit expired
             let score_reached =
@@ -1278,6 +1322,18 @@ fn training_state_machine(
                         eprintln!("No analysis available for analysis request.");
                     }
                 }
+                TrainingProtocol::Reachability => {
+                    // Reachability exploration - summary of levels visited
+                    println!("\n## Reachability Exploration Complete\n");
+                    println!(
+                        "Levels explored: {}/{}",
+                        training_state.level_sequence_index + 1,
+                        training_state.level_sequence.len()
+                    );
+                    println!(
+                        "\nRun offline analysis with:\n  ./offline_training/analyze_offline.sh"
+                    );
+                }
             }
 
             app_exit.write(AppExit::Success);
@@ -1292,6 +1348,24 @@ fn update_training_hud(
     mut hud_query: Query<&mut Text2d, With<TrainingHudText>>,
 ) {
     for mut text in &mut hud_query {
+        // Reachability mode: different HUD format
+        if training_state.protocol.iterates_all_levels() {
+            let phase_indicator = match training_state.phase {
+                TrainingPhase::Paused => " [PAUSED]",
+                TrainingPhase::SessionComplete => " [Complete]",
+                _ => "",
+            };
+
+            text.0 = format!(
+                "{} | Time: {:.0}s | [LB: Quit]{}",
+                training_state.current_level_name,
+                training_state.game_elapsed,
+                phase_indicator
+            );
+            return;
+        }
+
+        // Standard training mode HUD
         let phase_indicator = match training_state.phase {
             TrainingPhase::WaitingToStart => " [Pick up the ball to start]",
             TrainingPhase::Paused => " [PAUSED - Press Start to resume]",
@@ -1440,14 +1514,83 @@ fn flush_training_events_to_sqlite(
     flush_training_events_buffer(&mut event_buffer, &sqlite_logger);
 }
 
+/// Check for level advance input (Reachability protocol only)
+/// For now: LB quits the session (TODO: later will advance to next level)
+fn check_advance_level(
+    mut input: ResMut<PlayerInput>,
+    mut training_state: ResMut<TrainingState>,
+    score: Res<Score>,
+    mut event_buffer: ResMut<TrainingEventBuffer>,
+    sqlite_logger: Res<SqliteEventLogger>,
+) {
+    // Only handle for Reachability protocol during Playing phase
+    if !training_state.protocol.iterates_all_levels() {
+        return;
+    }
+
+    if training_state.phase != TrainingPhase::Playing {
+        return;
+    }
+
+    // Check if advance level was pressed
+    if !input.advance_level_pressed {
+        return;
+    }
+
+    // Consume both flags to prevent swap behavior
+    input.advance_level_pressed = false;
+    input.swap_pressed = false;
+
+    // Log match end for current level
+    event_buffer.buffer.log(
+        training_state.game_elapsed,
+        GameEvent::MatchEnd {
+            score_left: score.left,
+            score_right: score.right,
+            duration: training_state.game_elapsed,
+        },
+    );
+
+    flush_training_events_buffer(&mut event_buffer, &sqlite_logger);
+    sqlite_logger.end_match(score.left, score.right, training_state.game_elapsed);
+
+    println!(
+        "Level complete: {} ({:.1}s)",
+        training_state.current_level_name,
+        training_state.game_elapsed
+    );
+
+    // For now: just end the session (TODO: advance to next level)
+    training_state.phase = TrainingPhase::SessionComplete;
+}
+
 /// Check for escape key to quit
 fn check_escape_quit(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut app_exit: MessageWriter<AppExit>,
     training_state: Res<TrainingState>,
+    score: Res<Score>,
+    mut event_buffer: ResMut<TrainingEventBuffer>,
+    sqlite_logger: Res<SqliteEventLogger>,
 ) {
     if keyboard.just_pressed(KeyCode::Escape) {
         println!("\nTraining session cancelled by user.");
+
+        // End current match in SQLite if one is active
+        if training_state.phase == TrainingPhase::Playing
+            || training_state.phase == TrainingPhase::WaitingToStart
+        {
+            event_buffer.buffer.log(
+                training_state.game_elapsed,
+                GameEvent::MatchEnd {
+                    score_left: score.left,
+                    score_right: score.right,
+                    duration: training_state.game_elapsed,
+                },
+            );
+            flush_training_events_buffer(&mut event_buffer, &sqlite_logger);
+            sqlite_logger.end_match(score.left, score.right, training_state.game_elapsed);
+        }
 
         // Still write summary with completed games
         if !training_state.game_results.is_empty() {

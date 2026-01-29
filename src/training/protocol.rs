@@ -28,6 +28,14 @@ pub enum TrainingProtocol {
     /// - End condition: score or time limit
     /// - Metrics: distance over time, closing rate, stuck detection
     Pursuit2,
+
+    /// Solo level exploration for reachability analysis
+    /// - No AI opponent (AI spawned but idle)
+    /// - Iterates through all non-debug levels in order
+    /// - Player presses LB to advance to next level
+    /// - No win condition - player decides when done with each level
+    /// - Captures position data for coverage analysis
+    Reachability,
 }
 
 // TODO: add a shooting training protocol for basket position calculations.
@@ -42,6 +50,7 @@ impl TrainingProtocol {
             }
             "pursuit" | "chase" => Some(TrainingProtocol::Pursuit),
             "pursuit2" | "pursuit-2" | "pursuit-level-2" => Some(TrainingProtocol::Pursuit2),
+            "reachability" | "reach" | "exploration" => Some(TrainingProtocol::Reachability),
             _ => None,
         }
     }
@@ -52,6 +61,7 @@ impl TrainingProtocol {
             TrainingProtocol::AdvancedPlatform => "Advanced Platform",
             TrainingProtocol::Pursuit => "Pursuit Test",
             TrainingProtocol::Pursuit2 => "Pursuit Test Level 2",
+            TrainingProtocol::Reachability => "Reachability Exploration",
         }
     }
 
@@ -61,6 +71,7 @@ impl TrainingProtocol {
             TrainingProtocol::AdvancedPlatform => "advanced-platform",
             TrainingProtocol::Pursuit => "pursuit",
             TrainingProtocol::Pursuit2 => "pursuit2",
+            TrainingProtocol::Reachability => "reachability",
         }
     }
 
@@ -72,6 +83,9 @@ impl TrainingProtocol {
             }
             TrainingProtocol::Pursuit => "Flat level chase test - verifies AI pursues the player",
             TrainingProtocol::Pursuit2 => "Platform chase test - pursuit with center obstacle",
+            TrainingProtocol::Reachability => {
+                "Solo level exploration - iterate through all levels for coverage mapping"
+            }
         }
     }
 
@@ -81,6 +95,7 @@ impl TrainingProtocol {
             TrainingProtocol::AdvancedPlatform => None,
             TrainingProtocol::Pursuit => Some("Pursuit Arena"),
             TrainingProtocol::Pursuit2 => Some("Pursuit Arena 2"),
+            TrainingProtocol::Reachability => None, // Iterates all levels
         }
     }
 
@@ -90,6 +105,7 @@ impl TrainingProtocol {
             TrainingProtocol::AdvancedPlatform => None,
             TrainingProtocol::Pursuit => Some(30.0), // 30 second default for pursuit
             TrainingProtocol::Pursuit2 => Some(30.0), // 30 second default for pursuit2
+            TrainingProtocol::Reachability => None,  // Player decides when done
         }
     }
 
@@ -98,6 +114,7 @@ impl TrainingProtocol {
         match self {
             TrainingProtocol::AdvancedPlatform => true,
             TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => true, // Ends on score OR time
+            TrainingProtocol::Reachability => false,                        // No win condition
         }
     }
 
@@ -106,7 +123,18 @@ impl TrainingProtocol {
         match self {
             TrainingProtocol::AdvancedPlatform => true, // Already implemented
             TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => true, // AI must chase
+            TrainingProtocol::Reachability => true,     // Exploration mode
         }
+    }
+
+    /// Whether this is a solo exploration mode (no active AI opponent)
+    pub fn is_solo_mode(&self) -> bool {
+        matches!(self, TrainingProtocol::Reachability)
+    }
+
+    /// Whether this protocol iterates through all levels sequentially
+    pub fn iterates_all_levels(&self) -> bool {
+        matches!(self, TrainingProtocol::Reachability)
     }
 }
 
@@ -139,6 +167,7 @@ impl ProtocolConfig {
             win_score: match protocol {
                 TrainingProtocol::AdvancedPlatform => 5,
                 TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => 1, // End on first score
+                TrainingProtocol::Reachability => 0,                         // No score-based win
             },
         }
     }
@@ -196,6 +225,19 @@ mod tests {
             TrainingProtocol::from_str("pursuit-level-2"),
             Some(TrainingProtocol::Pursuit2)
         );
+        // Reachability parsing
+        assert_eq!(
+            TrainingProtocol::from_str("reachability"),
+            Some(TrainingProtocol::Reachability)
+        );
+        assert_eq!(
+            TrainingProtocol::from_str("reach"),
+            Some(TrainingProtocol::Reachability)
+        );
+        assert_eq!(
+            TrainingProtocol::from_str("exploration"),
+            Some(TrainingProtocol::Reachability)
+        );
     }
 
     #[test]
@@ -213,6 +255,14 @@ mod tests {
         let advanced = ProtocolConfig::new(TrainingProtocol::AdvancedPlatform);
         assert_eq!(advanced.level_name, None);
         assert_eq!(advanced.time_limit_secs, None);
+        assert_eq!(advanced.win_score, 5);
+
+        let reachability = ProtocolConfig::new(TrainingProtocol::Reachability);
+        assert_eq!(reachability.level_name, None);
+        assert_eq!(reachability.time_limit_secs, None);
+        assert_eq!(reachability.win_score, 0);
+        assert!(TrainingProtocol::Reachability.is_solo_mode());
+        assert!(TrainingProtocol::Reachability.iterates_all_levels());
         assert_eq!(advanced.win_score, 5);
     }
 }

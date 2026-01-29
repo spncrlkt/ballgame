@@ -109,11 +109,22 @@ cargo run --bin analyze -- --training-db db/training.db
 ## End-of-hour wrap
 - Skim the latest training debug reports under `training_logs/session_*/analysis/`.
 - Note any obvious missing heatmaps or low-contrast warnings.
-- Merge all offline DBs for a combined report:
+- Run the combined analysis script:
 ```
-python3 offline_training/merge_training_dbs.py --list offline_training/db_list.txt --out db/combined_offline_training.db
-cargo run --bin analyze -- --training-db db/combined_offline_training.db
+./offline_training/analyze_offline.sh
 ```
+
+### Coverage targets for reachability analysis
+Arena grid: 80 × 45 = 3,600 cells (20px cell size)
+
+| Coverage | Cells | Assessment |
+|----------|-------|------------|
+| <10% | <360 | Insufficient - need more playtime |
+| 10-20% | 360-720 | Low - basic patterns visible |
+| 20-30% | 720-1080 | Good - meaningful analysis possible |
+| >30% | >1080 | Excellent - comprehensive coverage |
+
+Rule of thumb: ~6 minutes of active play per level for 25%+ coverage.
 
 ## Quick notes (fill per level)
 - Islands:

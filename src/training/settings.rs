@@ -86,8 +86,8 @@ impl Default for TrainingSettings {
         Self {
             protocol: TrainingProtocol::default(),
             mode: TrainingMode::Goal,
-            iterations: 5,
-            win_score: 5,
+            iterations: 3,
+            win_score: 1,
             ai_profile: "Balanced".to_string(),
             level: None,
             exclude_levels: vec!["Pit".to_string()],
@@ -303,6 +303,7 @@ PROTOCOLS:
     advanced-platform (default) - Full 1v1 games on random levels
     pursuit                     - Flat level chase test (verifies AI pursues player)
     pursuit2                    - Platform chase test (pursuit with center obstacle)
+    reachability                - Solo level exploration for coverage mapping (LB to advance)
 
 MODES:
     goal  (default) - Each iteration ends after one goal, then reset
