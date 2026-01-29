@@ -12,6 +12,7 @@ cargo run --release    # Play with optimizations
 
 **Guides:**
 - [`docs/guides/HOW_TO_PLAY.md`](docs/guides/HOW_TO_PLAY.md) - Controls and gameplay
+- [`docs/guides/BINARIES.md`](docs/guides/BINARIES.md) - All binaries with flags and usage
 - [`docs/guides/TRAINING.md`](docs/guides/TRAINING.md) - Training mode setup and analysis workflow
 - [`docs/guides/WORKFLOWS.md`](docs/guides/WORKFLOWS.md) - Multi-step development workflows
 
@@ -45,106 +46,23 @@ cargo run --bin generate levels             # Level showcase grid
 
 ---
 
-## All Binaries
+## Binaries
 
 | Binary | Purpose |
 |--------|---------|
 | `ballgame` | Main game |
 | `training` | 1v1 vs AI with event logging |
 | `simulate` | Headless AI vs AI simulation |
-| `analyze` | Analyze training sessions, generate reports |
-| `run-ghost` | Run ghost trials (recorded inputs vs AI) |
-| `test-scenarios` | Run scenario tests |
-| `heatmap` | Generate per-level heatmaps (score, speed, reachability, etc.) |
-| `generate` | Generate assets (ball textures, showcases, GIFs) |
+| `analyze` | Analyze sessions, generate reports |
+| `test-scenarios` | Deterministic mechanics tests |
+| `heatmap` | Per-level heatmaps |
+| `run-ghost` | Ghost trial playback |
+| `generate` | Asset generation |
+| `extract-drives` | Extract input sequences |
+| `verify_reachability` | Verify heatmap coverage |
+| `gamepad_debug` | Controller debugging |
 
-### Main Game
-
-```bash
-cargo run                              # Play
-cargo run -- --replay-db <match_id>    # Replay a recorded match from SQLite
-cargo run -- --screenshot-and-quit     # Screenshot and exit (for testing)
-```
-
-### Training Mode
-
-Play 1v1 against AI with full event logging for analysis.
-
-```bash
-cargo run --bin training                              # Default: 5 iterations vs Balanced
-cargo run --bin training -- -n 10                     # 10 iterations
-cargo run --bin training -- -n 3 -p v3_Rush_Smart     # vs specific profile
-```
-
-Output: `training_logs/session_YYYYMMDD_HHMMSS/`
-
-### Simulation (Headless)
-
-Fast AI vs AI matches for testing and tournaments.
-
-```bash
-cargo run --bin simulate -- --help
-
-# Key options:
-#   --level <N>         Level 1-12 (default: random)
-#   --left <PROFILE>    Left AI profile
-#   --right <PROFILE>   Right AI profile
-#   --duration <SECS>   Time limit (default: 60)
-#   --matches <N>       Run N matches
-#   --tournament [N]    All profile pairs, N rounds each
-#   --shot-test [N]     Shot accuracy test (N iterations)
-#   --log-events        Save .evlog files
-#   --log-dir <DIR>     Where to save logs
-#   --parallel <N>      Parallel workers (default: CPU count)
-```
-
-**Examples:**
-```bash
-cargo run --bin simulate -- --level 3 --left v2_Balanced --right v3_Rush_Smart
-cargo run --bin simulate -- --tournament 5 --parallel 8
-cargo run --bin simulate -- --shot-test 30 --level 3
-```
-
-### Ghost System
-
-Test AI defense against recorded human play. Training sessions are complete drives (you start with the ball).
-
-**Step 1: Record training iterations**
-```bash
-cargo run --bin training -- -n 5
-```
-
-**Step 2: Run ghost trials against AI** (no extraction needed)
-```bash
-cargo run --bin run-ghost training_logs/session_YYYYMMDD_HHMMSS/
-cargo run --bin run-ghost training_logs/session_*/ --profile v3_Rush_Smart
-cargo run --bin run-ghost training_logs/session_*/ --summary
-```
-
-### Analytics
-
-```bash
-cargo run --bin analyze -- training_logs/session_YYYYMMDD_HHMMSS/
-cargo run --bin analyze -- logs/ --output report.txt
-```
-
-### Scenario Tests
-
-```bash
-cargo run --bin test-scenarios              # Run all 35 tests
-cargo run --bin test-scenarios -- ball/     # Run category
-cargo run --bin test-scenarios -- -v        # Verbose (show failures)
-```
-
-### Heatmaps
-
-```bash
-cargo run --bin heatmap -- score                  # Per-level scoring heatmaps (left/right)
-cargo run --bin heatmap -- --type reachability    # Reachability heatmaps
-cargo run --bin heatmap -- --full --level "Arena" # Full bundle for one level
-cargo run --bin heatmap -- --full --check         # Full bundles for changed/new levels
-cargo run --bin heatmap -- --full --refresh       # Regenerate everything
-```
+**Full documentation:** [`docs/guides/BINARIES.md`](docs/guides/BINARIES.md) - All flags, options, and examples.
 
 ---
 
@@ -257,6 +175,7 @@ ballgame/
 | File | Purpose |
 |------|---------|
 | [`docs/guides/HOW_TO_PLAY.md`](docs/guides/HOW_TO_PLAY.md) | Controls and gameplay |
+| [`docs/guides/BINARIES.md`](docs/guides/BINARIES.md) | All binaries reference |
 | [`docs/guides/TRAINING.md`](docs/guides/TRAINING.md) | Training mode setup |
 | [`docs/guides/TESTING.md`](docs/guides/TESTING.md) | Running tests |
 

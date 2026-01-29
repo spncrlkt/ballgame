@@ -1,7 +1,10 @@
 # Ballgame Done Archive
 
-## Archived 2026-01-29 (Unified Run Summary)
+## Archived 2026-01-29 (Binary Reference + Run Summary)
 
+- [x] **Binary Reference Guide** - Created `docs/guides/BINARIES.md`
+  - All 11 binaries documented with flags, options, examples
+  - Updated README.md to link instead of inline docs
 - [x] **Unified Run Summary** - Consistent end-of-run output for all binaries
   - New `src/run_summary.rs` module with builder pattern
   - 80-char Unicode box formatting, file category tags, next step suggestions
@@ -9,6 +12,7 @@
 - [x] **Documentation Reorganization** - Consolidated docs and tools (2026-01-28)
   - Moved archive docs to `docs/archive/`, dev guides to `docs/dev/`
   - Tools consolidated under `tools/` with README
+- [x] **Evlog elimination complete** - Full SQLite migration, all .evlog infrastructure removed (2026-01-26)
 
 ---
 

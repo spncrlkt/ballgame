@@ -86,6 +86,11 @@ Benefits: ~120 lines deleted, full AI defense in ghost mode, cleaner architectur
 - Debug level: labels update color on palette change
 - AI debug level: both players AI-controlled for testing
 
+**Documentation:**
+- AI_PROFILES.md - How to create/tune AI profiles (parameters, process)
+- LEVELS.md - Level authoring guide (format, geometry, testing)
+- Verify Python script dependencies in WORKFLOWS.md (see "Incomplete" section)
+
 **Simulation/Heatmaps:**
 - Generate heatmaps for all levels (only Arena + Open Floor currently have full set)
 - Add `--preset` flag to simulate binary for easier variant testing
@@ -116,6 +121,9 @@ cargo run --bin training                 # Training mode
 
 ## Done (Last 5)
 
+- [x] **Binary Reference Guide** - Created `docs/guides/BINARIES.md` (2026-01-29)
+  - All 11 binaries documented with flags, options, examples
+  - Updated README.md to link instead of inline docs
 - [x] **Unified Run Summary** - Consistent end-of-run output for all binaries (2026-01-29)
   - New `src/run_summary.rs` module with builder pattern
   - 80-char box formatting with Unicode box-drawing characters
@@ -132,6 +140,5 @@ cargo run --bin training                 # Training mode
 - [x] **Training Reachability Protocol** - Solo exploration mode for coverage mapping (2026-01-28)
   - `--protocol reachability` flag for level exploration
   - Q/LB advances to next level during exploration
-- [x] **Evlog elimination complete** - Full SQLite migration, all .evlog infrastructure removed (2026-01-26)
 
 *See `todone.md` for full archive with commit references*
