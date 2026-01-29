@@ -36,6 +36,14 @@ pub enum TrainingProtocol {
     /// - No win condition - player decides when done with each level
     /// - Captures position data for coverage analysis
     Reachability,
+
+    /// Automated reachability exploration via random walk and hop
+    /// - No human input needed - character moves automatically
+    /// - Walks along platform surfaces, jumps at edges with random timing
+    /// - Iterates through all non-debug levels
+    /// - Auto-advances when coverage plateaus or time limit reached
+    /// - Generates comprehensive reachability heatmaps
+    AutoReachability,
 }
 
 // TODO: add a shooting training protocol for basket position calculations.
@@ -51,6 +59,9 @@ impl TrainingProtocol {
             "pursuit" | "chase" => Some(TrainingProtocol::Pursuit),
             "pursuit2" | "pursuit-2" | "pursuit-level-2" => Some(TrainingProtocol::Pursuit2),
             "reachability" | "reach" | "exploration" => Some(TrainingProtocol::Reachability),
+            "auto-reachability" | "autoreachability" | "auto-reach" | "autoreach" | "auto" => {
+                Some(TrainingProtocol::AutoReachability)
+            }
             _ => None,
         }
     }
@@ -62,6 +73,7 @@ impl TrainingProtocol {
             TrainingProtocol::Pursuit => "Pursuit Test",
             TrainingProtocol::Pursuit2 => "Pursuit Test Level 2",
             TrainingProtocol::Reachability => "Reachability Exploration",
+            TrainingProtocol::AutoReachability => "Auto Reachability",
         }
     }
 
@@ -72,6 +84,7 @@ impl TrainingProtocol {
             TrainingProtocol::Pursuit => "pursuit",
             TrainingProtocol::Pursuit2 => "pursuit2",
             TrainingProtocol::Reachability => "reachability",
+            TrainingProtocol::AutoReachability => "auto-reachability",
         }
     }
 
@@ -86,6 +99,9 @@ impl TrainingProtocol {
             TrainingProtocol::Reachability => {
                 "Solo level exploration - iterate through all levels for coverage mapping"
             }
+            TrainingProtocol::AutoReachability => {
+                "Automated random walk/hop exploration for comprehensive reachability mapping"
+            }
         }
     }
 
@@ -95,7 +111,8 @@ impl TrainingProtocol {
             TrainingProtocol::AdvancedPlatform => None,
             TrainingProtocol::Pursuit => Some("Pursuit Arena"),
             TrainingProtocol::Pursuit2 => Some("Pursuit Arena 2"),
-            TrainingProtocol::Reachability => None, // Iterates all levels
+            TrainingProtocol::Reachability => None,      // Iterates all levels
+            TrainingProtocol::AutoReachability => None,  // Iterates all levels
         }
     }
 
@@ -103,9 +120,10 @@ impl TrainingProtocol {
     pub fn default_time_limit(&self) -> Option<f32> {
         match self {
             TrainingProtocol::AdvancedPlatform => None,
-            TrainingProtocol::Pursuit => Some(30.0), // 30 second default for pursuit
-            TrainingProtocol::Pursuit2 => Some(30.0), // 30 second default for pursuit2
-            TrainingProtocol::Reachability => None,  // Player decides when done
+            TrainingProtocol::Pursuit => Some(30.0),      // 30 second default for pursuit
+            TrainingProtocol::Pursuit2 => Some(30.0),     // 30 second default for pursuit2
+            TrainingProtocol::Reachability => None,       // Player decides when done
+            TrainingProtocol::AutoReachability => Some(60.0), // 60 seconds per level
         }
     }
 
@@ -114,27 +132,39 @@ impl TrainingProtocol {
         match self {
             TrainingProtocol::AdvancedPlatform => true,
             TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => true, // Ends on score OR time
-            TrainingProtocol::Reachability => false,                        // No win condition
+            TrainingProtocol::Reachability | TrainingProtocol::AutoReachability => false, // No win condition
         }
     }
 
     /// Whether player should start with the ball
     pub fn player_starts_with_ball(&self) -> bool {
         match self {
-            TrainingProtocol::AdvancedPlatform => true, // Already implemented
+            TrainingProtocol::AdvancedPlatform => true,   // Already implemented
             TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => true, // AI must chase
-            TrainingProtocol::Reachability => true,     // Exploration mode
+            TrainingProtocol::Reachability => true,       // Exploration mode
+            TrainingProtocol::AutoReachability => false,  // No ball needed for exploration
         }
     }
 
     /// Whether this is a solo exploration mode (no active AI opponent)
     pub fn is_solo_mode(&self) -> bool {
-        matches!(self, TrainingProtocol::Reachability)
+        matches!(
+            self,
+            TrainingProtocol::Reachability | TrainingProtocol::AutoReachability
+        )
     }
 
     /// Whether this protocol iterates through all levels sequentially
     pub fn iterates_all_levels(&self) -> bool {
-        matches!(self, TrainingProtocol::Reachability)
+        matches!(
+            self,
+            TrainingProtocol::Reachability | TrainingProtocol::AutoReachability
+        )
+    }
+
+    /// Whether this protocol uses automated input (no human control)
+    pub fn is_automated(&self) -> bool {
+        matches!(self, TrainingProtocol::AutoReachability)
     }
 }
 
@@ -167,7 +197,7 @@ impl ProtocolConfig {
             win_score: match protocol {
                 TrainingProtocol::AdvancedPlatform => 5,
                 TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => 1, // End on first score
-                TrainingProtocol::Reachability => 0,                         // No score-based win
+                TrainingProtocol::Reachability | TrainingProtocol::AutoReachability => 0, // No score-based win
             },
         }
     }
@@ -238,6 +268,19 @@ mod tests {
             TrainingProtocol::from_str("exploration"),
             Some(TrainingProtocol::Reachability)
         );
+        // AutoReachability parsing
+        assert_eq!(
+            TrainingProtocol::from_str("auto-reachability"),
+            Some(TrainingProtocol::AutoReachability)
+        );
+        assert_eq!(
+            TrainingProtocol::from_str("auto-reach"),
+            Some(TrainingProtocol::AutoReachability)
+        );
+        assert_eq!(
+            TrainingProtocol::from_str("auto"),
+            Some(TrainingProtocol::AutoReachability)
+        );
     }
 
     #[test]
@@ -263,6 +306,15 @@ mod tests {
         assert_eq!(reachability.win_score, 0);
         assert!(TrainingProtocol::Reachability.is_solo_mode());
         assert!(TrainingProtocol::Reachability.iterates_all_levels());
-        assert_eq!(advanced.win_score, 5);
+        assert!(!TrainingProtocol::Reachability.is_automated());
+
+        // AutoReachability config
+        let auto_reach = ProtocolConfig::new(TrainingProtocol::AutoReachability);
+        assert_eq!(auto_reach.level_name, None);
+        assert_eq!(auto_reach.time_limit_secs, Some(60.0)); // 60 second default
+        assert_eq!(auto_reach.win_score, 0);
+        assert!(TrainingProtocol::AutoReachability.is_solo_mode());
+        assert!(TrainingProtocol::AutoReachability.iterates_all_levels());
+        assert!(TrainingProtocol::AutoReachability.is_automated());
     }
 }

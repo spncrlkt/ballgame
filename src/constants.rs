@@ -220,6 +220,21 @@ pub const DEFENSE_GRACE_REDUCTION: f32 = 0.3;
 pub const DEFENSE_SHOT_VARIANCE_MAX: f32 = 0.20;
 
 // =============================================================================
+// REACHABILITY SHADOW TRAIL (Training Mode)
+// =============================================================================
+
+/// Size of shadow trail markers (slightly smaller than player)
+pub const SHADOW_TRAIL_SIZE: Vec2 = Vec2::new(28.0, 58.0);
+/// Opacity of shadow trail markers (0.0-1.0) - light and subtle
+pub const SHADOW_TRAIL_ALPHA: f32 = 0.25;
+/// Minimum distance between shadow spawns (pixels)
+pub const SHADOW_TRAIL_MIN_DISTANCE: f32 = 12.0;
+/// Z-depth for shadow trail (behind player but in front of background)
+pub const SHADOW_TRAIL_Z: f32 = -0.5;
+/// Lightness boost for complementary shadow color (0.0-1.0)
+pub const SHADOW_TRAIL_LIGHTNESS: f32 = 0.7;
+
+// =============================================================================
 // DEFAULT AI PROFILES
 // =============================================================================
 

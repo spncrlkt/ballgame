@@ -1110,46 +1110,147 @@ fn generate_value_heatmap(
     image_path
 }
 
+/// Multi-pass reachability simulation
+///
+/// Unlike single-hop simulation, this iteratively expands reachability:
+/// 1. First pass: simulate jumps from floor level
+/// 2. Subsequent passes: simulate jumps from newly-reachable platform surfaces
+/// 3. Repeat until no new cells are marked reachable
+///
+/// This correctly handles levels like Islands where platforms require
+/// intermediate hops to reach (floor → low platform → high platform).
 fn compute_reachability(platform_rects: &[PlatformRect], physics: &PhysicsConfig) -> HeatmapGrid {
     let mut grid = HeatmapGrid::new();
-    let mut counts = vec![0u32; (GRID_WIDTH * GRID_HEIGHT) as usize];
+    let mut reached = vec![false; (GRID_WIDTH * GRID_HEIGHT) as usize];
     let mut rng = rand::thread_rng();
+    let half_h = PLAYER_SIZE.y / 2.0;
 
-    let start_y = ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0;
-    let per_start = REACHABILITY_SAMPLES_PER_START as f32;
+    // Build list of jump surfaces: floor + all platform tops
+    let mut surfaces: Vec<(f32, f32, f32)> = Vec::new(); // (left_x, right_x, top_y)
 
-    for cx in 0..GRID_WIDTH {
-        let (start_x, _) = cell_world_coords(cx, 0);
-        for _ in 0..REACHABILITY_SAMPLES_PER_START {
-            let mut visited = vec![false; (GRID_WIDTH * GRID_HEIGHT) as usize];
-            simulate_jump(
-                start_x,
-                start_y,
-                platform_rects,
-                physics,
-                &mut rng,
-                &mut |pos: Vec2| {
-                    if let Some((gx, gy)) = world_to_cell(pos.x, pos.y) {
+    // Floor surface
+    let floor_left = -ARENA_WIDTH / 2.0 + WALL_THICKNESS;
+    let floor_right = ARENA_WIDTH / 2.0 - WALL_THICKNESS;
+    surfaces.push((floor_left, floor_right, ARENA_FLOOR_Y));
+
+    // Platform surfaces
+    for rect in platform_rects {
+        surfaces.push((rect.left, rect.right, rect.top));
+    }
+
+    // Track which surfaces we've already simulated from
+    let mut surface_used = vec![false; surfaces.len()];
+
+    // Pass 1: Always start from floor
+    surface_used[0] = true;
+    simulate_from_surface(
+        &surfaces[0],
+        platform_rects,
+        physics,
+        &mut rng,
+        &mut reached,
+        half_h,
+    );
+
+    // Multi-pass: iterate until no new surfaces become reachable
+    let max_passes = 10; // Safety limit
+    for _pass in 0..max_passes {
+        let mut new_surface_found = false;
+
+        for (surf_idx, surface) in surfaces.iter().enumerate() {
+            if surface_used[surf_idx] {
+                continue;
+            }
+
+            // Check if any cell on this surface is now reachable
+            let surf_y = surface.2 + half_h; // Player center when standing on surface
+            if let Some((_, gy)) = world_to_cell(surface.0, surf_y) {
+                let mut surface_reachable = false;
+
+                // Check cells along this surface
+                for x in (surface.0 as i32)..=(surface.1 as i32) {
+                    if let Some((gx, _)) = world_to_cell(x as f32, surf_y) {
                         let idx = HeatmapGrid::index(gx, gy);
-                        if !visited[idx] {
-                            visited[idx] = true;
-                            counts[idx] += 1;
+                        if reached[idx] {
+                            surface_reachable = true;
+                            break;
                         }
                     }
-                },
-            );
+                }
+
+                if surface_reachable {
+                    surface_used[surf_idx] = true;
+                    new_surface_found = true;
+                    simulate_from_surface(
+                        surface,
+                        platform_rects,
+                        physics,
+                        &mut rng,
+                        &mut reached,
+                        half_h,
+                    );
+                }
+            }
+        }
+
+        if !new_surface_found {
+            break;
         }
     }
 
+    // Convert reached flags to grid values
+    // Use 1.0 for reachable, 0.0 for unreachable (binary for now)
     for cy in 0..GRID_HEIGHT {
         for cx in 0..GRID_WIDTH {
             let idx = HeatmapGrid::index(cx, cy);
-            let value = (counts[idx] as f32 / per_start).clamp(0.0, 1.0);
+            let value = if reached[idx] { 1.0 } else { 0.0 };
             grid.set(cx, cy, value);
         }
     }
 
     grid
+}
+
+/// Simulate jumps from all positions along a surface
+fn simulate_from_surface(
+    surface: &(f32, f32, f32), // (left_x, right_x, top_y)
+    platform_rects: &[PlatformRect],
+    physics: &PhysicsConfig,
+    rng: &mut impl rand::Rng,
+    reached: &mut [bool],
+    half_h: f32,
+) {
+    let (left_x, right_x, top_y) = *surface;
+    let start_y = top_y + half_h;
+
+    // Sample jump start positions along the surface
+    let surface_width = right_x - left_x;
+    let num_starts = ((surface_width / CELL_SIZE as f32).ceil() as usize).max(3);
+
+    for i in 0..num_starts {
+        let t = if num_starts > 1 {
+            i as f32 / (num_starts - 1) as f32
+        } else {
+            0.5
+        };
+        let start_x = left_x + t * surface_width;
+
+        for _ in 0..REACHABILITY_SAMPLES_PER_START {
+            simulate_jump(
+                start_x,
+                start_y,
+                platform_rects,
+                physics,
+                rng,
+                &mut |pos: Vec2| {
+                    if let Some((gx, gy)) = world_to_cell(pos.x, pos.y) {
+                        let idx = HeatmapGrid::index(gx, gy);
+                        reached[idx] = true;
+                    }
+                },
+            );
+        }
+    }
 }
 
 fn compute_landing_safety(platform_rects: &[PlatformRect]) -> HeatmapGrid {

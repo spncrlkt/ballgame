@@ -38,7 +38,7 @@ use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use world::{Basket, BasketRim, Collider, Platform};
+use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 
 /// Path to ball options file
 const BALL_OPTIONS_FILE: &str = "config/ball_options.txt";
@@ -67,6 +67,83 @@ fn load_ball_style_names() -> Vec<String> {
 
 #[derive(Resource, Clone)]
 struct AllowedTrainingLevels(Option<Vec<String>>);
+
+/// Marker component for shadow trail entities (reachability visualization)
+#[derive(Component)]
+struct ShadowTrail;
+
+/// Resource tracking shadow trail state for reachability protocol
+#[derive(Resource)]
+struct ShadowTrailState {
+    /// Last position where a shadow was spawned
+    last_pos: Option<Vec2>,
+    /// Whether shadow trail is enabled (only for Reachability protocol)
+    enabled: bool,
+}
+
+impl Default for ShadowTrailState {
+    fn default() -> Self {
+        Self {
+            last_pos: None,
+            enabled: false,
+        }
+    }
+}
+
+/// Resource tracking automated walk/hop state for AutoReachability protocol
+#[derive(Resource)]
+struct AutoWalkState {
+    /// Current movement direction (-1.0 = left, 1.0 = right)
+    direction: f32,
+    /// Time until next jump attempt
+    jump_timer: f32,
+    /// Time until direction change
+    direction_timer: f32,
+    /// Whether currently holding jump
+    jump_held: bool,
+    /// How long to hold jump for (varies for different jump heights)
+    jump_hold_duration: f32,
+    /// Time spent holding jump
+    jump_hold_timer: f32,
+    /// Whether the automation is enabled
+    enabled: bool,
+    /// RNG seed for reproducibility (optional)
+    rng_counter: u32,
+}
+
+impl Default for AutoWalkState {
+    fn default() -> Self {
+        Self {
+            direction: 1.0,
+            jump_timer: 0.5,
+            direction_timer: 2.0,
+            jump_held: false,
+            jump_hold_duration: 0.0,
+            jump_hold_timer: 0.0,
+            enabled: false,
+            rng_counter: 0,
+        }
+    }
+}
+
+impl AutoWalkState {
+    /// Simple pseudo-random number generator (deterministic)
+    fn next_random(&mut self) -> f32 {
+        // LCG parameters
+        self.rng_counter = self.rng_counter.wrapping_mul(1103515245).wrapping_add(12345);
+        ((self.rng_counter >> 16) & 0x7FFF) as f32 / 32768.0
+    }
+
+    /// Reset state for a new level
+    fn reset_for_level(&mut self) {
+        self.direction = if self.next_random() > 0.5 { 1.0 } else { -1.0 };
+        self.jump_timer = 0.3 + self.next_random() * 0.5;
+        self.direction_timer = 1.5 + self.next_random() * 2.0;
+        self.jump_held = false;
+        self.jump_hold_duration = 0.0;
+        self.jump_hold_timer = 0.0;
+    }
+}
 
 fn load_allowed_levels(settings: &TrainingSettings) -> Option<Vec<String>> {
     let Some(path) = &settings.offline_levels_file else {
@@ -283,8 +360,8 @@ fn main() {
             if let Some(level_data) = level_db.get(level_idx) {
                 training_state.current_level = (level_idx + 1) as u32;
                 training_state.current_level_name = level_data.name.clone();
-                // Initialize reachability collector for this level
-                training_state.reachability_collector = Some(ReachabilityCollector::new(
+                // Initialize reachability collector for this level (with preloaded data if available)
+                training_state.reachability_collector = Some(ReachabilityCollector::new_with_preload(
                     level_data.id.clone(),
                     level_data.name.clone(),
                 ));
@@ -393,6 +470,8 @@ fn main() {
         .insert_resource(settings)
         .insert_resource(AllowedTrainingLevels(allowed_levels))
         .insert_resource(training_state)
+        .init_resource::<ShadowTrailState>()
+        .init_resource::<AutoWalkState>()
         .init_resource::<PlayerInput>()
         .init_resource::<TweakPanelState>()
         .init_resource::<DebugSettings>()
@@ -433,6 +512,7 @@ fn main() {
             (
                 input::capture_input,
                 ai::copy_human_input,
+                auto_walk_and_hop,
                 ai::mark_nav_dirty_on_level_change,
                 ai::load_heatmaps_on_level_change,
                 ai::rebuild_nav_graph,
@@ -493,10 +573,19 @@ fn main() {
                 give_ball_to_human,
                 collect_training_debug_samples,
                 collect_reachability_positions,
+                spawn_shadow_trail,
             )
                 .chain()
                 .run_if(countdown::not_in_countdown)
                 .run_if(not_paused),
+        )
+        // Level change handling
+        .add_systems(
+            Update,
+            (
+                reload_level_geometry_on_change,
+                clear_shadow_trail_on_level_change,
+            ),
         )
         .run();
 }
@@ -555,6 +644,280 @@ fn collect_reachability_positions(
                 collector.positions.push((pos.x, pos.y));
             }
         }
+    }
+}
+
+/// Spawn shadow trail markers behind the human player (Reachability protocol only)
+/// Creates persistent visual markers showing areas the player has visited
+fn spawn_shadow_trail(
+    mut commands: Commands,
+    mut shadow_state: ResMut<ShadowTrailState>,
+    training_state: Res<TrainingState>,
+    players: Query<(&Transform, Option<&HumanControlled>, &Team), With<Player>>,
+    palette_db: Res<PaletteDatabase>,
+    current_palette: Res<CurrentPalette>,
+) {
+    // Only spawn during Playing phase for Reachability protocol
+    if !shadow_state.enabled
+        || training_state.phase != TrainingPhase::Playing
+        || !training_state.protocol.iterates_all_levels()
+    {
+        return;
+    }
+
+    // Find human player position
+    for (transform, human, team) in &players {
+        if human.is_none() {
+            continue;
+        }
+
+        let pos = Vec2::new(transform.translation.x, transform.translation.y);
+
+        // Check if we've moved far enough from last shadow
+        let should_spawn = match shadow_state.last_pos {
+            Some(last) => pos.distance(last) >= SHADOW_TRAIL_MIN_DISTANCE,
+            None => true,
+        };
+
+        if should_spawn {
+            // Get player color and create complementary shadow color
+            let palette = palette_db.get(current_palette.0).unwrap_or_else(|| {
+                palette_db.get(0).expect("No palettes loaded")
+            });
+
+            // Use team color as base
+            let player_color = if *team == Team::Left {
+                palette.left
+            } else {
+                palette.right
+            };
+
+            // Create complementary color: shift hue by 180°, make it light
+            let shadow_color = complementary_light_color(player_color, SHADOW_TRAIL_LIGHTNESS, SHADOW_TRAIL_ALPHA);
+
+            // Spawn shadow sprite
+            commands.spawn((
+                Sprite::from_color(shadow_color, SHADOW_TRAIL_SIZE),
+                Transform::from_xyz(pos.x, pos.y, SHADOW_TRAIL_Z),
+                ShadowTrail,
+            ));
+
+            shadow_state.last_pos = Some(pos);
+        }
+    }
+}
+
+/// Clear shadow trail when level changes and spawn preloaded shadows
+fn clear_shadow_trail_on_level_change(
+    mut commands: Commands,
+    mut shadow_state: ResMut<ShadowTrailState>,
+    training_state: Res<TrainingState>,
+    shadows: Query<Entity, With<ShadowTrail>>,
+    players: Query<&Team, (With<Player>, With<HumanControlled>)>,
+    palette_db: Res<PaletteDatabase>,
+    current_palette: Res<CurrentPalette>,
+    mut last_level: Local<String>,
+) {
+    // Detect level change
+    if training_state.current_level_name != *last_level {
+        // Clear all shadow trail entities
+        for entity in &shadows {
+            commands.entity(entity).despawn();
+        }
+
+        // Reset shadow state
+        shadow_state.last_pos = None;
+
+        // Enable shadow trail for Reachability protocol
+        shadow_state.enabled = training_state.protocol.iterates_all_levels();
+
+        // Spawn shadows for preloaded positions if this is reachability mode
+        if shadow_state.enabled {
+            if let Some(ref collector) = training_state.reachability_collector {
+                if !collector.preloaded_positions.is_empty() {
+                    // Get shadow color from human player's team
+                    let team = players.iter().next().copied().unwrap_or(Team::Left);
+                    let palette = palette_db.get(current_palette.0).unwrap_or_else(|| {
+                        palette_db.get(0).expect("No palettes loaded")
+                    });
+                    let player_color = if team == Team::Left {
+                        palette.left
+                    } else {
+                        palette.right
+                    };
+                    let shadow_color = complementary_light_color(
+                        player_color,
+                        SHADOW_TRAIL_LIGHTNESS,
+                        SHADOW_TRAIL_ALPHA,
+                    );
+
+                    // Spawn shadows for all preloaded positions
+                    for &(x, y) in &collector.preloaded_positions {
+                        commands.spawn((
+                            Sprite::from_color(shadow_color, SHADOW_TRAIL_SIZE),
+                            Transform::from_xyz(x, y, SHADOW_TRAIL_Z),
+                            ShadowTrail,
+                        ));
+                    }
+
+                    info!(
+                        "Spawned {} preloaded shadows for {}",
+                        collector.preloaded_positions.len(),
+                        collector.level_name
+                    );
+                }
+            }
+        }
+
+        *last_level = training_state.current_level_name.clone();
+    }
+}
+
+/// Reload level geometry (platforms + corner ramps) when level changes
+/// This is needed because training mode doesn't use the main game's respawn_player system
+fn reload_level_geometry_on_change(
+    mut commands: Commands,
+    current_level: Res<CurrentLevel>,
+    level_db: Res<LevelDatabase>,
+    palette_db: Res<PaletteDatabase>,
+    current_palette: Res<CurrentPalette>,
+    level_platforms: Query<Entity, With<LevelPlatform>>,
+    corner_ramps: Query<Entity, With<CornerRamp>>,
+    mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>)>,
+    mut last_level_id: Local<String>,
+) {
+    // Detect level change by comparing level IDs
+    if current_level.0 == *last_level_id {
+        return;
+    }
+
+    // Skip on first frame (initial setup handles this)
+    if last_level_id.is_empty() {
+        *last_level_id = current_level.0.clone();
+        return;
+    }
+
+    info!("Reloading level geometry for: {}", current_level.0);
+
+    // Get palette for platform colors
+    let palette = palette_db
+        .get(current_palette.0)
+        .unwrap_or_else(|| palette_db.get(0).expect("No palettes loaded"));
+
+    // Reload level geometry (despawns old, spawns new)
+    if let Some((left_x, right_x, basket_y)) = levels::reload_level_geometry(
+        &mut commands,
+        &level_db,
+        &current_level.0,
+        palette.platforms,
+        level_platforms.iter(),
+        corner_ramps.iter(),
+    ) {
+        // Update basket positions
+        for mut basket_transform in &mut baskets {
+            if basket_transform.translation.x < 0.0 {
+                basket_transform.translation.x = left_x;
+            } else {
+                basket_transform.translation.x = right_x;
+            }
+            basket_transform.translation.y = basket_y;
+        }
+    }
+
+    *last_level_id = current_level.0.clone();
+}
+
+/// Automated random walk and hop system for AutoReachability protocol
+/// Generates movement and jump inputs to explore all reachable areas of a level
+fn auto_walk_and_hop(
+    time: Res<Time>,
+    training_state: Res<TrainingState>,
+    mut auto_state: ResMut<AutoWalkState>,
+    mut players: Query<
+        (&Transform, &Grounded, &mut InputState),
+        (With<Player>, With<HumanControlled>),
+    >,
+    mut last_level: Local<String>,
+) {
+    // Only active for AutoReachability protocol during Playing phase
+    if !training_state.protocol.is_automated() {
+        auto_state.enabled = false;
+        return;
+    }
+
+    if training_state.phase != TrainingPhase::Playing {
+        return;
+    }
+
+    // Reset state on level change
+    if training_state.current_level_name != *last_level {
+        auto_state.reset_for_level();
+        auto_state.enabled = true;
+        *last_level = training_state.current_level_name.clone();
+    }
+
+    if !auto_state.enabled {
+        return;
+    }
+
+    let dt = time.delta_secs();
+
+    // Update timers
+    auto_state.jump_timer -= dt;
+    auto_state.direction_timer -= dt;
+
+    // Change direction periodically or randomly
+    if auto_state.direction_timer <= 0.0 {
+        auto_state.direction = -auto_state.direction;
+        // Random duration between 1.0 and 4.0 seconds
+        auto_state.direction_timer = 1.0 + auto_state.next_random() * 3.0;
+    }
+
+    // Handle jump hold timing
+    if auto_state.jump_held {
+        auto_state.jump_hold_timer += dt;
+        if auto_state.jump_hold_timer >= auto_state.jump_hold_duration {
+            auto_state.jump_held = false;
+            auto_state.jump_hold_timer = 0.0;
+        }
+    }
+
+    // Apply inputs to human-controlled player
+    for (transform, grounded, mut input_state) in &mut players {
+        // Always move in current direction
+        input_state.move_x = auto_state.direction;
+
+        // Check if near arena walls and reverse direction
+        let wall_margin = ARENA_WIDTH / 2.0 - WALL_THICKNESS - 50.0;
+        if transform.translation.x > wall_margin && auto_state.direction > 0.0 {
+            auto_state.direction = -1.0;
+            auto_state.direction_timer = 1.0 + auto_state.next_random() * 2.0;
+        } else if transform.translation.x < -wall_margin && auto_state.direction < 0.0 {
+            auto_state.direction = 1.0;
+            auto_state.direction_timer = 1.0 + auto_state.next_random() * 2.0;
+        }
+
+        // Jump logic - only when grounded and timer expired
+        if grounded.0 && auto_state.jump_timer <= 0.0 && !auto_state.jump_held {
+            // Start a jump with random hold duration (0.0 = tap, up to 0.3 = full height)
+            auto_state.jump_held = true;
+            auto_state.jump_hold_duration = auto_state.next_random() * 0.3;
+            auto_state.jump_hold_timer = 0.0;
+
+            // Set jump buffer timer to trigger jump
+            input_state.jump_buffer_timer = 0.1;
+
+            // Random interval between jumps (0.3 to 1.5 seconds)
+            auto_state.jump_timer = 0.3 + auto_state.next_random() * 1.2;
+
+            // Occasionally change direction after landing
+            if auto_state.next_random() > 0.7 {
+                auto_state.direction = -auto_state.direction;
+            }
+        }
+
+        // Hold jump if in jump hold phase
+        input_state.jump_held = auto_state.jump_held;
     }
 }
 
@@ -1130,7 +1493,24 @@ fn training_state_machine(
             training_state.update_elapsed();
             event_buffer.elapsed = training_state.game_elapsed;
 
-            // Reachability: no win condition - player decides when to advance via LB
+            // AutoReachability: auto-advance based on time limit
+            if training_state.protocol.is_automated() {
+                let time_limit = training_state.time_limit_secs.unwrap_or(60.0);
+                if training_state.game_elapsed >= time_limit {
+                    // Auto-advance to next level
+                    auto_advance_level(
+                        &mut training_state,
+                        &score,
+                        &mut event_buffer,
+                        &sqlite_logger,
+                        &level_db,
+                        &mut current_level,
+                    );
+                }
+                return;
+            }
+
+            // Reachability (manual): no win condition - player decides when to advance via LB
             if training_state.protocol.iterates_all_levels() {
                 // Level transitions handled by check_advance_level system
                 return;
@@ -1373,7 +1753,7 @@ fn training_state_machine(
                         eprintln!("No analysis available for analysis request.");
                     }
                 }
-                TrainingProtocol::Reachability => {
+                TrainingProtocol::Reachability | TrainingProtocol::AutoReachability => {
                     // Reachability exploration - summary of levels visited
                     println!("\n## Reachability Exploration Complete\n");
                     println!(
@@ -1566,6 +1946,7 @@ fn flush_training_events_to_sqlite(
 }
 
 /// Export reachability heatmap data to CSV file
+/// Combines preloaded data with newly collected positions
 fn export_reachability_heatmap(collector: &ReachabilityCollector) {
     use std::io::Write;
 
@@ -1573,10 +1954,10 @@ fn export_reachability_heatmap(collector: &ReachabilityCollector) {
     const GRID_WIDTH: usize = 80;
     const GRID_HEIGHT: usize = 45;
 
-    // Build visit count grid
+    // Build visit count grid from all positions (preloaded + new)
     let mut grid = vec![0u32; GRID_WIDTH * GRID_HEIGHT];
 
-    for &(x, y) in &collector.positions {
+    for &(x, y) in collector.all_positions() {
         let cx = ((x + ARENA_WIDTH / 2.0) / CELL_SIZE).floor() as i32;
         let cy = ((ARENA_HEIGHT / 2.0 - y) / CELL_SIZE).floor() as i32;
 
@@ -1626,6 +2007,78 @@ fn export_reachability_heatmap(collector: &ReachabilityCollector) {
     }
 }
 
+/// Create a complementary color that is light and semi-transparent
+/// Shifts hue by 180°, increases lightness, and applies alpha
+fn complementary_light_color(base: Color, lightness: f32, alpha: f32) -> Color {
+    // Convert to HSL via Srgba
+    let srgba = base.to_srgba();
+    let r = srgba.red;
+    let g = srgba.green;
+    let b = srgba.blue;
+
+    // RGB to HSL conversion
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let l = (max + min) / 2.0;
+
+    let (h, s) = if (max - min).abs() < 0.0001 {
+        (0.0, 0.0)
+    } else {
+        let d = max - min;
+        let s = if l > 0.5 {
+            d / (2.0 - max - min)
+        } else {
+            d / (max + min)
+        };
+        let h = if (max - r).abs() < 0.0001 {
+            ((g - b) / d + if g < b { 6.0 } else { 0.0 }) / 6.0
+        } else if (max - g).abs() < 0.0001 {
+            ((b - r) / d + 2.0) / 6.0
+        } else {
+            ((r - g) / d + 4.0) / 6.0
+        };
+        (h, s)
+    };
+
+    // Shift hue by 180° (0.5 in 0-1 range) for complementary color
+    let new_h = (h + 0.5) % 1.0;
+    // Blend lightness toward target (make it lighter)
+    let new_l = l + (lightness - l) * 0.8;
+    // Keep saturation but reduce it slightly for softer look
+    let new_s = s * 0.6;
+
+    // HSL to RGB conversion
+    let (r2, g2, b2) = if new_s.abs() < 0.0001 {
+        (new_l, new_l, new_l)
+    } else {
+        let q = if new_l < 0.5 {
+            new_l * (1.0 + new_s)
+        } else {
+            new_l + new_s - new_l * new_s
+        };
+        let p = 2.0 * new_l - q;
+        let hue_to_rgb = |t: f32| {
+            let t = if t < 0.0 { t + 1.0 } else if t > 1.0 { t - 1.0 } else { t };
+            if t < 1.0 / 6.0 {
+                p + (q - p) * 6.0 * t
+            } else if t < 0.5 {
+                q
+            } else if t < 2.0 / 3.0 {
+                p + (q - p) * (2.0 / 3.0 - t) * 6.0
+            } else {
+                p
+            }
+        };
+        (
+            hue_to_rgb(new_h + 1.0 / 3.0),
+            hue_to_rgb(new_h),
+            hue_to_rgb(new_h - 1.0 / 3.0),
+        )
+    };
+
+    Color::srgba(r2, g2, b2, alpha)
+}
+
 /// Sanitize level name for use in filenames
 fn sanitize_level_name(name: &str) -> String {
     let mut out = String::new();
@@ -1642,17 +2095,101 @@ fn sanitize_level_name(name: &str) -> String {
     out.trim_matches('_').to_string()
 }
 
-/// Check for level advance input (Reachability protocol only)
-/// For now: LB quits the session (TODO: later will advance to next level)
+/// Auto-advance to next level (for AutoReachability protocol)
+/// Called when time limit is reached
+fn auto_advance_level(
+    training_state: &mut TrainingState,
+    score: &Score,
+    event_buffer: &mut TrainingEventBuffer,
+    sqlite_logger: &SqliteEventLogger,
+    level_db: &LevelDatabase,
+    current_level: &mut CurrentLevel,
+) {
+    // Export reachability heatmap
+    if let Some(collector) = training_state.reachability_collector.take() {
+        export_reachability_heatmap(&collector);
+        println!(
+            "  Exported reachability heatmap: {} ({:.1}s, {} samples)",
+            collector.level_name,
+            collector.elapsed_secs(),
+            collector.positions.len()
+        );
+    }
+
+    // Log match end for current level
+    event_buffer.buffer.log(
+        training_state.game_elapsed,
+        GameEvent::MatchEnd {
+            score_left: score.left,
+            score_right: score.right,
+            duration: training_state.game_elapsed,
+        },
+    );
+
+    flush_training_events_buffer(event_buffer, sqlite_logger);
+    sqlite_logger.end_match(score.left, score.right, training_state.game_elapsed);
+
+    println!(
+        "Level complete (auto): {} ({:.1}s) [{}/{}]",
+        training_state.current_level_name,
+        training_state.game_elapsed,
+        training_state.level_sequence_index + 1,
+        training_state.level_sequence.len()
+    );
+
+    // Advance to next level in sequence
+    if training_state.advance_to_next_level() {
+        // More levels to explore
+        if let Some(level_idx) = training_state.current_sequence_level() {
+            if let Some(level_data) = level_db.get(level_idx) {
+                // Update training state
+                training_state.current_level = (level_idx + 1) as u32;
+                training_state.current_level_name = level_data.name.clone();
+                training_state.game_number += 1;
+                training_state.game_elapsed = 0.0;
+                training_state.game_start_time = None;
+
+                // Update CurrentLevel resource to trigger level change
+                current_level.0 = level_data.id.clone();
+
+                // Create new reachability collector
+                training_state.reachability_collector = Some(ReachabilityCollector::new_with_preload(
+                    level_data.id.clone(),
+                    level_data.name.clone(),
+                ));
+
+                println!(
+                    "\nAuto-advancing to: {} [{}/{}]",
+                    level_data.name,
+                    training_state.level_sequence_index + 1,
+                    training_state.level_sequence.len()
+                );
+
+                // Reset to WaitingToStart
+                training_state.phase = TrainingPhase::WaitingToStart;
+            }
+        }
+    } else {
+        // All levels complete
+        println!("\nAll levels explored!");
+        training_state.phase = TrainingPhase::SessionComplete;
+    }
+}
+
+/// Check for level advance input (manual Reachability protocol only)
+/// LB advances to next level in the sequence, cycling through all levels
+/// Note: AutoReachability uses auto_advance_level instead (time-based)
 fn check_advance_level(
     mut input: ResMut<PlayerInput>,
     mut training_state: ResMut<TrainingState>,
     score: Res<Score>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
     sqlite_logger: Res<SqliteEventLogger>,
+    level_db: Res<LevelDatabase>,
+    mut current_level: ResMut<CurrentLevel>,
 ) {
-    // Only handle for Reachability protocol during Playing phase
-    if !training_state.protocol.iterates_all_levels() {
+    // Only handle for manual Reachability protocol (not AutoReachability)
+    if !training_state.protocol.iterates_all_levels() || training_state.protocol.is_automated() {
         return;
     }
 
@@ -1681,10 +2218,11 @@ fn check_advance_level(
         if collector.elapsed_secs() >= 10.0 {
             export_reachability_heatmap(&collector);
             println!(
-                "  Exported reachability heatmap: {} ({:.1}s, {} samples)",
+                "  Exported reachability heatmap: {} ({:.1}s, {} new + {} preloaded samples)",
                 collector.level_name,
                 collector.elapsed_secs(),
-                collector.positions.len()
+                collector.positions.len(),
+                collector.preloaded_positions.len()
             );
         } else {
             println!(
@@ -1709,13 +2247,50 @@ fn check_advance_level(
     sqlite_logger.end_match(score.left, score.right, training_state.game_elapsed);
 
     println!(
-        "Level complete: {} ({:.1}s)",
+        "Level complete: {} ({:.1}s) [{}/{}]",
         training_state.current_level_name,
-        training_state.game_elapsed
+        training_state.game_elapsed,
+        training_state.level_sequence_index + 1,
+        training_state.level_sequence.len()
     );
 
-    // For now: just end the session (TODO: advance to next level)
-    training_state.phase = TrainingPhase::SessionComplete;
+    // Advance to next level in sequence
+    if training_state.advance_to_next_level() {
+        // More levels to explore
+        if let Some(level_idx) = training_state.current_sequence_level() {
+            if let Some(level_data) = level_db.get(level_idx) {
+                // Update training state
+                training_state.current_level = (level_idx + 1) as u32;
+                training_state.current_level_name = level_data.name.clone();
+                training_state.game_number += 1;
+                training_state.game_elapsed = 0.0;
+                training_state.game_start_time = None;
+
+                // Update CurrentLevel resource to trigger level change
+                current_level.0 = level_data.id.clone();
+
+                // Create new reachability collector with preloaded data
+                training_state.reachability_collector = Some(ReachabilityCollector::new_with_preload(
+                    level_data.id.clone(),
+                    level_data.name.clone(),
+                ));
+
+                println!(
+                    "\nAdvancing to: {} [{}/{}]",
+                    level_data.name,
+                    training_state.level_sequence_index + 1,
+                    training_state.level_sequence.len()
+                );
+
+                // Reset to WaitingToStart (timer starts on first movement)
+                training_state.phase = TrainingPhase::WaitingToStart;
+            }
+        }
+    } else {
+        // All levels complete
+        println!("\nAll levels explored!");
+        training_state.phase = TrainingPhase::SessionComplete;
+    }
 }
 
 /// Check for escape key to quit

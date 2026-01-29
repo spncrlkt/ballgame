@@ -12,7 +12,10 @@ pub struct ReachabilityCollector {
     pub level_id: String,
     pub level_name: String,
     pub start_time: Instant,
+    /// New positions collected this session
     pub positions: Vec<(f32, f32)>,
+    /// Pre-loaded positions from existing heatmap (for visualization)
+    pub preloaded_positions: Vec<(f32, f32)>,
 }
 
 impl ReachabilityCollector {
@@ -22,12 +25,83 @@ impl ReachabilityCollector {
             level_name,
             start_time: Instant::now(),
             positions: Vec::with_capacity(1000),
+            preloaded_positions: Vec::new(),
         }
+    }
+
+    /// Create a collector and load existing heatmap data if available
+    pub fn new_with_preload(level_id: String, level_name: String) -> Self {
+        let mut collector = Self::new(level_id.clone(), level_name.clone());
+
+        // Try to load existing heatmap
+        let safe_name = sanitize_level_name(&level_name);
+        let path = format!(
+            "showcase/heatmaps/heatmap_reachability_{}_{}.txt",
+            safe_name, level_id
+        );
+
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            collector.preloaded_positions = parse_heatmap_positions(&content);
+            if !collector.preloaded_positions.is_empty() {
+                info!(
+                    "Loaded {} positions from existing heatmap for {}",
+                    collector.preloaded_positions.len(),
+                    level_name
+                );
+            }
+        }
+
+        collector
     }
 
     pub fn elapsed_secs(&self) -> f32 {
         self.start_time.elapsed().as_secs_f32()
     }
+
+    /// Get all positions (preloaded + new) for export
+    pub fn all_positions(&self) -> impl Iterator<Item = &(f32, f32)> {
+        self.preloaded_positions.iter().chain(self.positions.iter())
+    }
+}
+
+/// Sanitize level name for use in filenames
+fn sanitize_level_name(name: &str) -> String {
+    let mut out = String::new();
+    let mut last_was_underscore = false;
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_was_underscore = false;
+        } else if !last_was_underscore {
+            out.push('_');
+            last_was_underscore = true;
+        }
+    }
+    out.trim_matches('_').to_string()
+}
+
+/// Parse heatmap CSV file and extract positions with non-zero values
+fn parse_heatmap_positions(content: &str) -> Vec<(f32, f32)> {
+    let mut positions = Vec::new();
+
+    for line in content.lines().skip(1) {
+        // Skip header
+        let parts: Vec<&str> = line.split(',').collect();
+        if parts.len() >= 3 {
+            if let (Ok(x), Ok(y), Ok(value)) = (
+                parts[0].trim().parse::<f32>(),
+                parts[1].trim().parse::<f32>(),
+                parts[2].trim().parse::<f32>(),
+            ) {
+                // Only include positions that were visited (value > 0)
+                if value > 0.0 {
+                    positions.push((x, y));
+                }
+            }
+        }
+    }
+
+    positions
 }
 
 /// Training session phase
