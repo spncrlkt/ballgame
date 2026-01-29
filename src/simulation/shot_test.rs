@@ -17,6 +17,7 @@ use crate::ball::{
     ball_spin, ball_state_update,
 };
 use crate::constants::*;
+use crate::events::EventBus;
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
 use crate::player::{
@@ -216,6 +217,7 @@ fn run_shots_at_position(
     app.init_resource::<LastShotInfo>();
     app.insert_resource(CurrentPalette(0));
     app.init_resource::<PaletteDatabase>();
+    app.insert_resource(EventBus::new());
 
     // Shot test control - runs ALL shots for this position
     app.insert_resource(ShotTestControl {

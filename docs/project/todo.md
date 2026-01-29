@@ -149,18 +149,23 @@ cargo run --bin training                 # Training mode
 
 ## Done (Last 5)
 
+- [x] **Reachability-Aware Navigation** - NavGraph now uses player exploration data for smarter shooting positions (2026-01-28)
+  - `PlatformSource` enum tracks config origin (Floor, CornerRamp, Center, Mirror)
+  - `reachability` field (0.0-1.0) from SQLite exploration data
+  - `find_shooting_node` prefers high-reachability positions
+  - New tests: `reachability_test.rs`, `multihop_test.rs`
+  - Python script: `scripts/export_reachability.py` for heatmap generation
 - [x] **Accuracy/Cadence Tuning** - Extended preset system with 10 shot params, tested V1-V6 variants (2026-01-28)
   - V3-Forgiving now default: 3.2 goals/match (↑88%), 34.8% accuracy (↑61%)
   - All variants available in `config/game_presets.txt` for switching via D-pad
+- [x] **Training Reachability Protocol** - Solo exploration mode for coverage mapping (2026-01-28)
+  - `--protocol reachability` flag for level exploration
+  - Q/LB advances to next level during exploration
+  - Debug events logged to SQLite with human_controlled flag
+- [x] **Documentation Reorganization** - Consolidated docs and tools (2026-01-28)
+  - Moved archive docs to `docs/archive/`
+  - Moved dev guides to `docs/dev/`
+  - Tools consolidated under `tools/` with README
 - [x] **Evlog elimination complete** - Full SQLite migration, all .evlog infrastructure removed (2026-01-26)
-  - SQLite replay loading, --replay-db CLI, training writes to DB only
-  - Deleted: evlog_parser.rs, logger.rs, loader.rs, Python scripts
-- [x] **AI pressure/steal fixes** - Meta-analysis of 19 sessions → 4 fixes implemented (2026-01-25)
-  - Profile: steal_range 128→100, pressure_distance 82→120
-  - Intercept position closer to opponent (0.3-0.7x instead of 1.0x)
-  - PressureDefense window widened 34px→97px
-  - Result: AI steal attempts 0.26/game → 13/game
-- [x] **AI architecture refactor** - AiCapabilities + world_model.rs for single source of physics truth (2026-01-25)
-- [x] **Fix JumpAt horizontal movement** - AI now moves toward landing during entire jump arc (was stopping mid-air)
 
 *See `todone.md` for full archive with commit references*

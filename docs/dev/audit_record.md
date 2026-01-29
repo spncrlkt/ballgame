@@ -4,6 +4,88 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Session: 2026-01-28 - Reachability Integration & Engine Tuning
+
+**Commits:** `a82b3b1` → `0c34cc8` (5 commits)
+
+### Summary
+
+Major AI navigation enhancement: NavGraph now uses player exploration data to inform shooting position decisions. Also extended tuning system and reorganized documentation.
+
+### Key Changes
+
+**Reachability-Aware Navigation (0c34cc8):**
+- Added `PlatformSource` enum to track config origin (Floor, CornerRamp, Center, Mirror)
+- Added `LevelGeometry` struct for AI reasoning about level structure
+- NavNode now has `reachability` field (0.0-1.0) from SQLite exploration data
+- `find_shooting_node` now weighs positions by: `score = shot_quality * (0.5 + 0.5 * reachability)`
+- Added `MIN_REACHABILITY_FOR_SHOT` constant (0.1) to filter unreachable positions
+- New test modules: `reachability_test.rs`, `multihop_test.rs`
+- New Python script: `scripts/export_reachability.py`
+
+**Engine Tuning (c63fd7a):**
+- Extended `GameplayTuning` with 10 accuracy/cadence fields:
+  - shot_max_variance, shot_min_variance, shot_air_variance_penalty
+  - shot_move_variance_penalty, shot_quick_threshold
+  - quick_power_multiplier, quick_power_threshold
+  - speed_randomness_min/max, shot_distance_variance
+- Created V1-V6 shooting presets, V3-Forgiving now default
+- Result: 3.2 goals/match (↑88%), 34.8% accuracy (↑61%)
+
+**Training Updates (4c394fc):**
+- Added `TrainingProtocol` enum (advanced-platform, pursuit, pursuit2, reachability)
+- Reachability protocol: solo exploration mode for coverage mapping
+- Q/LB advances to next level during exploration
+- Debug events logged with `human_controlled` flag
+
+**Documentation (a82b3b1):**
+- Reorganized docs: archive/, dev/, guides/, project/
+- Consolidated tools under `tools/` directory
+- Created `tools/README.md`
+- Updated TRAINING.md with reachability protocol docs
+
+### Compilation Status
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| cargo check | PASS | 2 warnings in heatmap.rs (intentional TODO panic) |
+| cargo clippy | N/A | Not run this session |
+| Visual regression | N/A | Not run this session |
+
+### Known Warnings
+
+```
+src/bin/heatmap.rs:1032 - unused variable: platform_rects (after panic!)
+src/bin/heatmap.rs:1039 - unreachable statement (after panic!)
+```
+
+These are intentional - `compute_reachability` function has TODO panic blocking execution until tuning integration is complete.
+
+### Next Steps Identified
+
+**Training Reachability (High Priority):**
+1. Collect exploration data on all levels via `--protocol reachability`
+2. Export heatmaps with `scripts/export_reachability.py`
+3. Verify NavGraph uses reachability data correctly
+
+**AI/Levels/Engine Tuning:**
+1. Analyze which levels have lowest reachability coverage
+2. Test AI shooting behavior on high vs low reachability areas
+3. Consider reachability-based difficulty scaling
+
+**Code Quality:**
+1. Fix/remove heatmap.rs dead code (complete compute_reachability or remove it)
+2. Consolidate AI Plugin (P1.5 in todo) - unify decision systems
+3. Fix cooldown timing bug (runs in both Update and FixedUpdate)
+4. Fix input capture bug (stale input when tweak panel open)
+
+**Testing:**
+1. Run multihop tests on all levels to verify platform reachability
+2. Verify corner step navigation on levels 7-8
+3. Check AI climbing behavior in training sessions
+
+---
+
 ## Session: 2026-01-25 Night - Deep Code Review & Best Practices Library
 
 **Commit Analyzed:** `7462671` (ghost replay clean up and ai tuning)

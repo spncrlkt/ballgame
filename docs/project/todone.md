@@ -1,7 +1,18 @@
 # Ballgame Done Archive
 
-## Archived 2026-01-28 (Accuracy/Cadence Tuning)
+## Archived 2026-01-28 (Reachability Integration)
 
+**Commits:** `a82b3b1` → `0c34cc8`
+
+- [x] **Reachability-Aware Navigation** - NavGraph uses exploration data for shooting positions
+  - `PlatformSource` enum: Floor, CornerRamp, Center, Mirror
+  - `LevelGeometry` summary struct for AI reasoning
+  - `reachability` field (0.0-1.0) from player exploration
+  - `MIN_REACHABILITY_FOR_SHOT` constant (0.1) filters bad positions
+- [x] **Training Reachability Protocol** - `--protocol reachability` for solo exploration
+- [x] **Reachability Testing Infrastructure** - `reachability_test.rs`, `multihop_test.rs`
+- [x] **Accuracy/Cadence Tuning** - 10 new shot params (variance, quick thresholds, randomness)
+- [x] **Documentation Reorganization** - archive/, dev/, tools/ structure
 - [x] **Fix calculate_edge overlap case** - Jump from edge of overlap, not center (avoids ceiling collision)
 
 ---
