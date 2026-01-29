@@ -216,7 +216,6 @@ def main() -> int:
 
     results: List[VariantResult] = []
     try:
-        skip_reachability = False
         if not args.skip_heatmaps:
             level_list = []
             if args.heatmap_levels:
@@ -227,14 +226,15 @@ def main() -> int:
                 raise RuntimeError(
                     "No heatmap levels specified. Provide --heatmap-levels or ensure config/simulation_settings.json has levels."
                 )
-            skip_reachability = True
-            print("NOTE: reachability-dependent heatmaps disabled (TODO in src/bin/heatmap.rs).")
             heatmap_kinds = [
                 "speed",
                 "score",
                 "landing_safety",
                 "line_of_sight",
                 "elevation",
+                "reachability",
+                "path_cost",
+                "escape_routes",
             ]
             for idx, kind in enumerate(heatmap_kinds):
                 heatmap_cmd = [
@@ -272,8 +272,7 @@ def main() -> int:
                 "--parallel", str(args.parallel),
                 "--profiles", ",".join(top_profiles),
             ]
-            env = {"BALLGAME_SKIP_REACHABILITY_HEATMAPS": "1"} if skip_reachability else None
-            code, out = run_cmd(cmd, ROOT, env=env)
+            code, out = run_cmd(cmd, ROOT)
             if code != 0:
                 print(out)
                 raise RuntimeError(f"Tournament failed for {vid}")

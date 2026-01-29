@@ -10,15 +10,11 @@ pub const DEBUG_LOG_SETTINGS_FILE: &str = "config/debug_logging.json";
 #[derive(Debug, Clone, Serialize, Deserialize, Resource)]
 pub struct DebugLogConfig {
     pub enabled: bool,
-    pub skip_reachability_heatmaps: bool,
 }
 
 impl Default for DebugLogConfig {
     fn default() -> Self {
-        Self {
-            enabled: false,
-            skip_reachability_heatmaps: false,
-        }
+        Self { enabled: false }
     }
 }
 
@@ -44,13 +40,5 @@ impl DebugLogConfig {
             config.enabled = true;
         }
         config
-    }
-
-    pub fn apply_env(&self) {
-        if self.skip_reachability_heatmaps {
-            unsafe {
-                std::env::set_var("BALLGAME_SKIP_REACHABILITY_HEATMAPS", "1");
-            }
-        }
     }
 }

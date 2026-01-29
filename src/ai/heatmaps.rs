@@ -1,7 +1,6 @@
 //! Heatmap loading and sampling for AI decision making
 
 use bevy::prelude::*;
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -87,16 +86,6 @@ impl Default for HeatmapBundle {
     }
 }
 
-fn skip_reachability_heatmaps() -> bool {
-    match env::var("BALLGAME_SKIP_REACHABILITY_HEATMAPS") {
-        Ok(val) => {
-            let val = val.to_lowercase();
-            val == "1" || val == "true" || val == "yes"
-        }
-        Err(_) => false,
-    }
-}
-
 impl HeatmapBundle {
     pub fn score_for_basket(&self, basket: Basket, pos: Vec2) -> f32 {
         match basket {
@@ -172,56 +161,36 @@ pub fn load_heatmaps_on_level_change(
         level.id.as_str(),
         None,
     ));
-    let skip_reachability = skip_reachability_heatmaps();
-    if skip_reachability {
-        warn!(
-            "Heatmaps: reachability/path_cost/escape_routes skipped via BALLGAME_SKIP_REACHABILITY_HEATMAPS"
-        );
-    }
-    let reachability = if skip_reachability {
-        HeatmapGrid::new()
-    } else {
-        // Strict mode: panic if reachability data is missing
-        // Set BALLGAME_SKIP_REACHABILITY_HEATMAPS=1 to bypass during development
-        load_heatmap_grid(&resolve_heatmap_path(
-            "reachability",
-            &safe_name,
-            level.id.as_str(),
-            None,
-        ))
-    };
+    let reachability = load_heatmap_grid(&resolve_heatmap_path(
+        "reachability",
+        &safe_name,
+        level.id.as_str(),
+        None,
+    ));
     let landing_safety = load_heatmap_grid(&resolve_heatmap_path(
         "landing_safety",
         &safe_name,
         level.id.as_str(),
         None,
     ));
-    let path_cost = if skip_reachability {
-        HeatmapGrid::new()
-    } else {
-        load_heatmap_grid(&resolve_heatmap_path(
-            "path_cost",
-            &safe_name,
-            level.id.as_str(),
-            None,
-        ))
-    };
+    let path_cost = load_heatmap_grid(&resolve_heatmap_path(
+        "path_cost",
+        &safe_name,
+        level.id.as_str(),
+        None,
+    ));
     let elevation = load_heatmap_grid(&resolve_heatmap_path(
         "elevation",
         &safe_name,
         level.id.as_str(),
         None,
     ));
-    let escape_routes = if skip_reachability {
-        HeatmapGrid::new()
-    } else {
-        load_heatmap_grid(&resolve_heatmap_path(
-            "escape_routes",
-            &safe_name,
-            level.id.as_str(),
-            None,
-        ))
-    };
+    let escape_routes = load_heatmap_grid(&resolve_heatmap_path(
+        "escape_routes",
+        &safe_name,
+        level.id.as_str(),
+        None,
+    ));
 
     *heatmaps = HeatmapBundle {
         built_for_level_id: level.id.clone(),

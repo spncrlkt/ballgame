@@ -180,7 +180,6 @@ fn main() {
 
     let args: Vec<String> = std::env::args().collect();
     let debug_config = DebugLogConfig::load_with_args(&args);
-    debug_config.apply_env();
 
     App::new()
         .add_plugins((

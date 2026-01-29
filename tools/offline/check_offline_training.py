@@ -154,12 +154,9 @@ def check_debug_settings():
     except Exception as exc:
         return False, f"debug_logging.json invalid: {exc}"
     enabled = bool(data.get("enabled"))
-    skip = bool(data.get("skip_reachability_heatmaps"))
     if not enabled:
         return False, "debug logging disabled"
-    if not skip:
-        return False, "skip_reachability_heatmaps is false"
-    return True, "debug logging enabled; reachability skip true"
+    return True, "debug logging enabled"
 
 def check_training_settings(levels: list[str], profiles: list[str]):
     if not TRAINING_SETTINGS.exists():

@@ -79,6 +79,9 @@ pub struct TrainingSettings {
     /// Drive mode (start with ball, regain on loss, first point wins)
     #[serde(default)]
     pub drive_mode: bool,
+    /// Headless mode (no window, for automated simulation)
+    #[serde(default)]
+    pub headless: bool,
 }
 
 impl Default for TrainingSettings {
@@ -99,6 +102,7 @@ impl Default for TrainingSettings {
             palette_index: 0,
             ball_style: None,
             drive_mode: false,
+            headless: false,
         }
     }
 }
@@ -273,6 +277,9 @@ impl TrainingSettings {
                     self.iterations = 1;
                     self.win_score = 1;
                 }
+                "--headless" => {
+                    self.headless = true;
+                }
                 "--help" | "-h" => {
                     print_help();
                     std::process::exit(0);
@@ -304,6 +311,7 @@ PROTOCOLS:
     pursuit                     - Flat level chase test (verifies AI pursues player)
     pursuit2                    - Platform chase test (pursuit with center obstacle)
     reachability                - Solo level exploration for coverage mapping (LB to advance)
+    auto-reachability           - Automated random walk/hop exploration (headless compatible)
 
 MODES:
     goal  (default) - Each iteration ends after one goal, then reset
@@ -323,6 +331,7 @@ OPTIONS:
     --palette N                Color palette index (default: 0)
     --ball-style NAME          Ball visual style (default: random)
     --debug-log                Enable debug sample logging to SQLite
+    --headless                 Run without window (for auto-reachability)
     -h, --help                 Show this help
 
 SETTINGS FILES:

@@ -78,7 +78,6 @@ fn run_ghost_trial(
     app.insert_resource(CurrentLevel(level_id));
     let mut debug_config = DebugLogConfig::load();
     debug_config.enabled = debug_log;
-    debug_config.apply_env();
     app.insert_resource(debug_config);
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
@@ -411,7 +410,6 @@ fn ghost_check_end(
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let debug_config = DebugLogConfig::load_with_args(&args);
-    debug_config.apply_env();
 
     if args.len() < 2 {
         eprintln!("Ghost Trial Runner");

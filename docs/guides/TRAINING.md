@@ -98,14 +98,12 @@ Solo exploration mode for generating coverage heatmaps. No AI opponent - just ex
 
 ```bash
 # Explore all levels sequentially (starts at Arena)
-BALLGAME_SKIP_REACHABILITY_HEATMAPS=1 cargo run --bin training -- --protocol reachability
+cargo run --bin training -- --protocol reachability
 
 # Start at a specific level (skips earlier levels)
-BALLGAME_SKIP_REACHABILITY_HEATMAPS=1 cargo run --bin training -- --protocol reachability -l "Open Floor"
-BALLGAME_SKIP_REACHABILITY_HEATMAPS=1 cargo run --bin training -- --protocol reachability -l 4
+cargo run --bin training -- --protocol reachability -l "Open Floor"
+cargo run --bin training -- --protocol reachability -l 4
 ```
-
-The `BALLGAME_SKIP_REACHABILITY_HEATMAPS=1` env var skips expensive heatmap regeneration during training.
 
 ### Workflow
 

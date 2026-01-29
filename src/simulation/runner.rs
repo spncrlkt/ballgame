@@ -197,7 +197,6 @@ pub fn run_match(
     if config.debug_log {
         debug_config.enabled = true;
     }
-    debug_config.apply_env();
 
     // Simulation resources
     app.insert_resource(SimControl {

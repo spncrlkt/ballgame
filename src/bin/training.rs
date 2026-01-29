@@ -33,11 +33,12 @@ use ballgame::{
     ball, constants::*, countdown, emit_level_change_events, helpers::*, input, levels, player,
     scoring, shooting, spawn_countdown_text, steal, tuning, update_event_bus_time, world,
 };
-use bevy::{camera::ScalingMode, prelude::*};
+use bevy::{app::ScheduleRunnerPlugin, camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 
 /// Path to ball options file
@@ -64,6 +65,15 @@ fn load_ball_style_names() -> Vec<String> {
 
     styles
 }
+
+/// Speed multiplier for reachability training (4x faster exploration)
+const REACHABILITY_SPEED_MULTIPLIER: f32 = 4.0;
+/// Speed when one trigger is held (normal speed)
+const REACHABILITY_SPEED_NORMAL: f32 = 1.0;
+/// Speed when both triggers are held (slow motion)
+const REACHABILITY_SPEED_SLOW: f32 = 0.5;
+/// Trigger threshold for considering it "pressed" (analog value 0.0-1.0)
+const TRIGGER_PRESS_THRESHOLD: f32 = 0.5;
 
 #[derive(Resource, Clone)]
 struct AllowedTrainingLevels(Option<Vec<String>>);
@@ -441,15 +451,34 @@ fn main() {
 
     let args: Vec<String> = std::env::args().collect();
     let debug_config = DebugLogConfig::load_with_args(&args);
-    debug_config.apply_env();
 
     let (sqlite_logger, db_path_buf) = create_sqlite_logger();
     if settings.offline_levels_file.is_some() {
         append_offline_db_path(&db_path_buf);
     }
 
-    App::new()
-        .add_plugins(
+    let is_headless = settings.headless;
+
+    let mut app = App::new();
+
+    // Add plugins based on headless mode
+    if is_headless {
+        // Headless mode: minimal plugins for simulation
+        app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(
+            Duration::from_secs_f32(1.0 / 60.0),
+        )));
+        app.add_plugins(bevy::transform::TransformPlugin);
+        app.add_plugins(bevy::asset::AssetPlugin::default());
+        app.add_plugins(bevy::prelude::ImagePlugin::default());
+        app.add_plugins(bevy::input::InputPlugin);
+        app.add_plugins(bevy::state::app::StatesPlugin);
+        // Set fixed timestep for physics
+        app.insert_resource(Time::<Fixed>::from_duration(Duration::from_secs_f32(
+            1.0 / 60.0,
+        )));
+    } else {
+        // Windowed mode: full plugins
+        app.add_plugins(
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
                     resolution: bevy::window::WindowResolution::new(
@@ -463,8 +492,11 @@ fn main() {
                 }),
                 ..default()
             }),
-        )
-        .insert_resource(ClearColor(initial_bg))
+        );
+        app.insert_resource(ClearColor(initial_bg));
+    }
+
+    app
         .insert_resource(palette_db)
         .insert_resource(level_db)
         .insert_resource(settings)
@@ -502,10 +534,12 @@ fn main() {
         // SQLite event logger - central hub for event storage
         .insert_resource(sqlite_logger)
         // Startup systems
-        .add_systems(Startup, training_setup)
+        .add_systems(Startup, (training_setup, setup_reachability_time_scale).chain())
         // Event bus time update (runs every frame for timestamping)
         .add_systems(Update, update_event_bus_time)
         .add_systems(Update, flush_debug_samples_to_sqlite)
+        // Dynamic speed control for reachability mode (trigger-based)
+        .add_systems(Update, update_reachability_time_scale)
         // Input systems chain - paused when game is paused
         .add_systems(
             Update,
@@ -1456,6 +1490,71 @@ fn training_setup(
     );
 }
 
+/// Set up time scale for reachability protocols (4x speed for faster exploration)
+fn setup_reachability_time_scale(
+    training_state: Res<TrainingState>,
+    mut time: ResMut<Time<Virtual>>,
+) {
+    if training_state.protocol.iterates_all_levels() {
+        time.set_relative_speed(REACHABILITY_SPEED_MULTIPLIER);
+        info!(
+            "Reachability mode: time scale set to {}x",
+            REACHABILITY_SPEED_MULTIPLIER
+        );
+    }
+}
+
+/// Dynamic speed control for reachability training based on trigger input
+/// - No triggers: 4x speed (fast exploration)
+/// - One trigger held: 1x speed (normal)
+/// - Both triggers held: 0.5x speed (slow motion)
+fn update_reachability_time_scale(
+    training_state: Res<TrainingState>,
+    gamepads: Query<&Gamepad>,
+    mut time: ResMut<Time<Virtual>>,
+) {
+    // Only apply to reachability protocols
+    if !training_state.protocol.iterates_all_levels() {
+        return;
+    }
+
+    // Check trigger states from all connected gamepads
+    let mut left_trigger_held = false;
+    let mut right_trigger_held = false;
+
+    for gamepad in gamepads.iter() {
+        // LeftTrigger2/RightTrigger2 are the analog triggers (LT/RT)
+        // get() returns the analog value 0.0-1.0
+        if gamepad
+            .get(GamepadButton::LeftTrigger2)
+            .is_some_and(|v| v > TRIGGER_PRESS_THRESHOLD)
+        {
+            left_trigger_held = true;
+        }
+        if gamepad
+            .get(GamepadButton::RightTrigger2)
+            .is_some_and(|v| v > TRIGGER_PRESS_THRESHOLD)
+        {
+            right_trigger_held = true;
+        }
+    }
+
+    // Determine target speed based on trigger state
+    let target_speed = if left_trigger_held && right_trigger_held {
+        REACHABILITY_SPEED_SLOW // Both triggers: 0.5x
+    } else if left_trigger_held || right_trigger_held {
+        REACHABILITY_SPEED_NORMAL // One trigger: 1x
+    } else {
+        REACHABILITY_SPEED_MULTIPLIER // No triggers: 4x
+    };
+
+    // Only update if speed changed (avoid spamming the setter)
+    let current_speed = time.relative_speed();
+    if (current_speed - target_speed).abs() > 0.01 {
+        time.set_relative_speed(target_speed);
+    }
+}
+
 /// Training state machine - handles game flow
 fn training_state_machine(
     mut training_state: ResMut<TrainingState>,
@@ -1946,42 +2045,81 @@ fn flush_training_events_to_sqlite(
 }
 
 /// Export reachability heatmap data to CSV file
-/// Combines preloaded data with newly collected positions
+/// Merges with existing long-running data - each session accumulates onto the baseline
 fn export_reachability_heatmap(collector: &ReachabilityCollector) {
-    use std::io::Write;
+    use std::io::{BufRead, Write};
 
     const CELL_SIZE: f32 = 20.0;
     const GRID_WIDTH: usize = 80;
     const GRID_HEIGHT: usize = 45;
+    const SCALE_FACTOR: f32 = 10000.0; // Scale for converting normalized values to counts
 
-    // Build visit count grid from all positions (preloaded + new)
-    let mut grid = vec![0u32; GRID_WIDTH * GRID_HEIGHT];
+    // Sanitize level name and determine file path
+    let safe_name = sanitize_level_name(&collector.level_name);
+    fs::create_dir_all("showcase/heatmaps").ok();
+    let path = format!(
+        "showcase/heatmaps/heatmap_reachability_{}_{}.txt",
+        safe_name, collector.level_id
+    );
 
+    // Load existing cumulative counts from file (if it exists)
+    let mut cumulative_grid = vec![0u32; GRID_WIDTH * GRID_HEIGHT];
+    if let Ok(file) = fs::File::open(&path) {
+        let reader = std::io::BufReader::new(file);
+        for line in reader.lines().skip(1) {
+            // Skip header
+            if let Ok(line) = line {
+                let parts: Vec<&str> = line.split(',').collect();
+                if parts.len() == 3 {
+                    if let (Ok(x), Ok(y), Ok(value)) = (
+                        parts[0].parse::<f32>(),
+                        parts[1].parse::<f32>(),
+                        parts[2].parse::<f32>(),
+                    ) {
+                        // Convert world coords back to grid index
+                        let cx = ((x + ARENA_WIDTH / 2.0) / CELL_SIZE).floor() as i32;
+                        let cy = ((ARENA_HEIGHT / 2.0 - y) / CELL_SIZE).floor() as i32;
+                        if cx >= 0
+                            && cy >= 0
+                            && (cx as usize) < GRID_WIDTH
+                            && (cy as usize) < GRID_HEIGHT
+                        {
+                            let idx = cy as usize * GRID_WIDTH + cx as usize;
+                            // Convert normalized value back to pseudo-count (scaled)
+                            cumulative_grid[idx] = (value * SCALE_FACTOR) as u32;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Build new session visit counts
+    let mut session_grid = vec![0u32; GRID_WIDTH * GRID_HEIGHT];
     for &(x, y) in collector.all_positions() {
         let cx = ((x + ARENA_WIDTH / 2.0) / CELL_SIZE).floor() as i32;
         let cy = ((ARENA_HEIGHT / 2.0 - y) / CELL_SIZE).floor() as i32;
 
         if cx >= 0 && cy >= 0 && (cx as usize) < GRID_WIDTH && (cy as usize) < GRID_HEIGHT {
             let idx = cy as usize * GRID_WIDTH + cx as usize;
-            grid[idx] += 1;
+            session_grid[idx] += 1;
         }
     }
 
-    // Find max for normalization
-    let max_count = grid.iter().max().copied().unwrap_or(1).max(1);
+    // Normalize session data to SCALE_FACTOR max and add to cumulative
+    let session_max = session_grid.iter().max().copied().unwrap_or(1).max(1);
+    for idx in 0..(GRID_WIDTH * GRID_HEIGHT) {
+        if session_grid[idx] > 0 {
+            let normalized_session =
+                (session_grid[idx] as f32 / session_max as f32 * SCALE_FACTOR) as u32;
+            cumulative_grid[idx] = cumulative_grid[idx].saturating_add(normalized_session);
+        }
+    }
 
-    // Sanitize level name
-    let safe_name = sanitize_level_name(&collector.level_name);
-
-    // Ensure output directory exists
-    fs::create_dir_all("showcase/heatmaps").ok();
+    // Find max for final normalization
+    let max_count = cumulative_grid.iter().max().copied().unwrap_or(1).max(1);
 
     // Write CSV
-    let path = format!(
-        "showcase/heatmaps/heatmap_reachability_{}_{}.txt",
-        safe_name, collector.level_id
-    );
-
     let Ok(mut file) = fs::File::create(&path) else {
         eprintln!("Failed to create heatmap file: {}", path);
         return;
@@ -1996,7 +2134,7 @@ fn export_reachability_heatmap(collector: &ReachabilityCollector) {
         for cx in 0..GRID_WIDTH {
             let world_x = (cx as f32 + 0.5) * CELL_SIZE - ARENA_WIDTH / 2.0;
             let world_y = ARENA_HEIGHT / 2.0 - (cy as f32 + 0.5) * CELL_SIZE;
-            let count = grid[cy * GRID_WIDTH + cx];
+            let count = cumulative_grid[cy * GRID_WIDTH + cx];
             let value = if count > 0 {
                 count as f32 / max_count as f32
             } else {

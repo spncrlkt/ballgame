@@ -31,9 +31,8 @@
 //! Line-of-sight heatmaps include left/right suffixes.
 //! Combined sheets are written to showcase/heatmap_<type>_all.png.
 //! Full bundles write showcase/heatmaps/heatmap_full_<level>_<uuid>.png.
-//! Skips debug/regression levels and training protocol levels unless --level is specified.
+//! Skips debug/regression levels unless --level is specified.
 
-use ballgame::training::TrainingProtocol;
 use ballgame::tuning::{load_gameplay_tuning_from_file, GameplayTuning, GAMEPLAY_TUNING_FILE};
 use ballgame::{
     ARENA_FLOOR_Y, ARENA_HEIGHT, ARENA_WIDTH, BALL_BOUNCE, BALL_GRAVITY, CORNER_STEP_THICKNESS,
@@ -420,7 +419,6 @@ fn main() {
     let physics = PhysicsConfig::from(&tuning);
 
     let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
-    let training_levels = training_level_names();
     let level_hashes = compute_level_hashes(&level_db);
     let change_set = if config.check {
         let changes = compare_level_hashes(&level_hashes);
@@ -430,7 +428,7 @@ fn main() {
         LevelChangeSet::default()
     };
 
-    let eligible_levels = select_target_levels(&level_db, &training_levels, &config, &change_set);
+    let eligible_levels = select_target_levels(&level_db, &config, &change_set);
     if eligible_levels.is_empty() {
         println!("No eligible levels found for heatmap generation.");
         return;
@@ -560,7 +558,6 @@ fn stats_header_written() -> &'static Mutex<bool> {
 
 fn select_target_levels<'a>(
     level_db: &'a LevelDatabase,
-    training_levels: &[&'static str],
     config: &SimConfig,
     changes: &LevelChangeSet,
 ) -> Vec<&'a ballgame::LevelData> {
@@ -574,7 +571,7 @@ fn select_target_levels<'a>(
 
         for id in target_ids {
             if let Some(level) = level_db.get_by_id(&id) {
-                if should_skip_level(level, training_levels) {
+                if should_skip_level(level) {
                     continue;
                 }
                 levels.push(level);
@@ -588,7 +585,7 @@ fn select_target_levels<'a>(
             if level_matches_filter(level, &config.level_filter) {
                 levels.push(level);
             }
-        } else if !should_skip_level(level, training_levels) {
+        } else if !should_skip_level(level) {
             levels.push(level);
         }
     }
@@ -2186,21 +2183,10 @@ fn write_heatmap_stats_line(line: &str) {
     let _ = writeln!(file, "{}", line);
 }
 
-fn training_level_names() -> Vec<&'static str> {
-    [TrainingProtocol::Pursuit, TrainingProtocol::Pursuit2]
-        .into_iter()
-        .filter_map(|protocol| protocol.fixed_level())
-        .collect()
-}
-
-fn should_skip_level(level: &ballgame::LevelData, training_levels: &[&'static str]) -> bool {
-    if level.debug || level.regression {
-        return true;
-    }
-
-    training_levels
-        .iter()
-        .any(|name| level.name.eq_ignore_ascii_case(name))
+fn should_skip_level(level: &ballgame::LevelData) -> bool {
+    // Only skip debug and regression levels
+    // Pursuit Arena levels are now included for full heatmap coverage
+    level.debug || level.regression
 }
 
 fn level_matches_filter(level: &ballgame::LevelData, filters: &[String]) -> bool {
