@@ -8,9 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo build           # Debug build
 cargo build --release # Release build
 cargo run             # Run the game
-cargo run -- --replay <file.evlog>  # Run in replay mode
-cargo run --bin training            # Run training mode (5 games vs AI)
-cargo run --bin training -- --games 3 --profile Aggressive  # Custom training
+cargo run -- --replay-db <match_id>  # Replay from SQLite
+cargo run --bin training            # Run training mode (5 iterations vs AI)
+cargo run --bin training -- -n 3 -p Aggressive  # Custom training
 cargo check           # Check compilation without building
 cargo fmt             # Format code
 cargo clippy          # Lint code
@@ -57,7 +57,7 @@ Run at the end of each working session (or after ~10 changes):
 - [ ] **Update `docs/project/todo.md`** - Mark completed items, add new items discovered
 - [ ] **Archive done items** - Keep only last 5 in todo.md, move older to `docs/project/todone.md`
 - [ ] **Update `docs/project/open_questions.md`** - Add any new questions or decisions needed
-- [ ] **Update `docs/reviews/audit_record.md`** - Document changes and findings
+- [ ] **Update `docs/dev/audit_record.md`** - Document changes and findings
 - [ ] **Verify CLAUDE.md accuracy** - Update if architecture changed
 - [ ] **Commit changes** - With descriptive message
 
@@ -174,7 +174,7 @@ src/
 ├── steal.rs         # StealContest resource + steal cooldown system
 ├── levels/          # LevelDatabase, spawning, hot reload
 ├── presets/         # Game tuning presets (movement, ball, shooting, composite)
-├── replay/          # Replay system for playing back recorded .evlog files
+├── replay/          # Replay system for playing back matches from SQLite
 ├── training/        # Training mode state, session management, summary generation
 ├── world/           # Platform, Collider, Basket, BasketRim components
 └── ui/              # Debug, HUD, animations, charge gauge, tweak panel
@@ -193,7 +193,7 @@ src/
 - `LevelDatabase` - Loaded level definitions from config/levels.txt
 - `LastShotInfo` - Debug info about the most recent shot (angle, power, variance breakdown)
 - `BallTextures` - Handles to ball textures (dynamic styles × palettes)
-- `ReplayMode` - Controls replay mode (active flag, file path)
+- `ReplayMode` - Controls replay mode (active flag, match_id)
 - `ReplayData` - Loaded replay data (ticks, events, match info)
 - `ReplayState` - Playback state (time, speed, paused, stepping)
 - `ViewportScale` - Current viewport preset for testing different screen sizes
@@ -301,7 +301,7 @@ Display (top-left, always visible):
 - R: Reset selected parameter to default
 - Shift+R: Reset all parameters to defaults
 
-**Replay mode controls (when running with `--replay <file>`):**
+**Replay mode controls (when running with `--replay-db <match_id>`):**
 - Space: Toggle pause
 - Left/Right arrows: Adjust playback speed (0.25x/0.5x/1x/2x/4x)
 - Period (.): Step forward one tick (when paused)
@@ -311,13 +311,13 @@ Display (top-left, always visible):
 
 ### Training Mode
 
-Training mode (`cargo run --bin training`) lets you play 1v1 against AI across multiple games, logging everything for later analysis.
+Training mode (`cargo run --bin training`) lets you play 1v1 against AI across multiple iterations, logging everything for later analysis.
 
 **Usage:**
 ```bash
-cargo run --bin training                        # 5 games vs Balanced AI
-cargo run --bin training -- --games 3           # 3 games
-cargo run --bin training -- --profile Aggressive  # Specific AI profile
+cargo run --bin training                    # 5 iterations vs Balanced AI
+cargo run --bin training -- -n 3            # 3 iterations
+cargo run --bin training -- -p Aggressive   # Specific AI profile
 ```
 
 **Controls:**
@@ -329,29 +329,27 @@ cargo run --bin training -- --profile Aggressive  # Specific AI profile
 
 **Output:**
 ```
-training.db                              # SQLite database with all events
+db/training.db                           # SQLite database with all events
 training_logs/
 └── session_20260123_143022/
-    ├── game_1_level4.evlog
-    ├── game_2_level7.evlog
     ├── summary.json
     ├── analysis.md                      # Human-readable report
-    └── claude_prompt_YYYYMMDD_HHMM.txt  # AI review prompt
+    └── analysis_request_YYYYMMDD_HHMM.md  # AI review prompt
 ```
 
-**SQLite Analysis:** All events are stored in `training.db`. Query directly with:
+**SQLite Analysis:** All events are stored in `db/training.db`. Query directly with:
 ```bash
-sqlite3 training.db "SELECT event_type, COUNT(*) FROM events GROUP BY event_type;"
+sqlite3 db/training.db "SELECT event_type, COUNT(*) FROM events GROUP BY event_type;"
 ```
 
-See `docs/guides/training-workflow.md` for full SQL examples and analysis workflow.
+See `docs/guides/TRAINING.md` for full SQL examples and analysis workflow.
 
 **Post-session analysis:** Ask Claude Code to analyze the training session:
 ```
 "Analyze my training session in training_logs/session_20260123_143022/"
 ```
 
-**Analysis goal:** When analyzing training sessions, the objective is to identify ways to improve AI behavior. Review the evlog events, player notes, and AI goal transitions to find patterns where the AI makes poor decisions. Then examine the AI code in `src/ai/` and suggest specific changes to improve decision-making, positioning, or timing.
+**Analysis goal:** When analyzing training sessions, the objective is to identify ways to improve AI behavior. Review the events, player notes, and AI goal transitions to find patterns where the AI makes poor decisions. Then examine the AI code in `src/ai/` and suggest specific changes to improve decision-making, positioning, or timing.
 
 ---
 
@@ -459,7 +457,7 @@ velocity.x *= 0.98;           // Faster decay at higher FPS
 
 **Remind the user to audit every ~10 changes if they haven't recently.**
 
-For detailed explanations and code examples, see `docs/reviews/code_review_guidelines.md`.
+For detailed explanations and code examples, see `docs/dev/code_review_guidelines.md`.
 
 ### Code Review Quick Checklists
 
@@ -514,21 +512,20 @@ When asked to "audit", "review", or "check the repo", perform these checks:
 5. **Constants** - No magic numbers in code; all tunable values in `src/constants.rs`
 
 **Code Review (every audit):**
-Run the full code review process from `docs/reviews/code_review_prompt.md`. This includes:
+Run the full code review process from `docs/archive/code_review_prompt.md`. This includes:
 - Deep investigation of codebase for anti-patterns
 - Research game dev best practices from authoritative sources
 - Grade each area: Physics, Input, ECS, AI, Performance, Game Design
-- Create dated review file: `docs/reviews/code_review_YYYY-MM-DD.md`
-- Update `docs/reviews/code_review_guidelines.md` with new patterns/resources discovered
-- Log findings to `docs/reviews/code_review_audits.md`
+- Create dated review file: `docs/archive/code_review_YYYY-MM-DD.md`
+- Update `docs/dev/code_review_guidelines.md` with new patterns/resources discovered
 
 **Balance Testing (when relevant):**
 - `cargo run --bin simulate -- --shot-test 30 --level 3` (target: 40-60% over/under ratio)
 - `cargo run --bin simulate -- --tournament 5 --parallel 8` (AI match testing)
-- See `docs/analysis/balance-testing-workflow.md` for full iterative workflow
+- See `docs/dev/balance-testing.md` for full iterative workflow
 
 **After auditing:**
-- Write findings to `docs/reviews/audit_record.md` with commit reference
+- Write findings to `docs/dev/audit_record.md` with commit reference
 - Update `docs/project/todo.md` - add improvement tasks from code review, move completed items to Done
 - Archive old done records to `docs/project/todone.md` with dated header
 

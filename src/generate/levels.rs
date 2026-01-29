@@ -2,8 +2,6 @@
 //!
 //! Combines level screenshots into a grid PNG with level names.
 //! Expects screenshots in level_screenshots/ directory from the shell script.
-//!
-//! Run with: `cargo run --bin generate_level_showcase`
 
 use ab_glyph::{FontRef, PxScale};
 use image::{Rgba, RgbaImage, imageops};
@@ -19,7 +17,7 @@ const LABEL_HEIGHT: u32 = 40;
 // Embed system font
 const FONT_DATA: &[u8] = include_bytes!("/System/Library/Fonts/Helvetica.ttc");
 
-fn main() {
+pub fn run() {
     let screenshot_dir = "level_screenshots";
     let output_path = "showcase/level_showcase.png";
 

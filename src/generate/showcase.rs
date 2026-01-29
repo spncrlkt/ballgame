@@ -1,8 +1,6 @@
 //! Ball Style Showcase Generator
 //!
 //! Generates a PNG grid showing all ball styles across the first 5 palettes.
-//!
-//! Run with: `cargo run --bin generate_showcase`
 
 use ab_glyph::{FontRef, PxScale};
 use image::{Rgba, RgbaImage};
@@ -87,7 +85,7 @@ fn calculate_coverage(ball: &RgbaImage) -> (f32, f32) {
     (pct1, pct2)
 }
 
-fn main() {
+pub fn run() {
     // Load style names from ball_options.txt
     let style_names = load_style_names();
     let palette_names = load_palette_names();

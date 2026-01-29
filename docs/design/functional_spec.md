@@ -18,6 +18,8 @@ This document describes all intended behaviors in the game, organized for intera
 10. [UI/HUD](#10-uihud)
 11. [Configuration & Persistence](#11-configuration--persistence)
 12. [Debug/Dev Features](#12-debugdev-features)
+13. [Ghost System](#13-ghost-system)
+14. [Event Logging (SQLite)](#14-event-logging-sqlite)
 
 ---
 
@@ -40,11 +42,12 @@ This document describes all intended behaviors in the game, organized for intera
 | ID | Behavior | Expected Outcome |
 |----|----------|------------------|
 | M2.1 | Launch training | 1v1 match starts, human vs AI |
-| M2.2 | `--games N` flag | Runs N consecutive games |
-| M2.3 | `--profile X` flag | AI uses specified profile |
-| M2.4 | Game ends | Winner determined, moves to next game |
-| M2.5 | Session ends | Writes summary + analysis outputs to `training_logs/session_*/` |
-| M2.6 | Escape key | Quits training session early, still writes summary |
+| M2.2 | `-n, --iterations N` flag | Runs N iterations (default: 5) |
+| M2.3 | `-p, --profile X` flag | AI uses specified profile |
+| M2.4 | `-m, --mode` flag | `goal` (default) or `game` mode |
+| M2.5 | Iteration ends | Reset for next iteration (goal mode) or score update (game mode) |
+| M2.6 | Session ends | Events in SQLite (`db/training.db`), summary in `training_logs/session_*/` |
+| M2.7 | Escape key | Quits training session early, still writes summary |
 
 ### 1.3 Replay Mode
 
@@ -567,6 +570,74 @@ Profiles define AI personality via parameters loaded from `config/ai_profiles.tx
 
 ---
 
+## 13. Ghost System
+
+Test AI defense against recorded human play.
+
+### 13.1 Drive Recording
+
+| ID | Behavior | Expected Outcome |
+|----|----------|------------------|
+| GH1.1 | Training records inputs | Each iteration stored in SQLite (`db/training.db`) |
+| GH1.2 | Drives segmented by goals | Ball pickup to score = one drive |
+| GH1.3 | Level/profile captured | Match metadata stored with events |
+
+### 13.2 Ghost Replay
+
+**Entry:** `cargo run --bin run-ghost <session_dir>`
+
+| ID | Behavior | Expected Outcome |
+|----|----------|------------------|
+| GH2.1 | Load session | Reads events from SQLite via session directory |
+| GH2.2 | `--profile X` flag | Override AI defender profile |
+| GH2.3 | `--summary` flag | Show win/loss statistics after run |
+| GH2.4 | Playback inputs | Ghost player follows recorded inputs exactly |
+| GH2.5 | AI defends | Full AI decision system active |
+| GH2.6 | Defense metrics | Success/fail tracked per drive |
+
+### 13.3 Analysis Outputs
+
+| ID | Behavior | Expected Outcome |
+|----|----------|------------------|
+| GH3.1 | Per-drive results | Score, time, defender actions logged |
+| GH3.2 | Summary stats | Win rate, average time, steal success |
+| GH3.3 | Profile comparison | Multiple profiles can be tested against same drives |
+
+---
+
+## 14. Event Logging (SQLite)
+
+All game events are stored in SQLite databases.
+
+### 14.1 Database Files
+
+| Database | Purpose |
+|----------|---------|
+| `db/training.db` | Training mode sessions and events |
+| `db/simulation.db` | Headless simulation results |
+
+### 14.2 Event Types
+
+| Code | Description |
+|------|-------------|
+| T | Tick (physics frame state) |
+| G | Goal scored |
+| P | Ball pickup |
+| SR | Shot release |
+| SS | Shot start |
+| SA | Steal attempt |
+| S+ | Steal success |
+| S- | Steal fail |
+| SO | Steal out of range |
+| AG | AI goal change |
+| CI | Controller input |
+
+### 14.3 Schema
+
+See `docs/guides/TRAINING.md` for full schema documentation.
+
+---
+
 ## Appendix A: Input Reference
 
 ### Keyboard
@@ -669,5 +740,5 @@ For automated testing, scenarios can be organized into these categories:
 
 | ID | Description | Status |
 |----|-------------|--------|
-| GAP1 | No automated test suite | Manual testing only |
+| GAP1 | ~~No automated test suite~~ | 35 scenario tests implemented |
 | GAP2 | Tweak values don't persist | Session-only changes (intentional) |

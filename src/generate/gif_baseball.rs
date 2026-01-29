@@ -15,7 +15,7 @@ const SEAM_COLOR: [u8; 3] = [15, 15, 15]; // Black seam line
 const BORDER_COLOR: [u8; 3] = [20, 20, 20];
 const BG_COLOR: [u8; 3] = [30, 30, 35];
 
-fn main() {
+pub fn run() {
     println!(
         "Generating baseball frames ({} frames at {}x{})...",
         FRAMES, SIZE, SIZE

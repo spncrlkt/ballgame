@@ -15,7 +15,7 @@ const COLOR_B: [u8; 3] = [255, 0, 128]; // Pink
 const BORDER_COLOR: [u8; 3] = [20, 20, 20];
 const BG_COLOR: [u8; 3] = [30, 30, 35];
 
-fn main() {
+pub fn run() {
     println!(
         "Generating wedge_{} frames ({} frames at {}x{})...",
         SECTIONS, FRAMES, SIZE, SIZE

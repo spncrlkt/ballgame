@@ -22,7 +22,7 @@ REGRESSION_DIR="showcase/regression"
 BASELINE_DIR="$REGRESSION_DIR/baselines"
 CURRENT_DIR="$REGRESSION_DIR/current"
 DIFF_DIR="$REGRESSION_DIR/diffs"
-SCENARIO_FILE="config/regression_scenarios.txt"
+SCENARIO_FILE="tests/fixtures/regression_scenarios.txt"
 
 # Tolerance: allow up to 1% of pixels to differ (handles timing variations)
 # 2560x1440 = 3,686,400 pixels, 1% = 36,864 pixels

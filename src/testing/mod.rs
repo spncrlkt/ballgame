@@ -20,4 +20,4 @@ pub use runner::{TestResult, run_test};
 pub const SCENARIOS_DIR: &str = "tests/scenarios";
 
 /// Default path for test levels
-pub const TEST_LEVELS_FILE: &str = "config/test_levels.txt";
+pub const TEST_LEVELS_FILE: &str = "tests/fixtures/test_levels.txt";

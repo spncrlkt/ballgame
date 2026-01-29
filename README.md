@@ -13,13 +13,33 @@ cargo run --release    # Play with optimizations
 - [`docs/guides/HOW_TO_PLAY.md`](docs/guides/HOW_TO_PLAY.md) - Controls and gameplay
 - [`docs/guides/TRAINING.md`](docs/guides/TRAINING.md) - Training mode setup and analysis workflow
 
-- TODO: polish the following: Getting started: you'll need to autogenerate heat maps for training and analysis. - here are the following generated files, showing game progress
+## Quick Reference
+
+| What | Command |
+|------|---------|
+| Play | `cargo run` |
+| Train | `cargo run --bin training` |
+| Test | `cargo run --bin test-scenarios` |
+| Simulate | `cargo run --bin simulate -- --tournament 5` |
+
 ---
-  - showcase/ball_styles_showcase.png
-  - showcase/level_showcase.png
-  - showcase/heatmap_speed_all.png
-  - showcase/heatmap_speed_all_overlay.png
-  - showcase/heatmaps/heatmap_stats.txt
+
+## Generated Assets
+
+Run offline workflows to generate analysis files:
+
+```bash
+cargo run --bin heatmap -- --full --check   # Heatmaps for new/changed levels
+cargo run --bin generate ball               # Ball textures (all styles × palettes)
+cargo run --bin generate showcase           # Ball styles showcase image
+cargo run --bin generate levels             # Level showcase grid
+```
+
+**Output files:**
+- `showcase/heatmaps/` - Shot probability maps per level
+- `showcase/level_showcase.png` - All levels grid
+- `showcase/ball_styles_showcase.png` - All ball styles
+- `assets/textures/balls/` - Ball texture PNGs
 
 ---
 
@@ -30,17 +50,17 @@ cargo run --release    # Play with optimizations
 | `ballgame` | Main game |
 | `training` | 1v1 vs AI with event logging |
 | `simulate` | Headless AI vs AI simulation |
-| `analyze` | Analyze event logs, generate reports |
+| `analyze` | Analyze training sessions, generate reports |
 | `run-ghost` | Run ghost trials (recorded inputs vs AI) |
-| `extract-drives` | Extract drives from evlogs to ghost files |
 | `test-scenarios` | Run scenario tests |
 | `heatmap` | Generate per-level heatmaps (score, speed, reachability, etc.) |
+| `generate` | Generate assets (ball textures, showcases, GIFs) |
 
 ### Main Game
 
 ```bash
 cargo run                              # Play
-cargo run -- --replay <file.evlog>     # Replay a recorded game
+cargo run -- --replay-db <match_id>    # Replay a recorded match from SQLite
 cargo run -- --screenshot-and-quit     # Screenshot and exit (for testing)
 ```
 
@@ -49,9 +69,9 @@ cargo run -- --screenshot-and-quit     # Screenshot and exit (for testing)
 Play 1v1 against AI with full event logging for analysis.
 
 ```bash
-cargo run --bin training                              # Default: 1 game vs Balanced
-cargo run --bin training -- --games 5                 # 5 games
-cargo run --bin training -- --games 3 --profile v3_Rush_Smart  # vs specific profile
+cargo run --bin training                              # Default: 5 iterations vs Balanced
+cargo run --bin training -- -n 10                     # 10 iterations
+cargo run --bin training -- -n 3 -p v3_Rush_Smart     # vs specific profile
 ```
 
 Output: `training_logs/session_YYYYMMDD_HHMMSS/`
@@ -87,9 +107,9 @@ cargo run --bin simulate -- --shot-test 30 --level 3
 
 Test AI defense against recorded human play. Training sessions are complete drives (you start with the ball).
 
-**Step 1: Record training games**
+**Step 1: Record training iterations**
 ```bash
-cargo run --bin training -- --games 5
+cargo run --bin training -- -n 5
 ```
 
 **Step 2: Run ghost trials against AI** (no extraction needed)
@@ -190,14 +210,15 @@ ballgame/
 │   ├── game_presets.txt      # Physics/movement presets
 │   └── init_settings.json    # Saved user preferences
 │
+├── db/                       # SQLite databases (training.db, simulation.db)
+│
 ├── docs/
-│   ├── project/              # Task tracking
-│   ├── design/               # Design documents
-│   ├── planning/             # Implementation plans
-│   ├── analysis/             # Analysis and reports
-│   ├── reviews/              # Code reviews
+│   ├── project/              # Task tracking (todo.md, milestones.md)
+│   ├── design/               # Design documents (functional_spec.md)
+│   ├── planning/             # Active implementation plans
+│   ├── dev/                  # Developer reference (guidelines, workflows)
 │   ├── guides/               # User-facing guides
-│   └── historical/           # Archived notes
+│   └── archive/              # Completed plans, historical docs
 │
 ├── showcase/                 # Generated outputs
 │   ├── snapshots/            # Game state captures (F4)
@@ -208,11 +229,15 @@ ballgame/
 ├── assets/
 │   └── textures/balls/       # Ball texture PNGs (1650)
 │
+├── tools/                    # Offline tooling (analysis, training scripts)
+│   ├── offline/              # Offline training scripts
+│   ├── analysis/             # Tournament and analysis scripts
+│   └── config/               # Analysis config (heatmap variants)
+│
 ├── src/                      # Source code
 ├── scripts/                  # Build/test scripts
-├── tests/scenarios/          # Scenario test files
-├── training_logs/            # Training session data
-└── logs/                     # Simulation logs
+├── tests/                    # Test files (scenarios/, fixtures/)
+└── training_logs/            # Training session data
 ```
 
 ## Quick Links
@@ -237,14 +262,14 @@ ballgame/
 | File | Purpose |
 |------|---------|
 | [`CLAUDE.md`](CLAUDE.md) | Architecture, patterns, dev workflow |
-| [`docs/reviews/code_review_guidelines.md`](docs/reviews/code_review_guidelines.md) | Code review best practices |
+| [`docs/dev/code_review_guidelines.md`](docs/dev/code_review_guidelines.md) | Code review best practices |
+| [`docs/dev/balance-testing.md`](docs/dev/balance-testing.md) | Balance tuning process |
 | [`docs/project/open_questions.md`](docs/project/open_questions.md) | Pending decisions |
 
 **Design:**
 | File | Purpose |
 |------|---------|
 | [`docs/design/functional_spec.md`](docs/design/functional_spec.md) | Full game specification |
-| [`docs/analysis/balance-testing-workflow.md`](docs/analysis/balance-testing-workflow.md) | Balance tuning process |
 
 ## Reference
 

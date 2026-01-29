@@ -17,8 +17,8 @@ name = "heatmap"
 path = "src/bin/heatmap.rs"
 
 [[bin]]
-name = "generate_ball"
-path = "src/bin/generate_ball.rs"
+name = "generate"
+path = "src/bin/generate.rs"
 
 [[bin]]
 name = "simulate"

@@ -180,7 +180,7 @@ def pick_top_variants(results: List[VariantResult], count: int = 3) -> List[Vari
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run variant tournaments + analysis")
-    parser.add_argument("--variants", default="config/heatmap_variants.json")
+    parser.add_argument("--variants", default="tools/config/heatmap_variants.json")
     parser.add_argument("--baseline-db", required=True)
     parser.add_argument("--matches-per-pair", type=int, default=2)
     parser.add_argument("--profiles", default=None)

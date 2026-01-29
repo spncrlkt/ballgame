@@ -1,21 +1,13 @@
 # Ballgame TODO - Current Sprint
 
 *See `milestones.md` for full plan: Training Tools → AI Quality → MVP*
+*See `ideas.md` for non-prioritized ideas and notes*
 
 ---
 
-## gameplay notes 
-- we need to have an animated gif of a good starting 3-2-1 -> 20 seconds of action ending in a point. we need a system to recreate a full replay (like our ghost/replay system) and record it as a gif for the front page demo on our readme. lets organize and fix the leaky abstractions that we have laid out across our events/replay system
-- archive level system. move to archived file, remove all references, ensure no path to read from the archived levels file
-- documentantion roundup: assets, notes, settings, readme, todo systems, etc let's try to categorize and organize these files into a structure in our project that works
-- the ai steals too easily and it is too hard for me to steal. lets set up a training protocol for stealing only with a flat level and normal baskets no stairs. we'll play for 60 seconds and record steal attempts and successful steals. make sure we are logging enough information to analyze the fairness of player stealing vs ai stealing.
-- the platforming and understanding of steps and platforms are still inefficient. lets set up a training protocol for steps and platforming. make the level look like Skyway. 
-- check where symlinks would help for newest outputs (e.g., latest training DB, latest tournament DB).
-- parallelize heatmap generation (per-level + per-type) to reduce offline workflow time.
-
 ## Code Review Available (2026-01-25)
 
-**Deep analysis completed** - see `docs/reviews/code_review_2026-01-25.md` for:
+**Deep analysis completed** - see `docs/archive/code_review_2026-01-25.md` for:
 - Best practices library with sources
 - Anti-patterns found in codebase
 - Prioritized improvement plan (P0-P3)
@@ -130,7 +122,7 @@ Benefits: ~120 lines deleted, full AI defense in ghost mode, cleaner architectur
 
 ## Known Issues
 
-**Tournament Simulation Bug (see `docs/analysis/tournament_analysis.md`):**
+**Tournament Simulation Bug (see `docs/archive/tournament_analysis.md`):**
 - 4 profiles NEVER shoot: Defensive, Patient, Sniper, Turtle
 - Root cause: min_shot_quality too high for floor shots (max quality ~0.51)
 - 54.8% of matches ended 0-0

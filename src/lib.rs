@@ -8,6 +8,7 @@ pub mod config_watcher;
 pub mod constants;
 pub mod countdown;
 pub mod debug_logging;
+pub mod generate;
 pub use debug_logging::DebugLogConfig;
 pub mod events;
 pub mod helpers;

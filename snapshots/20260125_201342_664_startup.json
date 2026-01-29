@@ -1,0 +1,55 @@
+{
+  "timestamp": "20260125_201342_664",
+  "frame": 61,
+  "trigger": "startup",
+  "score": {
+    "left": 0,
+    "right": 0
+  },
+  "level": 1,
+  "palette": 0,
+  "ball": {
+    "position": [
+      0.0,
+      -400.0
+    ],
+    "velocity": [
+      0.0,
+      0.0
+    ],
+    "state": "Free",
+    "holder_team": null
+  },
+  "players": [
+    {
+      "team": "Left",
+      "position": [
+        -300.0,
+        -350.0
+      ],
+      "velocity": [
+        0.0,
+        0.0
+      ],
+      "is_human": true,
+      "holding_ball": false,
+      "ai_goal": null
+    },
+    {
+      "team": "Right",
+      "position": [
+        300.0,
+        -350.0
+      ],
+      "velocity": [
+        0.0,
+        0.0
+      ],
+      "is_human": false,
+      "holding_ball": false,
+      "ai_goal": "Idle"
+    }
+  ],
+  "last_shot": null,
+  "screenshot_path": "snapshots/20260125_201342_664_startup.png"
+}

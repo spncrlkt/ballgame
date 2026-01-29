@@ -2,8 +2,6 @@
 //!
 //! Generates ball textures for all styles × all color palettes.
 //! Styles and palettes are read from config files (single source of truth).
-//!
-//! Run with: `cargo run --bin generate_ball`
 
 use image::{Rgba, RgbaImage};
 use std::collections::HashMap;
@@ -106,7 +104,7 @@ struct BallConfig {
     palettes: Vec<Palette>,
 }
 
-fn main() {
+pub fn run() {
     let palettes = load_palettes();
     let config = load_config(palettes);
 

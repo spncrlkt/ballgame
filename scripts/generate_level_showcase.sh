@@ -64,7 +64,7 @@ echo ""
 echo "Combining into showcase..."
 
 # Run the Rust binary to combine screenshots
-cargo run --quiet --bin generate_level_showcase
+cargo run --quiet --bin generate levels
 
 # Clean up temp directories
 rm -rf "$LEVEL_DIR"
