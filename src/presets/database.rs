@@ -164,6 +164,47 @@ impl PresetDatabase {
             name: name.to_string(),
             shot_charge_time: values.get("shot_charge_time")?.parse().ok()?,
             shot_max_power: values.get("shot_max_power")?.parse().ok()?,
+            // Accuracy/cadence fields with defaults
+            shot_max_variance: values
+                .get("shot_max_variance")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(SHOT_MAX_VARIANCE),
+            shot_min_variance: values
+                .get("shot_min_variance")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(SHOT_MIN_VARIANCE),
+            shot_air_variance_penalty: values
+                .get("shot_air_variance_penalty")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(SHOT_AIR_VARIANCE_PENALTY),
+            shot_move_variance_penalty: values
+                .get("shot_move_variance_penalty")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(SHOT_MOVE_VARIANCE_PENALTY),
+            shot_quick_threshold: values
+                .get("shot_quick_threshold")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(SHOT_QUICK_THRESHOLD),
+            quick_power_multiplier: values
+                .get("quick_power_multiplier")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.7),
+            quick_power_threshold: values
+                .get("quick_power_threshold")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.25),
+            speed_randomness_min: values
+                .get("speed_randomness_min")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.9),
+            speed_randomness_max: values
+                .get("speed_randomness_max")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1.1),
+            shot_distance_variance: values
+                .get("shot_distance_variance")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.00025),
         })
     }
 
@@ -218,6 +259,17 @@ impl PresetDatabase {
             name: "Default".to_string(),
             shot_charge_time: SHOT_CHARGE_TIME,
             shot_max_power: SHOT_MAX_POWER,
+            // Accuracy/cadence defaults
+            shot_max_variance: SHOT_MAX_VARIANCE,
+            shot_min_variance: SHOT_MIN_VARIANCE,
+            shot_air_variance_penalty: SHOT_AIR_VARIANCE_PENALTY,
+            shot_move_variance_penalty: SHOT_MOVE_VARIANCE_PENALTY,
+            shot_quick_threshold: SHOT_QUICK_THRESHOLD,
+            quick_power_multiplier: 0.7,
+            quick_power_threshold: 0.25,
+            speed_randomness_min: 0.9,
+            speed_randomness_max: 1.1,
+            shot_distance_variance: 0.00025,
         }
     }
 

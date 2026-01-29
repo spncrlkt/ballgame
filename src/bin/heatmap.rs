@@ -288,9 +288,14 @@ fn simulate_ball_flight(
 fn simulate_scoring(shooter_x: f32, shooter_y: f32, basket_x: f32, basket_y: f32) -> f32 {
     let mut rng = rand::thread_rng();
 
-    let Some(traj) =
-        calculate_shot_trajectory(shooter_x, shooter_y, basket_x, basket_y, BALL_GRAVITY)
-    else {
+    let Some(traj) = calculate_shot_trajectory(
+        shooter_x,
+        shooter_y,
+        basket_x,
+        basket_y,
+        BALL_GRAVITY,
+        SHOT_DISTANCE_VARIANCE,
+    ) else {
         return 0.0;
     };
 
@@ -1736,9 +1741,14 @@ fn generate_speed_heatmap(
         for cx in 0..GRID_WIDTH {
             let (world_x, world_y) = cell_world_coords(cx, cy);
 
-            if let Some(traj) =
-                calculate_shot_trajectory(world_x, world_y, basket_x, basket_y, BALL_GRAVITY)
-            {
+            if let Some(traj) = calculate_shot_trajectory(
+                world_x,
+                world_y,
+                basket_x,
+                basket_y,
+                BALL_GRAVITY,
+                SHOT_DISTANCE_VARIANCE,
+            ) {
                 let speed = traj.required_speed.clamp(SPEED_MIN, SPEED_MAX);
                 let t = (speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN);
 

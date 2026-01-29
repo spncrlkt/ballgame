@@ -6,6 +6,38 @@ use serde::{Deserialize, Serialize};
 
 use crate::constants::*;
 
+// Serde default functions for new accuracy/cadence fields
+fn default_shot_max_variance() -> f32 {
+    SHOT_MAX_VARIANCE
+}
+fn default_shot_min_variance() -> f32 {
+    SHOT_MIN_VARIANCE
+}
+fn default_shot_air_variance_penalty() -> f32 {
+    SHOT_AIR_VARIANCE_PENALTY
+}
+fn default_shot_move_variance_penalty() -> f32 {
+    SHOT_MOVE_VARIANCE_PENALTY
+}
+fn default_shot_quick_threshold() -> f32 {
+    SHOT_QUICK_THRESHOLD
+}
+fn default_quick_power_multiplier() -> f32 {
+    0.7
+}
+fn default_quick_power_threshold() -> f32 {
+    0.25
+}
+fn default_speed_randomness_min() -> f32 {
+    0.9
+}
+fn default_speed_randomness_max() -> f32 {
+    1.1
+}
+fn default_shot_distance_variance() -> f32 {
+    0.00025
+}
+
 /// Path to global gameplay tuning config
 pub const GAMEPLAY_TUNING_FILE: &str = "config/gameplay_tuning.json";
 
@@ -26,6 +58,27 @@ pub struct GameplayTuning {
     pub ball_roll_friction: f32,
     pub shot_max_power: f32,
     pub shot_charge_time: f32,
+    // Accuracy/cadence tuning fields
+    #[serde(default = "default_shot_max_variance")]
+    pub shot_max_variance: f32,
+    #[serde(default = "default_shot_min_variance")]
+    pub shot_min_variance: f32,
+    #[serde(default = "default_shot_air_variance_penalty")]
+    pub shot_air_variance_penalty: f32,
+    #[serde(default = "default_shot_move_variance_penalty")]
+    pub shot_move_variance_penalty: f32,
+    #[serde(default = "default_shot_quick_threshold")]
+    pub shot_quick_threshold: f32,
+    #[serde(default = "default_quick_power_multiplier")]
+    pub quick_power_multiplier: f32,
+    #[serde(default = "default_quick_power_threshold")]
+    pub quick_power_threshold: f32,
+    #[serde(default = "default_speed_randomness_min")]
+    pub speed_randomness_min: f32,
+    #[serde(default = "default_speed_randomness_max")]
+    pub speed_randomness_max: f32,
+    #[serde(default = "default_shot_distance_variance")]
+    pub shot_distance_variance: f32,
 }
 
 impl Default for GameplayTuning {
@@ -45,6 +98,17 @@ impl Default for GameplayTuning {
             ball_roll_friction: BALL_ROLL_FRICTION,
             shot_max_power: SHOT_MAX_POWER,
             shot_charge_time: SHOT_CHARGE_TIME,
+            // Accuracy/cadence defaults
+            shot_max_variance: default_shot_max_variance(),
+            shot_min_variance: default_shot_min_variance(),
+            shot_air_variance_penalty: default_shot_air_variance_penalty(),
+            shot_move_variance_penalty: default_shot_move_variance_penalty(),
+            shot_quick_threshold: default_shot_quick_threshold(),
+            quick_power_multiplier: default_quick_power_multiplier(),
+            quick_power_threshold: default_quick_power_threshold(),
+            speed_randomness_min: default_speed_randomness_min(),
+            speed_randomness_max: default_speed_randomness_max(),
+            shot_distance_variance: default_shot_distance_variance(),
         }
     }
 }
@@ -65,6 +129,17 @@ impl GameplayTuning {
         tweaks.ball_roll_friction = self.ball_roll_friction;
         tweaks.shot_max_power = self.shot_max_power;
         tweaks.shot_charge_time = self.shot_charge_time;
+        // Accuracy/cadence fields
+        tweaks.shot_max_variance = self.shot_max_variance;
+        tweaks.shot_min_variance = self.shot_min_variance;
+        tweaks.shot_air_variance_penalty = self.shot_air_variance_penalty;
+        tweaks.shot_move_variance_penalty = self.shot_move_variance_penalty;
+        tweaks.shot_quick_threshold = self.shot_quick_threshold;
+        tweaks.quick_power_multiplier = self.quick_power_multiplier;
+        tweaks.quick_power_threshold = self.quick_power_threshold;
+        tweaks.speed_randomness_min = self.speed_randomness_min;
+        tweaks.speed_randomness_max = self.speed_randomness_max;
+        tweaks.shot_distance_variance = self.shot_distance_variance;
     }
 }
 
@@ -85,6 +160,17 @@ pub struct PhysicsTweaks {
     pub ball_roll_friction: f32,
     pub shot_max_power: f32,
     pub shot_charge_time: f32,
+    // Accuracy/cadence tuning fields
+    pub shot_max_variance: f32,
+    pub shot_min_variance: f32,
+    pub shot_air_variance_penalty: f32,
+    pub shot_move_variance_penalty: f32,
+    pub shot_quick_threshold: f32,
+    pub quick_power_multiplier: f32,
+    pub quick_power_threshold: f32,
+    pub speed_randomness_min: f32,
+    pub speed_randomness_max: f32,
+    pub shot_distance_variance: f32,
 }
 
 impl Default for PhysicsTweaks {
@@ -105,12 +191,23 @@ impl Default for PhysicsTweaks {
             ball_roll_friction: defaults.ball_roll_friction,
             shot_max_power: defaults.shot_max_power,
             shot_charge_time: defaults.shot_charge_time,
+            // Accuracy/cadence fields
+            shot_max_variance: defaults.shot_max_variance,
+            shot_min_variance: defaults.shot_min_variance,
+            shot_air_variance_penalty: defaults.shot_air_variance_penalty,
+            shot_move_variance_penalty: defaults.shot_move_variance_penalty,
+            shot_quick_threshold: defaults.shot_quick_threshold,
+            quick_power_multiplier: defaults.quick_power_multiplier,
+            quick_power_threshold: defaults.quick_power_threshold,
+            speed_randomness_min: defaults.speed_randomness_min,
+            speed_randomness_max: defaults.speed_randomness_max,
+            shot_distance_variance: defaults.shot_distance_variance,
         }
     }
 }
 
 impl PhysicsTweaks {
-    pub const LABELS: [&'static str; 14] = [
+    pub const LABELS: [&'static str; 24] = [
         "Gravity Rise",
         "Gravity Fall",
         "Jump Velocity",
@@ -125,6 +222,17 @@ impl PhysicsTweaks {
         "Ball Roll Friction",
         "Shot Max Power",
         "Shot Charge Time",
+        // Accuracy/cadence labels
+        "Shot Max Variance",
+        "Shot Min Variance",
+        "Shot Air Variance",
+        "Shot Move Variance",
+        "Quick Shot Threshold",
+        "Quick Power Mult",
+        "Quick Power Thresh",
+        "Speed Random Min",
+        "Speed Random Max",
+        "Shot Dist Variance",
     ];
 
     pub fn get_value(&self, index: usize) -> f32 {
@@ -143,6 +251,16 @@ impl PhysicsTweaks {
             11 => self.ball_roll_friction,
             12 => self.shot_max_power,
             13 => self.shot_charge_time,
+            14 => self.shot_max_variance,
+            15 => self.shot_min_variance,
+            16 => self.shot_air_variance_penalty,
+            17 => self.shot_move_variance_penalty,
+            18 => self.shot_quick_threshold,
+            19 => self.quick_power_multiplier,
+            20 => self.quick_power_threshold,
+            21 => self.speed_randomness_min,
+            22 => self.speed_randomness_max,
+            23 => self.shot_distance_variance,
             _ => 0.0,
         }
     }
@@ -163,6 +281,16 @@ impl PhysicsTweaks {
             11 => BALL_ROLL_FRICTION,
             12 => SHOT_MAX_POWER,
             13 => SHOT_CHARGE_TIME,
+            14 => SHOT_MAX_VARIANCE,
+            15 => SHOT_MIN_VARIANCE,
+            16 => SHOT_AIR_VARIANCE_PENALTY,
+            17 => SHOT_MOVE_VARIANCE_PENALTY,
+            18 => SHOT_QUICK_THRESHOLD,
+            19 => 0.7,  // quick_power_multiplier default
+            20 => 0.25, // quick_power_threshold default
+            21 => 0.9,  // speed_randomness_min default
+            22 => 1.1,  // speed_randomness_max default
+            23 => 0.00025, // shot_distance_variance default
             _ => 0.0,
         }
     }
@@ -183,6 +311,16 @@ impl PhysicsTweaks {
             11 => self.ball_roll_friction = value,
             12 => self.shot_max_power = value,
             13 => self.shot_charge_time = value,
+            14 => self.shot_max_variance = value,
+            15 => self.shot_min_variance = value,
+            16 => self.shot_air_variance_penalty = value,
+            17 => self.shot_move_variance_penalty = value,
+            18 => self.shot_quick_threshold = value,
+            19 => self.quick_power_multiplier = value,
+            20 => self.quick_power_threshold = value,
+            21 => self.speed_randomness_min = value,
+            22 => self.speed_randomness_max = value,
+            23 => self.shot_distance_variance = value,
             _ => {}
         }
     }

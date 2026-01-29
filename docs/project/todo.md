@@ -118,6 +118,10 @@ Benefits: ~120 lines deleted, full AI defense in ghost mode, cleaner architectur
 - Debug level: labels update color on palette change
 - AI debug level: both players AI-controlled for testing
 
+**Simulation/Heatmaps:**
+- Generate heatmaps for all levels (only Arena + Open Floor currently have full set)
+- Add `--preset` flag to simulate binary for easier variant testing
+
 ---
 
 ## Known Issues
@@ -145,6 +149,9 @@ cargo run --bin training                 # Training mode
 
 ## Done (Last 5)
 
+- [x] **Accuracy/Cadence Tuning** - Extended preset system with 10 shot params, tested V1-V6 variants (2026-01-28)
+  - V3-Forgiving now default: 3.2 goals/match (↑88%), 34.8% accuracy (↑61%)
+  - All variants available in `config/game_presets.txt` for switching via D-pad
 - [x] **Evlog elimination complete** - Full SQLite migration, all .evlog infrastructure removed (2026-01-26)
   - SQLite replay loading, --replay-db CLI, training writes to DB only
   - Deleted: evlog_parser.rs, logger.rs, loader.rs, Python scripts
@@ -155,6 +162,5 @@ cargo run --bin training                 # Training mode
   - Result: AI steal attempts 0.26/game → 13/game
 - [x] **AI architecture refactor** - AiCapabilities + world_model.rs for single source of physics truth (2026-01-25)
 - [x] **Fix JumpAt horizontal movement** - AI now moves toward landing during entire jump arc (was stopping mid-air)
-- [x] **Fix calculate_edge overlap case** - Jump from edge of overlap, not center (avoids ceiling collision)
 
 *See `todone.md` for full archive with commit references*

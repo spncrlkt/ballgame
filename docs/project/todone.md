@@ -1,5 +1,11 @@
 # Ballgame Done Archive
 
+## Archived 2026-01-28 (Accuracy/Cadence Tuning)
+
+- [x] **Fix calculate_edge overlap case** - Jump from edge of overlap, not center (avoids ceiling collision)
+
+---
+
 ## Archived 2026-01-25 (AI Architecture Refactor)
 
 **AI Physics Consolidation:**

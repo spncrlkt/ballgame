@@ -108,18 +108,22 @@ pub struct ShotTrajectory {
     pub distance_variance: f32,
 }
 
-/// Variance per unit distance for trajectory calculation
+/// Default variance per unit distance for trajectory calculation
 pub const SHOT_DISTANCE_VARIANCE: f32 = 0.00025;
 
 /// Calculate shot trajectory to hit target.
 /// Returns the angle and exact speed needed to hit the target.
 /// Uses a fixed elevation angle (60°) and calculates the required speed.
+///
+/// `distance_variance_factor` controls how much distance affects accuracy.
+/// Use `SHOT_DISTANCE_VARIANCE` (0.00025) for the default value.
 pub fn calculate_shot_trajectory(
     shooter_x: f32,
     shooter_y: f32,
     target_x: f32,
     target_y: f32,
     gravity: f32,
+    distance_variance_factor: f32,
 ) -> Option<ShotTrajectory> {
     let tx = target_x - shooter_x; // Positive = target is right, negative = left
     let ty = target_y - shooter_y; // Positive = target is above, negative = below
@@ -127,7 +131,7 @@ pub fn calculate_shot_trajectory(
     let distance = (tx * tx + ty * ty).sqrt();
 
     // Variance penalty based on distance (longer shots are less accurate)
-    let distance_variance = distance * SHOT_DISTANCE_VARIANCE;
+    let distance_variance = distance * distance_variance_factor;
 
     // Directly under/over target
     if dx < 1.0 {

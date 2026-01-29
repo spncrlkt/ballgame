@@ -30,6 +30,17 @@ pub struct ShootingPreset {
     pub name: String,
     pub shot_charge_time: f32,
     pub shot_max_power: f32,
+    // Accuracy/cadence tuning fields
+    pub shot_max_variance: f32,
+    pub shot_min_variance: f32,
+    pub shot_air_variance_penalty: f32,
+    pub shot_move_variance_penalty: f32,
+    pub shot_quick_threshold: f32,
+    pub quick_power_multiplier: f32,
+    pub quick_power_threshold: f32,
+    pub speed_randomness_min: f32,
+    pub speed_randomness_max: f32,
+    pub shot_distance_variance: f32,
 }
 
 /// Global preset - combines all settings into one preset

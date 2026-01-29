@@ -43,7 +43,10 @@ Dead: ball_gravity=1400, ball_bounce=0.2, ball_air_friction=0.7, ball_roll_frict
 
 [Shooting]
 # Default: current game constants
-Default: shot_charge_time=1.6, shot_max_power=900
+# New accuracy/cadence fields: shot_max_variance, shot_min_variance, shot_air_variance_penalty,
+# shot_move_variance_penalty, shot_quick_threshold, quick_power_multiplier, quick_power_threshold,
+# speed_randomness_min, speed_randomness_max, shot_distance_variance
+Default: shot_charge_time=1.6, shot_max_power=900, shot_max_variance=0.35, shot_min_variance=0.02, shot_air_variance_penalty=0.10, shot_move_variance_penalty=0.10, shot_quick_threshold=0.4, quick_power_multiplier=0.7, quick_power_threshold=0.25, speed_randomness_min=0.9, speed_randomness_max=1.1, shot_distance_variance=0.00025
 
 # Quick: faster charging, less power
 Quick: shot_charge_time=0.8, shot_max_power=750
@@ -59,6 +62,28 @@ Sniper: shot_charge_time=4.0, shot_max_power=1500
 
 # Spam: instant shots, weak power
 Spam: shot_charge_time=0.2, shot_max_power=500
+
+# =============================================================================
+# ACCURACY TUNING VARIANTS (for scoring rate experimentation)
+# =============================================================================
+
+# V1: Baseline Tighten - slightly tighter speed randomness and distance variance
+V1-Tighten: shot_charge_time=1.6, shot_max_power=900, speed_randomness_min=0.95, speed_randomness_max=1.05, shot_distance_variance=0.0002
+
+# V2: Quick Charge - faster charge time + tighter randomness
+V2-QuickCharge: shot_charge_time=1.0, shot_max_power=900, speed_randomness_min=0.95, speed_randomness_max=1.05
+
+# V3: Forgiving Variance - lower variance penalties all around
+V3-Forgiving: shot_charge_time=1.6, shot_max_power=900, shot_max_variance=0.25, shot_min_variance=0.01, shot_air_variance_penalty=0.05, shot_move_variance_penalty=0.05, speed_randomness_min=0.95, speed_randomness_max=1.05
+
+# V4: Quick Shot Buff - faster charge, boosted quick shots, moderate variance reduction
+V4-QuickBuff: shot_charge_time=1.2, shot_max_power=900, shot_quick_threshold=0.3, quick_power_multiplier=0.85, quick_power_threshold=0.2, shot_max_variance=0.28, speed_randomness_min=0.97, speed_randomness_max=1.03
+
+# V5: High Cadence - fast charge, very forgiving quick shots, low variance
+V5-HighCadence: shot_charge_time=0.8, shot_max_power=900, shot_quick_threshold=0.25, quick_power_multiplier=0.9, quick_power_threshold=0.15, shot_max_variance=0.22, shot_min_variance=0.01, shot_air_variance_penalty=0.03, shot_move_variance_penalty=0.03, speed_randomness_min=0.97, speed_randomness_max=1.03, shot_distance_variance=0.00015
+
+# V6: Target Mode - very fast charge, nearly full-power quick shots, minimal variance
+V6-Target: shot_charge_time=0.6, shot_max_power=900, shot_quick_threshold=0.2, quick_power_multiplier=0.95, quick_power_threshold=0.1, shot_max_variance=0.18, shot_min_variance=0.005, shot_air_variance_penalty=0.02, shot_move_variance_penalty=0.02, speed_randomness_min=0.98, speed_randomness_max=1.02, shot_distance_variance=0.0001
 
 [Composite]
 # Combinations of category presets for quick switching

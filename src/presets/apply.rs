@@ -58,6 +58,17 @@ pub fn apply_preset_to_tweaks(
     if let Some(shooting) = preset_db.get_shooting(current.shooting) {
         tweaks.shot_charge_time = shooting.shot_charge_time;
         tweaks.shot_max_power = shooting.shot_max_power;
+        // Accuracy/cadence fields
+        tweaks.shot_max_variance = shooting.shot_max_variance;
+        tweaks.shot_min_variance = shooting.shot_min_variance;
+        tweaks.shot_air_variance_penalty = shooting.shot_air_variance_penalty;
+        tweaks.shot_move_variance_penalty = shooting.shot_move_variance_penalty;
+        tweaks.shot_quick_threshold = shooting.shot_quick_threshold;
+        tweaks.quick_power_multiplier = shooting.quick_power_multiplier;
+        tweaks.quick_power_threshold = shooting.quick_power_threshold;
+        tweaks.speed_randomness_min = shooting.speed_randomness_min;
+        tweaks.speed_randomness_max = shooting.speed_randomness_max;
+        tweaks.shot_distance_variance = shooting.shot_distance_variance;
     }
 
     info!(

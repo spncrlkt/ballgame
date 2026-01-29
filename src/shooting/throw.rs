@@ -101,27 +101,28 @@ pub fn throw_ball(
                 basket_pos.x,
                 basket_pos.y,
                 BALL_GRAVITY,
+                tweaks.shot_distance_variance,
             )
         } else {
             None
         };
 
-        // Base variance from charge level: 50% at 0 charge → 2% at full charge
-        let base_variance =
-            SHOT_MAX_VARIANCE - (SHOT_MAX_VARIANCE - SHOT_MIN_VARIANCE) * charge_pct;
+        // Base variance from charge level: max at 0 charge → min at full charge
+        let base_variance = tweaks.shot_max_variance
+            - (tweaks.shot_max_variance - tweaks.shot_min_variance) * charge_pct;
         let mut variance = base_variance;
 
-        // Air shot penalty: +10% variance when airborne
+        // Air shot penalty: additional variance when airborne
         let air_penalty = if !grounded.0 {
-            SHOT_AIR_VARIANCE_PENALTY
+            tweaks.shot_air_variance_penalty
         } else {
             0.0
         };
         variance += air_penalty;
 
-        // Horizontal movement penalty: 0-10% variance based on horizontal speed
+        // Horizontal movement penalty: variance based on horizontal speed
         let move_penalty =
-            (player_velocity.0.x.abs() / MOVE_SPEED).min(1.0) * SHOT_MOVE_VARIANCE_PENALTY;
+            (player_velocity.0.x.abs() / MOVE_SPEED).min(1.0) * tweaks.shot_move_variance_penalty;
         variance += move_penalty;
 
         // Get base angle, required speed, and distance variance from trajectory
@@ -149,10 +150,9 @@ pub fn throw_ball(
         let angle_variance = rng.gen_range(-variance..variance) * max_angle_variance;
         let final_angle = base_angle + angle_variance;
 
-        // Reduced power for very quick shots (< 250ms charge)
-        // Changed from 0.5 at 400ms to 0.7 at 250ms to make AI quick shots more viable
-        let power_multiplier = if charging.charge_time < 0.25 {
-            0.7
+        // Reduced power for very quick shots (below quick_power_threshold charge time)
+        let power_multiplier = if charging.charge_time < tweaks.quick_power_threshold {
+            tweaks.quick_power_multiplier
         } else {
             1.0
         };
@@ -170,8 +170,9 @@ pub fn throw_ball(
             1.0
         };
 
-        // Apply distance multiplier and ±10% randomness
-        let speed_randomness = rng.gen_range(0.9..1.1);
+        // Apply distance multiplier and randomness
+        let speed_randomness =
+            rng.gen_range(tweaks.speed_randomness_min..tweaks.speed_randomness_max);
         let uncapped_speed =
             required_speed * distance_multiplier * speed_randomness * power_multiplier;
 
