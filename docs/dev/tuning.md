@@ -12,14 +12,28 @@ Checklist
 - Any AI caches tied to level geometry are refreshed.
 - Config files used by the run are current and on disk.
 
+### Quick Start: All Heatmaps Script
+The easiest way to generate all heatmaps is the bundled script:
+```bash
+./scripts/generate_heatmaps.sh                    # All types, all levels
+./scripts/generate_heatmaps.sh --full --release   # Full bundle per level (faster)
+./scripts/generate_heatmaps.sh --type reachability --level "Islands"  # Specific
+./scripts/generate_heatmaps.sh --check --stats    # Only changed levels, show stats
+```
+
+All heatmap types are now supported, including reachability-dependent types (reachability, path_cost, escape_routes) which load physics from `config/gameplay_tuning.json`.
+
+### Manual Commands
 Suggested commands (adjust level/profile lists as needed)
-- Heatmaps (reachability-dependent types skipped, specific levels): `cargo run --release --bin heatmap -- --type speed --check --refresh --level "Open Floor" --level "Skyway"` (repeat for score, landing_safety, line_of_sight, elevation)
-- Heatmaps (levels from sim settings): `python3 scripts/run_variant_tournaments.py --baseline-db <DB> --levels-from-sim-settings`
+- Full heatmap bundle: `cargo run --release --bin heatmap -- --full --check`
+- Single type: `cargo run --release --bin heatmap -- --type reachability --level "Open Floor"`
 - Level data validation: `cargo run --bin generate_level_showcase` (optional)
 - Config reload sanity check: `cargo run --bin simulate -- --matches 1 --quiet`
 
 Output
-- Heatmap files for each tuned level.
+- Heatmap files for each tuned level in `showcase/heatmaps/`
+- Combined sheets in `showcase/heatmap_<type>_all.png`
+- Statistics log in `showcase/heatmaps/heatmap_stats.txt`
 - Logs in `logs/` or `training_logs/` if enabled.
 
 ---

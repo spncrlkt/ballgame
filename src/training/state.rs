@@ -124,6 +124,8 @@ pub struct TrainingState {
     pub level_sequence_index: usize,
     /// Reachability position collector (for auto-export heatmaps)
     pub reachability_collector: Option<ReachabilityCollector>,
+    /// Whether advance button has been released at least once (prevents spurious input on startup)
+    pub advance_button_armed: bool,
 }
 
 impl Default for TrainingState {
@@ -153,6 +155,7 @@ impl Default for TrainingState {
             level_sequence: Vec::new(),
             level_sequence_index: 0,
             reachability_collector: None,
+            advance_button_armed: false,
         }
     }
 }

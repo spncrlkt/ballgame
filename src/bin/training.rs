@@ -1660,6 +1660,13 @@ fn check_advance_level(
         return;
     }
 
+    // Grace period: ignore all advance input for first 2 seconds
+    if training_state.game_elapsed < 2.0 {
+        input.advance_level_pressed = false;
+        input.swap_pressed = false;
+        return;
+    }
+
     // Check if advance level was pressed
     if !input.advance_level_pressed {
         return;

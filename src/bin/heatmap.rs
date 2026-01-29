@@ -32,11 +32,11 @@
 //! Skips debug/regression levels and training protocol levels unless --level is specified.
 
 use ballgame::training::TrainingProtocol;
+use ballgame::tuning::{load_gameplay_tuning_from_file, GameplayTuning, GAMEPLAY_TUNING_FILE};
 use ballgame::{
-    AIR_ACCEL, AIR_DECEL, ARENA_FLOOR_Y, ARENA_HEIGHT, ARENA_WIDTH, BALL_BOUNCE, BALL_GRAVITY,
-    CORNER_STEP_THICKNESS, GRAVITY_FALL, GRAVITY_RISE, GROUND_ACCEL, GROUND_DECEL, JUMP_VELOCITY,
-    LevelDatabase, MOVE_SPEED, PLAYER_SIZE, RIM_THICKNESS, SHOT_DISTANCE_VARIANCE,
-    SHOT_MIN_VARIANCE, WALL_THICKNESS, basket_x_from_offset, calculate_shot_trajectory,
+    ARENA_FLOOR_Y, ARENA_HEIGHT, ARENA_WIDTH, BALL_BOUNCE, BALL_GRAVITY, CORNER_STEP_THICKNESS,
+    LevelDatabase, PLAYER_SIZE, RIM_THICKNESS, SHOT_DISTANCE_VARIANCE, SHOT_MIN_VARIANCE,
+    WALL_THICKNESS, basket_x_from_offset, calculate_shot_trajectory,
 };
 use bevy::prelude::Vec2;
 use image::{Rgb, RgbImage};
@@ -82,6 +82,37 @@ const ELEVATION_RANGE: f32 = 500.0;
 const SCORE_MASK_THRESHOLD: f32 = 0.1;
 const SCORE_PERCENTILE_LOW: f32 = 0.1;
 const SCORE_PERCENTILE_HIGH: f32 = 0.9;
+
+// =============================================================================
+// PHYSICS CONFIG (loaded from gameplay tuning)
+// =============================================================================
+
+/// Physics values for jump simulation, loaded from config/gameplay_tuning.json
+struct PhysicsConfig {
+    jump_velocity: f32,
+    gravity_rise: f32,
+    gravity_fall: f32,
+    ground_accel: f32,
+    ground_decel: f32,
+    air_accel: f32,
+    air_decel: f32,
+    move_speed: f32,
+}
+
+impl From<&GameplayTuning> for PhysicsConfig {
+    fn from(t: &GameplayTuning) -> Self {
+        Self {
+            jump_velocity: t.jump_velocity,
+            gravity_rise: t.gravity_rise,
+            gravity_fall: t.gravity_fall,
+            ground_accel: t.ground_accel,
+            ground_decel: t.ground_decel,
+            air_accel: t.air_accel,
+            air_decel: t.air_decel,
+            move_speed: t.move_speed,
+        }
+    }
+}
 
 // =============================================================================
 // SIMULATION TYPE
@@ -349,6 +380,16 @@ fn main() {
         clear_heatmap_outputs();
     }
 
+    // Load gameplay tuning for physics simulation
+    let tuning = load_gameplay_tuning_from_file(GAMEPLAY_TUNING_FILE).unwrap_or_else(|e| {
+        eprintln!(
+            "Warning: Could not load gameplay tuning: {}. Using defaults.",
+            e
+        );
+        GameplayTuning::default()
+    });
+    let physics = PhysicsConfig::from(&tuning);
+
     let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
     let training_levels = training_level_names();
     let level_hashes = compute_level_hashes(&level_db);
@@ -375,14 +416,14 @@ fn main() {
                 GRID_HEIGHT,
                 CELL_SIZE
             );
-            run_single_kind(kind, &eligible_levels);
+            run_single_kind(kind, &eligible_levels, &physics);
         }
         HeatmapMode::Full => {
             println!(
                 "Generating full heatmap bundle: {}x{} cells ({} pixels)",
                 GRID_WIDTH, GRID_HEIGHT, CELL_SIZE
             );
-            run_full_bundle(&eligible_levels);
+            run_full_bundle(&eligible_levels, &physics);
             if config.check && config.level_filter.is_empty() {
                 save_level_hashes(&level_hashes);
             }
@@ -526,7 +567,7 @@ fn select_target_levels<'a>(
     levels
 }
 
-fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData]) {
+fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], physics: &PhysicsConfig) {
     let mut generated = Vec::new();
     let mut generated_overlays = Vec::new();
 
@@ -609,6 +650,7 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData]) {
                 &platform_rects,
                 None,
                 Some(&overlay),
+                physics,
             );
             generated.push(image_path);
             generated_overlays.push(overlay_path(
@@ -640,7 +682,7 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData]) {
     }
 }
 
-fn run_full_bundle(levels: &[&ballgame::LevelData]) {
+fn run_full_bundle(levels: &[&ballgame::LevelData], physics: &PhysicsConfig) {
     let mut per_kind: HashMap<HeatmapKind, Vec<String>> = HashMap::new();
     let mut per_kind_overlays: HashMap<HeatmapKind, Vec<String>> = HashMap::new();
 
@@ -648,7 +690,7 @@ fn run_full_bundle(levels: &[&ballgame::LevelData]) {
         let basket_y = ARENA_FLOOR_Y + level.basket_height;
         let (left_x, right_x) = basket_x_from_offset(level.basket_push_in);
         let platform_rects = build_platform_rects(level);
-        let reachability = compute_reachability(&platform_rects);
+        let reachability = compute_reachability(&platform_rects, physics);
         let overlay = LevelOverlayContext {
             platform_rects: &platform_rects,
             basket_left_x: left_x,
@@ -747,6 +789,7 @@ fn run_full_bundle(levels: &[&ballgame::LevelData]) {
                     &platform_rects,
                     Some(&reachability),
                     Some(&overlay),
+                    physics,
                 );
                 level_images.push(image_path.clone());
                 per_kind.entry(kind).or_default().push(image_path);
@@ -822,6 +865,7 @@ fn generate_heatmap_for_kind(
     platform_rects: &[PlatformRect],
     reachability_cache: Option<&HeatmapGrid>,
     overlay: Option<&LevelOverlayContext<'_>>,
+    physics: &PhysicsConfig,
 ) -> String {
     let mut owned_reachability = None;
 
@@ -846,11 +890,11 @@ fn generate_heatmap_for_kind(
                 cache
             } else {
                 if owned_reachability.is_none() {
-                    owned_reachability = Some(compute_reachability(platform_rects));
+                    owned_reachability = Some(compute_reachability(platform_rects, physics));
                 }
                 owned_reachability.as_ref().expect("reachability cache")
             };
-            generate_value_heatmap(level, "reachability", &reachability, 1.0, None, overlay)
+            generate_value_heatmap(level, "reachability", reachability, 1.0, None, overlay)
         }
         HeatmapKind::LandingSafety => {
             let safety = compute_landing_safety(platform_rects);
@@ -861,7 +905,7 @@ fn generate_heatmap_for_kind(
                 cache
             } else {
                 if owned_reachability.is_none() {
-                    owned_reachability = Some(compute_reachability(platform_rects));
+                    owned_reachability = Some(compute_reachability(platform_rects, physics));
                 }
                 owned_reachability.as_ref().expect("reachability cache")
             };
@@ -881,7 +925,7 @@ fn generate_heatmap_for_kind(
                 cache
             } else {
                 if owned_reachability.is_none() {
-                    owned_reachability = Some(compute_reachability(platform_rects));
+                    owned_reachability = Some(compute_reachability(platform_rects, physics));
                 }
                 owned_reachability.as_ref().expect("reachability cache")
             };
@@ -1029,13 +1073,7 @@ fn generate_value_heatmap(
     image_path
 }
 
-fn compute_reachability(platform_rects: &[PlatformRect]) -> HeatmapGrid {
-    // TODO: Hard fail until reachability uses gameplay tuning (config/gameplay_tuning.json)
-    // to ensure the heatmap matches real in-game physics.
-    panic!(
-        "TODO: reachability heatmap must load gameplay tuning before simulating (see docs/analysis/tuning_workflows.md; workflow skips reachability for now)"
-    );
-
+fn compute_reachability(platform_rects: &[PlatformRect], physics: &PhysicsConfig) -> HeatmapGrid {
     let mut grid = HeatmapGrid::new();
     let mut counts = vec![0u32; (GRID_WIDTH * GRID_HEIGHT) as usize];
     let mut rng = rand::thread_rng();
@@ -1051,6 +1089,7 @@ fn compute_reachability(platform_rects: &[PlatformRect]) -> HeatmapGrid {
                 start_x,
                 start_y,
                 platform_rects,
+                physics,
                 &mut rng,
                 &mut |pos: Vec2| {
                     if let Some((gx, gy)) = world_to_cell(pos.x, pos.y) {
@@ -1267,15 +1306,16 @@ fn simulate_jump(
     start_x: f32,
     start_y: f32,
     platform_rects: &[PlatformRect],
+    physics: &PhysicsConfig,
     rng: &mut impl Rng,
     mut on_sample: impl FnMut(Vec2),
 ) {
     let mut x = start_x;
     let mut y = start_y;
     let mut vx = 0.0;
-    let mut vy = JUMP_VELOCITY;
+    let mut vy = physics.jump_velocity;
     let mut t = 0.0;
-    let mut input_dir = 0.0;
+    let mut input_dir: f32 = 0.0;
     let mut next_input = 0.0;
     let half_w = PLAYER_SIZE.x / 2.0;
     let half_h = PLAYER_SIZE.y / 2.0;
@@ -1293,24 +1333,28 @@ fn simulate_jump(
         }
 
         let accel = if y - half_h <= ARENA_FLOOR_Y + 0.5 {
-            GROUND_ACCEL
+            physics.ground_accel
         } else {
-            AIR_ACCEL
+            physics.air_accel
         };
         let decel = if y - half_h <= ARENA_FLOOR_Y + 0.5 {
-            GROUND_DECEL
+            physics.ground_decel
         } else {
-            AIR_DECEL
+            physics.air_decel
         };
 
-        let target_vx = input_dir * MOVE_SPEED;
+        let target_vx = input_dir * physics.move_speed;
         if input_dir.abs() > 0.01 {
             vx = approach(vx, target_vx, accel * REACHABILITY_DT);
         } else {
             vx = approach(vx, 0.0, decel * REACHABILITY_DT);
         }
 
-        let gravity = if vy > 0.0 { GRAVITY_RISE } else { GRAVITY_FALL };
+        let gravity = if vy > 0.0 {
+            physics.gravity_rise
+        } else {
+            physics.gravity_fall
+        };
         vy -= gravity * REACHABILITY_DT;
 
         let prev_y = y;
