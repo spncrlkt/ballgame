@@ -8,6 +8,8 @@
 //!   cargo run --bin heatmap                    # Default: speed heatmap
 //!   cargo run --bin heatmap -- speed           # Explicit: speed heatmap
 //!   cargo run --bin heatmap -- score           # Scoring percentage heatmaps (per level)
+//!   cargo run --bin heatmap -- score --fast    # Quick iteration (25 trials, ~4x faster)
+//!   cargo run --bin heatmap -- score --accurate # Publication quality (100 trials)
 //!   cargo run --bin heatmap -- --type reachability
 //!   cargo run --bin heatmap -- --full --level "Catwalk"
 //!   cargo run --bin heatmap -- --check
@@ -41,6 +43,7 @@ use ballgame::{
 use bevy::prelude::Vec2;
 use image::{Rgb, RgbImage};
 use rand::Rng;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Write as FmtWrite;
@@ -64,7 +67,9 @@ const SPEED_MIN: f32 = 300.0; // Green
 const SPEED_MAX: f32 = 1400.0; // Red
 
 // Monte Carlo settings
-const MONTE_CARLO_TRIALS: u32 = 100;
+const MONTE_CARLO_FAST: u32 = 25;
+const MONTE_CARLO_DEFAULT: u32 = 50;
+const MONTE_CARLO_ACCURATE: u32 = 100;
 
 const LEVELS_FILE: &str = "config/levels.txt";
 const LEVEL_HASH_FILE: &str = "config/level_hashes.json";
@@ -141,6 +146,7 @@ struct SimConfig {
     level_filter: Vec<String>,
     check: bool,
     refresh: bool,
+    trial_count: u32,
 }
 
 fn parse_args() -> SimConfig {
@@ -148,6 +154,7 @@ fn parse_args() -> SimConfig {
     let mut level_filter = Vec::new();
     let mut check = false;
     let mut refresh = false;
+    let mut trial_count = MONTE_CARLO_DEFAULT;
     let mut args = std::env::args().skip(1);
 
     while let Some(arg) = args.next() {
@@ -164,6 +171,8 @@ fn parse_args() -> SimConfig {
             "--full" => mode = HeatmapMode::Full,
             "--check" => check = true,
             "--refresh" => refresh = true,
+            "--fast" => trial_count = MONTE_CARLO_FAST,
+            "--accurate" => trial_count = MONTE_CARLO_ACCURATE,
             "--level" => {
                 if let Some(value) = args.next() {
                     level_filter.push(value);
@@ -178,6 +187,7 @@ fn parse_args() -> SimConfig {
         level_filter,
         check,
         refresh,
+        trial_count,
     }
 }
 
@@ -252,6 +262,7 @@ fn simulate_ball_flight(
     speed: f32,
     basket_x: f32,
     basket_y: f32,
+    rims: &[Rect],
 ) -> bool {
     const DT: f32 = 0.001; // 1ms timestep
     const MAX_TIME: f32 = 5.0;
@@ -263,7 +274,6 @@ fn simulate_ball_flight(
     let mut t = 0.0;
 
     let ball_radius = BALL_RADIUS;
-    let rims = build_rim_geometry(basket_x, basket_y);
 
     // Scoring zone (inside basket)
     let score_left = basket_x - BASKET_SIZE_X / 2.0 + ball_radius;
@@ -278,8 +288,19 @@ fn simulate_ball_flight(
         y += vy * DT;
         t += DT;
 
+        // Early termination: ball fallen well below basket and still going down
+        if y < basket_y - BASKET_SIZE_Y * 2.0 && vy < 0.0 {
+            return false;
+        }
+
+        // Early termination: ball going away from basket with no return chance
+        let dx_to_basket = basket_x - x;
+        if dx_to_basket.abs() > BASKET_SIZE_X * 3.0 && vx.signum() != dx_to_basket.signum() {
+            return false;
+        }
+
         // Check rim collisions
-        for rim in &rims {
+        for rim in rims {
             if let Some((nx, ny)) = check_circle_rect_collision(x, y, ball_radius, rim) {
                 // Reflect velocity
                 let dot = vx * nx + vy * ny;
@@ -316,7 +337,14 @@ fn simulate_ball_flight(
 /// - Speed randomness (±10%)
 /// - Distance multiplier (1.0→1.05 linear)
 /// - Angle variance (based on SHOT_MIN_VARIANCE for ideal shots)
-fn simulate_scoring(shooter_x: f32, shooter_y: f32, basket_x: f32, basket_y: f32) -> f32 {
+fn simulate_scoring(
+    shooter_x: f32,
+    shooter_y: f32,
+    basket_x: f32,
+    basket_y: f32,
+    rims: &[Rect],
+    trial_count: u32,
+) -> f32 {
     let mut rng = rand::thread_rng();
 
     let Some(traj) = calculate_shot_trajectory(
@@ -332,7 +360,7 @@ fn simulate_scoring(shooter_x: f32, shooter_y: f32, basket_x: f32, basket_y: f32
 
     let mut makes = 0;
 
-    for _ in 0..MONTE_CARLO_TRIALS {
+    for _ in 0..trial_count {
         // Apply variance: base + distance penalty (matching throw.rs)
         let distance = ((basket_x - shooter_x).powi(2) + (basket_y - shooter_y).powi(2)).sqrt();
         let distance_variance = distance * SHOT_DISTANCE_VARIANCE;
@@ -361,12 +389,13 @@ fn simulate_scoring(shooter_x: f32, shooter_y: f32, basket_x: f32, basket_y: f32
             final_speed,
             basket_x,
             basket_y,
+            rims,
         ) {
             makes += 1;
         }
     }
 
-    makes as f32 / MONTE_CARLO_TRIALS as f32
+    makes as f32 / trial_count as f32
 }
 
 // =============================================================================
@@ -416,14 +445,22 @@ fn main() {
                 GRID_HEIGHT,
                 CELL_SIZE
             );
+<<<<<<< HEAD
             run_single_kind(kind, &eligible_levels, &physics);
+=======
+            run_single_kind(kind, &eligible_levels, config.trial_count);
+>>>>>>> 5cd437a (heatmap fast / accurate options)
         }
         HeatmapMode::Full => {
             println!(
                 "Generating full heatmap bundle: {}x{} cells ({} pixels)",
                 GRID_WIDTH, GRID_HEIGHT, CELL_SIZE
             );
+<<<<<<< HEAD
             run_full_bundle(&eligible_levels, &physics);
+=======
+            run_full_bundle(&eligible_levels, config.trial_count);
+>>>>>>> 5cd437a (heatmap fast / accurate options)
             if config.check && config.level_filter.is_empty() {
                 save_level_hashes(&level_hashes);
             }
@@ -567,7 +604,11 @@ fn select_target_levels<'a>(
     levels
 }
 
+<<<<<<< HEAD
 fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], physics: &PhysicsConfig) {
+=======
+fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], trial_count: u32) {
+>>>>>>> 5cd437a (heatmap fast / accurate options)
     let mut generated = Vec::new();
     let mut generated_overlays = Vec::new();
 
@@ -589,6 +630,7 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], physics: 
                 left_x,
                 basket_y,
                 Some(&overlay),
+                trial_count,
             ));
             generated_overlays.push(overlay_path(
                 "score",
@@ -603,6 +645,7 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], physics: 
                 right_x,
                 basket_y,
                 Some(&overlay),
+                trial_count,
             ));
             generated_overlays.push(overlay_path(
                 "score",
@@ -650,7 +693,11 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], physics: 
                 &platform_rects,
                 None,
                 Some(&overlay),
+<<<<<<< HEAD
                 physics,
+=======
+                trial_count,
+>>>>>>> 5cd437a (heatmap fast / accurate options)
             );
             generated.push(image_path);
             generated_overlays.push(overlay_path(
@@ -676,13 +723,17 @@ fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], physics: 
         ),
         HeatmapKind::Score => println!(
             "Score range: 0% (red) to 100% (green), {} trials per cell",
-            MONTE_CARLO_TRIALS
+            trial_count
         ),
         _ => {}
     }
 }
 
+<<<<<<< HEAD
 fn run_full_bundle(levels: &[&ballgame::LevelData], physics: &PhysicsConfig) {
+=======
+fn run_full_bundle(levels: &[&ballgame::LevelData], trial_count: u32) {
+>>>>>>> 5cd437a (heatmap fast / accurate options)
     let mut per_kind: HashMap<HeatmapKind, Vec<String>> = HashMap::new();
     let mut per_kind_overlays: HashMap<HeatmapKind, Vec<String>> = HashMap::new();
 
@@ -708,6 +759,7 @@ fn run_full_bundle(levels: &[&ballgame::LevelData], physics: &PhysicsConfig) {
                     left_x,
                     basket_y,
                     Some(&overlay),
+                    trial_count,
                 );
                 let right_path = generate_score_heatmap(
                     level.name.as_str(),
@@ -716,6 +768,7 @@ fn run_full_bundle(levels: &[&ballgame::LevelData], physics: &PhysicsConfig) {
                     right_x,
                     basket_y,
                     Some(&overlay),
+                    trial_count,
                 );
                 level_images.push(left_path.clone());
                 level_images.push(right_path.clone());
@@ -789,7 +842,11 @@ fn run_full_bundle(levels: &[&ballgame::LevelData], physics: &PhysicsConfig) {
                     &platform_rects,
                     Some(&reachability),
                     Some(&overlay),
+<<<<<<< HEAD
                     physics,
+=======
+                    trial_count,
+>>>>>>> 5cd437a (heatmap fast / accurate options)
                 );
                 level_images.push(image_path.clone());
                 per_kind.entry(kind).or_default().push(image_path);
@@ -865,7 +922,11 @@ fn generate_heatmap_for_kind(
     platform_rects: &[PlatformRect],
     reachability_cache: Option<&HeatmapGrid>,
     overlay: Option<&LevelOverlayContext<'_>>,
+<<<<<<< HEAD
     physics: &PhysicsConfig,
+=======
+    trial_count: u32,
+>>>>>>> 5cd437a (heatmap fast / accurate options)
 ) -> String {
     let mut owned_reachability = None;
 
@@ -884,6 +945,7 @@ fn generate_heatmap_for_kind(
             basket_x,
             basket_y,
             overlay,
+            trial_count,
         ),
         HeatmapKind::Reachability => {
             let reachability = if let Some(cache) = reachability_cache {
@@ -1836,6 +1898,7 @@ fn generate_score_heatmap(
     basket_x: f32,
     basket_y: f32,
     overlay: Option<&LevelOverlayContext<'_>>,
+    trial_count: u32,
 ) -> String {
     let safe_name = sanitize_level_name(level_name);
     let base_name = format!("heatmap_score_{}_{}_{}", safe_name, level_id, side);
@@ -1843,9 +1906,12 @@ fn generate_score_heatmap(
     let data_path = format!("{}/{}.txt", OUTPUT_DIR, base_name);
 
     println!(
-        "Generating score heatmap for {} ({}, {}): {}x{} cells",
-        level_name, level_id, side, GRID_WIDTH, GRID_HEIGHT
+        "Generating score heatmap for {} ({}, {}): {}x{} cells, {} trials per cell",
+        level_name, level_id, side, GRID_WIDTH, GRID_HEIGHT, trial_count
     );
+
+    // Pre-compute rim geometry once (instead of 360K times)
+    let rims = build_rim_geometry(basket_x, basket_y);
 
     // Create image (multiply by cell size for actual pixels)
     let img_width = GRID_WIDTH * CELL_SIZE;
@@ -1859,30 +1925,34 @@ fn generate_score_heatmap(
     }
 
     let total_cells = GRID_WIDTH * GRID_HEIGHT;
-    let mut processed = 0;
+
+    // Build list of all cells for parallel processing
+    let cells: Vec<(u32, u32)> = (0..GRID_HEIGHT)
+        .flat_map(|cy| (0..GRID_WIDTH).map(move |cx| (cx, cy)))
+        .collect();
+
+    // Parallel Monte Carlo simulation for all cells
+    let results: Vec<((u32, u32), f32)> = cells
+        .par_iter()
+        .map(|&(cx, cy)| {
+            let (world_x, world_y) = cell_world_coords(cx, cy);
+            let score_pct = simulate_scoring(world_x, world_y, basket_x, basket_y, &rims, trial_count);
+            ((cx, cy), score_pct)
+        })
+        .collect();
+
+    // Collect results into grid
     let mut grid = HeatmapGrid::new();
     let mut values = Vec::with_capacity(total_cells as usize);
     let mut data = String::from("x,y,shot_pct\n");
 
-    for cy in 0..GRID_HEIGHT {
-        for cx in 0..GRID_WIDTH {
-            let (world_x, world_y) = cell_world_coords(cx, cy);
-            let score_pct = simulate_scoring(world_x, world_y, basket_x, basket_y);
-            grid.set(cx, cy, score_pct);
-            values.push(score_pct);
+    for ((cx, cy), score_pct) in &results {
+        grid.set(*cx, *cy, *score_pct);
+        values.push(*score_pct);
 
-            let shot_pct = score_pct * 100.0;
-            let _ = writeln!(&mut data, "{:.2},{:.2},{:.2}", world_x, world_y, shot_pct);
-
-            processed += 1;
-            if processed % 100 == 0 {
-                print!(
-                    "\rProgress: {:.1}%",
-                    (processed as f32 / total_cells as f32) * 100.0
-                );
-                std::io::stdout().flush().ok();
-            }
-        }
+        let (world_x, world_y) = cell_world_coords(*cx, *cy);
+        let shot_pct = score_pct * 100.0;
+        let _ = writeln!(&mut data, "{:.2},{:.2},{:.2}", world_x, world_y, shot_pct);
     }
 
     report_heatmap_stats("score", level_name, level_id, Some(side), &values);
@@ -1905,8 +1975,6 @@ fn generate_score_heatmap(
             fill_cell(&mut img, cx, cy, color);
         }
     }
-
-    println!(); // Newline after progress
 
     // Draw basket position marker
     draw_basket_marker(&mut img, basket_x, basket_y);
