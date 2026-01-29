@@ -15,6 +15,7 @@
 //!   cargo run --bin heatmap -- --check
 //!   cargo run --bin heatmap -- --full --check
 //!   cargo run --bin heatmap -- --full --refresh
+//!   cargo run --bin heatmap -- --full --refresh --clear-manual-trainings
 //!   cargo run --bin heatmap -- score --level "Catwalk"
 //!   cargo run --bin heatmap -- score --level b7569f063af0f78b
 //!   cargo run --bin heatmap -- speed --level "Open Floor"
@@ -32,6 +33,10 @@
 //! Combined sheets are written to showcase/heatmap_<type>_all.png.
 //! Full bundles write showcase/heatmaps/heatmap_full_<level>_<uuid>.png.
 //! Skips debug/regression levels unless --level is specified.
+//!
+//! --refresh clears existing heatmaps before generation. By default, manually
+//! trained heatmaps (e.g., reachability from training sessions) are preserved.
+//! Use --clear-manual-trainings to also clear these.
 
 use ballgame::tuning::{load_gameplay_tuning_from_file, GameplayTuning, GAMEPLAY_TUNING_FILE};
 use ballgame::{
@@ -146,6 +151,7 @@ struct SimConfig {
     check: bool,
     refresh: bool,
     trial_count: u32,
+    clear_manual_trainings: bool,
 }
 
 fn parse_args() -> SimConfig {
@@ -154,6 +160,7 @@ fn parse_args() -> SimConfig {
     let mut check = false;
     let mut refresh = false;
     let mut trial_count = MONTE_CARLO_DEFAULT;
+    let mut clear_manual_trainings = false;
     let mut args = std::env::args().skip(1);
 
     while let Some(arg) = args.next() {
@@ -172,6 +179,7 @@ fn parse_args() -> SimConfig {
             "--refresh" => refresh = true,
             "--fast" => trial_count = MONTE_CARLO_FAST,
             "--accurate" => trial_count = MONTE_CARLO_ACCURATE,
+            "--clear-manual-trainings" => clear_manual_trainings = true,
             "--level" => {
                 if let Some(value) = args.next() {
                     level_filter.push(value);
@@ -187,6 +195,7 @@ fn parse_args() -> SimConfig {
         check,
         refresh,
         trial_count,
+        clear_manual_trainings,
     }
 }
 
@@ -405,7 +414,7 @@ fn main() {
     let config = parse_args();
     fs::create_dir_all(OUTPUT_DIR).expect("Failed to create heatmap output directory");
     if config.refresh {
-        clear_heatmap_outputs();
+        clear_heatmap_outputs(config.clear_manual_trainings);
     }
 
     // Load gameplay tuning for physics simulation
@@ -1723,12 +1732,27 @@ fn print_level_changes(level_db: &LevelDatabase, changes: &LevelChangeSet) {
     }
 }
 
-fn clear_heatmap_outputs() {
+/// Heatmap types generated from manual training sessions (not algorithmically computed).
+/// These are preserved by default on --refresh unless --clear-manual-trainings is passed.
+const MANUAL_TRAINING_HEATMAP_PREFIXES: &[&str] = &["heatmap_reachability_"];
+
+fn clear_heatmap_outputs(clear_manual_trainings: bool) {
     let showcase_root = "showcase";
+    let mut preserved_count = 0;
+
     if let Ok(entries) = fs::read_dir(OUTPUT_DIR) {
         for entry in entries.flatten() {
             if let Some(name) = entry.file_name().to_str() {
                 if name.starts_with("heatmap_") {
+                    // Check if this is a manually trained heatmap
+                    let is_manual = MANUAL_TRAINING_HEATMAP_PREFIXES
+                        .iter()
+                        .any(|prefix| name.starts_with(prefix));
+
+                    if is_manual && !clear_manual_trainings {
+                        preserved_count += 1;
+                        continue;
+                    }
                     let _ = fs::remove_file(entry.path());
                 }
             }
@@ -1739,6 +1763,15 @@ fn clear_heatmap_outputs() {
         for entry in entries.flatten() {
             if let Some(name) = entry.file_name().to_str() {
                 if name.starts_with("heatmap_") && name.ends_with(".png") {
+                    // Check if this is a manually trained heatmap
+                    let is_manual = MANUAL_TRAINING_HEATMAP_PREFIXES
+                        .iter()
+                        .any(|prefix| name.starts_with(prefix));
+
+                    if is_manual && !clear_manual_trainings {
+                        preserved_count += 1;
+                        continue;
+                    }
                     let _ = fs::remove_file(entry.path());
                 }
             }
@@ -1747,7 +1780,15 @@ fn clear_heatmap_outputs() {
 
     let _ = fs::remove_file(LEVEL_HASH_FILE);
     let _ = fs::remove_file(HEATMAP_STATS_FILE);
-    println!("Cleared prior heatmap outputs and hash cache.");
+
+    if preserved_count > 0 {
+        println!(
+            "Cleared prior heatmap outputs and hash cache (preserved {} manually trained files).",
+            preserved_count
+        );
+    } else {
+        println!("Cleared prior heatmap outputs and hash cache.");
+    }
 }
 
 /// Convert normalized speed (0-1) to RGB color
