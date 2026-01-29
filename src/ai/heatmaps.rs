@@ -297,11 +297,7 @@ fn load_heatmap_grid_with_default(path: &Path, default_value: Option<f32>) -> He
                 }
             }
         } else {
-            panic!(
-                "Heatmaps: {} missing {} cells",
-                path.display(),
-                missing
-            );
+            panic!("Heatmaps: {} missing {} cells", path.display(), missing);
         }
     }
 

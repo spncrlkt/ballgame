@@ -6,9 +6,9 @@
 use bevy::prelude::*;
 use rusqlite::Connection;
 
+use crate::ai::heatmaps::HeatmapBundle;
 use crate::ai::navigation::NavGraph;
 use crate::ai::pathfinding::find_path;
-use crate::ai::heatmaps::HeatmapBundle;
 
 /// Result of a reachability test for a single level
 #[derive(Debug, Clone)]
@@ -105,8 +105,7 @@ pub fn load_exploration_positions(
     level_id: &str,
     human_only: bool,
 ) -> Result<Vec<Vec2>, String> {
-    let conn = Connection::open(db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = Connection::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
 
     let query = if human_only {
         "SELECT pos_x, pos_y FROM debug_events WHERE level_id = ?1 AND human_controlled = 1"
@@ -114,7 +113,8 @@ pub fn load_exploration_positions(
         "SELECT pos_x, pos_y FROM debug_events WHERE level_id = ?1"
     };
 
-    let mut stmt = conn.prepare(query)
+    let mut stmt = conn
+        .prepare(query)
         .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
     let positions: Vec<Vec2> = stmt
@@ -172,7 +172,10 @@ pub fn run_reachability_test(
     let positions = match load_exploration_positions(db_path, level_id, true) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("Warning: Failed to load positions for {}: {}", level_name, e);
+            eprintln!(
+                "Warning: Failed to load positions for {}: {}",
+                level_name, e
+            );
             return result;
         }
     };
@@ -207,7 +210,11 @@ pub fn run_reachability_test(
             .unwrap_or((0, f32::MAX));
 
         // Try to find path from floor to nearest node
-        let path_result = find_path(nav_graph, floor_pos, nav_graph.nodes[nearest_node_idx].center);
+        let path_result = find_path(
+            nav_graph,
+            floor_pos,
+            nav_graph.nodes[nearest_node_idx].center,
+        );
         let path_found = path_result.is_some();
 
         // Sample heatmap reachability at test point
@@ -238,9 +245,7 @@ mod tests {
 
     #[test]
     fn test_sample_positions_deterministic() {
-        let positions: Vec<Vec2> = (0..100)
-            .map(|i| Vec2::new(i as f32, i as f32))
-            .collect();
+        let positions: Vec<Vec2> = (0..100).map(|i| Vec2::new(i as f32, i as f32)).collect();
 
         let sample1 = sample_positions(&positions, 10, 42);
         let sample2 = sample_positions(&positions, 10, 42);

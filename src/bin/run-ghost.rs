@@ -26,6 +26,7 @@ use ballgame::debug_logging::DebugLogConfig;
 use ballgame::levels::LevelDatabase;
 use ballgame::palettes::PaletteDatabase;
 use ballgame::player::{HoldingBall, Player, Team, apply_gravity, apply_input, check_collisions};
+use ballgame::run_summary::{NextStep, RunSummary};
 use ballgame::scoring::{CurrentLevel, Score, check_scoring};
 use ballgame::shooting::{LastShotInfo, throw_ball, update_shot_charge};
 use ballgame::simulation::{
@@ -594,14 +595,45 @@ fn main() {
 
     // Originally scoring trials
     let originally_scored: Vec<_> = results.iter().filter(|r| r.originally_scored).collect();
-    if !originally_scored.is_empty() {
+    let originally_defended = if !originally_scored.is_empty() {
         let defended_scoring = originally_scored.iter().filter(|r| r.ai_defended()).count();
-        println!();
-        println!(
-            "Originally-scoring drives defended: {}/{} ({:.1}%)",
-            defended_scoring,
-            originally_scored.len(),
-            defended_scoring as f32 / originally_scored.len() as f32 * 100.0
+        Some((defended_scoring, originally_scored.len()))
+    } else {
+        None
+    };
+
+    // Print summary
+    let mut summary = RunSummary::new("Ghost Trial Run Complete")
+        .stat("AI Profile", ai_profile.clone())
+        .stat("Trials", total.to_string())
+        .stat("Defense Rate", format!("{:.1}%", defense_rate))
+        .stat("Ghost Scored", ghost_scored.to_string())
+        .stat("AI Stole", ai_stole.to_string());
+
+    if let Some((def, orig)) = originally_defended {
+        summary = summary.stat(
+            "Originally-Scoring Defended",
+            format!(
+                "{}/{} ({:.1}%)",
+                def,
+                orig,
+                def as f32 / orig as f32 * 100.0
+            ),
         );
     }
+
+    summary = summary
+        .next_step(NextStep::primary(
+            format!(
+                "cargo run --bin run-ghost -- {} --profile <other>",
+                input_path.display()
+            ),
+            "Test a different AI profile",
+        ))
+        .next_step(NextStep::secondary(
+            "cargo run --bin extract-drives -- --db <db>",
+            "Extract more ghost trials from training sessions",
+        ));
+
+    summary.print();
 }

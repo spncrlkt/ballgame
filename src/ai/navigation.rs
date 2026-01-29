@@ -9,7 +9,7 @@ use crate::ai::capabilities::AiCapabilities;
 use crate::ai::heatmaps::HeatmapBundle;
 use crate::ai::shot_quality::evaluate_shot_quality;
 use crate::constants::*;
-use crate::levels::{LevelDatabase, LevelData, PlatformDef};
+use crate::levels::{LevelData, LevelDatabase, PlatformDef};
 use crate::scoring::CurrentLevel;
 use crate::world::{BasketRim, CornerRamp, LevelPlatform, Platform};
 
@@ -736,7 +736,12 @@ pub fn rebuild_nav_graph(
             PlatformSource::Floor => "Floor".to_string(),
             PlatformSource::CornerRamp => "Ramp".to_string(),
             PlatformSource::Center { y, width } => format!("Center({y},{width})"),
-            PlatformSource::Mirror { x, y, width, is_left } => {
+            PlatformSource::Mirror {
+                x,
+                y,
+                width,
+                is_left,
+            } => {
                 let side = if *is_left { "L" } else { "R" };
                 format!("Mirror{side}({x},{y},{width})")
             }
@@ -992,7 +997,10 @@ fn match_platform_to_config(pos: Vec3, level_config: Option<&LevelData>) -> Plat
                 // Center platforms spawn at x=0, y=ARENA_FLOOR_Y + y
                 let config_y = ARENA_FLOOR_Y + y;
                 if pos.x.abs() < 1.0 && (pos.y - config_y).abs() < 5.0 {
-                    return PlatformSource::Center { y: *y, width: *width };
+                    return PlatformSource::Center {
+                        y: *y,
+                        width: *width,
+                    };
                 }
             }
             PlatformDef::Mirror { x, y, width } => {

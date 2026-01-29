@@ -217,9 +217,7 @@ mod tests {
 
     #[test]
     fn test_builder_with_new_api() {
-        let app = HeadlessAppBuilder::new()
-            .with_level("test_level")
-            .build();
+        let app = HeadlessAppBuilder::new().with_level("test_level").build();
         assert!(app.world().contains_resource::<Score>());
         assert!(app.world().contains_resource::<CurrentLevel>());
     }

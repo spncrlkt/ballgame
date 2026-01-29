@@ -26,6 +26,7 @@ use crate::player::TargetBasket;
 use crate::player::{
     HoldingBall, JumpState, Player, Team, apply_gravity, apply_input, check_collisions,
 };
+use crate::run_summary::{FileCategory, FileEntry, NextStep, RunSummary};
 use crate::scoring::{CurrentLevel, Score, check_scoring};
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
 use crate::steal::{StealContest, StealCooldown, StealTracker, steal_cooldown_update};
@@ -1098,11 +1099,47 @@ pub fn run_simulation(config: SimConfig) {
 
             // Export rankings file
             let rankings_path = std::path::Path::new("config/tournament_rankings.txt");
-            if let Err(e) = export_tournament_rankings(&tournament, rankings_path, *matches_per_pair)
+            if let Err(e) =
+                export_tournament_rankings(&tournament, rankings_path, *matches_per_pair)
             {
                 eprintln!("Warning: Failed to export rankings: {}", e);
             } else if !config.quiet {
                 println!("Rankings exported to {}", rankings_path.display());
+            }
+
+            // Print summary
+            if !config.quiet {
+                let mut summary = RunSummary::new("Tournament Simulation Complete")
+                    .duration(start.elapsed())
+                    .stat("Profiles", profiles.len().to_string())
+                    .stat("Matches/Pair", matches_per_pair.to_string())
+                    .stat("Total Matches", tournament.matches.len().to_string())
+                    .file(FileEntry::new(
+                        rankings_path.display().to_string(),
+                        FileCategory::Data,
+                    ));
+
+                if let Some(ref path) = db_path {
+                    summary = summary.file(FileEntry::new(path.clone(), FileCategory::Database));
+                }
+
+                summary = summary
+                    .next_step(NextStep::primary(
+                        format!(
+                            "cargo run --bin analyze -- --bracket --bracket-db {}",
+                            db_path.as_deref().unwrap_or("db/tournament_*.db")
+                        ),
+                        "Analyze tournament results",
+                    ))
+                    .next_step(NextStep::secondary(
+                        format!(
+                            "cargo run --bin simulate -- --tournament {} --parallel 8",
+                            matches_per_pair
+                        ),
+                        "Run more tournament matches",
+                    ));
+
+                summary.print();
             }
         }
 
@@ -1302,7 +1339,9 @@ fn plan_run(
         super::config::SimMode::ReachabilityTest { .. } => {
             ("reachability_test".to_string(), 0, None, None)
         }
-        super::config::SimMode::Bracket { entrants, best_of, .. } => {
+        super::config::SimMode::Bracket {
+            entrants, best_of, ..
+        } => {
             // Double elimination: approximately 2*N - 1 matches for N entrants
             // (N-1 in winners + N-1 in losers + 1-2 grand finals)
             let total_matches = (*entrants as i64 * 2) - 1;
@@ -1559,7 +1598,14 @@ fn run_reachability_tests(
         let heatmaps = app.world().resource::<HeatmapBundle>();
 
         // Run the test
-        let result = run_reachability_test(nav_graph, heatmaps, &level.name, &level.id, db_path, samples);
+        let result = run_reachability_test(
+            nav_graph,
+            heatmaps,
+            &level.name,
+            &level.id,
+            db_path,
+            samples,
+        );
 
         if !config.quiet {
             println!("{}", result.format());
@@ -1601,8 +1647,8 @@ fn run_bracket_tournament(
     external_db: Option<&SimDatabase>,
 ) {
     use super::bracket::{
-        format_standings, pad_to_power_of_2, seed_entries, select_profiles, BracketExecutor,
-        BracketState, MatchFormat, SeedingMethod,
+        BracketExecutor, BracketState, MatchFormat, SeedingMethod, format_standings,
+        pad_to_power_of_2, seed_entries, select_profiles,
     };
     use super::db::{BracketEntryData, BracketTournamentData};
 
@@ -1697,20 +1743,21 @@ fn run_bracket_tournament(
         Some(format!("db/bracket_{}.db", timestamp))
     };
 
-    let owned_db = db_path.as_ref().and_then(|path| {
-        match SimDatabase::open(std::path::Path::new(path)) {
-            Ok(db) => {
-                if !config.quiet {
-                    println!("Using database: {}", path);
+    let owned_db =
+        db_path
+            .as_ref()
+            .and_then(|path| match SimDatabase::open(std::path::Path::new(path)) {
+                Ok(db) => {
+                    if !config.quiet {
+                        println!("Using database: {}", path);
+                    }
+                    Some(db)
                 }
-                Some(db)
-            }
-            Err(e) => {
-                eprintln!("Warning: Failed to open database {}: {}", path, e);
-                None
-            }
-        }
-    });
+                Err(e) => {
+                    eprintln!("Warning: Failed to open database {}: {}", path, e);
+                    None
+                }
+            });
 
     let db: Option<&SimDatabase> = external_db.or(owned_db.as_ref());
 
@@ -1818,10 +1865,51 @@ fn run_bracket_tournament(
 
         // Export rankings file
         let rankings_path = std::path::Path::new("config/bracket_rankings.txt");
-        if let Err(e) = export_bracket_rankings(&bracket, rankings_path, best_of, game_score_limit) {
+        if let Err(e) = export_bracket_rankings(&bracket, rankings_path, best_of, game_score_limit)
+        {
             eprintln!("Warning: Failed to export rankings: {}", e);
         } else if !config.quiet {
             println!("Rankings exported to {}", rankings_path.display());
+        }
+
+        // Print summary
+        if !config.quiet {
+            let champion = bracket
+                .champion
+                .map(|idx| bracket.entries[idx].profile_name.clone())
+                .unwrap_or_else(|| "N/A".to_string());
+
+            let mut summary = RunSummary::new("Bracket Tournament Complete")
+                .duration(start.elapsed())
+                .stat("Entrants", bracket.entries.len().to_string())
+                .stat("Format", format!("BO{} FT{}", best_of, game_score_limit))
+                .stat("Champion", champion)
+                .file(FileEntry::new(
+                    rankings_path.display().to_string(),
+                    FileCategory::Data,
+                ));
+
+            if let Some(path) = &db_path {
+                summary = summary.file(FileEntry::new(path.clone(), FileCategory::Database));
+            }
+
+            summary = summary
+                .next_step(NextStep::primary(
+                    format!(
+                        "python3 scripts/generate_bracket_profiles.py --db {}",
+                        db_path.as_deref().unwrap_or("db/bracket_*.db")
+                    ),
+                    "Generate improved AI profiles from bracket results",
+                ))
+                .next_step(NextStep::secondary(
+                    format!(
+                        "cargo run --bin analyze -- --bracket --bracket-db {}",
+                        db_path.as_deref().unwrap_or("db/bracket_*.db")
+                    ),
+                    "Analyze bracket tournament results",
+                ));
+
+            summary.print();
         }
     }
 }
@@ -1915,7 +2003,7 @@ fn export_tournament_rankings(
 
     // Sort by wins desc, then losses asc
     let mut sorted: Vec<_> = profile_stats.into_iter().collect();
-    sorted.sort_by(|a, b| b.1 .0.cmp(&a.1 .0).then(a.1 .1.cmp(&b.1 .1)));
+    sorted.sort_by(|a, b| b.1.0.cmp(&a.1.0).then(a.1.1.cmp(&b.1.1)));
 
     let mut content = String::new();
     content.push_str(&format!(
@@ -1926,7 +2014,10 @@ fn export_tournament_rankings(
         "# Generated: {}\n",
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
     ));
-    content.push_str(&format!("# Format: {} matches per pair\n", matches_per_pair));
+    content.push_str(&format!(
+        "# Format: {} matches per pair\n",
+        matches_per_pair
+    ));
     content.push_str("#\n");
     content.push_str("# Rank | Profile                  |  Wins | Losses | WinRate\n");
     content.push_str("# -----+--------------------------+-------+--------+--------\n");

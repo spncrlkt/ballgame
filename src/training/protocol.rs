@@ -111,8 +111,8 @@ impl TrainingProtocol {
             TrainingProtocol::AdvancedPlatform => None,
             TrainingProtocol::Pursuit => Some("Pursuit Arena"),
             TrainingProtocol::Pursuit2 => Some("Pursuit Arena 2"),
-            TrainingProtocol::Reachability => None,      // Iterates all levels
-            TrainingProtocol::AutoReachability => None,  // Iterates all levels
+            TrainingProtocol::Reachability => None, // Iterates all levels
+            TrainingProtocol::AutoReachability => None, // Iterates all levels
         }
     }
 
@@ -120,9 +120,9 @@ impl TrainingProtocol {
     pub fn default_time_limit(&self) -> Option<f32> {
         match self {
             TrainingProtocol::AdvancedPlatform => None,
-            TrainingProtocol::Pursuit => Some(30.0),      // 30 second default for pursuit
-            TrainingProtocol::Pursuit2 => Some(30.0),     // 30 second default for pursuit2
-            TrainingProtocol::Reachability => None,       // Player decides when done
+            TrainingProtocol::Pursuit => Some(30.0), // 30 second default for pursuit
+            TrainingProtocol::Pursuit2 => Some(30.0), // 30 second default for pursuit2
+            TrainingProtocol::Reachability => None,  // Player decides when done
             TrainingProtocol::AutoReachability => Some(60.0), // 60 seconds per level
         }
     }
@@ -139,10 +139,10 @@ impl TrainingProtocol {
     /// Whether player should start with the ball
     pub fn player_starts_with_ball(&self) -> bool {
         match self {
-            TrainingProtocol::AdvancedPlatform => true,   // Already implemented
+            TrainingProtocol::AdvancedPlatform => true, // Already implemented
             TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => true, // AI must chase
-            TrainingProtocol::Reachability => true,       // Exploration mode
-            TrainingProtocol::AutoReachability => false,  // No ball needed for exploration
+            TrainingProtocol::Reachability => true,     // Exploration mode
+            TrainingProtocol::AutoReachability => false, // No ball needed for exploration
         }
     }
 

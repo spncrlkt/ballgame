@@ -121,8 +121,7 @@ pub fn warmup_seeding(
         configs
             .par_iter()
             .map(|(profile, config)| {
-                let result =
-                    run_match(&config.base_config, config.seed, level_db, profile_db);
+                let result = run_match(&config.base_config, config.seed, level_db, profile_db);
                 let won = result.score_left > result.score_right;
                 (profile.clone(), won, result.score_left, result.score_right)
             })
@@ -135,8 +134,7 @@ pub fn warmup_seeding(
                 if !quiet && (i + 1) % 10 == 0 {
                     eprint!("\r  Progress: {}/{}", i + 1, total_games);
                 }
-                let result =
-                    run_match(&config.base_config, config.seed, level_db, profile_db);
+                let result = run_match(&config.base_config, config.seed, level_db, profile_db);
                 let won = result.score_left > result.score_right;
                 (profile.clone(), won, result.score_left, result.score_right)
             })
@@ -254,11 +252,7 @@ pub fn seed_entries(
                 .enumerate()
                 .filter_map(|(i, name)| {
                     let profile = profile_db.get_by_name(&name)?;
-                    Some(BracketEntry::new(
-                        profile.id.clone(),
-                        name,
-                        (i + 1) as u32,
-                    ))
+                    Some(BracketEntry::new(profile.id.clone(), name, (i + 1) as u32))
                 })
                 .collect()
         }

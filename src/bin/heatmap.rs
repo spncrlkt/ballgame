@@ -38,7 +38,8 @@
 //! trained heatmaps (e.g., reachability from training sessions) are preserved.
 //! Use --clear-manual-trainings to also clear these.
 
-use ballgame::tuning::{load_gameplay_tuning_from_file, GameplayTuning, GAMEPLAY_TUNING_FILE};
+use ballgame::run_summary::{FileCategory, FileEntry, NextStep, RunSummary};
+use ballgame::tuning::{GAMEPLAY_TUNING_FILE, GameplayTuning, load_gameplay_tuning_from_file};
 use ballgame::{
     ARENA_FLOOR_Y, ARENA_HEIGHT, ARENA_WIDTH, BALL_BOUNCE, BALL_GRAVITY, CORNER_STEP_THICKNESS,
     LevelDatabase, PLAYER_SIZE, RIM_THICKNESS, SHOT_DISTANCE_VARIANCE, SHOT_MIN_VARIANCE,
@@ -443,6 +444,8 @@ fn main() {
         return;
     }
 
+    let start_time = std::time::Instant::now();
+
     match config.mode {
         HeatmapMode::Single(kind) => {
             println!(
@@ -452,19 +455,56 @@ fn main() {
                 GRID_HEIGHT,
                 CELL_SIZE
             );
-run_single_kind(kind, &eligible_levels, &physics, config.trial_count);
+            run_single_kind(kind, &eligible_levels, &physics, config.trial_count);
         }
         HeatmapMode::Full => {
             println!(
                 "Generating full heatmap bundle: {}x{} cells ({} pixels)",
                 GRID_WIDTH, GRID_HEIGHT, CELL_SIZE
             );
-run_full_bundle(&eligible_levels, &physics, config.trial_count);
+            run_full_bundle(&eligible_levels, &physics, config.trial_count);
             if config.check && config.level_filter.is_empty() {
                 save_level_hashes(&level_hashes);
             }
         }
     }
+
+    // Print summary
+    let mode_str = match config.mode {
+        HeatmapMode::Single(kind) => heatmap_kind_label(kind).to_string(),
+        HeatmapMode::Full => "full bundle".to_string(),
+    };
+
+    let mut summary = RunSummary::new("Heatmap Generation Complete")
+        .duration(start_time.elapsed())
+        .stat("Mode", mode_str)
+        .stat("Levels", eligible_levels.len().to_string())
+        .stat("Trials/Cell", config.trial_count.to_string())
+        .file(
+            FileEntry::new(OUTPUT_DIR, FileCategory::Image)
+                .with_description("Heatmap images and data files"),
+        );
+
+    if matches!(config.mode, HeatmapMode::Full) {
+        summary = summary.file(FileEntry::new(
+            "showcase/heatmap_*_all.png",
+            FileCategory::Image,
+        ));
+    }
+
+    if !config.check {
+        summary = summary.next_step(NextStep::primary(
+            "cargo run --bin heatmap -- --check",
+            "Verify heatmaps are up-to-date with level changes",
+        ));
+    }
+
+    summary = summary.next_step(NextStep::secondary(
+        "cargo run --bin heatmap -- --full --level <name>",
+        "Generate full bundle for a specific level",
+    ));
+
+    summary.print();
 }
 
 fn parse_heatmap_kind(value: &str) -> Option<HeatmapKind> {
@@ -602,7 +642,12 @@ fn select_target_levels<'a>(
     levels
 }
 
-fn run_single_kind(kind: HeatmapKind, levels: &[&ballgame::LevelData], physics: &PhysicsConfig, trial_count: u32) {
+fn run_single_kind(
+    kind: HeatmapKind,
+    levels: &[&ballgame::LevelData],
+    physics: &PhysicsConfig,
+    trial_count: u32,
+) {
     let mut generated = Vec::new();
     let mut generated_overlays = Vec::new();
 
@@ -2050,7 +2095,8 @@ fn generate_score_heatmap(
         .par_iter()
         .map(|&(cx, cy)| {
             let (world_x, world_y) = cell_world_coords(cx, cy);
-            let score_pct = simulate_scoring(world_x, world_y, basket_x, basket_y, &rims, trial_count);
+            let score_pct =
+                simulate_scoring(world_x, world_y, basket_x, basket_y, &rims, trial_count);
             ((cx, cy), score_pct)
         })
         .collect();

@@ -13,6 +13,7 @@ pub use debug_logging::DebugLogConfig;
 pub mod events;
 pub mod helpers;
 pub mod replay;
+pub mod run_summary;
 pub mod settings;
 pub mod simulation;
 pub mod snapshot;
@@ -72,6 +73,7 @@ pub use replay::{
     replay_active, replay_input_handler, replay_playback, replay_setup, setup_replay_ui,
     update_replay_ui,
 };
+pub use run_summary::{FileCategory, FileEntry, NextStep, NextStepPriority, RunSummary};
 pub use scoring::{CurrentLevel, Score};
 pub use settings::{CurrentSettings, InitSettings, save_settings_system};
 pub use shooting::{ChargingShot, LastShotInfo};

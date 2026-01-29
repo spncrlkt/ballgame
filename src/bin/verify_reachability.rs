@@ -5,12 +5,17 @@
 use std::fs;
 use std::path::Path;
 
+use ballgame::run_summary::{NextStep, RunSummary};
+
 fn main() {
     println!("Verifying reachability heatmap integration\n");
 
     let heatmap_dir = Path::new("showcase/heatmaps");
     if !heatmap_dir.exists() {
-        eprintln!("ERROR: Heatmap directory not found: {}", heatmap_dir.display());
+        eprintln!(
+            "ERROR: Heatmap directory not found: {}",
+            heatmap_dir.display()
+        );
         std::process::exit(1);
     }
 
@@ -82,24 +87,34 @@ fn main() {
         }
     }
 
-    println!("\n----------------------------------------");
-    println!(
-        "Checked {} levels, {} have varied reachability data",
-        levels_checked, levels_with_varied_data
-    );
-
-    if levels_with_varied_data == levels_checked && levels_checked > 0 {
-        println!("\nRESULT: PASS - All levels have reachability heatmaps with real data");
-        std::process::exit(0);
+    // Print summary
+    let (title, passed) = if levels_with_varied_data == levels_checked && levels_checked > 0 {
+        ("Reachability Verification Passed", true)
     } else if levels_checked == 0 {
-        eprintln!("\nRESULT: FAIL - No reachability heatmaps found");
-        std::process::exit(1);
+        ("Reachability Verification Failed", false)
     } else {
-        eprintln!(
-            "\nRESULT: WARN - {} of {} levels may have default/empty data",
-            levels_checked - levels_with_varied_data,
-            levels_checked
-        );
-        std::process::exit(0);
+        ("Reachability Verification Warning", true)
+    };
+
+    let mut summary = RunSummary::new(title)
+        .stat("Levels Checked", levels_checked.to_string())
+        .stat("With Valid Data", levels_with_varied_data.to_string());
+
+    if !passed || levels_with_varied_data < levels_checked {
+        summary = summary.next_step(NextStep::primary(
+            "cargo run --bin heatmap -- reachability",
+            "Generate reachability heatmaps for all levels",
+        ));
+    }
+
+    summary = summary.next_step(NextStep::secondary(
+        "cargo run --bin heatmap -- --full",
+        "Regenerate all heatmap types",
+    ));
+
+    summary.print();
+
+    if !passed {
+        std::process::exit(1);
     }
 }

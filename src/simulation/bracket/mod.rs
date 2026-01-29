@@ -22,8 +22,8 @@ mod executor;
 mod seeding;
 mod types;
 
-pub use executor::{format_standings, BracketExecutor};
-pub use seeding::{pad_to_power_of_2, seed_entries, select_profiles, warmup_seeding, WarmupResult};
+pub use executor::{BracketExecutor, format_standings};
+pub use seeding::{WarmupResult, pad_to_power_of_2, seed_entries, select_profiles, warmup_seeding};
 pub use types::{
     BracketEntry, BracketMatch, BracketMatchResult, BracketSeedingConfig, BracketSide,
     BracketState, GameResult, LossCount, MatchFormat, Placement, SeedingMethod,

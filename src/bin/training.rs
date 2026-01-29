@@ -140,7 +140,10 @@ impl AutoWalkState {
     /// Simple pseudo-random number generator (deterministic)
     fn next_random(&mut self) -> f32 {
         // LCG parameters
-        self.rng_counter = self.rng_counter.wrapping_mul(1103515245).wrapping_add(12345);
+        self.rng_counter = self
+            .rng_counter
+            .wrapping_mul(1103515245)
+            .wrapping_add(12345);
         ((self.rng_counter >> 16) & 0x7FFF) as f32 / 32768.0
     }
 
@@ -201,6 +204,10 @@ fn level_allowed(
     }
 }
 
+/// Resource storing the database path for this training session
+#[derive(Resource, Clone)]
+struct TrainingDbPath(String);
+
 /// Create the SQLite event logger for training
 fn create_sqlite_logger() -> (SqliteEventLogger, String) {
     // Ensure db directory exists
@@ -208,18 +215,6 @@ fn create_sqlite_logger() -> (SqliteEventLogger, String) {
     let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
     let db_path_buf = format!("db/training_{}.db", timestamp);
     let db_path = std::path::Path::new(&db_path_buf);
-    let latest_path = std::path::Path::new("db/training.db");
-    if let Err(e) = std::fs::remove_file(latest_path) {
-        if e.kind() != std::io::ErrorKind::NotFound {
-            warn!("Failed to remove existing training.db symlink: {}", e);
-        }
-    }
-    let link_target = std::env::current_dir()
-        .map(|cwd| cwd.join(&db_path_buf))
-        .unwrap_or_else(|_| db_path.to_path_buf());
-    if let Err(e) = std::os::unix::fs::symlink(&link_target, latest_path) {
-        warn!("Failed to update training.db symlink: {}", e);
-    }
     match SqliteEventLogger::new(db_path, "training") {
         Ok(logger) => {
             info!("SQLite event logger initialized: {:?}", db_path);
@@ -371,10 +366,11 @@ fn main() {
                 training_state.current_level = (level_idx + 1) as u32;
                 training_state.current_level_name = level_data.name.clone();
                 // Initialize reachability collector for this level (with preloaded data if available)
-                training_state.reachability_collector = Some(ReachabilityCollector::new_with_preload(
-                    level_data.id.clone(),
-                    level_data.name.clone(),
-                ));
+                training_state.reachability_collector =
+                    Some(ReachabilityCollector::new_with_preload(
+                        level_data.id.clone(),
+                        level_data.name.clone(),
+                    ));
             }
         }
     } else if let Some(ref level_selector) = settings.level {
@@ -453,10 +449,13 @@ fn main() {
     let debug_config = DebugLogConfig::load_with_args(&args);
 
     let (sqlite_logger, db_path_buf) = create_sqlite_logger();
+    println!("  Database: {}", db_path_buf);
+    println!();
     if settings.offline_levels_file.is_some() {
         append_offline_db_path(&db_path_buf);
     }
 
+    let db_path_resource = TrainingDbPath(db_path_buf);
     let is_headless = settings.headless;
 
     let mut app = App::new();
@@ -496,8 +495,7 @@ fn main() {
         app.insert_resource(ClearColor(initial_bg));
     }
 
-    app
-        .insert_resource(palette_db)
+    app.insert_resource(palette_db)
         .insert_resource(level_db)
         .insert_resource(settings)
         .insert_resource(AllowedTrainingLevels(allowed_levels))
@@ -533,8 +531,13 @@ fn main() {
         .init_resource::<DebugSampleBuffer>()
         // SQLite event logger - central hub for event storage
         .insert_resource(sqlite_logger)
+        // Database path for this session
+        .insert_resource(db_path_resource)
         // Startup systems
-        .add_systems(Startup, (training_setup, setup_reachability_time_scale).chain())
+        .add_systems(
+            Startup,
+            (training_setup, setup_reachability_time_scale).chain(),
+        )
         // Event bus time update (runs every frame for timestamping)
         .add_systems(Update, update_event_bus_time)
         .add_systems(Update, flush_debug_samples_to_sqlite)
@@ -715,9 +718,9 @@ fn spawn_shadow_trail(
 
         if should_spawn {
             // Get player color and create complementary shadow color
-            let palette = palette_db.get(current_palette.0).unwrap_or_else(|| {
-                palette_db.get(0).expect("No palettes loaded")
-            });
+            let palette = palette_db
+                .get(current_palette.0)
+                .unwrap_or_else(|| palette_db.get(0).expect("No palettes loaded"));
 
             // Use team color as base
             let player_color = if *team == Team::Left {
@@ -727,7 +730,8 @@ fn spawn_shadow_trail(
             };
 
             // Create complementary color: shift hue by 180°, make it light
-            let shadow_color = complementary_light_color(player_color, SHADOW_TRAIL_LIGHTNESS, SHADOW_TRAIL_ALPHA);
+            let shadow_color =
+                complementary_light_color(player_color, SHADOW_TRAIL_LIGHTNESS, SHADOW_TRAIL_ALPHA);
 
             // Spawn shadow sprite
             commands.spawn((
@@ -771,9 +775,9 @@ fn clear_shadow_trail_on_level_change(
                 if !collector.preloaded_positions.is_empty() {
                     // Get shadow color from human player's team
                     let team = players.iter().next().copied().unwrap_or(Team::Left);
-                    let palette = palette_db.get(current_palette.0).unwrap_or_else(|| {
-                        palette_db.get(0).expect("No palettes loaded")
-                    });
+                    let palette = palette_db
+                        .get(current_palette.0)
+                        .unwrap_or_else(|| palette_db.get(0).expect("No palettes loaded"));
                     let player_color = if team == Team::Left {
                         palette.left
                     } else {
@@ -1570,6 +1574,7 @@ fn training_state_machine(
     level_db: Res<LevelDatabase>,
     mut current_level: ResMut<CurrentLevel>,
     sqlite_logger: Res<SqliteEventLogger>,
+    db_path: Res<TrainingDbPath>,
 ) {
     match training_state.phase {
         TrainingPhase::WaitingToStart => {
@@ -1770,7 +1775,7 @@ fn training_state_machine(
             if let Err(e) = write_session_summary(&training_state) {
                 eprintln!("Failed to write session summary: {}", e);
             }
-            print_session_summary(&training_state);
+            print_session_summary(&training_state, &db_path.0);
 
             // Run standard analysis (same for all protocols)
             println!("\nAnalyzing training session...");
@@ -1778,7 +1783,7 @@ fn training_state_machine(
                 .sqlite_session_id
                 .as_deref()
                 .and_then(|session_id| {
-                    SimDatabase::open(std::path::Path::new("db/training.db"))
+                    SimDatabase::open(std::path::Path::new(&db_path.0))
                         .ok()
                         .and_then(|db| {
                             analyze_session_from_db(&db, session_id, training_state.protocol)
@@ -1802,7 +1807,7 @@ fn training_state_machine(
                             .sqlite_session_id
                             .as_deref()
                             .and_then(|session_id| {
-                                SimDatabase::open(std::path::Path::new("db/training.db"))
+                                SimDatabase::open(std::path::Path::new(&db_path.0))
                                     .ok()
                                     .and_then(|db| analyze_pursuit_session_from_db(&db, session_id))
                             });
@@ -1888,9 +1893,7 @@ fn update_training_hud(
 
             text.0 = format!(
                 "{} | Time: {:.0}s | [LB: Quit]{}",
-                training_state.current_level_name,
-                training_state.game_elapsed,
-                phase_indicator
+                training_state.current_level_name, training_state.game_elapsed, phase_indicator
             );
             return;
         }
@@ -2196,7 +2199,13 @@ fn complementary_light_color(base: Color, lightness: f32, alpha: f32) -> Color {
         };
         let p = 2.0 * new_l - q;
         let hue_to_rgb = |t: f32| {
-            let t = if t < 0.0 { t + 1.0 } else if t > 1.0 { t - 1.0 } else { t };
+            let t = if t < 0.0 {
+                t + 1.0
+            } else if t > 1.0 {
+                t - 1.0
+            } else {
+                t
+            };
             if t < 1.0 / 6.0 {
                 p + (q - p) * 6.0 * t
             } else if t < 0.5 {
@@ -2291,10 +2300,11 @@ fn auto_advance_level(
                 current_level.0 = level_data.id.clone();
 
                 // Create new reachability collector
-                training_state.reachability_collector = Some(ReachabilityCollector::new_with_preload(
-                    level_data.id.clone(),
-                    level_data.name.clone(),
-                ));
+                training_state.reachability_collector =
+                    Some(ReachabilityCollector::new_with_preload(
+                        level_data.id.clone(),
+                        level_data.name.clone(),
+                    ));
 
                 println!(
                     "\nAuto-advancing to: {} [{}/{}]",
@@ -2408,10 +2418,11 @@ fn check_advance_level(
                 current_level.0 = level_data.id.clone();
 
                 // Create new reachability collector with preloaded data
-                training_state.reachability_collector = Some(ReachabilityCollector::new_with_preload(
-                    level_data.id.clone(),
-                    level_data.name.clone(),
-                ));
+                training_state.reachability_collector =
+                    Some(ReachabilityCollector::new_with_preload(
+                        level_data.id.clone(),
+                        level_data.name.clone(),
+                    ));
 
                 println!(
                     "\nAdvancing to: {} [{}/{}]",
@@ -2439,6 +2450,7 @@ fn check_escape_quit(
     score: Res<Score>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
     sqlite_logger: Res<SqliteEventLogger>,
+    db_path: Res<TrainingDbPath>,
 ) {
     if keyboard.just_pressed(KeyCode::Escape) {
         println!("\nTraining session cancelled by user.");
@@ -2483,7 +2495,7 @@ fn check_escape_quit(
             if let Err(e) = write_session_summary(&training_state) {
                 eprintln!("Failed to write session summary: {}", e);
             }
-            print_session_summary(&training_state);
+            print_session_summary(&training_state, &db_path.0);
         }
 
         app_exit.write(AppExit::Success);

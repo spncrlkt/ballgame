@@ -4,8 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
+use std::time::Duration;
 
 use super::state::{TrainingState, Winner};
+use crate::run_summary::{FileCategory, FileEntry, NextStep, RunSummary};
 
 /// Session summary for JSON output
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,51 +104,53 @@ pub fn write_session_summary(state: &TrainingState) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Print session summary to console
-pub fn print_session_summary(state: &TrainingState) {
+/// Print session summary to console using unified RunSummary format
+pub fn print_session_summary(state: &TrainingState, db_path: &str) {
     let (player_wins, ai_wins) = state.wins();
-    let total_player: u32 = state.game_results.iter().map(|r| r.human_score).sum();
-    let total_ai: u32 = state.game_results.iter().map(|r| r.ai_score).sum();
+    let total_duration_secs: f32 = state.game_results.iter().map(|r| r.duration_secs).sum();
 
-    println!("\n========================================");
-    println!("       TRAINING SESSION COMPLETE");
-    println!("========================================");
-    println!();
-    println!("  Protocol: {}", state.protocol.display_name());
-    println!("  Goal: {}", state.protocol.description());
-    println!();
-    println!("  Opponent: {} (AI)", state.ai_profile);
-    println!("  Iterations: {} played", state.game_results.len());
-    println!();
-    println!(
-        "  RESULTS: You {} - {} {}",
-        player_wins, ai_wins, state.ai_profile
-    );
-    println!("  TOTAL SCORE: {} - {}", total_player, total_ai);
-    println!();
-
+    // Build game results string
+    let mut games_info = String::new();
     for result in &state.game_results {
         let winner_marker = match result.winner {
             Winner::Human => "[WIN]",
             Winner::AI => "[LOSS]",
         };
-        println!(
-            "  Game {}: {} {}-{} on {} ({:.1}s) {}",
-            result.game_number,
-            winner_marker,
-            result.human_score,
-            result.ai_score,
-            result.level_name,
-            result.duration_secs,
-            result
-                .match_id
-                .map(|id| format!("match {}", id))
-                .unwrap_or_else(|| "match ?".to_string())
-        );
+        if !games_info.is_empty() {
+            games_info.push_str(" | ");
+        }
+        games_info.push_str(&format!(
+            "G{}: {} {}-{}",
+            result.game_number, winner_marker, result.human_score, result.ai_score
+        ));
     }
 
-    println!();
-    println!("  Logs saved to: {}", state.session_dir.display());
-    println!("========================================");
-    println!();
+    let summary_path = state.session_dir.join("summary.json");
+
+    RunSummary::new("Training Session Complete")
+        .duration(Duration::from_secs_f32(total_duration_secs))
+        .stat(
+            "Result",
+            format!("You {} - {} {}", player_wins, ai_wins, state.ai_profile),
+        )
+        .stat("Protocol", state.protocol.display_name().to_string())
+        .stat("Games", games_info)
+        .file(FileEntry::new(db_path, FileCategory::Database))
+        .file(FileEntry::new(
+            summary_path.display().to_string(),
+            FileCategory::Report,
+        ))
+        .next_step(NextStep::primary(
+            format!("cargo run --bin analyze -- --training-db {}", db_path),
+            "Generate detailed analysis report",
+        ))
+        .next_step(NextStep::secondary(
+            format!(
+                "cargo run --bin training -- -n {} -p {}",
+                state.game_results.len(),
+                state.ai_profile
+            ),
+            "Continue training against same opponent",
+        ))
+        .print();
 }

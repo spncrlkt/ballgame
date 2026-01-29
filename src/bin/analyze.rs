@@ -224,25 +224,34 @@ fn main() {
                 // Print summary to console
                 println!("\n=== Bracket Tournament Analysis ===\n");
                 println!("Tournament ID: {}", report.tournament.id);
-                println!("Format: Best of {} (First to {})",
-                    report.tournament.format_best_of,
-                    report.tournament.format_score_limit);
+                println!(
+                    "Format: Best of {} (First to {})",
+                    report.tournament.format_best_of, report.tournament.format_score_limit
+                );
                 println!("Entrants: {}", report.tournament.entrant_count);
                 if let Some(ref champion) = report.tournament.champion_profile {
                     println!("Champion: {}", champion);
                 }
-                println!("Total Games: {} ({} events)", report.total_games, report.total_events);
+                println!(
+                    "Total Games: {} ({} events)",
+                    report.total_games, report.total_events
+                );
                 println!("\nTop Standings:");
-                println!("{:<4} {:<24} {:>8} {:>10}", "Rank", "Profile", "Match", "Game");
+                println!(
+                    "{:<4} {:<24} {:>8} {:>10}",
+                    "Rank", "Profile", "Match", "Game"
+                );
                 println!("{:-<4} {:-<24} {:->8} {:->10}", "", "", "", "");
                 for standing in report.standings.iter().take(10) {
-                    println!("{:<4} {:<24} {:>3}-{:<3} {:>4}-{:<4}",
+                    println!(
+                        "{:<4} {:<24} {:>3}-{:<3} {:>4}-{:<4}",
                         standing.final_placement.unwrap_or(0),
                         &standing.profile_name[..standing.profile_name.len().min(24)],
                         standing.match_wins,
                         standing.match_losses,
                         standing.game_wins,
-                        standing.game_losses);
+                        standing.game_losses
+                    );
                 }
             }
             Err(e) => {
@@ -253,8 +262,16 @@ fn main() {
         return;
     }
 
+    // Check that db_path was provided for main analysis
+    if config.db_path.as_os_str().is_empty() {
+        eprintln!("Error: Database path required for analysis");
+        eprintln!("Usage: cargo run --bin analyze -- <db_path>");
+        eprintln!("       cargo run --bin analyze -- --db <db_path>");
+        std::process::exit(1);
+    }
+
     // Parse all event logs from SQLite
-    println!("Parsing SQLite events from {}...", config.db_path.display());
+    println!("Using database: {}", config.db_path.display());
     let matches = parse_all_matches_from_db(&config.db_path);
 
     if matches.is_empty() {
@@ -362,7 +379,7 @@ struct AnalyzeConfig {
 impl Default for AnalyzeConfig {
     fn default() -> Self {
         Self {
-            db_path: PathBuf::from("db/training.db"),
+            db_path: PathBuf::new(), // Must be set explicitly via --db or positional arg
             targets_file: None,
             output_file: None,
             event_audit: None,

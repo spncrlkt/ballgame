@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use rusqlite::params;
 
 use ballgame::events::{GameEvent, PlayerId, parse_event};
+use ballgame::run_summary::{FileCategory, FileEntry, NextStep, RunSummary};
 use ballgame::simulation::SimDatabase;
 
 /// Input sample at a single tick
@@ -284,10 +285,15 @@ fn main() {
         );
         eprintln!();
         eprintln!("Extracts player input sequences from SQLite events as ghost trials.");
+        eprintln!();
+        eprintln!("  --db <path>      Path to SQLite database (REQUIRED)");
+        eprintln!("  --session <id>   Extract all matches from session");
+        eprintln!("  --match <id>     Extract specific match");
+        eprintln!("  --output <dir>   Output directory (default: ghost_trials)");
         std::process::exit(1);
     }
 
-    let mut db_path = PathBuf::from("db/training.db");
+    let mut db_path: Option<PathBuf> = None;
     let mut session_id: Option<String> = None;
     let mut match_id: Option<i64> = None;
     let mut output_dir: Option<PathBuf> = None;
@@ -296,7 +302,7 @@ fn main() {
     while i < args.len() {
         match args[i].as_str() {
             "--db" if i + 1 < args.len() => {
-                db_path = PathBuf::from(&args[i + 1]);
+                db_path = Some(PathBuf::from(&args[i + 1]));
                 i += 2;
             }
             "--session" if i + 1 < args.len() => {
@@ -316,6 +322,16 @@ fn main() {
             }
         }
     }
+
+    let db_path = match db_path {
+        Some(p) => p,
+        None => {
+            eprintln!("Error: --db <path> is required");
+            std::process::exit(1);
+        }
+    };
+
+    println!("Using database: {}", db_path.display());
 
     let output_dir = output_dir.unwrap_or_else(|| PathBuf::from("ghost_trials"));
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");
@@ -392,10 +408,30 @@ fn main() {
         }
     }
 
-    println!();
-    println!("=== Summary ===");
-    println!("Total drives extracted: {}", total_drives);
-    println!("  Scoring drives: {}", scoring_drives);
-    println!("  Turnover drives: {}", turnover_drives);
-    println!("Ghost trials written to: {}", output_dir.display());
+    // Print summary using RunSummary
+    let mut summary = RunSummary::new("Drive Extraction Complete")
+        .stat("Total Drives", total_drives.to_string())
+        .stat("Scoring Drives", scoring_drives.to_string())
+        .stat("Turnover Drives", turnover_drives.to_string())
+        .file(
+            FileEntry::new(output_dir.display().to_string(), FileCategory::Data)
+                .with_description("Ghost trial files"),
+        );
+
+    if total_drives > 0 {
+        summary = summary
+            .next_step(NextStep::primary(
+                format!("cargo run --bin run-ghost -- {}", output_dir.display()),
+                "Test ghost playback from extracted drives",
+            ))
+            .next_step(NextStep::secondary(
+                format!(
+                    "cargo run --bin extract-drives -- --db {} --session <other>",
+                    db_path.display()
+                ),
+                "Extract drives from a different session",
+            ));
+    }
+
+    summary.print();
 }

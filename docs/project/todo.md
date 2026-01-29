@@ -116,23 +116,22 @@ cargo run --bin training                 # Training mode
 
 ## Done (Last 5)
 
+- [x] **Unified Run Summary** - Consistent end-of-run output for all binaries (2026-01-29)
+  - New `src/run_summary.rs` module with builder pattern
+  - 80-char box formatting with Unicode box-drawing characters
+  - File category tags: `[DB]`, `[REPORT]`, `[IMG]`, `[DATA]`, `[CFG]`
+  - Next step suggestions: primary (→) and secondary (·)
+  - Integrated: training, test_scenarios, extract-drives, heatmap, verify_reachability, run-ghost, generate, simulate (tournament/bracket modes)
 - [x] **Reachability-Aware Navigation** - NavGraph now uses player exploration data for smarter shooting positions (2026-01-28)
   - `PlatformSource` enum tracks config origin (Floor, CornerRamp, Center, Mirror)
   - `reachability` field (0.0-1.0) from SQLite exploration data
   - `find_shooting_node` prefers high-reachability positions
   - New tests: `reachability_test.rs`, `multihop_test.rs`
-  - Python script: `scripts/export_reachability.py` for heatmap generation
 - [x] **Accuracy/Cadence Tuning** - Extended preset system with 10 shot params, tested V1-V6 variants (2026-01-28)
   - V3-Forgiving now default: 3.2 goals/match (↑88%), 34.8% accuracy (↑61%)
-  - All variants available in `config/game_presets.txt` for switching via D-pad
 - [x] **Training Reachability Protocol** - Solo exploration mode for coverage mapping (2026-01-28)
   - `--protocol reachability` flag for level exploration
   - Q/LB advances to next level during exploration
-  - Debug events logged to SQLite with human_controlled flag
-- [x] **Documentation Reorganization** - Consolidated docs and tools (2026-01-28)
-  - Moved archive docs to `docs/archive/`
-  - Moved dev guides to `docs/dev/`
-  - Tools consolidated under `tools/` with README
 - [x] **Evlog elimination complete** - Full SQLite migration, all .evlog infrastructure removed (2026-01-26)
 
 *See `todone.md` for full archive with commit references*

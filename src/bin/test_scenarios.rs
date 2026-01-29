@@ -10,6 +10,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use ballgame::run_summary::{NextStep, RunSummary};
 use ballgame::testing::{SCENARIOS_DIR, TestResult, parser::parse_test_file, runner::run_test};
 
 fn main() {
@@ -95,13 +96,37 @@ fn main() {
         print_result(&test_name, &result, verbose);
     }
 
-    println!("\n==============");
-    println!(
-        "Results: {} passed, {} failed, {} errors",
-        passed, failed, errors
-    );
+    // Print summary
+    let total = passed + failed + errors;
+    let has_failures = failed > 0 || errors > 0;
 
-    if failed > 0 || errors > 0 {
+    let mut summary = RunSummary::new(if has_failures {
+        "Scenario Tests Failed"
+    } else {
+        "Scenario Tests Passed"
+    })
+    .stat("Passed", passed.to_string())
+    .stat("Failed", failed.to_string())
+    .stat("Errors", errors.to_string())
+    .stat("Total", total.to_string());
+
+    if has_failures && !verbose {
+        summary = summary.next_step(NextStep::primary(
+            "cargo run --bin test-scenarios -- -v",
+            "Run with verbose output to see failure details",
+        ));
+    }
+
+    if has_failures {
+        summary = summary.next_step(NextStep::secondary(
+            "cargo run --bin test-scenarios -- <test_name>",
+            "Run a specific failing test",
+        ));
+    }
+
+    summary.print();
+
+    if has_failures {
         std::process::exit(1);
     }
 }

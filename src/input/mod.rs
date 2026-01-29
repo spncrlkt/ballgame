@@ -11,12 +11,12 @@ use crate::ui::TweakPanelState;
 #[derive(Resource, Default)]
 pub struct PlayerInput {
     pub move_x: f32,
-    pub jump_buffer_timer: f32, // Time remaining in jump buffer
-    pub jump_held: bool,        // Is jump button currently held
-    pub pickup_pressed: bool,   // West button - pick up ball
-    pub throw_held: bool,       // R shoulder - charging throw
-    pub throw_released: bool,   // R shoulder released - execute throw
-    pub swap_pressed: bool,     // L shoulder / Q key - swap which player you control
+    pub jump_buffer_timer: f32,      // Time remaining in jump buffer
+    pub jump_held: bool,             // Is jump button currently held
+    pub pickup_pressed: bool,        // West button - pick up ball
+    pub throw_held: bool,            // R shoulder - charging throw
+    pub throw_released: bool,        // R shoulder released - execute throw
+    pub swap_pressed: bool,          // L shoulder / Q key - swap which player you control
     pub advance_level_pressed: bool, // L shoulder / Q key - advance to next level (Reachability)
 }
 

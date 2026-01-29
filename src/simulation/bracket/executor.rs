@@ -161,7 +161,16 @@ impl<'a> BracketExecutor<'a> {
                 let p2_idx = m.players[1]?;
                 let p1 = &bracket.entries[p1_idx];
                 let p2 = &bracket.entries[p2_idx];
-                Some((id, p1_idx, p2_idx, p1.profile_name.clone(), p2.profile_name.clone(), m.side, m.round, m.match_in_round))
+                Some((
+                    id,
+                    p1_idx,
+                    p2_idx,
+                    p1.profile_name.clone(),
+                    p2.profile_name.clone(),
+                    m.side,
+                    m.round,
+                    m.match_in_round,
+                ))
             })
             .collect();
 
@@ -174,35 +183,89 @@ impl<'a> BracketExecutor<'a> {
         let should_log = db.is_some() && session_id.is_some() && tournament_id.is_some();
 
         // Execute all matches (with DB logging if enabled)
-        let results: Vec<(u32, usize, usize, BracketMatchResult, super::types::BracketSide, u32, u32)> = if self.base_config.parallel > 0 {
+        let results: Vec<(
+            u32,
+            usize,
+            usize,
+            BracketMatchResult,
+            super::types::BracketSide,
+            u32,
+            u32,
+        )> = if self.base_config.parallel > 0 {
             match_infos
                 .par_iter()
                 .enumerate()
-                .map(|(match_idx, (match_id, p1_idx, p2_idx, p1_name, p2_name, side, round, match_in_round))| {
-                    let seed_start = match_idx * games_per_match as usize;
-                    let match_seeds = &seeds[seed_start..seed_start + games_per_match as usize];
-                    let result = if should_log {
-                        self.execute_bracket_match_parallel_with_db(p1_name, p2_name, &bracket.format, match_seeds)
-                    } else {
-                        self.execute_bracket_match_parallel(p1_name, p2_name, &bracket.format, match_seeds)
-                    };
-                    (*match_id, *p1_idx, *p2_idx, result, *side, *round, *match_in_round)
-                })
+                .map(
+                    |(
+                        match_idx,
+                        (match_id, p1_idx, p2_idx, p1_name, p2_name, side, round, match_in_round),
+                    )| {
+                        let seed_start = match_idx * games_per_match as usize;
+                        let match_seeds = &seeds[seed_start..seed_start + games_per_match as usize];
+                        let result = if should_log {
+                            self.execute_bracket_match_parallel_with_db(
+                                p1_name,
+                                p2_name,
+                                &bracket.format,
+                                match_seeds,
+                            )
+                        } else {
+                            self.execute_bracket_match_parallel(
+                                p1_name,
+                                p2_name,
+                                &bracket.format,
+                                match_seeds,
+                            )
+                        };
+                        (
+                            *match_id,
+                            *p1_idx,
+                            *p2_idx,
+                            result,
+                            *side,
+                            *round,
+                            *match_in_round,
+                        )
+                    },
+                )
                 .collect()
         } else {
             match_infos
                 .iter()
                 .enumerate()
-                .map(|(match_idx, (match_id, p1_idx, p2_idx, p1_name, p2_name, side, round, match_in_round))| {
-                    let seed_start = match_idx * games_per_match as usize;
-                    let match_seeds = &seeds[seed_start..seed_start + games_per_match as usize];
-                    let result = if should_log {
-                        self.execute_bracket_match_with_db(p1_name, p2_name, &bracket.format, match_seeds)
-                    } else {
-                        self.execute_bracket_match(p1_name, p2_name, &bracket.format, match_seeds)
-                    };
-                    (*match_id, *p1_idx, *p2_idx, result, *side, *round, *match_in_round)
-                })
+                .map(
+                    |(
+                        match_idx,
+                        (match_id, p1_idx, p2_idx, p1_name, p2_name, side, round, match_in_round),
+                    )| {
+                        let seed_start = match_idx * games_per_match as usize;
+                        let match_seeds = &seeds[seed_start..seed_start + games_per_match as usize];
+                        let result = if should_log {
+                            self.execute_bracket_match_with_db(
+                                p1_name,
+                                p2_name,
+                                &bracket.format,
+                                match_seeds,
+                            )
+                        } else {
+                            self.execute_bracket_match(
+                                p1_name,
+                                p2_name,
+                                &bracket.format,
+                                match_seeds,
+                            )
+                        };
+                        (
+                            *match_id,
+                            *p1_idx,
+                            *p2_idx,
+                            result,
+                            *side,
+                            *round,
+                            *match_in_round,
+                        )
+                    },
+                )
                 .collect()
         };
 
@@ -240,7 +303,11 @@ impl<'a> BracketExecutor<'a> {
                     player2_entry_idx: Some(p2_idx),
                     player1_wins: result.player1_wins,
                     player2_wins: result.player2_wins,
-                    winner_idx: Some(if result.winner_index == 0 { p1_idx } else { p2_idx }),
+                    winner_idx: Some(if result.winner_index == 0 {
+                        p1_idx
+                    } else {
+                        p2_idx
+                    }),
                 };
 
                 match db.insert_bracket_match(tid, &match_data) {
@@ -258,7 +325,10 @@ impl<'a> BracketExecutor<'a> {
                                                 match_result.duration,
                                                 &match_result.events,
                                             ) {
-                                                eprintln!("Warning: Failed to store game events: {}", e);
+                                                eprintln!(
+                                                    "Warning: Failed to store game events: {}",
+                                                    e
+                                                );
                                             }
                                         }
                                         mid
@@ -284,7 +354,9 @@ impl<'a> BracketExecutor<'a> {
                                 seed: game.seed,
                             };
 
-                            if let Err(e) = db.insert_bracket_game(bracket_match_db_id, db_match_id, &game_data) {
+                            if let Err(e) =
+                                db.insert_bracket_game(bracket_match_db_id, db_match_id, &game_data)
+                            {
                                 eprintln!("Warning: Failed to insert bracket game: {}", e);
                             }
                         }
@@ -548,7 +620,10 @@ pub fn format_standings(bracket: &BracketState) -> String {
         "{:>4} | {:>16} | {:>4} | {:>5} | {:>5}\n",
         "Rank", "Profile", "Seed", "Match", "Game"
     ));
-    output.push_str(&format!("{:-<4}-+-{:-<16}-+-{:-<4}-+-{:-<5}-+-{:-<5}\n", "", "", "", "", ""));
+    output.push_str(&format!(
+        "{:-<4}-+-{:-<16}-+-{:-<4}-+-{:-<5}-+-{:-<5}\n",
+        "", "", "", "", ""
+    ));
 
     let placements = bracket.placements();
     for entry in placements.iter().take(16) {

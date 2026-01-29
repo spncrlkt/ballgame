@@ -91,18 +91,27 @@ impl BracketReport {
         // Header
         md.push_str(&format!("# Bracket Tournament Report\n\n"));
         md.push_str(&format!("**Tournament ID:** {}\n\n", self.tournament.id));
-        md.push_str(&format!("**Format:** Best of {} (First to {})\n\n",
-            self.tournament.format_best_of,
-            self.tournament.format_score_limit));
-        md.push_str(&format!("**Seeding:** {}\n\n", self.tournament.seeding_method));
-        md.push_str(&format!("**Entrants:** {}\n\n", self.tournament.entrant_count));
+        md.push_str(&format!(
+            "**Format:** Best of {} (First to {})\n\n",
+            self.tournament.format_best_of, self.tournament.format_score_limit
+        ));
+        md.push_str(&format!(
+            "**Seeding:** {}\n\n",
+            self.tournament.seeding_method
+        ));
+        md.push_str(&format!(
+            "**Entrants:** {}\n\n",
+            self.tournament.entrant_count
+        ));
 
         if let Some(ref champion) = self.tournament.champion_profile {
             md.push_str(&format!("**Champion:** {}\n\n", champion));
         }
 
-        md.push_str(&format!("**Total Games:** {} ({} events logged)\n\n",
-            self.total_games, self.total_events));
+        md.push_str(&format!(
+            "**Total Games:** {} ({} events logged)\n\n",
+            self.total_games, self.total_events
+        ));
 
         // Standings table
         md.push_str("## Final Standings\n\n");
@@ -131,9 +140,7 @@ impl BracketReport {
         // Group matches by side
         let sides = ["Winners", "Losers", "GrandFinals", "GrandFinalsReset"];
         for side in &sides {
-            let side_matches: Vec<_> = self.matches.iter()
-                .filter(|m| m.side == *side)
-                .collect();
+            let side_matches: Vec<_> = self.matches.iter().filter(|m| m.side == *side).collect();
 
             if side_matches.is_empty() {
                 continue;
@@ -194,11 +201,18 @@ impl BracketReport {
     /// Export standings to a simple rankings file (one profile per line)
     pub fn export_rankings(&self, path: &Path) -> std::io::Result<()> {
         let mut content = String::new();
-        content.push_str(&format!("# Bracket Rankings (Tournament {})\n", self.tournament.id));
-        content.push_str(&format!("# Generated: {}\n", chrono::Local::now().format("%Y-%m-%d %H:%M:%S")));
-        content.push_str(&format!("# Format: BO{} FT{}\n",
-            self.tournament.format_best_of,
-            self.tournament.format_score_limit));
+        content.push_str(&format!(
+            "# Bracket Rankings (Tournament {})\n",
+            self.tournament.id
+        ));
+        content.push_str(&format!(
+            "# Generated: {}\n",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        ));
+        content.push_str(&format!(
+            "# Format: BO{} FT{}\n",
+            self.tournament.format_best_of, self.tournament.format_score_limit
+        ));
         content.push_str("#\n");
         content.push_str("# Rank, Profile, MatchW, MatchL, GameW, GameL\n");
 
@@ -224,11 +238,13 @@ pub fn load_latest_bracket(db_path: &Path) -> Result<Option<BracketReport>> {
     let conn = Connection::open(db_path)?;
 
     // Get most recent tournament
-    let tournament_id: Option<i64> = conn.query_row(
-        "SELECT id FROM bracket_tournaments ORDER BY id DESC LIMIT 1",
-        [],
-        |row| row.get(0),
-    ).ok();
+    let tournament_id: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM bracket_tournaments ORDER BY id DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
 
     match tournament_id {
         Some(id) => load_bracket_tournament(&conn, id).map(Some),
@@ -268,18 +284,20 @@ pub fn load_bracket_tournament(conn: &Connection, tournament_id: i64) -> Result<
            ORDER BY match_wins DESC, game_wins DESC, game_losses ASC"#,
     )?;
 
-    let standings: Vec<BracketStanding> = stmt.query_map(params![tournament_id], |row| {
-        Ok(BracketStanding {
-            entry_index: row.get::<_, i64>(0)? as usize,
-            profile_name: row.get(1)?,
-            seed: row.get(2)?,
-            final_placement: row.get(3)?,
-            match_wins: row.get(4)?,
-            match_losses: row.get(5)?,
-            game_wins: row.get(6)?,
-            game_losses: row.get(7)?,
-        })
-    })?.collect::<Result<Vec<_>>>()?;
+    let standings: Vec<BracketStanding> = stmt
+        .query_map(params![tournament_id], |row| {
+            Ok(BracketStanding {
+                entry_index: row.get::<_, i64>(0)? as usize,
+                profile_name: row.get(1)?,
+                seed: row.get(2)?,
+                final_placement: row.get(3)?,
+                match_wins: row.get(4)?,
+                match_losses: row.get(5)?,
+                game_wins: row.get(6)?,
+                game_losses: row.get(7)?,
+            })
+        })?
+        .collect::<Result<Vec<_>>>()?;
 
     // Load match summaries with player names
     let mut stmt = conn.prepare(
@@ -292,39 +310,45 @@ pub fn load_bracket_tournament(conn: &Connection, tournament_id: i64) -> Result<
            ORDER BY bm.id"#,
     )?;
 
-    let matches: Vec<BracketMatchSummary> = stmt.query_map(params![tournament_id], |row| {
-        let p1_name: String = row.get::<_, Option<String>>(4)?.unwrap_or_else(|| "BYE".to_string());
-        let p2_name: String = row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "BYE".to_string());
-        let p1_wins: u32 = row.get(6)?;
-        let p2_wins: u32 = row.get(7)?;
-        let winner_idx: Option<i64> = row.get(8)?;
+    let matches: Vec<BracketMatchSummary> = stmt
+        .query_map(params![tournament_id], |row| {
+            let p1_name: String = row
+                .get::<_, Option<String>>(4)?
+                .unwrap_or_else(|| "BYE".to_string());
+            let p2_name: String = row
+                .get::<_, Option<String>>(5)?
+                .unwrap_or_else(|| "BYE".to_string());
+            let p1_wins: u32 = row.get(6)?;
+            let p2_wins: u32 = row.get(7)?;
+            let winner_idx: Option<i64> = row.get(8)?;
 
-        // Determine winner name from winner_idx
-        let winner_name = match winner_idx {
-            Some(_) => {
-                // winner_idx is the entry_index, need to match it to p1 or p2
-                // This is a simplification - we check which player won more games
-                if p1_wins > p2_wins {
-                    p1_name.clone()
-                } else {
-                    p2_name.clone()
+            // Determine winner name from winner_idx
+            let winner_name = match winner_idx {
+                Some(_) => {
+                    // winner_idx is the entry_index, need to match it to p1 or p2
+                    // This is a simplification - we check which player won more games
+                    if p1_wins > p2_wins {
+                        p1_name.clone()
+                    } else {
+                        p2_name.clone()
+                    }
                 }
-            }
-            None => "TBD".to_string(),
-        };
+                None => "TBD".to_string(),
+            };
 
-        Ok(BracketMatchSummary {
-            bracket_match_id: row.get(0)?,
-            side: row.get(1)?,
-            round: row.get(2)?,
-            match_in_round: row.get(3)?,
-            player1_name: p1_name,
-            player2_name: p2_name,
-            player1_wins: p1_wins,
-            player2_wins: p2_wins,
-            winner_name,
-        })
-    })?.collect::<Result<Vec<_>>>()?;
+            Ok(BracketMatchSummary {
+                bracket_match_id: row.get(0)?,
+                side: row.get(1)?,
+                round: row.get(2)?,
+                match_in_round: row.get(3)?,
+                player1_name: p1_name,
+                player2_name: p2_name,
+                player1_wins: p1_wins,
+                player2_wins: p2_wins,
+                winner_name,
+            })
+        })?
+        .collect::<Result<Vec<_>>>()?;
 
     // Count total games and events
     let total_games: u32 = conn.query_row(
@@ -354,8 +378,8 @@ pub fn run_bracket_analysis(
     output_dir: &Path,
     rankings_file: Option<&Path>,
 ) -> Result<BracketReport> {
-    let report = load_latest_bracket(db_path)?
-        .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
+    let report =
+        load_latest_bracket(db_path)?.ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
 
     // Create output directory
     std::fs::create_dir_all(output_dir).ok();
@@ -372,7 +396,8 @@ pub fn run_bracket_analysis(
 
     // Export rankings if path provided
     if let Some(rankings_path) = rankings_file {
-        report.export_rankings(rankings_path)
+        report
+            .export_rankings(rankings_path)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
         println!("Rankings exported to {}", rankings_path.display());
     }
@@ -391,19 +416,21 @@ pub fn list_bracket_tournaments(db_path: &Path) -> Result<Vec<BracketTournament>
            ORDER BY id DESC"#,
     )?;
 
-    let tournaments = stmt.query_map([], |row| {
-        Ok(BracketTournament {
-            id: row.get(0)?,
-            session_id: row.get(1)?,
-            format_best_of: row.get(2)?,
-            format_score_limit: row.get(3)?,
-            format_duration_limit: row.get(4)?,
-            seeding_method: row.get(5)?,
-            entrant_count: row.get(6)?,
-            champion_profile: row.get(7)?,
-            is_complete: row.get::<_, i32>(8)? != 0,
-        })
-    })?.collect::<Result<Vec<_>>>()?;
+    let tournaments = stmt
+        .query_map([], |row| {
+            Ok(BracketTournament {
+                id: row.get(0)?,
+                session_id: row.get(1)?,
+                format_best_of: row.get(2)?,
+                format_score_limit: row.get(3)?,
+                format_duration_limit: row.get(4)?,
+                seeding_method: row.get(5)?,
+                entrant_count: row.get(6)?,
+                champion_profile: row.get(7)?,
+                is_complete: row.get::<_, i32>(8)? != 0,
+            })
+        })?
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(tournaments)
 }

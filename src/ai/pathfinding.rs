@@ -307,7 +307,10 @@ mod tests {
                 shot_quality_right: 0.6,
                 platform_role: PlatformRole::ShotPosition,
                 reachability: 0.5,
-                source: PlatformSource::Center { y: 200.0, width: 200.0 },
+                source: PlatformSource::Center {
+                    y: 200.0,
+                    width: 200.0,
+                },
             },
         ];
 

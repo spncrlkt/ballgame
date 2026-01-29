@@ -18,16 +18,25 @@ fn main() {
             }),
             ..default()
         }))
-        .add_systems(Update, (debug_gamepad_connections, debug_gamepad_input, check_exit))
+        .add_systems(
+            Update,
+            (debug_gamepad_connections, debug_gamepad_input, check_exit),
+        )
         .run();
 }
 
 fn debug_gamepad_connections(
-    mut connection_events: bevy::prelude::MessageReader<bevy::input::gamepad::GamepadConnectionEvent>,
+    mut connection_events: bevy::prelude::MessageReader<
+        bevy::input::gamepad::GamepadConnectionEvent,
+    >,
 ) {
     for event in connection_events.read() {
         match &event.connection {
-            bevy::input::gamepad::GamepadConnection::Connected { name, vendor_id, product_id } => {
+            bevy::input::gamepad::GamepadConnection::Connected {
+                name,
+                vendor_id,
+                product_id,
+            } => {
                 println!("[CONNECTED] Gamepad: {:?}", event.gamepad);
                 println!("  Name: {}", name);
                 println!("  Vendor ID: {:?}", vendor_id);
@@ -41,9 +50,7 @@ fn debug_gamepad_connections(
     }
 }
 
-fn debug_gamepad_input(
-    gamepads: Query<(Entity, &Gamepad)>,
-) {
+fn debug_gamepad_input(gamepads: Query<(Entity, &Gamepad)>) {
     for (_entity, gamepad) in &gamepads {
         // Check all buttons
         let buttons = [

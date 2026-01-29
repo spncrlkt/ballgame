@@ -68,7 +68,11 @@ impl MultihopTestResult {
 /// Tests that all non-floor nodes in the NavGraph are reachable from the floor
 /// via A* pathfinding. This validates that the NavGraph edges correctly chain
 /// together to allow reaching elevated platforms.
-pub fn run_multihop_test(nav_graph: &NavGraph, level_name: &str, level_id: &str) -> MultihopTestResult {
+pub fn run_multihop_test(
+    nav_graph: &NavGraph,
+    level_name: &str,
+    level_id: &str,
+) -> MultihopTestResult {
     let mut result = MultihopTestResult {
         level_name: level_name.to_string(),
         level_id: level_id.to_string(),
@@ -116,9 +120,7 @@ pub fn run_multihop_test(nav_graph: &NavGraph, level_name: &str, level_id: &str)
 }
 
 /// Run multi-hop test for all levels
-pub fn run_multihop_test_all_levels(
-    level_db: &LevelDatabase,
-) -> Vec<MultihopTestResult> {
+pub fn run_multihop_test_all_levels(level_db: &LevelDatabase) -> Vec<MultihopTestResult> {
     // Note: This requires building NavGraphs for each level, which needs a Bevy World
     // For now, this function is a placeholder - the actual test is run from the simulation runner
     // which has access to the World and can properly build NavGraphs
@@ -153,13 +155,11 @@ mod tests {
             level_id: "test123".to_string(),
             platforms_tested: 5,
             paths_found: 3,
-            failures: vec![
-                MultihopFailure {
-                    platform_id: 2,
-                    platform_center: Vec2::new(100.0, 200.0),
-                    reachability_value: 0.05,
-                },
-            ],
+            failures: vec![MultihopFailure {
+                platform_id: 2,
+                platform_center: Vec2::new(100.0, 200.0),
+                reachability_value: 0.05,
+            }],
         };
 
         let output = result.format();

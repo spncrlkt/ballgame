@@ -1403,11 +1403,7 @@ impl SimDatabase {
     }
 
     /// Insert a bracket match and return its database ID
-    pub fn insert_bracket_match(
-        &self,
-        tournament_id: i64,
-        data: &BracketMatchData,
-    ) -> Result<i64> {
+    pub fn insert_bracket_match(&self, tournament_id: i64, data: &BracketMatchData) -> Result<i64> {
         self.conn.execute(
             r#"INSERT INTO bracket_matches
                (tournament_id, bracket_match_id, side, round, match_in_round,

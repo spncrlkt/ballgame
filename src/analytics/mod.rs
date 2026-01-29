@@ -16,6 +16,10 @@ pub mod suggestions;
 mod targets;
 mod training_debug;
 
+pub use bracket_analysis::{
+    BracketReport, BracketStanding, BracketTournament, list_bracket_tournaments,
+    load_bracket_tournament, load_latest_bracket, run_bracket_analysis,
+};
 pub use db_analytics::{
     DetailedProfileStats, ProfileAnalysis, ProfileComparison, analyze_profile, compare_profiles,
     format_leaderboard, summarize_all_profiles,
@@ -32,7 +36,3 @@ pub use requests::{
 pub use suggestions::{ParameterSuggestion, format_suggestions, generate_suggestions};
 pub use targets::{TargetDelta, TargetStatus, TuningTargets, default_targets, load_targets};
 pub use training_debug::{TrainingDebugReport, run_training_debug_analysis};
-pub use bracket_analysis::{
-    BracketReport, BracketStanding, BracketTournament, list_bracket_tournaments,
-    load_bracket_tournament, load_latest_bracket, run_bracket_analysis,
-};

@@ -190,12 +190,16 @@ impl BracketMatch {
 
     /// Get the winner's entry index
     pub fn winner(&self) -> Option<usize> {
-        self.result.as_ref().map(|r| self.players[r.winner_index].unwrap())
+        self.result
+            .as_ref()
+            .map(|r| self.players[r.winner_index].unwrap())
     }
 
     /// Get the loser's entry index
     pub fn loser(&self) -> Option<usize> {
-        self.result.as_ref().map(|r| self.players[r.loser_index].unwrap())
+        self.result
+            .as_ref()
+            .map(|r| self.players[r.loser_index].unwrap())
     }
 }
 
@@ -400,12 +404,8 @@ impl BracketState {
 
                 for m in 0..matches_this_round {
                     match_id += 1;
-                    let mut bracket_match = BracketMatch::new(
-                        match_id,
-                        BracketSide::Losers,
-                        1,
-                        (m + 1) as u32,
-                    );
+                    let mut bracket_match =
+                        BracketMatch::new(match_id, BracketSide::Losers, 1, (m + 1) as u32);
                     // Fed by losers from winners R1
                     bracket_match.feeders = [
                         Some(winners_round_matches[m * 2]),
@@ -436,12 +436,8 @@ impl BracketState {
 
                 for m in 0..prev_count {
                     match_id += 1;
-                    let mut bracket_match = BracketMatch::new(
-                        match_id,
-                        BracketSide::Losers,
-                        round_num,
-                        (m + 1) as u32,
-                    );
+                    let mut bracket_match =
+                        BracketMatch::new(match_id, BracketSide::Losers, round_num, (m + 1) as u32);
                     // Fed by previous losers winners and new losers from winners
                     bracket_match.feeders = [
                         Some(losers_prev_round_winners[m]),
@@ -774,10 +770,16 @@ mod tests {
     fn test_bracket_seed_pairing_4() {
         // 4-player bracket: 1v4, 2v3
         let (a, b) = bracket_seed_pairing(4, 0);
-        assert!((a == 0 && b == 3) || (a == 3 && b == 0), "Match 0 should be 1v4");
+        assert!(
+            (a == 0 && b == 3) || (a == 3 && b == 0),
+            "Match 0 should be 1v4"
+        );
 
         let (a, b) = bracket_seed_pairing(4, 1);
-        assert!((a == 1 && b == 2) || (a == 2 && b == 1), "Match 1 should be 2v3");
+        assert!(
+            (a == 1 && b == 2) || (a == 2 && b == 1),
+            "Match 1 should be 2v3"
+        );
     }
 
     #[test]
@@ -797,17 +799,29 @@ mod tests {
 
     #[test]
     fn test_match_format_wins_needed() {
-        let bo3 = MatchFormat { best_of: 3, ..Default::default() };
+        let bo3 = MatchFormat {
+            best_of: 3,
+            ..Default::default()
+        };
         assert_eq!(bo3.wins_needed(), 2);
 
-        let bo5 = MatchFormat { best_of: 5, ..Default::default() };
+        let bo5 = MatchFormat {
+            best_of: 5,
+            ..Default::default()
+        };
         assert_eq!(bo5.wins_needed(), 3);
     }
 
     #[test]
     fn test_bracket_state_creation() {
         let entries: Vec<_> = (0..8)
-            .map(|i| BracketEntry::new(format!("profile_{}", i), format!("Profile {}", i), (i + 1) as u32))
+            .map(|i| {
+                BracketEntry::new(
+                    format!("profile_{}", i),
+                    format!("Profile {}", i),
+                    (i + 1) as u32,
+                )
+            })
             .collect();
 
         let state = BracketState::new(entries, MatchFormat::default());
@@ -817,7 +831,11 @@ mod tests {
         // Losers: varies based on structure but ~7 matches
         // Grand finals + reset: 2 matches
         // Total should be around 15-16 matches
-        assert!(state.total_matches >= 14, "Expected at least 14 matches, got {}", state.total_matches);
+        assert!(
+            state.total_matches >= 14,
+            "Expected at least 14 matches, got {}",
+            state.total_matches
+        );
 
         // First round should have 4 ready matches
         let ready = state.ready_matches();

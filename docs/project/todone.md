@@ -1,5 +1,17 @@
 # Ballgame Done Archive
 
+## Archived 2026-01-29 (Unified Run Summary)
+
+- [x] **Unified Run Summary** - Consistent end-of-run output for all binaries
+  - New `src/run_summary.rs` module with builder pattern
+  - 80-char Unicode box formatting, file category tags, next step suggestions
+  - Integrated: training, test_scenarios, extract-drives, heatmap, verify_reachability, run-ghost, generate, simulate (tournament/bracket)
+- [x] **Documentation Reorganization** - Consolidated docs and tools (2026-01-28)
+  - Moved archive docs to `docs/archive/`, dev guides to `docs/dev/`
+  - Tools consolidated under `tools/` with README
+
+---
+
 ## Archived 2026-01-29 (Ghost System Complete + Cleanup)
 
 **Ghost System MVP:**

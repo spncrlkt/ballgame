@@ -286,10 +286,10 @@ impl PhysicsTweaks {
             16 => SHOT_AIR_VARIANCE_PENALTY,
             17 => SHOT_MOVE_VARIANCE_PENALTY,
             18 => SHOT_QUICK_THRESHOLD,
-            19 => 0.7,  // quick_power_multiplier default
-            20 => 0.25, // quick_power_threshold default
-            21 => 0.9,  // speed_randomness_min default
-            22 => 1.1,  // speed_randomness_max default
+            19 => 0.7,     // quick_power_multiplier default
+            20 => 0.25,    // quick_power_threshold default
+            21 => 0.9,     // speed_randomness_min default
+            22 => 1.1,     // speed_randomness_max default
             23 => 0.00025, // shot_distance_variance default
             _ => 0.0,
         }
