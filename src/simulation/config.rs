@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::bracket::BracketSeedingConfig;
+
 /// Simulation mode
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum SimMode {
@@ -35,6 +37,17 @@ pub enum SimMode {
         samples: u32,
         /// Path to SQLite database with exploration data
         db_path: String,
+    },
+    /// Double elimination bracket tournament
+    Bracket {
+        /// Number of entrants (must be power of 2: 8, 16, 32, 64, 128)
+        entrants: u32,
+        /// Games per match (e.g., 3 for best-of-3)
+        best_of: u32,
+        /// Points to win a game (first to N)
+        game_score_limit: u32,
+        /// Seeding method
+        seeding: BracketSeedingConfig,
     },
 }
 
@@ -78,6 +91,9 @@ pub struct SimConfig {
     /// Enable debug sample logging
     #[serde(default)]
     pub debug_log: bool,
+    /// Path to custom AI profiles file (None = use default config/ai_profiles.txt)
+    #[serde(default)]
+    pub profiles_file: Option<String>,
 }
 
 impl Default for SimConfig {
@@ -100,6 +116,7 @@ impl Default for SimConfig {
             profiles: Vec::new(), // Empty = all profiles
             levels: Vec::new(),   // Empty = all non-debug levels
             debug_log: false,
+            profiles_file: None, // Use default config/ai_profiles.txt
         }
     }
 }
@@ -221,7 +238,23 @@ impl SimConfig {
                 }
                 "--score-limit" => {
                     if i + 1 < args.len() {
-                        config.score_limit = args[i + 1].parse().unwrap_or(0);
+                        let score_limit = args[i + 1].parse().unwrap_or(0);
+                        config.score_limit = score_limit;
+                        // Also update bracket mode game_score_limit if active
+                        if let SimMode::Bracket {
+                            entrants,
+                            best_of,
+                            seeding,
+                            ..
+                        } = &config.mode
+                        {
+                            config.mode = SimMode::Bracket {
+                                entrants: *entrants,
+                                best_of: *best_of,
+                                game_score_limit: score_limit,
+                                seeding: seeding.clone(),
+                            };
+                        }
                         i += 1;
                     }
                 }
@@ -288,6 +321,72 @@ impl SimConfig {
                         .unwrap_or_else(|| "db/training.db".to_string());
                     config.mode = SimMode::ReachabilityTest { samples, db_path };
                 }
+                "--bracket" => {
+                    let entrants = if i + 1 < args.len() && !args[i + 1].starts_with('-') {
+                        i += 1;
+                        args[i].parse().unwrap_or(64)
+                    } else {
+                        64
+                    };
+                    config.mode = SimMode::Bracket {
+                        entrants,
+                        best_of: 3,
+                        game_score_limit: 5,
+                        seeding: BracketSeedingConfig::Random,
+                    };
+                }
+                "--best-of" => {
+                    if i + 1 < args.len() {
+                        let best_of = args[i + 1].parse().unwrap_or(3);
+                        if let SimMode::Bracket {
+                            entrants,
+                            game_score_limit,
+                            seeding,
+                            ..
+                        } = &config.mode
+                        {
+                            config.mode = SimMode::Bracket {
+                                entrants: *entrants,
+                                best_of,
+                                game_score_limit: *game_score_limit,
+                                seeding: seeding.clone(),
+                            };
+                        }
+                        i += 1;
+                    }
+                }
+                "--warmup-seeding" => {
+                    // Parse: --warmup-seeding [PROFILE] [GAMES]
+                    let baseline = if i + 1 < args.len() && !args[i + 1].starts_with('-') {
+                        i += 1;
+                        args[i].clone()
+                    } else {
+                        "Balanced".to_string()
+                    };
+                    let games = if i + 1 < args.len() && !args[i + 1].starts_with('-') {
+                        i += 1;
+                        args[i].parse().unwrap_or(5)
+                    } else {
+                        5
+                    };
+                    if let SimMode::Bracket {
+                        entrants,
+                        best_of,
+                        game_score_limit,
+                        ..
+                    } = &config.mode
+                    {
+                        config.mode = SimMode::Bracket {
+                            entrants: *entrants,
+                            best_of: *best_of,
+                            game_score_limit: *game_score_limit,
+                            seeding: BracketSeedingConfig::Warmup {
+                                baseline_profile: baseline,
+                                games_per_entrant: games,
+                            },
+                        };
+                    }
+                }
                 "--samples" => {
                     if i + 1 < args.len() {
                         let samples = args[i + 1].parse().unwrap_or(50);
@@ -319,6 +418,12 @@ impl SimConfig {
                 "--parallel" => {
                     if i + 1 < args.len() {
                         config.parallel = args[i + 1].parse().unwrap_or(0);
+                        i += 1;
+                    }
+                }
+                "--profiles-file" => {
+                    if i + 1 < args.len() {
+                        config.profiles_file = Some(args[i + 1].clone());
                         i += 1;
                     }
                 }
@@ -361,6 +466,7 @@ OPTIONS:
     --level <N>         Level number (1-12, default: random per match)
     --levels <LIST>     Comma-separated level numbers to use (e.g., "3,4,7,11")
     --profiles <LIST>   Comma-separated profile names for tournament (e.g., "v4_RP_Gamma,v4_Elite_A")
+    --profiles-file <FILE>  Load profiles from custom file (default: config/ai_profiles.txt)
     --left <PROFILE>    Left player AI profile (default: Balanced)
     --right <PROFILE>   Right player AI profile (default: Balanced)
     --duration <SECS>   Match duration limit in seconds (default: 60)
@@ -376,6 +482,9 @@ OPTIONS:
     --multihop-test     Test NavGraph multi-hop platform reachability
     --reachability-test Validate NavGraph against exploration data
     --samples <N>       Number of samples for reachability test (default: 50)
+    --bracket [N]       Run double elimination bracket with N entrants (default: 64)
+    --best-of <N>       Games per bracket match (default: 3, use with --bracket)
+    --warmup-seeding [PROFILE] [GAMES]  Seed bracket by win rate vs baseline
     --seed <N>          RNG seed for reproducibility
     --output <FILE>     Output JSON to file (default: stdout)
     --quiet, -q         Suppress progress output
@@ -402,6 +511,12 @@ EXAMPLES:
 
     # Run matches with SQLite logging
     cargo run --bin simulate -- --tournament 5 --db training.db
+
+    # 64-player double elimination bracket with warmup seeding
+    cargo run --bin simulate -- --bracket 64 --parallel 16 --warmup-seeding Balanced 5
+
+    # BO5 bracket with specific profiles
+    cargo run --bin simulate -- --bracket 32 --best-of 5 --profiles "Profile1,Profile2,..."
 
 PROFILES:
     Balanced, Aggressive, Defensive, Sniper, Rusher, Turtle, Chaotic, Patient, Hunter, Goalie

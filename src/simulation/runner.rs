@@ -680,7 +680,11 @@ fn emit_simulation_events(
 pub fn run_simulation(config: SimConfig) {
     // Load databases
     let level_db = LevelDatabase::load_from_file(LEVELS_FILE);
-    let profile_db = AiProfileDatabase::default();
+    let profile_db = if let Some(ref path) = config.profiles_file {
+        AiProfileDatabase::load_from_file(path)
+    } else {
+        AiProfileDatabase::default()
+    };
 
     // Initialize parallel execution if requested
     if config.parallel > 0 {
@@ -1222,6 +1226,24 @@ pub fn run_simulation(config: SimConfig) {
         super::config::SimMode::ReachabilityTest { samples, db_path } => {
             run_reachability_tests(&config, *samples, db_path, &level_db, &profile_db);
         }
+
+        super::config::SimMode::Bracket {
+            entrants,
+            best_of,
+            game_score_limit,
+            seeding,
+        } => {
+            run_bracket_tournament(
+                &config,
+                *entrants,
+                *best_of,
+                *game_score_limit,
+                seeding,
+                &level_db,
+                &profile_db,
+                db.as_ref(),
+            );
+        }
     }
 }
 
@@ -1270,6 +1292,17 @@ fn plan_run(
         super::config::SimMode::MultihopTest => ("multihop_test".to_string(), 0, None, None),
         super::config::SimMode::ReachabilityTest { .. } => {
             ("reachability_test".to_string(), 0, None, None)
+        }
+        super::config::SimMode::Bracket { entrants, best_of, .. } => {
+            // Double elimination: approximately 2*N - 1 matches for N entrants
+            // (N-1 in winners + N-1 in losers + 1-2 grand finals)
+            let total_matches = (*entrants as i64 * 2) - 1;
+            (
+                "bracket".to_string(),
+                total_matches,
+                Some(*best_of as i64),
+                None,
+            )
         }
     }
 }
@@ -1545,6 +1578,114 @@ fn run_reachability_tests(
     } else if skipped > 0 && passed == 0 {
         std::process::exit(2); // All skipped
     }
+}
+
+/// Run a double elimination bracket tournament
+fn run_bracket_tournament(
+    config: &SimConfig,
+    entrants: u32,
+    best_of: u32,
+    game_score_limit: u32,
+    seeding_config: &super::bracket::BracketSeedingConfig,
+    level_db: &LevelDatabase,
+    profile_db: &AiProfileDatabase,
+    _db: Option<&SimDatabase>,
+) {
+    use super::bracket::{
+        format_standings, pad_to_power_of_2, seed_entries, select_profiles, BracketExecutor,
+        BracketState, MatchFormat, SeedingMethod,
+    };
+
+    let start = std::time::Instant::now();
+    let base_seed = config.seed.unwrap_or_else(|| rand::thread_rng().r#gen());
+
+    // Select profiles for the bracket
+    let selected_profiles = select_profiles(profile_db, &config.profiles, entrants as usize);
+    let actual_entrants = selected_profiles.len();
+
+    if actual_entrants < 2 {
+        eprintln!(
+            "Error: Need at least 2 profiles for a bracket, found {}",
+            actual_entrants
+        );
+        return;
+    }
+
+    // Round down to nearest power of 2 if needed
+    let bracket_size = if actual_entrants.is_power_of_two() {
+        actual_entrants
+    } else {
+        // Use the largest power of 2 that fits
+        let target = actual_entrants.next_power_of_two() / 2;
+        if !config.quiet {
+            eprintln!(
+                "Warning: {} profiles not a power of 2, using first {} profiles",
+                actual_entrants, target
+            );
+        }
+        target
+    };
+
+    let profiles_for_bracket: Vec<String> =
+        selected_profiles.into_iter().take(bracket_size).collect();
+
+    if !config.quiet {
+        println!(
+            "Running {}-player double elimination bracket (BO{}, FT{})",
+            bracket_size, best_of, game_score_limit
+        );
+        if config.parallel > 0 {
+            println!("  Parallel execution: {} threads", config.parallel);
+        }
+    }
+
+    // Seed the bracket
+    let seeding_method: SeedingMethod = seeding_config.clone().into();
+    let mut entries = seed_entries(
+        &profiles_for_bracket,
+        &seeding_method,
+        config,
+        base_seed,
+        level_db,
+        profile_db,
+        config.quiet,
+    );
+
+    // Pad if needed (shouldn't happen given our power-of-2 check above)
+    pad_to_power_of_2(&mut entries);
+
+    // Create bracket
+    let format = MatchFormat {
+        best_of,
+        score_limit: game_score_limit,
+        duration_limit: config.duration_limit,
+    };
+    let mut bracket = BracketState::new(entries, format);
+
+    if !config.quiet {
+        println!(
+            "  Total matches: {} ({}% complete)",
+            bracket.total_matches,
+            (bracket.progress() * 100.0) as u32
+        );
+        println!();
+    }
+
+    // Run the tournament
+    let mut executor = BracketExecutor::new(level_db, profile_db, config, base_seed);
+    executor.run_tournament(&mut bracket);
+
+    // Print results
+    let standings = format_standings(&bracket);
+    println!("{}", standings);
+
+    let elapsed = start.elapsed().as_secs_f64();
+    if !config.quiet {
+        println!("Elapsed time: {:.1}s", elapsed);
+    }
+
+    // TODO: Store in database if enabled
+    // This requires adding bracket-specific tables (see db.rs task)
 }
 
 #[cfg(test)]

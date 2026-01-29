@@ -2,21 +2,7 @@
 
 *See `milestones.md` for full plan: Training Tools → AI Quality → MVP*
 *See `ideas.md` for non-prioritized ideas and notes*
-
----
-
-## Code Review Available (2026-01-25)
-
-**Deep analysis completed** - see `docs/archive/code_review_2026-01-25.md` for:
-- Best practices library with sources
-- Anti-patterns found in codebase
-- Prioritized improvement plan (P0-P3)
-- Game design fundamentals
-
-**Top findings:**
-- `ai/decision.rs` needs splitting (1195 lines)
-- RNG should consolidate to seeded resource (21 calls)
-- Overall grades: Physics A+, Input A+, AI B+
+*See `docs/archive/code_review_2026-01-25.md` for deep code analysis*
 
 ---
 
@@ -31,14 +17,6 @@
 
 ---
 
-## P0: SQLite Ghost Replay System
-
-*See `docs/planning/sqlite-ghost-replay-plan.md` for full implementation plan*
-
-- [ ] **Implement SQLite-based training + ghost replay** - Record inputs to DB, replay as ghost
-
----
-
 ## P0: Training Binary UX
 
 *Top priority - enables faster AI iteration*
@@ -50,18 +28,7 @@
 
 ---
 
-## P1: Ghost System (MVP DONE)
-
-*Scripted replay for AI defense testing*
-
-- [x] **Drive extractor** - `cargo run --bin extract-drives <session_dir>`
-- [x] **Ghost replay mode** - `cargo run --bin run-ghost <trial.ghost>`
-- [x] **Defense metric** - run-ghost shows defense rate and outcome breakdown
-- [ ] **Polish: visual ghost mode** - render ghost playback in main game (optional)
-
----
-
-## P1.5: AI Plugin Consolidation
+## P1: AI Plugin Consolidation
 
 *Unify AI decision-making across all contexts - see `docs/planning/ai-plugin-plan.md`*
 
@@ -112,6 +79,7 @@ Benefits: ~120 lines deleted, full AI defense in ghost mode, cleaner architectur
 - Defensive test matrix (levels, seeds, profiles, expected goal mix)
 
 **Features:**
+- Visual ghost mode: render ghost playback in main game (optional polish)
 - Settings file: move init_settings out of VC, use template as default
 - Settings persistence: save viewport/prefs on change, load on start
 - Ball options: more styles (yin yang, volleyball, pool balls, etc.)
@@ -132,11 +100,10 @@ Benefits: ~120 lines deleted, full AI defense in ghost mode, cleaner architectur
 - 54.8% of matches ended 0-0
 - FIX NEEDED: Lower thresholds or add desperation timer
 
-**Ghost system status:**
+**Ghost system (MVP complete):**
 - `src/bin/run-ghost.rs` - Working ghost trial runner
 - `src/bin/extract-drives.rs` - Working drive extractor
-- `src/simulation/ghost.rs` - Core ghost types and systems
-- Note: run-ghost uses simplified AI - will be fixed by AI Plugin consolidation (P1.5)
+- Note: run-ghost uses simplified AI - will be fixed by AI Plugin consolidation (P1)
 
 **Test commands:**
 ```bash

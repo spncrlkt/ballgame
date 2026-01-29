@@ -4,6 +4,7 @@
 //! on AI behavior, performance, and decision-making.
 
 pub mod app_builder;
+pub mod bracket;
 pub mod config;
 pub mod control;
 pub mod db;
@@ -17,6 +18,12 @@ pub mod setup;
 pub mod shot_test;
 
 pub use app_builder::HeadlessAppBuilder;
+pub use bracket::{
+    BracketEntry, BracketExecutor, BracketMatch, BracketMatchResult, BracketSeedingConfig,
+    BracketSide, BracketState, GameResult, LossCount, MatchFormat, Placement, SeedingMethod,
+    WarmupResult, format_standings, pad_to_power_of_2, seed_entries, select_profiles,
+    warmup_seeding,
+};
 pub use config::{SimConfig, SimMode};
 pub use control::{SimControl, SimEventBuffer};
 pub use db::{

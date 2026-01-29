@@ -1,5 +1,19 @@
 # Ballgame Done Archive
 
+## Archived 2026-01-29 (Ghost System Complete + Cleanup)
+
+**Ghost System MVP:**
+- [x] **Drive extractor** - `cargo run --bin extract-drives <session_dir>`
+- [x] **Ghost replay mode** - `cargo run --bin run-ghost <trial.ghost>`
+- [x] **Defense metric** - run-ghost shows defense rate and outcome breakdown
+
+**Code Review Available (2026-01-25):**
+- Deep analysis in `docs/archive/code_review_2026-01-25.md`
+- Best practices library, anti-patterns, prioritized improvements
+- Grades: Physics A+, Input A+, AI B+
+
+---
+
 ## Archived 2026-01-28 (Reachability Integration)
 
 **Commits:** `a82b3b1` → `0c34cc8`

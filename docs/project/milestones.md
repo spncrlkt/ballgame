@@ -17,20 +17,21 @@ Training Tools → AI Quality → MVP (playable) → V0 (polished) → V1 (multi
 - [ ] Preserve CLI args on reset, cycle defaults otherwise
 - [ ] Clear status display between games
 
-**Ghost System:**
-- [ ] Extract player drives from SQLite events (segment by goals)
-- [ ] Ghost replay mode - one player follows recorded inputs
-- [ ] `--ghost` flag works in simulate binary
-- [ ] Defense test: measure AI success at stopping recorded human plays
-
 **AI Navigation:**
-- [ ] Fix corner step traversal (nav graph debug logging added)
+- [ ] Fix ramp-less level fallback (InterceptDefense assumes ramps exist)
+- [ ] Reduce goal oscillation (hysteresis or commitment timers)
 - [ ] Teach AI its jump capability (skip intermediate steps)
 - [ ] Verify AI can climb corner steps on levels 7-8
 
-**WIP Files (need fixing):**
-- [ ] `src/bin/ghost-visual.rs` - compilation errors
-- [ ] `src/simulation/ghost.rs` - integration pending
+**AI Plugin Consolidation:**
+- [ ] Create `AiPlugin` - single source of truth for AI systems
+- [ ] Fix ghost mode to use full AI (not simplified)
+
+**Done:**
+- [x] Ghost System MVP (extract-drives, run-ghost, defense metrics)
+- [x] Reachability-aware navigation (exploration data → shooting positions)
+- [x] SQLite event logging infrastructure
+- [x] Simulation infrastructure (parallel, analytics)
 
 ---
 
@@ -50,7 +51,7 @@ Training Tools → AI Quality → MVP (playable) → V0 (polished) → V1 (multi
 **Done:**
 - [x] Stealing mechanics (33% base, 50% if charging, cooldowns)
 - [x] AI profiles (10 personas with tunable parameters)
-- [x] Simulation infrastructure (parallel, SQLite, analytics)
+- [x] Scenario test suite (35 tests across 6 categories)
 
 ---
 
