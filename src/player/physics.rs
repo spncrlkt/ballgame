@@ -13,6 +13,7 @@ use crate::helpers::*;
 use crate::levels::{LevelDatabase, reload_level_geometry};
 use crate::palettes::PaletteDatabase;
 use crate::player::components::*;
+use crate::player::spawn::spawn_position;
 use crate::scoring::CurrentLevel;
 use crate::tuning::PhysicsTweaks;
 use crate::world::{Basket, BasketRim, CornerRamp, LevelPlatform, Platform};
@@ -331,7 +332,7 @@ pub fn respawn_player(
             &mut Transform,
             &mut Velocity,
             Option<&HoldingBall>,
-            &Team,
+            &Character,
         ),
         With<Player>,
     >,
@@ -385,12 +386,9 @@ pub fn respawn_player(
         score.right = 0;
 
         // Reset player positions
-        for (player_entity, mut p_transform, mut p_velocity, holding, team) in &mut players {
-            // Use Team component to determine spawn position
-            p_transform.translation = match team {
-                Team::Left => PLAYER_SPAWN_LEFT,
-                Team::Right => PLAYER_SPAWN_RIGHT,
-            };
+        for (player_entity, mut p_transform, mut p_velocity, holding, character) in &mut players {
+            // Use Character component to determine spawn position
+            p_transform.translation = spawn_position(character.0);
             p_velocity.0 = Vec2::ZERO;
 
             // Drop ball if holding
@@ -434,11 +432,8 @@ pub fn respawn_player(
             .expect("Palette index out of bounds");
 
         // Reset player positions
-        for (player_entity, mut p_transform, mut p_velocity, holding, team) in &mut players {
-            p_transform.translation = match team {
-                Team::Left => PLAYER_SPAWN_LEFT,
-                Team::Right => PLAYER_SPAWN_RIGHT,
-            };
+        for (player_entity, mut p_transform, mut p_velocity, holding, character) in &mut players {
+            p_transform.translation = spawn_position(character.0);
             p_velocity.0 = Vec2::ZERO;
 
             if holding.is_some() {

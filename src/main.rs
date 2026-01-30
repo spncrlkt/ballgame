@@ -4,25 +4,23 @@
 
 use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
-    AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact,
+    AiCapabilities, AiProfileDatabase, Ball, BallPlayerContact,
     BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
-    ChargeGaugeBackground, ChargeGaugeFill, ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel,
-    CurrentPalette, CurrentPresets, CurrentSettings, CycleIndicator, CycleSelection,
-    DebugLogConfig, DebugSettings, DebugText, DisplayBallWave, EventBus, Facing, Grounded,
-    HumanControlled, InputState, JumpState, LastShotInfo, LevelChangeTracker,
-    LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase,
-    PhysicsTweaks, Player, PlayerInput, PresetDatabase, Score, ScoreLevelText,
-    SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown, StealTracker, StyleTextures,
-    TargetBasket, Team, TweakPanel, TweakPanelState, TweakRow, Velocity, ViewportScale, ai,
-    apply_preset_to_tweaks, ball, config_watcher, constants::*, countdown, display_ball_wave,
-    emit_level_change_events, input, levels, player, replay, save_settings_system, scoring,
-    shooting, snapshot, spawn_countdown_text, steal, tuning, ui, update_event_bus_time, world,
+    CharacterId, ConfigWatcher, CurrentLevel, CurrentPalette, CurrentPresets, CurrentSettings,
+    CycleIndicator, CycleSelection, DebugLogConfig, DebugSettings, DebugText, DisplayBallWave,
+    EventBus, GameMode, LastShotInfo, LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph,
+    PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks, PlayerInput, PresetDatabase, Score,
+    ScoreLevelText, SnapshotConfig, SnapshotTriggerState, StealContest, StealTracker, StyleTextures,
+    TweakPanel, TweakPanelState, TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks,
+    ball, config_watcher, constants::*, countdown, display_ball_wave, emit_level_change_events,
+    color_for_character, initial_facing, input, levels, player, replay, save_settings_system, scoring, shooting,
+    snapshot, spawn_charge_gauge, spawn_characters_for_mode, spawn_countdown_text, steal, tuning,
+    ui, update_event_bus_time, world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use world::{Basket, Collider};
 
 /// Path to ball options file
 const BALL_OPTIONS_FILE: &str = "config/ball_options.txt";
@@ -478,140 +476,30 @@ fn setup(
     // Check if this is a debug or regression level early (for AI goal)
     let is_special_level = level_data.map(|l| l.debug || l.regression).unwrap_or(false);
 
-    // Left team player - spawns on left side
-    let left_player = commands
-        .spawn((
-            Sprite::from_color(initial_palette.left, PLAYER_SIZE),
-            Transform::from_translation(PLAYER_SPAWN_LEFT),
-            (
-                Player,
-                Velocity::default(),
-                Grounded(false),
-                CoyoteTimer::default(),
-            ),
-            (
-                JumpState::default(),
-                Facing::default(),
-                ChargingShot::default(),
-            ),
-            TargetBasket(Basket::Right), // Left team scores in right basket
-            Collider,
-            Team::Left,
-            (
-                InputState::default(),
-                AiState {
-                    current_goal: if is_special_level {
-                        AiGoal::Idle
-                    } else {
-                        AiGoal::default()
-                    },
-                    profile_id: left_ai_profile_id,
-                    ..default()
-                },
-                AiNavState::default(),
-                StealCooldown::default(),
-            ),
-        ))
-        .id();
+    // Determine which character is human-controlled (if any)
+    let human_controlled = if left_is_human {
+        Some(CharacterId::L0)
+    } else {
+        None
+    };
 
-    // Conditionally add HumanControlled marker to left player
-    if left_is_human {
-        commands.entity(left_player).insert(HumanControlled);
+    // Spawn characters using the helper function (2v2 mode)
+    let spawned_characters = spawn_characters_for_mode(
+        &mut commands,
+        GameMode::TwoVsTwo,
+        &initial_palette,
+        &left_ai_profile_id,
+        &right_ai_profile_id,
+        human_controlled,
+        is_special_level,
+    );
+
+    // Spawn charge gauges and steal indicators for all spawned characters
+    for (character_id, entity) in &spawned_characters {
+        let facing = initial_facing(*character_id);
+        spawn_charge_gauge(&mut commands, *entity, facing);
+        spawn_steal_indicators(&mut commands, *entity, facing);
     }
-
-    // Right team player - spawns on right side, starts AI-controlled
-    let right_player = commands
-        .spawn((
-            Sprite::from_color(initial_palette.right, PLAYER_SIZE),
-            Transform::from_translation(PLAYER_SPAWN_RIGHT),
-            (
-                Player,
-                Velocity::default(),
-                Grounded(false),
-                CoyoteTimer::default(),
-            ),
-            (JumpState::default(), Facing(-1.0), ChargingShot::default()),
-            TargetBasket(Basket::Left), // Right team scores in left basket
-            Collider,
-            Team::Right,
-            (
-                InputState::default(),
-                AiState {
-                    // On debug level, AI stands still (Idle); otherwise normal AI
-                    current_goal: if is_special_level {
-                        AiGoal::Idle
-                    } else {
-                        AiGoal::default()
-                    },
-                    profile_id: right_ai_profile_id,
-                    ..default()
-                },
-                AiNavState::default(),
-                StealCooldown::default(),
-            ),
-        ))
-        .id();
-
-    // Charge gauge - inside player, opposite side of ball
-    // Start on left side (default facing is right, so ball is right, gauge is left)
-    let gauge_x = -PLAYER_SIZE.x / 4.0;
-
-    // Background (black bar, always visible, centered vertically on player)
-    let gauge_bg = commands
-        .spawn((
-            Sprite::from_color(
-                Color::BLACK,
-                Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT),
-            ),
-            Transform::from_xyz(gauge_x, 0.0, 0.5),
-            ChargeGaugeBackground,
-        ))
-        .id();
-    commands.entity(left_player).add_child(gauge_bg);
-
-    // Fill (green->red, scales with charge) - starts invisible
-    let gauge_fill = commands
-        .spawn((
-            Sprite::from_color(
-                Color::srgb(0.0, 0.8, 0.0),
-                Vec2::new(CHARGE_GAUGE_WIDTH - 2.0, CHARGE_GAUGE_HEIGHT - 2.0),
-            ),
-            Transform::from_xyz(gauge_x, 0.0, 0.6).with_scale(Vec3::new(1.0, 0.0, 1.0)),
-            ChargeGaugeFill,
-        ))
-        .id();
-    commands.entity(left_player).add_child(gauge_fill);
-
-    // Charge gauge for right player (faces left, so gauge is on right side)
-    let right_gauge_x = PLAYER_SIZE.x / 4.0;
-
-    let right_gauge_bg = commands
-        .spawn((
-            Sprite::from_color(
-                Color::BLACK,
-                Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT),
-            ),
-            Transform::from_xyz(right_gauge_x, 0.0, 0.5),
-            ChargeGaugeBackground,
-        ))
-        .id();
-    commands.entity(right_player).add_child(right_gauge_bg);
-
-    let right_gauge_fill = commands
-        .spawn((
-            Sprite::from_color(
-                Color::srgb(0.0, 0.8, 0.0),
-                Vec2::new(CHARGE_GAUGE_WIDTH - 2.0, CHARGE_GAUGE_HEIGHT - 2.0),
-            ),
-            Transform::from_xyz(right_gauge_x, 0.0, 0.6).with_scale(Vec3::new(1.0, 0.0, 1.0)),
-            ChargeGaugeFill,
-        ))
-        .id();
-    commands.entity(right_player).add_child(right_gauge_fill);
-
-    // Steal indicators for both players
-    spawn_steal_indicators(&mut commands, left_player, 1.0); // Left player faces right
-    spawn_steal_indicators(&mut commands, right_player, -1.0); // Right player faces left
 
     // Load ball style names from config file
     let style_names = load_ball_style_names();
@@ -715,12 +603,17 @@ fn setup(
     let basket_push_in = initial_level
         .map(|l| l.basket_push_in)
         .unwrap_or(BASKET_PUSH_IN);
+    // Get slot 1 colors (darker variants) for basket stripes
+    let left_color2 = color_for_character(CharacterId::L1, &initial_palette);
+    let right_color2 = color_for_character(CharacterId::R1, &initial_palette);
     world::spawn_baskets(
         &mut commands,
         basket_y,
         basket_push_in,
         initial_palette.left,
+        left_color2,
         initial_palette.right,
+        right_color2,
         initial_palette.left_rim,
         initial_palette.right_rim,
     );

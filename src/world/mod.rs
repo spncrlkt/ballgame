@@ -61,19 +61,28 @@ pub fn spawn_walls(commands: &mut Commands, color: Color) {
     ));
 }
 
-/// Spawn a single basket with rim children
+/// Marker component for basket stripe children (for color updates)
+#[derive(Component)]
+pub struct BasketStripe {
+    /// Which stripe index (0 = top, alternating colors)
+    pub index: usize,
+}
+
+/// Spawn a single basket with rim children and striped body
 ///
 /// - `side`: Which basket (Left or Right)
 /// - `x`: X position of basket center
 /// - `y`: Y position of basket center
-/// - `basket_color`: Color of the basket body
+/// - `color1`: Primary team color (slot 0)
+/// - `color2`: Secondary team color (slot 1, darker)
 /// - `rim_color`: Color of the rim platforms
 pub fn spawn_basket_with_rims(
     commands: &mut Commands,
     side: Basket,
     x: f32,
     y: f32,
-    basket_color: Color,
+    color1: Color,
+    color2: Color,
     rim_color: Color,
 ) {
     // Rim dimensions
@@ -89,13 +98,29 @@ pub fn spawn_basket_with_rims(
         Basket::Right => (rim_inner_height, rim_inner_y, rim_outer_height, rim_outer_y),
     };
 
+    // Stripe configuration
+    let num_stripes = 4;
+    let stripe_height = BASKET_SIZE.y / num_stripes as f32;
+
     commands
         .spawn((
-            Sprite::from_color(basket_color, BASKET_SIZE),
+            // Transparent sprite for collision detection and size queries
+            Sprite::from_color(Color::NONE, BASKET_SIZE),
             Transform::from_xyz(x, y, -0.1),
             side,
         ))
         .with_children(|parent| {
+            // Spawn horizontal stripes
+            for i in 0..num_stripes {
+                let stripe_color = if i % 2 == 0 { color1 } else { color2 };
+                let stripe_y = BASKET_SIZE.y / 2.0 - stripe_height / 2.0 - (i as f32 * stripe_height);
+                parent.spawn((
+                    Sprite::from_color(stripe_color, Vec2::new(BASKET_SIZE.x, stripe_height)),
+                    Transform::from_xyz(0.0, stripe_y, 0.0),
+                    BasketStripe { index: i },
+                ));
+            }
+
             // Left rim
             parent.spawn((
                 Sprite::from_color(rim_color, Vec2::new(RIM_THICKNESS, left_rim_height)),
@@ -121,12 +146,15 @@ pub fn spawn_basket_with_rims(
 }
 
 /// Spawn both baskets with rims at specified positions
+/// Each basket has two colors for striped effect (slot 0 and slot 1 player colors)
 pub fn spawn_baskets(
     commands: &mut Commands,
     basket_y: f32,
     basket_push_in: f32,
-    left_basket_color: Color,
-    right_basket_color: Color,
+    left_color1: Color,
+    left_color2: Color,
+    right_color1: Color,
+    right_color2: Color,
     left_rim_color: Color,
     right_rim_color: Color,
 ) {
@@ -139,7 +167,8 @@ pub fn spawn_baskets(
         Basket::Left,
         left_x,
         basket_y,
-        left_basket_color,
+        left_color1,
+        left_color2,
         right_rim_color,
     );
     spawn_basket_with_rims(
@@ -147,7 +176,8 @@ pub fn spawn_baskets(
         Basket::Right,
         right_x,
         basket_y,
-        right_basket_color,
+        right_color1,
+        right_color2,
         left_rim_color,
     );
 }

@@ -68,8 +68,8 @@ pub use palettes::{PALETTES_FILE, Palette, PaletteDatabase};
 pub use player::{
     Character, CharacterSpawnConfig, ControlledBy, CoyoteTimer, Facing, Grounded, HoldingBall,
     HumanControlled, JumpState, Player, TargetBasket, Team, Velocity,
-    color_for_character, initial_facing, spawn_character, spawn_characters_for_mode,
-    spawn_position, target_basket_for_character, team_for_character,
+    color_for_character, initial_facing, spawn_character, spawn_charge_gauge,
+    spawn_characters_for_mode, spawn_position, target_basket_for_character, team_for_character,
 };
 pub use presets::{
     BallPreset, CompositePreset, CurrentPresets, MovementPreset, PRESETS_FILE, PresetDatabase,

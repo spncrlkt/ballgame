@@ -761,10 +761,19 @@ pub fn apply_palette_colors(
     palette_db: Res<PaletteDatabase>,
     ball_textures: Res<BallTextures>,
     mut clear_color: ResMut<ClearColor>,
-    mut player_query: Query<(&mut Sprite, &Team), (With<Player>, Without<Ball>, Without<Basket>)>,
-    mut basket_query: Query<
-        (&mut Sprite, &Basket, Option<&Children>),
-        (Without<Player>, Without<Ball>),
+    mut player_query: Query<(&mut Sprite, &crate::player::Character), (With<Player>, Without<Ball>, Without<Basket>)>,
+    basket_query: Query<
+        (&Basket, &Children),
+        Without<Player>,
+    >,
+    mut stripe_query: Query<
+        (&mut Sprite, &crate::world::BasketStripe),
+        (
+            Without<BasketRim>,
+            Without<Player>,
+            Without<Ball>,
+            Without<Platform>,
+        ),
     >,
     mut rim_query: Query<
         &mut Sprite,
@@ -785,6 +794,7 @@ pub fn apply_palette_colors(
             Without<Ball>,
             Without<Basket>,
             Without<BasketRim>,
+            Without<crate::world::BasketStripe>,
         ),
     >,
     mut level_platform_query: Query<
@@ -796,6 +806,7 @@ pub fn apply_palette_colors(
             Without<Ball>,
             Without<Basket>,
             Without<BasketRim>,
+            Without<crate::world::BasketStripe>,
         ),
     >,
     mut corner_ramp_query: Query<
@@ -807,6 +818,7 @@ pub fn apply_palette_colors(
             Without<Ball>,
             Without<Basket>,
             Without<BasketRim>,
+            Without<crate::world::BasketStripe>,
         ),
     >,
     mut ball_query: Query<(&BallStyle, &mut Sprite), With<Ball>>,
@@ -825,30 +837,34 @@ pub fn apply_palette_colors(
     // Background
     clear_color.0 = palette.background;
 
-    // Players
-    for (mut sprite, team) in &mut player_query {
-        sprite.color = match team {
-            Team::Left => palette.left,
-            Team::Right => palette.right,
-        };
+    // Players - use character-specific colors (slot 1 players are darker)
+    for (mut sprite, character) in &mut player_query {
+        sprite.color = crate::player::color_for_character(character.0, palette);
     }
 
-    // Baskets and rims
-    for (mut sprite, basket, children) in &mut basket_query {
-        sprite.color = match basket {
-            Basket::Left => palette.left,
-            Basket::Right => palette.right,
+    // Baskets - update stripe colors and rims
+    for (basket, children) in &basket_query {
+        // Get team colors for this basket
+        let (color1, color2, rim_color) = match basket {
+            Basket::Left => (
+                palette.left,
+                crate::player::color_for_character(crate::events::CharacterId::L1, palette),
+                palette.right_rim,
+            ),
+            Basket::Right => (
+                palette.right,
+                crate::player::color_for_character(crate::events::CharacterId::R1, palette),
+                palette.left_rim,
+            ),
         };
 
-        // Update rim colors (children)
-        if let Some(children) = children {
-            for child in children.iter() {
-                if let Ok(mut rim_sprite) = rim_query.get_mut(child) {
-                    rim_sprite.color = match basket {
-                        Basket::Left => palette.right_rim,
-                        Basket::Right => palette.left_rim,
-                    };
-                }
+        // Update stripe and rim colors (children)
+        for child in children.iter() {
+            if let Ok((mut stripe_sprite, stripe)) = stripe_query.get_mut(child) {
+                stripe_sprite.color = if stripe.index % 2 == 0 { color1 } else { color2 };
+            }
+            if let Ok(mut rim_sprite) = rim_query.get_mut(child) {
+                rim_sprite.color = rim_color;
             }
         }
     }

@@ -24,15 +24,14 @@ use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
     AI_SOURCE_ID_START, AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball,
     BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
-    BallTextures, Character, CharacterId, ChargeGaugeBackground, ChargeGaugeFill, ChargingShot,
-    ControlledBy, CoyoteTimer, CurrentLevel, CurrentPalette, DebugSettings, EventBuffer, EventBus,
-    Facing, GameConfig, GameEvent, Grounded, HoldingBall, HumanControlled,
-    InputState, JumpState, KEYBOARD_SOURCE_ID, LastShotInfo, LevelChangeTracker, LevelDatabase,
-    MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase, PhysicsTweaks, Player,
-    PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown, StealTracker, StyleTextures,
-    TargetBasket, Team, TweakPanelState, Velocity, ai, ball, constants::*, countdown,
-    emit_level_change_events, helpers::*, input, levels, player, scoring, shooting,
-    spawn_countdown_text, steal, tuning, update_event_bus_time, world,
+    BallTextures, Character, CharacterId, ChargingShot, ControlledBy, CoyoteTimer, CurrentLevel,
+    CurrentPalette, DebugSettings, EventBuffer, EventBus, Facing, GameConfig, GameEvent, Grounded,
+    HoldingBall, HumanControlled, InputState, JumpState, KEYBOARD_SOURCE_ID, LastShotInfo,
+    LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase,
+    PhysicsTweaks, Player, PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown,
+    StealTracker, StyleTextures, TargetBasket, Team, TweakPanelState, Velocity, ai, ball,
+    constants::*, countdown, emit_level_change_events, helpers::*, input, levels, player, scoring,
+    shooting, spawn_charge_gauge, spawn_countdown_text, steal, tuning, update_event_bus_time, world,
 };
 use bevy::{app::ScheduleRunnerPlugin, camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
@@ -1229,59 +1228,9 @@ fn training_setup(
         ))
         .id();
 
-    // Charge gauges for left player
-    let gauge_x = -PLAYER_SIZE.x / 4.0;
-    let gauge_bg = commands
-        .spawn((
-            Sprite::from_color(
-                Color::BLACK,
-                Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT),
-            ),
-            Transform::from_xyz(gauge_x, 0.0, 0.5),
-            ChargeGaugeBackground,
-        ))
-        .id();
-    commands.entity(left_player).add_child(gauge_bg);
-
-    let gauge_fill = commands
-        .spawn((
-            Sprite::from_color(
-                Color::srgb(0.0, 0.8, 0.0),
-                Vec2::new(CHARGE_GAUGE_WIDTH - 2.0, CHARGE_GAUGE_HEIGHT - 2.0),
-            ),
-            Transform::from_xyz(gauge_x, 0.0, 0.6).with_scale(Vec3::new(1.0, 0.0, 1.0)),
-            ChargeGaugeFill,
-        ))
-        .id();
-    commands.entity(left_player).add_child(gauge_fill);
-
-    // Charge gauge for right player
-    let right_gauge_x = PLAYER_SIZE.x / 4.0;
-    let right_gauge_bg = commands
-        .spawn((
-            Sprite::from_color(
-                Color::BLACK,
-                Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT),
-            ),
-            Transform::from_xyz(right_gauge_x, 0.0, 0.5),
-            ChargeGaugeBackground,
-        ))
-        .id();
-    commands.entity(right_player).add_child(right_gauge_bg);
-
-    let right_gauge_fill = commands
-        .spawn((
-            Sprite::from_color(
-                Color::srgb(0.0, 0.8, 0.0),
-                Vec2::new(CHARGE_GAUGE_WIDTH - 2.0, CHARGE_GAUGE_HEIGHT - 2.0),
-            ),
-            Transform::from_xyz(right_gauge_x, 0.0, 0.6).with_scale(Vec3::new(1.0, 0.0, 1.0)),
-            ChargeGaugeFill,
-        ))
-        .id();
-    commands.entity(right_player).add_child(right_gauge_fill);
-
-    // Steal indicators
+    // Charge gauges and steal indicators for both players
+    spawn_charge_gauge(&mut commands, left_player, 1.0); // Left player faces right
+    spawn_charge_gauge(&mut commands, right_player, -1.0); // Right player faces left
     spawn_steal_indicators(&mut commands, left_player, 1.0);
     spawn_steal_indicators(&mut commands, right_player, -1.0);
 

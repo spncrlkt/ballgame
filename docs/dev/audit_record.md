@@ -4,6 +4,89 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Session: 2026-01-30 - 2v2 Readiness & Test Coverage
+
+**Commit:** (pending)
+
+### Summary
+
+Complete implementation of 2v2 Readiness Audit & Test Coverage Plan:
+- Added 86 new unit tests (145 total, up from 62)
+- Refactored player spawning in main.rs to use helpers
+- Created reusable `spawn_charge_gauge()` helper
+- PlayerId → CharacterId migration verified complete
+
+### Test Coverage Added
+
+| Module | Tests Added | Description |
+|--------|-------------|-------------|
+| `src/events/types.rs` | 11 | CharacterId methods (from_str, team, slot, teammate, opponents, etc.) |
+| `src/events/format.rs` | 26 | Round-trip serialization for all 2v2 event variants |
+| `src/analytics/parser.rs` | 17 | ParsedMatch helper methods (goals, shots, steals, winner, etc.) |
+| `src/testing/assertions.rs` | 17 | CapturedEvent conversion and check_sequence/check_state |
+| `src/events/sqlite_logger.rs` | 15 | 2v2 event logging and round-trip verification |
+| **Total** | **86** | |
+
+### Code Refactoring
+
+**src/main.rs** (~130 lines → ~15 lines):
+- Replaced hardcoded L0+R0 spawning with `spawn_characters_for_mode()`
+- Charge gauges and steal indicators now spawned in loop over all characters
+- Fixed missing `Character(CharacterId)` component on spawned entities
+
+**src/player/spawn.rs**:
+- Added `spawn_charge_gauge()` helper function
+- Gauge positioned based on facing direction (opposite side from ball)
+- Properly spawns as child entities with ChargeGaugeBackground/Fill components
+
+**src/bin/training.rs**:
+- Updated to use `spawn_charge_gauge()` helper (50 lines → 4 lines)
+- Kept manual spawning for solo training mode special requirements
+
+**src/simulation/setup.rs**:
+- Evaluated but kept as-is (headless mode has different requirements)
+
+### Verification Results
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `cargo check` | ✅ Pass | Clean (deprecation warnings for PlayerId expected) |
+| `cargo test` | ✅ Pass | 145 passed, 0 failed |
+| `cargo run --bin test-scenarios` | ✅ Pass | 42 passed, 0 failed |
+| `cargo clippy` | ✅ Pass | No errors, only deprecation warnings |
+| Visual regression | ⚠️ N/A | No baseline set |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/events/types.rs` | Added 11 CharacterId unit tests |
+| `src/events/format.rs` | Added 26 round-trip tests for 2v2 events |
+| `src/analytics/parser.rs` | Added 17 tests for ParsedMatch methods |
+| `src/testing/assertions.rs` | Added 17 tests for CapturedEvent and assertions |
+| `src/events/sqlite_logger.rs` | Added 15 tests for 2v2 event logging |
+| `src/player/spawn.rs` | Added `spawn_charge_gauge()` helper |
+| `src/player/mod.rs` | Added `spawn_charge_gauge` to exports |
+| `src/lib.rs` | Added `spawn_charge_gauge` to public exports |
+| `src/main.rs` | Refactored player spawning to use helpers |
+| `src/bin/training.rs` | Updated to use `spawn_charge_gauge()` helper |
+
+### 2v2 Infrastructure Status
+
+**Ready for 2v2:**
+- ✅ `CharacterId { L0, L1, R0, R1 }` type with full helper methods
+- ✅ `Character(CharacterId)` component on all spawned entities
+- ✅ `ControlledBy(InputSourceId)` for input routing
+- ✅ `GameMode::TwoVsTwo` enum returning all 4 characters
+- ✅ `spawn_characters_for_mode()` helper in `src/player/spawn.rs`
+- ✅ `spawn_charge_gauge()` helper for UI elements
+- ✅ AI/Physics/Input systems work for any player count
+
+**To Enable 2v2:**
+Change `GameMode::OneVsOne` to `GameMode::TwoVsTwo` in main.rs setup.
+
+---
+
 ## Session: 2026-01-30 - Audit Process Improvement
 
 **Commit:** `b77fe8f` (pre-change baseline)

@@ -341,16 +341,19 @@ fn test_setup(
             }
         }
 
-        // Baskets with rims using shared function
+        // Baskets with rims using shared function (striped with two shades)
         let basket_y = ARENA_FLOOR_Y + level.basket_height;
         let basket_color = Color::srgb(0.5, 0.5, 0.5);
+        let basket_color_dark = Color::srgb(0.3, 0.3, 0.3);
         let rim_color = Color::srgb(0.4, 0.4, 0.4);
         spawn_baskets(
             &mut commands,
             basket_y,
             level.basket_push_in,
             basket_color,
+            basket_color_dark,
             basket_color,
+            basket_color_dark,
             rim_color,
             rim_color,
         );

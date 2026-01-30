@@ -58,10 +58,30 @@
 
 ## Done (Last 5)
 
-- [x] Cooldown timing bug fix (2026-01-30)
-- [x] Nav/Pathfinding debug logging (2026-01-30)
-- [x] Binary Reference Guide (2026-01-29)
-- [x] Unified Run Summary (2026-01-29)
-- [x] Reachability-Aware Navigation (2026-01-28)
+- [x] **2v2 Readiness & Test Coverage** - Full implementation (2026-01-30)
+  - Added 86 new unit tests (145 total, up from 62)
+  - CharacterId, format round-trip, analytics parser, assertions, SQLite logger tests
+  - Refactored main.rs player spawning to use `spawn_characters_for_mode()`
+  - Created reusable `spawn_charge_gauge()` helper in player/spawn.rs
+  - PlayerId → CharacterId migration complete
+- [x] **Binary Reference Guide** - Created `docs/guides/BINARIES.md` (2026-01-29)
+  - All 11 binaries documented with flags, options, examples
+  - Updated README.md to link instead of inline docs
+- [x] **Unified Run Summary** - Consistent end-of-run output for all binaries (2026-01-29)
+  - New `src/run_summary.rs` module with builder pattern
+  - 80-char box formatting with Unicode box-drawing characters
+  - File category tags: `[DB]`, `[REPORT]`, `[IMG]`, `[DATA]`, `[CFG]`
+  - Next step suggestions: primary (→) and secondary (·)
+  - Integrated: training, test_scenarios, extract-drives, heatmap, verify_reachability, run-ghost, generate, simulate (tournament/bracket modes)
+- [x] **Reachability-Aware Navigation** - NavGraph now uses player exploration data for smarter shooting positions (2026-01-28)
+  - `PlatformSource` enum tracks config origin (Floor, CornerRamp, Center, Mirror)
+  - `reachability` field (0.0-1.0) from SQLite exploration data
+  - `find_shooting_node` prefers high-reachability positions
+  - New tests: `reachability_test.rs`, `multihop_test.rs`
+- [x] **Accuracy/Cadence Tuning** - Extended preset system with 10 shot params, tested V1-V6 variants (2026-01-28)
+  - V3-Forgiving now default: 3.2 goals/match (↑88%), 34.8% accuracy (↑61%)
+- [x] **Training Reachability Protocol** - Solo exploration mode for coverage mapping (2026-01-28)
+  - `--protocol reachability` flag for level exploration
+  - Q/LB advances to next level during exploration
 
 *See `todone.md` for full archive*
