@@ -204,12 +204,20 @@ impl NavGraph {
             .filter_map(|(i, node)| {
                 // Skip dead zones
                 if node.platform_role == PlatformRole::DeadZone {
+                    debug!(
+                        "find_shooting_node: Rejecting node {} (DeadZone) @ ({:.0},{:.0})",
+                        i, node.center.x, node.center.y
+                    );
                     return None;
                 }
 
                 // Skip areas with very low reachability (< 0.1)
                 // These are likely unreachable or problematic areas
                 if node.reachability < MIN_REACHABILITY_FOR_SHOT {
+                    debug!(
+                        "find_shooting_node: Rejecting node {} (reachability {:.2} < {:.2}) @ ({:.0},{:.0})",
+                        i, node.reachability, MIN_REACHABILITY_FOR_SHOT, node.center.x, node.center.y
+                    );
                     return None;
                 }
 
@@ -261,6 +269,10 @@ impl NavGraph {
 
                 // Skip areas with very low reachability
                 if node.reachability < MIN_REACHABILITY_FOR_SHOT {
+                    debug!(
+                        "find_shooting_node (fallback): Rejecting node {} (reachability {:.2} < {:.2}) @ ({:.0},{:.0})",
+                        i, node.reachability, MIN_REACHABILITY_FOR_SHOT, node.center.x, node.center.y
+                    );
                     return None;
                 }
 
@@ -275,6 +287,10 @@ impl NavGraph {
                     let combined_score = quality * (0.5 + 0.5 * node.reachability);
                     Some((i, combined_score))
                 } else {
+                    debug!(
+                        "find_shooting_node (fallback): Rejecting node {} (quality {:.2} < {:.2}) @ ({:.0},{:.0})",
+                        i, quality, min_shot_quality, node.center.x, node.center.y
+                    );
                     None
                 }
             })
@@ -667,6 +683,15 @@ pub fn rebuild_nav_graph(
         node.platform_role = classify_platform_role(node);
         // Sample reachability from heatmap at node center
         node.reachability = heatmaps.reachability_at(node.center);
+        // Log reachability for debugging navigation failures
+        info!(
+            "NavNode {}: {:?} @ ({:.0},{:.0}) reachability={:.2}",
+            node.id,
+            node.source,
+            node.center.x,
+            node.center.y,
+            node.reachability
+        );
     }
 
     // Calculate level's max achievable shot quality (for AI threshold scaling)

@@ -207,7 +207,9 @@ pub const NAV_PATH_RECALC_DISTANCE: f32 = 100.0;
 pub const NAV_JUMP_APPROACH_DISTANCE: f32 = 20.0;
 /// Minimum reachability value for AI to consider a shooting position
 /// Areas with reachability below this threshold are skipped (likely unreachable/problematic)
-pub const MIN_REACHABILITY_FOR_SHOT: f32 = 0.1;
+/// Set very low (0.01) to allow AI to navigate to almost any platform - the reachability
+/// filter was blocking navigation to elevated platforms, causing AI to stay grounded
+pub const MIN_REACHABILITY_FOR_SHOT: f32 = 0.01;
 // =============================================================================
 // AI DEFENSIVE BEHAVIOR
 // =============================================================================

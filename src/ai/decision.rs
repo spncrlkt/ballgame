@@ -228,16 +228,35 @@ pub fn ai_navigation_update(
                         profile.shoot_range,
                         profile.min_shot_quality,
                     ) {
-                        Some(nav_graph.nodes[path_result.goal_node].center)
+                        let target_node = &nav_graph.nodes[path_result.goal_node];
+                        info!(
+                            "AI AttackWithBall: Found shooting path to node {} @ ({:.0},{:.0}), {} actions, cost={:.1}",
+                            path_result.goal_node,
+                            target_node.center.x,
+                            target_node.center.y,
+                            path_result.actions.len(),
+                            path_result.total_cost
+                        );
+                        Some(target_node.center)
                     } else {
                         // Fallback: find best elevated platform instead of going under basket
                         // This prevents AI from getting stuck under the basket
+                        warn!(
+                            "AI AttackWithBall: No shooting path found from ({:.0},{:.0}) to basket ({:.0},{:.0}), trying elevated platform",
+                            ai_pos.x, ai_pos.y, basket_pos.x, basket_pos.y
+                        );
                         if let Some(elevated_idx) =
                             nav_graph.find_elevated_platform(basket_pos, profile.min_shot_quality)
                         {
-                            Some(nav_graph.nodes[elevated_idx].center)
+                            let target_node = &nav_graph.nodes[elevated_idx];
+                            info!(
+                                "AI AttackWithBall: Found elevated platform fallback node {} @ ({:.0},{:.0})",
+                                elevated_idx, target_node.center.x, target_node.center.y
+                            );
+                            Some(target_node.center)
                         } else {
                             // Last resort: stay in pursuit mode (don't navigate)
+                            warn!("AI AttackWithBall: No elevated platform found - using simple movement fallback");
                             None
                         }
                     }
@@ -347,14 +366,30 @@ pub fn ai_navigation_update(
                         && height_diff > NAV_POSITION_TOLERANCE);
 
                 if needs_navigation {
+                    debug!(
+                        "AI nav: Needs navigation to ({:.0},{:.0}), height_diff={:.0}, h_dist={:.0}",
+                        target.x, target.y, height_diff, horizontal_dist
+                    );
                     if let Some(path_result) = find_path(&nav_graph, ai_pos, target) {
+                        info!(
+                            "AI nav: Path found with {} actions to ({:.0},{:.0})",
+                            path_result.actions.len(), target.x, target.y
+                        );
                         nav_state.set_path(path_result.actions, target);
                     } else {
                         // No path found - clear and let simple movement take over
+                        warn!(
+                            "AI nav: No path found from ({:.0},{:.0}) to ({:.0},{:.0})",
+                            ai_pos.x, ai_pos.y, target.x, target.y
+                        );
                         nav_state.clear();
                     }
                 } else {
                     // Target reachable by simple walking
+                    debug!(
+                        "AI nav: Target ({:.0},{:.0}) reachable by walking, no nav needed",
+                        target.x, target.y
+                    );
                     nav_state.clear();
                 }
             } else {
@@ -811,6 +846,23 @@ pub fn ai_decision_update(
         // Check if navigation is controlling movement
         let nav_controlling = nav_state.active && !nav_state.path_complete();
 
+        // Log nav state periodically (once per second to avoid spam)
+        if ai_state.ball_hold_time > 0.1 && (ai_state.ball_hold_time * 10.0) as u32 % 10 == 0 {
+            if nav_controlling {
+                debug!(
+                    "AI nav state: ACTIVE, {} actions remaining, target {:?}, current action: {:?}",
+                    nav_state.current_path.len() - nav_state.path_index,
+                    nav_state.nav_target,
+                    nav_state.current_action()
+                );
+            } else {
+                debug!(
+                    "AI nav state: INACTIVE (active={}, path_complete={})",
+                    nav_state.active, nav_state.path_complete()
+                );
+            }
+        }
+
         if nav_controlling {
             // Execute navigation actions
             execute_nav_action(&mut input, &mut nav_state, ai_pos, grounded.0, &time);
@@ -857,10 +909,40 @@ pub fn ai_decision_update(
                 }
 
                 AiGoal::AttackWithBall => {
-                    // Move toward target basket (simple horizontal movement)
+                    // Move toward target basket
                     let dx = target_basket_pos.x - ai_pos.x;
                     if dx.abs() > profile.position_tolerance {
                         input.move_x = dx.signum();
+                    }
+
+                    // Jump fallback: when navigation fails and basket is elevated,
+                    // actively seek elevated positions by jumping toward ramps/platforms
+                    let floor_y = ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0;
+                    let ai_at_floor = ai_pos.y < floor_y + PLAYER_SIZE.y;
+                    let basket_elevated = target_basket_pos.y > floor_y + PLAYER_SIZE.y * 2.0;
+
+                    if ai_at_floor && basket_elevated && grounded.0 {
+                        // AI is on floor but basket is elevated - need to climb
+                        // Move toward the corner ramp on the basket's side to gain elevation
+                        let arena_edge = ARENA_WIDTH / 2.0 - WALL_THICKNESS - 100.0;
+                        let ramp_target_x = if target_basket_pos.x > 0.0 {
+                            arena_edge // Target right basket, use right ramp
+                        } else {
+                            -arena_edge // Target left basket, use left ramp
+                        };
+
+                        let ramp_dx = ramp_target_x - ai_pos.x;
+                        if ramp_dx.abs() > profile.position_tolerance {
+                            input.move_x = ramp_dx.signum();
+                        }
+
+                        // Jump continuously when on/near ramp area to climb steps
+                        let on_ramp_area =
+                            ai_pos.x.abs() > ARENA_WIDTH / 2.0 - WALL_THICKNESS - 300.0;
+                        if on_ramp_area {
+                            input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                            input.jump_held = true;
+                        }
                     }
 
                     input.pickup_pressed = false;
