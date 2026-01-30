@@ -5,17 +5,58 @@ use bevy::prelude::*;
 use crate::ai::{AiGoal, AiNavState, AiState, InputState};
 use crate::ball::{Ball, BallState, CurrentPalette, Velocity};
 use crate::constants::*;
-use crate::events::{EventBus, GameEvent, PlayerId};
+use crate::events::{CharacterId, EventBus, GameEvent, PlayerId, TeamId};
 use crate::palettes::PaletteDatabase;
-use crate::player::{HoldingBall, Player, Team};
+use crate::player::{Character, HoldingBall, Player, Team};
 use crate::ui::ScoreFlash;
 use crate::world::Basket;
 
-/// Score resource tracking left/right team scores
+/// Record of a single goal for attribution tracking
+#[derive(Debug, Clone)]
+pub struct GoalRecord {
+    /// Which character scored (if known)
+    pub scorer: Option<CharacterId>,
+    /// Which team scored
+    pub team: TeamId,
+    /// Points awarded (1 for throw, 2 for carry-in)
+    pub points: u32,
+    /// Match time when goal was scored (milliseconds)
+    pub time_ms: u32,
+}
+
+/// Score resource tracking left/right team scores with attribution
 #[derive(Resource, Default)]
 pub struct Score {
-    pub left: u32,  // Left team's score
-    pub right: u32, // Right team's score
+    pub left: u32,  // Left team's total score
+    pub right: u32, // Right team's total score
+    /// Per-character goal attribution
+    pub attribution: Vec<GoalRecord>,
+}
+
+impl Score {
+    /// Get goals scored by a specific character
+    pub fn goals_by_character(&self, character: CharacterId) -> u32 {
+        self.attribution
+            .iter()
+            .filter(|g| g.scorer == Some(character))
+            .map(|g| g.points)
+            .sum()
+    }
+
+    /// Get goals scored by a team
+    pub fn goals_by_team(&self, team: TeamId) -> u32 {
+        match team {
+            TeamId::Left => self.left,
+            TeamId::Right => self.right,
+        }
+    }
+
+    /// Reset scores to 0-0
+    pub fn reset(&mut self) {
+        self.left = 0;
+        self.right = 0;
+        self.attribution.clear();
+    }
 }
 
 /// Current level (stores level ID)
@@ -37,9 +78,10 @@ pub fn check_scoring(
     current_palette: Res<CurrentPalette>,
     palette_db: Res<PaletteDatabase>,
     mut event_bus: ResMut<EventBus>,
+    time: Res<Time>,
     mut ball_query: Query<(&mut Transform, &mut Velocity, &mut BallState, &Sprite), With<Ball>>,
     basket_query: Query<(Entity, &Transform, &Basket, &Sprite), Without<Ball>>,
-    player_query: Query<(Entity, &Sprite, &Team), With<Player>>,
+    player_query: Query<(Entity, &Sprite, &Team, Option<&Character>), With<Player>>,
     mut ai_query: Query<(&mut AiState, &mut AiNavState, &mut InputState), With<Player>>,
 ) {
     let palette = palette_db
@@ -64,24 +106,50 @@ pub fn check_scoring(
                 // Determine points: 2 for carry-in, 1 for throw
                 let points = if is_held { 2 } else { 1 };
 
-                // Determine which team scored
-                let scoring_team = match basket {
+                // Determine which team scored and the scoring character
+                let (scoring_team_id, scoring_player_id, scorer_entity) = match basket {
                     Basket::Left => {
                         score.right += points; // Right team scores in left basket
-                        PlayerId::R
+                        (TeamId::Right, PlayerId::R, get_scorer_entity(&ball_state))
                     }
                     Basket::Right => {
                         score.left += points; // Left team scores in right basket
-                        PlayerId::L
+                        (TeamId::Left, PlayerId::L, get_scorer_entity(&ball_state))
                     }
                 };
 
-                // Emit Goal event for auditability
+                // Get the CharacterId of the scorer (if we can determine it)
+                let scorer_character: Option<CharacterId> = scorer_entity.and_then(|entity| {
+                    player_query
+                        .get(entity)
+                        .ok()
+                        .and_then(|(_, _, _, char)| char.map(|c| c.0))
+                });
+
+                // Record goal attribution
+                let time_ms = (time.elapsed_secs() * 1000.0) as u32;
+                score.attribution.push(GoalRecord {
+                    scorer: scorer_character,
+                    team: scoring_team_id,
+                    points,
+                    time_ms,
+                });
+
+                // Emit Goal event for auditability (legacy format)
                 event_bus.emit(GameEvent::Goal {
-                    player: scoring_team,
+                    player: scoring_player_id,
                     score_left: score.left,
                     score_right: score.right,
                 });
+
+                // Also emit Goal2 event with CharacterId (new format)
+                if let Some(character) = scorer_character {
+                    event_bus.emit(GameEvent::Goal2 {
+                        character,
+                        score_left: score.left,
+                        score_right: score.right,
+                    });
+                }
 
                 // Basket color based on its side (from current palette)
                 let basket_original_color = match basket {
@@ -103,7 +171,7 @@ pub fn check_scoring(
 
                 // If held, also flash the player who scored
                 if let BallState::Held(holder) = *ball_state {
-                    if let Ok((player_entity, _player_sprite, team)) = player_query.get(holder) {
+                    if let Ok((player_entity, _player_sprite, team, _)) = player_query.get(holder) {
                         // Player color based on team (from current palette)
                         let player_original_color = match team {
                             Team::Left => palette.left,
@@ -143,11 +211,23 @@ pub fn check_scoring(
                     *input_state = InputState::default();
                 }
 
+                let scorer_str = scorer_character
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "?".to_string());
                 info!(
-                    "SCORE {}pts! Left: {} Right: {}",
-                    points, score.left, score.right
+                    "SCORE {}pts by {}! Left: {} Right: {}",
+                    points, scorer_str, score.left, score.right
                 );
             }
         }
+    }
+}
+
+/// Helper to get the entity that caused the score (holder or shooter)
+fn get_scorer_entity(ball_state: &BallState) -> Option<Entity> {
+    match ball_state {
+        BallState::Held(holder) => Some(*holder),
+        BallState::InFlight { shooter, .. } => Some(*shooter),
+        BallState::Free => None,
     }
 }

@@ -2,10 +2,12 @@
 
 mod components;
 mod interaction;
+mod pass;
 mod physics;
 
 pub use components::*;
 pub use interaction::*;
+pub use pass::*;
 pub use physics::*;
 
 // Re-export Velocity from player since it's shared

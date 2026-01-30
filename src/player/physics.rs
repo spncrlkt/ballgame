@@ -200,6 +200,70 @@ pub fn check_collisions(
     }
 }
 
+/// Handle player-to-player collisions (2v2 mode)
+/// Pushes players apart when they overlap, preventing stacking
+pub fn player_player_collision(
+    mut players: Query<(Entity, &mut Transform, &mut Velocity, &Sprite), With<Player>>,
+) {
+    // Collect all player data first to avoid borrow issues
+    let player_data: Vec<(Entity, Vec3, Vec2, Vec2)> = players
+        .iter()
+        .map(|(e, t, v, s)| {
+            (
+                e,
+                t.translation,
+                v.0,
+                s.custom_size.unwrap_or(PLAYER_SIZE),
+            )
+        })
+        .collect();
+
+    // Check all pairs for collision
+    for i in 0..player_data.len() {
+        for j in (i + 1)..player_data.len() {
+            let (entity_a, pos_a, vel_a, size_a) = &player_data[i];
+            let (entity_b, pos_b, vel_b, size_b) = &player_data[j];
+
+            let half_a = *size_a / 2.0;
+            let half_b = *size_b / 2.0;
+
+            let diff = pos_a.truncate() - pos_b.truncate();
+            let overlap_x = half_a.x + half_b.x - diff.x.abs();
+            let overlap_y = half_a.y + half_b.y - diff.y.abs();
+
+            // No collision
+            if overlap_x <= 0.0 || overlap_y <= 0.0 {
+                continue;
+            }
+
+            // Resolve collision - push apart equally
+            let push_dir = if diff.x.abs() > 0.01 {
+                diff.x.signum()
+            } else {
+                1.0 // Default push direction if exactly overlapping
+            };
+
+            // Only resolve horizontal overlap (players can pass over/under each other vertically)
+            if overlap_x < overlap_y {
+                let push_amount = overlap_x / 2.0 + COLLISION_EPSILON;
+
+                // Apply position correction to both players
+                if let Ok([(_, mut trans_a, mut vel_a_mut, _), (_, mut trans_b, mut vel_b_mut, _)]) =
+                    players.get_many_mut([*entity_a, *entity_b])
+                {
+                    trans_a.translation.x += push_dir * push_amount;
+                    trans_b.translation.x -= push_dir * push_amount;
+
+                    // Reduce relative velocity to prevent jitter
+                    let avg_vel_x = (vel_a.x + vel_b.x) / 2.0;
+                    vel_a_mut.0.x = avg_vel_x * 0.5 + vel_a.x * 0.5;
+                    vel_b_mut.0.x = avg_vel_x * 0.5 + vel_b.x * 0.5;
+                }
+            }
+        }
+    }
+}
+
 /// Handle double-click Start to reset settings to defaults
 /// Runs before respawn_player to detect double-click
 pub fn check_settings_reset(

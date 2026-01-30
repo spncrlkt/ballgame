@@ -11,9 +11,9 @@ use crate::ai::{
 };
 use crate::ball::{Ball, BallState};
 use crate::constants::*;
-use crate::events::{ControllerSource, EventBus, GameEvent, PlayerId};
+use crate::events::{CharacterId, ControllerSource, EventBus, GameEvent, PlayerId};
 use crate::levels::LevelDatabase;
-use crate::player::{Grounded, HoldingBall, HumanControlled, Player, TargetBasket, Team};
+use crate::player::{Character, Grounded, HoldingBall, HumanControlled, Player, TargetBasket, Team};
 use crate::scoring::CurrentLevel;
 use crate::world::Basket;
 
@@ -108,6 +108,7 @@ pub fn ai_navigation_update(
         (
             Entity,
             &Transform,
+            &Team,
             Option<&HoldingBall>,
             Option<&HumanControlled>,
         ),
@@ -124,7 +125,7 @@ pub fn ai_navigation_update(
     for (
         ai_entity,
         ai_transform,
-        team,
+        ai_team,
         ai_state,
         mut nav_state,
         target_basket,
@@ -155,12 +156,37 @@ pub fn ai_navigation_update(
             .find(|(_, b)| **b == target_basket.0)
             .map(|(t, _)| t.translation.truncate());
 
-        // Find opponent position (prefer human if present, otherwise any other player)
-        let opponent_pos = all_players
+        // Find nearest opponent (different team) - prefer ball carrier, then human, then closest
+        let opponents: Vec<(Entity, Vec2, bool, bool)> = all_players
             .iter()
-            .find(|(e, _, _, human)| *e != ai_entity && human.is_some())
-            .or_else(|| all_players.iter().find(|(e, _, _, _)| *e != ai_entity))
-            .map(|(_, t, _, _)| t.translation.truncate());
+            .filter(|(e, _, t, _, _)| *e != ai_entity && *t != ai_team)
+            .map(|(e, tr, _, holding, human)| {
+                (e, tr.translation.truncate(), holding.is_some(), human.is_some())
+            })
+            .collect();
+
+        let opponent_pos = opponents
+            .iter()
+            .filter(|(_, _, has_ball, _)| *has_ball)
+            .map(|(_, pos, _, _)| *pos)
+            .next()
+            .or_else(|| {
+                opponents
+                    .iter()
+                    .filter(|(_, _, _, is_human)| *is_human)
+                    .map(|(_, pos, _, _)| *pos)
+                    .next()
+            })
+            .or_else(|| {
+                opponents
+                    .iter()
+                    .min_by(|(_, pos_a, _, _), (_, pos_b, _, _)| {
+                        let dist_a = ai_pos.distance(*pos_a);
+                        let dist_b = ai_pos.distance(*pos_b);
+                        dist_a.partial_cmp(&dist_b).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|(_, pos, _, _)| *pos)
+            });
 
         // Get the AI's own basket (the one they're defending)
         // AI defends the opposite basket from what they're targeting
@@ -203,7 +229,7 @@ pub fn ai_navigation_update(
             } else {
                 // Fallback defensive position (old logic)
                 let defensive_y = ARENA_FLOOR_Y + 50.0;
-                match *team {
+                match *ai_team {
                     Team::Left => Vec2::new(-profile.defense_offset, defensive_y),
                     Team::Right => Vec2::new(profile.defense_offset, defensive_y),
                 }
@@ -416,6 +442,7 @@ pub fn ai_decision_update(
             Entity,
             &Transform,
             &Team,
+            Option<&Character>,
             &mut InputState,
             &mut AiState,
             &mut AiNavState,
@@ -429,6 +456,8 @@ pub fn ai_decision_update(
         (
             Entity,
             &Transform,
+            &Team,
+            Option<&Character>,
             Option<&HoldingBall>,
             Option<&HumanControlled>,
         ),
@@ -453,7 +482,8 @@ pub fn ai_decision_update(
     for (
         ai_entity,
         ai_transform,
-        team,
+        ai_team,
+        ai_character,
         mut input,
         mut ai_state,
         mut nav_state,
@@ -504,17 +534,52 @@ pub fn ai_decision_update(
             ai_state.ball_hold_time = 0.0;
         }
 
-        // Check if opponent (any other player) has ball
-        let opponent_has_ball = all_players
-            .iter()
-            .filter(|(e, _, _, _)| *e != ai_entity)
-            .any(|(_, _, h, _)| h.is_some());
+        // Collect opponents (different team) and teammates (same team, not self)
+        let mut opponents: Vec<(Entity, Vec2, bool, bool, Option<CharacterId>)> = Vec::new();
+        let mut teammate_pos: Option<Vec2> = None;
 
-        // Find opponent position (for defense/steal decisions)
-        let opponent_pos = all_players
+        for (e, tr, t, char_opt, holding_opt, human_opt) in &all_players {
+            if e == ai_entity {
+                continue;
+            }
+            let pos = tr.translation.truncate();
+            let char_id = char_opt.map(|c| c.0);
+
+            if t != ai_team {
+                // Opponent
+                opponents.push((e, pos, holding_opt.is_some(), human_opt.is_some(), char_id));
+            } else {
+                // Teammate (same team)
+                teammate_pos = Some(pos);
+            }
+        }
+
+        // Check if any opponent has ball
+        let opponent_has_ball = opponents.iter().any(|(_, _, has_ball, _, _)| *has_ball);
+
+        // Find nearest/most relevant opponent: prefer ball carrier, then human, then closest
+        let opponent_pos = opponents
             .iter()
-            .find(|(e, _, _, _)| *e != ai_entity)
-            .map(|(_, t, _, _)| t.translation.truncate());
+            .filter(|(_, _, has_ball, _, _)| *has_ball)
+            .map(|(_, pos, _, _, _)| *pos)
+            .next()
+            .or_else(|| {
+                opponents
+                    .iter()
+                    .filter(|(_, _, _, is_human, _)| *is_human)
+                    .map(|(_, pos, _, _, _)| *pos)
+                    .next()
+            })
+            .or_else(|| {
+                opponents
+                    .iter()
+                    .min_by(|(_, pos_a, _, _, _), (_, pos_b, _, _, _)| {
+                        let dist_a = ai_pos.distance(*pos_a);
+                        let dist_b = ai_pos.distance(*pos_b);
+                        dist_a.partial_cmp(&dist_b).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|(_, pos, _, _, _)| *pos)
+            });
 
         // Determine the target basket position based on team
         let target_basket_type = target_basket.0;
@@ -542,7 +607,7 @@ pub fn ai_decision_update(
         } else {
             // Fallback defensive position
             let defensive_y = ARENA_FLOOR_Y + 50.0;
-            match *team {
+            match *ai_team {
                 Team::Left => Vec2::new(-profile.defense_offset, defensive_y),
                 Team::Right => Vec2::new(profile.defense_offset, defensive_y),
             }
@@ -1303,6 +1368,32 @@ pub fn ai_decision_update(
             }
         }
 
+        // Teammate crowding avoidance: if too close to teammate, adjust movement
+        // This prevents AI teammates from bunching up on the same spot
+        if let Some(tm_pos) = teammate_pos {
+            let distance_to_teammate = ai_pos.distance(tm_pos);
+            if distance_to_teammate < MIN_TEAMMATE_SPACING {
+                // Too close to teammate - adjust movement to spread out
+                let dx_to_teammate = tm_pos.x - ai_pos.x;
+
+                // If moving toward teammate, reduce or reverse movement
+                if input.move_x * dx_to_teammate > 0.0 {
+                    // Moving toward teammate - try to stop or back off
+                    // Only back off if not chasing the ball or doing something urgent
+                    let is_urgent = matches!(
+                        ai_state.current_goal,
+                        AiGoal::ChaseBall | AiGoal::AttemptSteal | AiGoal::ChargeShot
+                    );
+
+                    if !is_urgent {
+                        // Reverse direction to maintain spacing
+                        input.move_x = -dx_to_teammate.signum() * 0.5;
+                    }
+                    // If urgent, continue toward goal but teammate avoidance is overridden
+                }
+            }
+        }
+
         // ChargeShot throw logic runs regardless of navigation
         // (navigation handles movement, this handles the actual throw)
         if ai_state.current_goal == AiGoal::ChargeShot && nav_controlling {
@@ -1397,20 +1488,36 @@ pub fn ai_decision_update(
         input.jump_buffer_timer = (input.jump_buffer_timer - dt).max(0.0);
 
         // Emit ControllerInput event for auditability
-        let player_id = match team {
-            Team::Left => PlayerId::L,
-            Team::Right => PlayerId::R,
-        };
-        event_bus.emit(GameEvent::ControllerInput {
-            player: player_id,
-            source: ControllerSource::Ai,
-            move_x: input.move_x,
-            jump: input.jump_held,
-            jump_pressed: input.jump_buffer_timer > 0.0,
-            throw: input.throw_held,
-            throw_released: input.throw_released,
-            pickup: input.pickup_pressed,
-        });
+        // Use new CharacterId if Character component present, otherwise fall back to legacy PlayerId
+        if let Some(char_comp) = ai_character {
+            event_bus.emit(GameEvent::ControllerInput2 {
+                character: char_comp.0,
+                source_id: crate::input::AI_SOURCE_ID_START, // AI uses a reserved source ID
+                move_x: input.move_x,
+                jump: input.jump_held,
+                jump_pressed: input.jump_buffer_timer > 0.0,
+                throw: input.throw_held,
+                throw_released: input.throw_released,
+                pickup: input.pickup_pressed,
+                pass: input.pass_pressed,
+            });
+        } else {
+            // Legacy fallback for entities without Character component
+            let player_id = match *ai_team {
+                Team::Left => PlayerId::L,
+                Team::Right => PlayerId::R,
+            };
+            event_bus.emit(GameEvent::ControllerInput {
+                player: player_id,
+                source: ControllerSource::Ai,
+                move_x: input.move_x,
+                jump: input.jump_held,
+                jump_pressed: input.jump_buffer_timer > 0.0,
+                throw: input.throw_held,
+                throw_released: input.throw_released,
+                pickup: input.pickup_pressed,
+            });
+        }
     }
 }
 

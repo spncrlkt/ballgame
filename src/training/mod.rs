@@ -15,5 +15,5 @@ pub use protocol::{ProtocolConfig, TrainingProtocol};
 pub use session::{
     GameSummary, SessionSummary, ensure_session_dir, print_session_summary, write_session_summary,
 };
-pub use settings::{LevelSelector, TrainingMode, TrainingSettings};
+pub use settings::{LevelSelector, TrainingGameMode, TrainingMode, TrainingSettings};
 pub use state::{GameResult, ReachabilityCollector, TrainingPhase, TrainingState, Winner};

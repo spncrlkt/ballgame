@@ -81,7 +81,7 @@ pub use replay::{
     update_replay_ui,
 };
 pub use run_summary::{FileCategory, FileEntry, NextStep, NextStepPriority, RunSummary};
-pub use scoring::{CurrentLevel, Score};
+pub use scoring::{CurrentLevel, GoalRecord, Score};
 pub use settings::{CurrentSettings, InitSettings, save_settings_system};
 pub use shooting::{ChargingShot, LastShotInfo};
 pub use snapshot::{

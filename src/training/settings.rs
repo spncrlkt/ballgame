@@ -42,12 +42,53 @@ impl std::fmt::Display for LevelSelector {
     }
 }
 
+/// Game mode for training
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum TrainingGameMode {
+    /// 1v1 mode (2 players)
+    #[default]
+    #[serde(rename = "1v1")]
+    OneVsOne,
+    /// 2v2 mode (4 players)
+    #[serde(rename = "2v2")]
+    TwoVsTwo,
+}
+
+impl TrainingGameMode {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "1v1" | "onevone" => Some(Self::OneVsOne),
+            "2v2" | "twovtwo" => Some(Self::TwoVsTwo),
+            _ => None,
+        }
+    }
+
+    pub fn character_count(&self) -> usize {
+        match self {
+            Self::OneVsOne => 2,
+            Self::TwoVsTwo => 4,
+        }
+    }
+}
+
+impl std::fmt::Display for TrainingGameMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OneVsOne => write!(f, "1v1"),
+            Self::TwoVsTwo => write!(f, "2v2"),
+        }
+    }
+}
+
 /// Training session settings
 #[derive(Debug, Clone, Resource, Serialize, Deserialize)]
 pub struct TrainingSettings {
     /// Training protocol (advanced-platform, pursuit, etc.)
     #[serde(default)]
     pub protocol: TrainingProtocol,
+    /// Game mode (1v1 or 2v2)
+    #[serde(default)]
+    pub game_mode: TrainingGameMode,
     /// Training mode (game or goal-by-goal)
     pub mode: TrainingMode,
     /// Number of iterations (games in Game mode, goals in Goal mode)
@@ -92,6 +133,7 @@ impl Default for TrainingSettings {
     fn default() -> Self {
         Self {
             protocol: TrainingProtocol::default(),
+            game_mode: TrainingGameMode::default(),
             mode: TrainingMode::Goal,
             iterations: 3,
             win_score: 1,
@@ -191,6 +233,16 @@ impl TrainingSettings {
                             "game" | "games" => self.mode = TrainingMode::Game,
                             "goal" | "goals" => self.mode = TrainingMode::Goal,
                             _ => {}
+                        }
+                        i += 1;
+                    }
+                }
+                "--game-mode" => {
+                    if let Some(val) = args.get(i + 1) {
+                        if let Some(game_mode) = TrainingGameMode::from_str(val) {
+                            self.game_mode = game_mode;
+                        } else {
+                            eprintln!("Warning: Unknown game mode '{}', using default (1v1, 2v2)", val);
                         }
                         i += 1;
                     }
@@ -337,6 +389,7 @@ MODES:
 
 OPTIONS:
     --protocol NAME            Training protocol (default: advanced-platform)
+    --game-mode MODE           Game mode: 1v1 or 2v2 (default: 1v1)
     -m, --mode MODE            Training mode: goal or game (default: goal)
     -n, --iterations N         Number of iterations (default: 5)
     -w, --win-score N          Points to win in game mode (default: 5)

@@ -384,6 +384,7 @@ fn main() {
                 ball::ball_spin,
                 ball::apply_velocity,
                 player::check_collisions,
+                player::player_player_collision,
                 ball::ball_collisions,
                 ball::ball_state_update,
                 ball::ball_player_collision,
@@ -392,6 +393,7 @@ fn main() {
                 steal::steal_cooldown_update,
                 shooting::update_shot_charge,
                 shooting::throw_ball,
+                ball::handle_pass,
                 scoring::check_scoring,
             )
                 .chain()

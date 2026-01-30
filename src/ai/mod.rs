@@ -133,6 +133,10 @@ pub fn copy_human_input(
         input_state.throw_released = true;
         human_input.throw_released = false;
     }
+    if human_input.pass_pressed {
+        input_state.pass_pressed = true;
+        human_input.pass_pressed = false;
+    }
 }
 
 /// Swap which player the human controls (Q key / L bumper).

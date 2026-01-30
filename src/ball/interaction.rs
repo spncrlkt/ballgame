@@ -137,6 +137,7 @@ pub fn ball_follow_holder(
 /// Handle ball pickup and instant steal attempts.
 /// All players read from their InputState component.
 /// Uses graduated steal difficulty: teams with more steals have reduced success chance.
+/// In 2v2: Only allows stealing from opponents (different team).
 pub fn pickup_ball(
     mut commands: Commands,
     mut steal_contest: ResMut<StealContest>,
@@ -160,6 +161,7 @@ pub fn pickup_ball(
             &ChargingShot,
             &mut Velocity,
             &mut StealCooldown,
+            &Team, // Added: need team to check for opponent-only stealing
         ),
         With<Player>,
     >,
@@ -222,7 +224,7 @@ pub fn pickup_ball(
         }
 
         // If no free ball nearby, check for steal opportunity
-        let mut nearest_defender_distance = f32::MAX;
+        let mut nearest_opponent_distance = f32::MAX;
         for (
             defender_entity,
             defender_transform,
@@ -230,10 +232,17 @@ pub fn pickup_ball(
             defender_charging,
             mut defender_velocity,
             mut defender_cooldown,
+            defender_team,
         ) in &mut holding_players
         {
+            // 2v2 rule: Can only steal from opponents (different team)
+            if team == defender_team {
+                // Same team - can't steal from teammate
+                continue;
+            }
+
             let distance = player_pos.distance(defender_transform.translation.truncate());
-            nearest_defender_distance = nearest_defender_distance.min(distance);
+            nearest_opponent_distance = nearest_opponent_distance.min(distance);
 
             if distance < STEAL_RANGE {
                 // Record the attempt BEFORE rolling for success
@@ -310,16 +319,17 @@ pub fn pickup_ball(
             }
         }
 
-        // Check for "near miss" - defender nearby but outside steal range
+        // Check for "near miss" - opponent nearby but outside steal range
         // This gives feedback to players who pressed steal too early
-        if nearest_defender_distance < STEAL_NEAR_MISS_RANGE {
+        // Only triggers if there's an opponent nearby (not a teammate)
+        if nearest_opponent_distance < STEAL_NEAR_MISS_RANGE {
             steal_contest.out_of_range_timer = STEAL_OUT_OF_RANGE_FLASH_DURATION;
             steal_contest.out_of_range_entity = Some(player_entity);
             // Short cooldown to prevent spam, but less punishing than actual failed steal
             cooldown.0 = STEAL_OUT_OF_RANGE_COOLDOWN;
             info!(
                 "STEAL OUT OF RANGE: {:?} at {:.1}px (need <{:.1}px)",
-                team, nearest_defender_distance, STEAL_RANGE
+                team, nearest_opponent_distance, STEAL_RANGE
             );
         }
     }

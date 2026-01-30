@@ -29,6 +29,7 @@ pub struct PlayerInput {
     pub throw_released: bool,        // R shoulder released - execute throw
     pub swap_pressed: bool,          // L shoulder / Q key - swap which player you control
     pub advance_level_pressed: bool, // L shoulder / Q key - advance to next level (Reachability)
+    pub pass_pressed: bool,          // East button / G key - pass to teammate (2v2)
 }
 
 /// Runs in Update to capture input state before it's cleared.
@@ -117,6 +118,16 @@ pub fn capture_input(
     {
         input.swap_pressed = true;
         input.advance_level_pressed = true;
+    }
+
+    // Pass (East button / G key) - pass to teammate in 2v2 mode
+    // Accumulate until consumed
+    if keyboard.just_pressed(KeyCode::KeyG)
+        || gamepads
+            .iter()
+            .any(|gp| gp.just_pressed(GamepadButton::East))
+    {
+        input.pass_pressed = true;
     }
 
     // Emit ControllerInput event to EventBus for auditability

@@ -216,6 +216,8 @@ pub const NAV_JUMP_APPROACH_DISTANCE: f32 = 20.0;
 /// Set very low (0.01) to allow AI to navigate to almost any platform - the reachability
 /// filter was blocking navigation to elevated platforms, causing AI to stay grounded
 pub const MIN_REACHABILITY_FOR_SHOT: f32 = 0.01;
+/// Minimum horizontal spacing between teammates to avoid crowding (2v2 mode)
+pub const MIN_TEAMMATE_SPACING: f32 = 80.0;
 // =============================================================================
 // AI DEFENSIVE BEHAVIOR
 // =============================================================================
