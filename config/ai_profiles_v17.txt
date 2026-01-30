@@ -1,0 +1,1147 @@
+# AI Profiles - Evolution v17 (64 profiles)
+#
+# DEPRECATION POLICY: Never remove profiles from this file.
+# Mark deprecated profiles with "# DEPRECATED" comment instead.
+# This preserves historical data for tournament analysis.
+#
+# WARMUP_SEED: v16_EvoAGPatie_Sniper
+#
+# Lineage:
+#   v1 = Original 5 profiles
+#   v2 = Top 4 from 25-profile tournament
+#   v3 = 50 variants, winner: v3_Rush_Patient (26.9%)
+#   v4 = 50 new variants based on v3 learnings
+#   v5-v6 = Experimental playstyles (Sniper, Brawler, Fortress, etc.)
+#   v7 = Single parameter variants from top performers
+#   v8-v9 = Randomized from successful parameter ranges
+#   v10 = Randomized from top v8/v9 performers
+#   v11 = Blends of top v10 performers
+#   v12 = Evolved from top 16 bracket finishers
+#   v17 = Top 16 seeds + 48 extreme archetype variants
+#
+# Source: db/bracket_20260129_190211.db
+# Source profiles: config/ai_profiles_v16.txt
+#
+# Archetype variants applied to top 8 winners:
+#   - Aggro: max aggression, tight pressure, fast steals
+#   - Zone: defensive, wide pressure, high IQ
+#   - Sniper: long range, high charge, patient positioning
+#   - Brawl: close range, quick shots, physical play
+#   - Speed: fast reactions, high button rate, aggressive
+#   - Patient: wait for quality shots, defensive positioning
+#
+# Generation method: scripts/generate_bracket_profiles.py
+
+# =============================================================================
+# TOP 16 PROTECTED SEEDS (from previous bracket)
+# =============================================================================
+
+# Seed 1
+profile: v16_EvoJZoneZo_Zone
+id: 8d53e929ee0a5daf
+position_tolerance: 24
+shoot_range: 518
+charge_min: 0.32
+charge_max: 0.80
+steal_range: 80
+defense_offset: 246
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.13
+button_presses_per_sec: 14
+position_patience: 0.51
+seek_threshold: 0.25
+
+# Seed 2
+profile: v16_EvoJZoneZo_Speed
+id: 8b80bbfc153c210a
+position_tolerance: 23
+shoot_range: 508
+charge_min: 0.32
+charge_max: 0.82
+steal_range: 77
+defense_offset: 261
+min_shot_quality: 0.31
+pressure_distance: 257
+aggression: 0.90
+defensive_iq: 0.92
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.26
+
+# Seed 3
+profile: v15_EvoDZoneSp_Speed
+id: 89bd6a74556c3b56
+position_tolerance: 25
+shoot_range: 560
+charge_min: 0.28
+charge_max: 0.64
+steal_range: 80
+defense_offset: 241
+min_shot_quality: 0.30
+pressure_distance: 242
+aggression: 0.90
+defensive_iq: 0.89
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+# Seed 4
+profile: v16_EvoAGPatie_Zone
+id: 2a60878c94e06305
+position_tolerance: 24
+shoot_range: 593
+charge_min: 0.25
+charge_max: 0.65
+steal_range: 80
+defense_offset: 228
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.06
+button_presses_per_sec: 15
+position_patience: 0.26
+seek_threshold: 0.05
+
+# Seed 5
+profile: v16_EvoQSpeedP_Sniper
+id: fb159622d64a1cf5
+position_tolerance: 25
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 200
+defense_offset: 226
+min_shot_quality: 0.35
+pressure_distance: 36
+aggression: 0.97
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 1.20
+seek_threshold: 0.05
+
+# Seed 6
+profile: v16_EvoDPatien_Zone
+id: 48ef2eb8f9e5d1b8
+position_tolerance: 25
+shoot_range: 552
+charge_min: 0.29
+charge_max: 0.73
+steal_range: 80
+defense_offset: 218
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.11
+button_presses_per_sec: 14
+position_patience: 1.45
+seek_threshold: 0.05
+
+# Seed 7
+profile: v15_EvoAG_Speed
+id: 0c710ce819de6ba3
+position_tolerance: 23
+shoot_range: 535
+charge_min: 0.27
+charge_max: 0.64
+steal_range: 134
+defense_offset: 228
+min_shot_quality: 0.27
+pressure_distance: 70
+aggression: 0.90
+defensive_iq: 0.58
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.16
+
+# Seed 8
+profile: v16_EvoDPatien_Patient
+id: d43a0b0e04debd25
+position_tolerance: 25
+shoot_range: 565
+charge_min: 0.28
+charge_max: 0.68
+steal_range: 118
+defense_offset: 227
+min_shot_quality: 0.40
+pressure_distance: 76
+aggression: 0.96
+defensive_iq: 0.85
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 1.50
+seek_threshold: 0.05
+
+# Seed 9
+profile: v16_EvoDZoneSp_Brawl
+id: 7052f2b51d1f1cf2
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 241
+min_shot_quality: 0.29
+pressure_distance: 238
+aggression: 0.92
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 19
+position_patience: 0.31
+seek_threshold: 0.15
+
+# Seed 10
+profile: v16_EvoDPatien_Aggro
+id: c6c3ba78cca91f50
+position_tolerance: 25
+shoot_range: 547
+charge_min: 0.27
+charge_max: 0.74
+steal_range: 200
+defense_offset: 222
+min_shot_quality: 0.40
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.88
+steal_reaction_time: 0.06
+button_presses_per_sec: 14
+position_patience: 0.25
+seek_threshold: 0.05
+
+# Seed 11
+profile: v14_EvoQSpeed_Patient
+id: de6d2c445e05e130
+position_tolerance: 25
+shoot_range: 545
+charge_min: 0.31
+charge_max: 0.71
+steal_range: 110
+defense_offset: 247
+min_shot_quality: 0.40
+pressure_distance: 90
+aggression: 0.93
+defensive_iq: 0.85
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 1.50
+seek_threshold: 0.05
+
+# Seed 12
+profile: v16_EvoDZoneSp_Speed
+id: 2534e55faf86589f
+position_tolerance: 26
+shoot_range: 545
+charge_min: 0.28
+charge_max: 0.65
+steal_range: 84
+defense_offset: 249
+min_shot_quality: 0.31
+pressure_distance: 235
+aggression: 0.90
+defensive_iq: 0.89
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+# Seed 13
+profile: v16_EvoQSpeedZ_Aggro
+id: 5ea6f32ac358d94a
+position_tolerance: 23
+shoot_range: 565
+charge_min: 0.33
+charge_max: 0.78
+steal_range: 200
+defense_offset: 247
+min_shot_quality: 0.30
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.89
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 0.25
+seek_threshold: 0.12
+
+# Seed 14
+profile: v16_EvoJZoneZo_Patient
+id: c90a9d5ed4f4d951
+position_tolerance: 25
+shoot_range: 539
+charge_min: 0.33
+charge_max: 0.82
+steal_range: 79
+defense_offset: 263
+min_shot_quality: 0.40
+pressure_distance: 257
+aggression: 0.31
+defensive_iq: 0.85
+steal_reaction_time: 0.13
+button_presses_per_sec: 13
+position_patience: 1.50
+seek_threshold: 0.05
+
+# Seed 15
+profile: v16_EvoAGPatie_Speed
+id: 7cc7ff16a749085f
+position_tolerance: 22
+shoot_range: 560
+charge_min: 0.24
+charge_max: 0.62
+steal_range: 200
+defense_offset: 226
+min_shot_quality: 0.37
+pressure_distance: 36
+aggression: 0.90
+defensive_iq: 0.83
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.05
+
+# Seed 16
+profile: v16_EvoDZoneSp_Aggro
+id: 0677bbe8c6616e72
+position_tolerance: 24
+shoot_range: 562
+charge_min: 0.28
+charge_max: 0.62
+steal_range: 200
+defense_offset: 229
+min_shot_quality: 0.31
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 19
+position_patience: 0.25
+seek_threshold: 0.14
+
+# =============================================================================
+# V17 EXTREME VARIANTS (48 profiles)
+# Generated from top 8 winners × 6 archetypes
+# =============================================================================
+
+profile: v17_EvoJZoneZo_Aggro
+id: 7a6807e474b6de37
+position_tolerance: 23
+shoot_range: 515
+charge_min: 0.32
+charge_max: 0.76
+steal_range: 200
+defense_offset: 258
+min_shot_quality: 0.30
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 13
+position_patience: 0.25
+seek_threshold: 0.25
+
+profile: v17_EvoJZoneZo_Zone
+id: 28d5e6ad69ec1bd7
+position_tolerance: 23
+shoot_range: 506
+charge_min: 0.31
+charge_max: 0.82
+steal_range: 80
+defense_offset: 250
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.14
+button_presses_per_sec: 14
+position_patience: 0.50
+seek_threshold: 0.26
+
+profile: v17_EvoJZoneZo_Sniper
+id: 90c395dc34544d50
+position_tolerance: 24
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 81
+defense_offset: 254
+min_shot_quality: 0.35
+pressure_distance: 241
+aggression: 0.31
+defensive_iq: 0.92
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 1.20
+seek_threshold: 0.25
+
+profile: v17_EvoJZoneZo_Brawl
+id: 2744d875a1833bf1
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 253
+min_shot_quality: 0.29
+pressure_distance: 239
+aggression: 0.30
+defensive_iq: 0.87
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 0.50
+seek_threshold: 0.26
+
+profile: v17_EvoJZoneZo_Speed
+id: 3521d16a20d74c9d
+position_tolerance: 25
+shoot_range: 528
+charge_min: 0.31
+charge_max: 0.80
+steal_range: 77
+defense_offset: 238
+min_shot_quality: 0.29
+pressure_distance: 243
+aggression: 0.90
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.25
+
+profile: v17_EvoJZoneZo_Patient
+id: 8e64e8201fdc645f
+position_tolerance: 24
+shoot_range: 540
+charge_min: 0.31
+charge_max: 0.83
+steal_range: 81
+defense_offset: 236
+min_shot_quality: 0.40
+pressure_distance: 258
+aggression: 0.29
+defensive_iq: 0.85
+steal_reaction_time: 0.13
+button_presses_per_sec: 15
+position_patience: 1.50
+seek_threshold: 0.05
+
+profile: v17_EvoJZoneZo_Aggro
+id: 7a6807e474b6de37
+position_tolerance: 24
+shoot_range: 505
+charge_min: 0.31
+charge_max: 0.79
+steal_range: 200
+defense_offset: 260
+min_shot_quality: 0.31
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.92
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 0.25
+seek_threshold: 0.25
+
+profile: v17_EvoJZoneZo_Zone
+id: 28d5e6ad69ec1bd7
+position_tolerance: 23
+shoot_range: 484
+charge_min: 0.32
+charge_max: 0.84
+steal_range: 80
+defense_offset: 260
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 19
+position_patience: 0.30
+seek_threshold: 0.25
+
+profile: v17_EvoJZoneZo_Sniper
+id: 90c395dc34544d50
+position_tolerance: 23
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 75
+defense_offset: 268
+min_shot_quality: 0.35
+pressure_distance: 244
+aggression: 0.87
+defensive_iq: 0.89
+steal_reaction_time: 0.05
+button_presses_per_sec: 19
+position_patience: 1.20
+seek_threshold: 0.27
+
+profile: v17_EvoJZoneZo_Brawl
+id: 2744d875a1833bf1
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 273
+min_shot_quality: 0.32
+pressure_distance: 253
+aggression: 0.94
+defensive_iq: 0.89
+steal_reaction_time: 0.05
+button_presses_per_sec: 19
+position_patience: 0.29
+seek_threshold: 0.25
+
+profile: v17_EvoJZoneZo_Speed
+id: 3521d16a20d74c9d
+position_tolerance: 22
+shoot_range: 500
+charge_min: 0.30
+charge_max: 0.78
+steal_range: 81
+defense_offset: 264
+min_shot_quality: 0.30
+pressure_distance: 263
+aggression: 0.90
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.26
+
+profile: v17_EvoJZoneZo_Patient
+id: 8e64e8201fdc645f
+position_tolerance: 24
+shoot_range: 506
+charge_min: 0.31
+charge_max: 0.78
+steal_range: 74
+defense_offset: 254
+min_shot_quality: 0.40
+pressure_distance: 245
+aggression: 0.88
+defensive_iq: 0.85
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 1.50
+seek_threshold: 0.05
+
+profile: v17_EvoDZoneSp_Aggro
+id: 5d9584224a6c70f2
+position_tolerance: 26
+shoot_range: 544
+charge_min: 0.29
+charge_max: 0.63
+steal_range: 200
+defense_offset: 234
+min_shot_quality: 0.30
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.85
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 0.25
+seek_threshold: 0.13
+
+profile: v17_EvoDZoneSp_Zone
+id: 848b5c5f470f964a
+position_tolerance: 24
+shoot_range: 551
+charge_min: 0.29
+charge_max: 0.66
+steal_range: 80
+defense_offset: 247
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+profile: v17_EvoDZoneSp_Sniper
+id: e801f66ae16e4108
+position_tolerance: 25
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 82
+defense_offset: 250
+min_shot_quality: 0.35
+pressure_distance: 235
+aggression: 0.88
+defensive_iq: 0.92
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 1.20
+seek_threshold: 0.14
+
+profile: v17_EvoDZoneSp_Brawl
+id: fa887ea36048f11f
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 237
+min_shot_quality: 0.30
+pressure_distance: 234
+aggression: 0.91
+defensive_iq: 0.92
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.31
+seek_threshold: 0.14
+
+profile: v17_EvoDZoneSp_Speed
+id: 92ab758f41c077a7
+position_tolerance: 25
+shoot_range: 561
+charge_min: 0.28
+charge_max: 0.65
+steal_range: 78
+defense_offset: 243
+min_shot_quality: 0.30
+pressure_distance: 246
+aggression: 0.90
+defensive_iq: 0.91
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+profile: v17_EvoDZoneSp_Patient
+id: 25c5a6109da32445
+position_tolerance: 25
+shoot_range: 555
+charge_min: 0.27
+charge_max: 0.65
+steal_range: 79
+defense_offset: 241
+min_shot_quality: 0.40
+pressure_distance: 250
+aggression: 0.92
+defensive_iq: 0.85
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 1.50
+seek_threshold: 0.05
+
+profile: v17_EvoAGPatie_Aggro
+id: b51c5f17d16fd8e0
+position_tolerance: 24
+shoot_range: 568
+charge_min: 0.24
+charge_max: 0.65
+steal_range: 200
+defense_offset: 231
+min_shot_quality: 0.30
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 15
+position_patience: 0.25
+seek_threshold: 0.05
+
+profile: v17_EvoAGPatie_Zone
+id: ac95ef0b5b4b2e60
+position_tolerance: 24
+shoot_range: 612
+charge_min: 0.26
+charge_max: 0.67
+steal_range: 80
+defense_offset: 223
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.06
+button_presses_per_sec: 14
+position_patience: 0.25
+seek_threshold: 0.05
+
+profile: v17_EvoAGPatie_Sniper
+id: a895f1081f17c281
+position_tolerance: 24
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 76
+defense_offset: 217
+min_shot_quality: 0.35
+pressure_distance: 256
+aggression: 0.31
+defensive_iq: 0.88
+steal_reaction_time: 0.06
+button_presses_per_sec: 15
+position_patience: 1.20
+seek_threshold: 0.05
+
+profile: v17_EvoAGPatie_Brawl
+id: a66845527fd1d2dd
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 227
+min_shot_quality: 0.30
+pressure_distance: 260
+aggression: 0.29
+defensive_iq: 0.91
+steal_reaction_time: 0.06
+button_presses_per_sec: 15
+position_patience: 0.26
+seek_threshold: 0.05
+
+profile: v17_EvoAGPatie_Speed
+id: 103ed1ace61fd8cd
+position_tolerance: 25
+shoot_range: 589
+charge_min: 0.25
+charge_max: 0.68
+steal_range: 82
+defense_offset: 239
+min_shot_quality: 0.30
+pressure_distance: 262
+aggression: 0.90
+defensive_iq: 0.89
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.05
+
+profile: v17_EvoAGPatie_Patient
+id: b0bcd7a5ec964b20
+position_tolerance: 24
+shoot_range: 619
+charge_min: 0.26
+charge_max: 0.67
+steal_range: 80
+defense_offset: 219
+min_shot_quality: 0.40
+pressure_distance: 246
+aggression: 0.31
+defensive_iq: 0.85
+steal_reaction_time: 0.06
+button_presses_per_sec: 15
+position_patience: 1.50
+seek_threshold: 0.05
+
+profile: v17_EvoQSpeedP_Aggro
+id: a892a864842bcbb1
+position_tolerance: 24
+shoot_range: 676
+charge_min: 0.35
+charge_max: 0.92
+steal_range: 200
+defense_offset: 234
+min_shot_quality: 0.36
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 0.25
+seek_threshold: 0.05
+
+profile: v17_EvoQSpeedP_Zone
+id: 8c511a918234a426
+position_tolerance: 26
+shoot_range: 700
+charge_min: 0.36
+charge_max: 0.91
+steal_range: 80
+defense_offset: 219
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 1.15
+seek_threshold: 0.05
+
+profile: v17_EvoQSpeedP_Sniper
+id: a3a93a32f2d30e2c
+position_tolerance: 26
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 196
+defense_offset: 217
+min_shot_quality: 0.35
+pressure_distance: 35
+aggression: 0.94
+defensive_iq: 0.88
+steal_reaction_time: 0.06
+button_presses_per_sec: 19
+position_patience: 1.20
+seek_threshold: 0.05
+
+profile: v17_EvoQSpeedP_Brawl
+id: a1fca3da8bb5bfc9
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 224
+min_shot_quality: 0.33
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 19
+position_patience: 1.14
+seek_threshold: 0.05
+
+profile: v17_EvoQSpeedP_Speed
+id: f271aece00ef27af
+position_tolerance: 24
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.91
+steal_range: 200
+defense_offset: 216
+min_shot_quality: 0.35
+pressure_distance: 35
+aggression: 0.90
+defensive_iq: 0.83
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.05
+
+profile: v17_EvoQSpeedP_Patient
+id: d93bdeb30f477073
+position_tolerance: 26
+shoot_range: 700
+charge_min: 0.36
+charge_max: 0.92
+steal_range: 196
+defense_offset: 221
+min_shot_quality: 0.40
+pressure_distance: 38
+aggression: 0.94
+defensive_iq: 0.85
+steal_reaction_time: 0.06
+button_presses_per_sec: 19
+position_patience: 1.50
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Aggro
+id: 84749cb54a3d816a
+position_tolerance: 26
+shoot_range: 545
+charge_min: 0.28
+charge_max: 0.77
+steal_range: 200
+defense_offset: 209
+min_shot_quality: 0.29
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 13
+position_patience: 0.25
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Zone
+id: 21a18c57d1ca4652
+position_tolerance: 25
+shoot_range: 577
+charge_min: 0.28
+charge_max: 0.76
+steal_range: 80
+defense_offset: 217
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 1.45
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Sniper
+id: 452cbc1035653d9d
+position_tolerance: 25
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 83
+defense_offset: 225
+min_shot_quality: 0.35
+pressure_distance: 248
+aggression: 0.29
+defensive_iq: 0.86
+steal_reaction_time: 0.11
+button_presses_per_sec: 13
+position_patience: 1.20
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Brawl
+id: 70a59ebb0f27a870
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 227
+min_shot_quality: 0.30
+pressure_distance: 247
+aggression: 0.29
+defensive_iq: 0.87
+steal_reaction_time: 0.11
+button_presses_per_sec: 13
+position_patience: 1.50
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Speed
+id: 007f1a6b636b89ef
+position_tolerance: 25
+shoot_range: 545
+charge_min: 0.28
+charge_max: 0.75
+steal_range: 76
+defense_offset: 219
+min_shot_quality: 0.30
+pressure_distance: 261
+aggression: 0.90
+defensive_iq: 0.92
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Patient
+id: 08a6efefee751220
+position_tolerance: 24
+shoot_range: 571
+charge_min: 0.28
+charge_max: 0.74
+steal_range: 82
+defense_offset: 215
+min_shot_quality: 0.40
+pressure_distance: 251
+aggression: 0.30
+defensive_iq: 0.85
+steal_reaction_time: 0.11
+button_presses_per_sec: 14
+position_patience: 1.50
+seek_threshold: 0.05
+
+profile: v17_EvoAGSpeed_Aggro
+id: 4766e9ae7765a887
+position_tolerance: 24
+shoot_range: 519
+charge_min: 0.27
+charge_max: 0.67
+steal_range: 200
+defense_offset: 217
+min_shot_quality: 0.27
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.57
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 0.25
+seek_threshold: 0.16
+
+profile: v17_EvoAGSpeed_Zone
+id: 661e68b958c4a0cf
+position_tolerance: 23
+shoot_range: 532
+charge_min: 0.27
+charge_max: 0.63
+steal_range: 80
+defense_offset: 238
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 19
+position_patience: 0.31
+seek_threshold: 0.16
+
+profile: v17_EvoAGSpeed_Sniper
+id: 910a76b1d4e2db7e
+position_tolerance: 22
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 136
+defense_offset: 237
+min_shot_quality: 0.35
+pressure_distance: 72
+aggression: 0.88
+defensive_iq: 0.59
+steal_reaction_time: 0.05
+button_presses_per_sec: 19
+position_patience: 1.20
+seek_threshold: 0.17
+
+profile: v17_EvoAGSpeed_Brawl
+id: 7c0d38f95f3c3433
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 238
+min_shot_quality: 0.27
+pressure_distance: 67
+aggression: 0.91
+defensive_iq: 0.60
+steal_reaction_time: 0.05
+button_presses_per_sec: 19
+position_patience: 0.30
+seek_threshold: 0.16
+
+profile: v17_EvoAGSpeed_Speed
+id: bbf72bdaf76de2af
+position_tolerance: 24
+shoot_range: 527
+charge_min: 0.26
+charge_max: 0.61
+steal_range: 132
+defense_offset: 228
+min_shot_quality: 0.26
+pressure_distance: 70
+aggression: 0.90
+defensive_iq: 0.61
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.15
+
+profile: v17_EvoAGSpeed_Patient
+id: 17a622641c64e08e
+position_tolerance: 23
+shoot_range: 561
+charge_min: 0.26
+charge_max: 0.62
+steal_range: 138
+defense_offset: 220
+min_shot_quality: 0.40
+pressure_distance: 71
+aggression: 0.87
+defensive_iq: 0.85
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 1.50
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Aggro
+id: 84749cb54a3d816a
+position_tolerance: 26
+shoot_range: 558
+charge_min: 0.29
+charge_max: 0.65
+steal_range: 200
+defense_offset: 238
+min_shot_quality: 0.39
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.83
+steal_reaction_time: 0.06
+button_presses_per_sec: 13
+position_patience: 0.25
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Zone
+id: 21a18c57d1ca4652
+position_tolerance: 26
+shoot_range: 591
+charge_min: 0.29
+charge_max: 0.68
+steal_range: 80
+defense_offset: 221
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 1.49
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Sniper
+id: 452cbc1035653d9d
+position_tolerance: 25
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 114
+defense_offset: 216
+min_shot_quality: 0.35
+pressure_distance: 79
+aggression: 0.96
+defensive_iq: 0.88
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 1.20
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Brawl
+id: 70a59ebb0f27a870
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 227
+min_shot_quality: 0.40
+pressure_distance: 73
+aggression: 0.93
+defensive_iq: 0.84
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 1.45
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Speed
+id: 007f1a6b636b89ef
+position_tolerance: 25
+shoot_range: 577
+charge_min: 0.28
+charge_max: 0.68
+steal_range: 123
+defense_offset: 220
+min_shot_quality: 0.39
+pressure_distance: 77
+aggression: 0.90
+defensive_iq: 0.85
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.05
+
+profile: v17_EvoDPatien_Patient
+id: 08a6efefee751220
+position_tolerance: 24
+shoot_range: 565
+charge_min: 0.27
+charge_max: 0.68
+steal_range: 117
+defense_offset: 226
+min_shot_quality: 0.40
+pressure_distance: 76
+aggression: 0.95
+defensive_iq: 0.85
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 1.50
+seek_threshold: 0.05
+

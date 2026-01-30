@@ -7,6 +7,7 @@ Multi-step processes for development, testing, and analysis. Each workflow shows
 | Workflow | Entry Point | Purpose |
 |----------|-------------|---------|
 | [Training & Analysis](#training--analysis) | `cargo run --bin training` | Play vs AI, analyze sessions |
+| [Offline Training](#offline-training-manual-playtesting) | `tools/offline/manual_todo.md` | Structured playtesting vs champions |
 | [Ghost Testing](#ghost-testing) | `cargo run --bin run-ghost` | Test AI against recorded play |
 | [Tournament Simulation](#tournament-simulation) | `cargo run --bin simulate -- --tournament` | AI vs AI tournaments |
 | [Bracket Tournament](#bracket-tournament) | `cargo run --bin simulate -- --bracket` | Elimination bracket tournaments |
@@ -85,6 +86,75 @@ FROM matches GROUP BY right_profile;
 ```
 
 See `docs/guides/TRAINING.md` for full SQL examples.
+
+---
+
+## Offline Training (Manual Playtesting)
+
+Structured human playtesting against top tournament profiles for debug data collection.
+
+### Entry Point
+
+```
+tools/offline/manual_todo.md
+```
+
+### Purpose
+
+- Collect reachability traces for heatmap generation
+- Test AI behavior against tournament-proven profiles
+- Gather LOS/shot quality data for balance tuning
+- Identify AI navigation issues
+
+### Workflow Chain
+
+```
+manual_todo.md → training (--profiles-file) → analyze → [merge DBs] → combined report
+```
+
+### Step 1: Load Champions Profiles
+
+```bash
+cargo run --bin training -- \
+  --profiles-file config/ai_profiles_champions.txt \
+  --profile T17_v17_EvoAGPatie_Speed \
+  --level "Arena"
+```
+
+### Step 2: Follow Per-Level Checklist
+
+See `tools/offline/manual_todo.md` for:
+- Level rotation plan (10 champions across 12 levels)
+- Per-level tasks (reachability, LOS, AI stress)
+- Coverage targets
+
+### Step 3: Analyze Session
+
+```bash
+cargo run --bin analyze -- --training-db db/training.db
+```
+
+### Step 4: Merge Multiple Sessions (Optional)
+
+```bash
+python3 offline_training/merge_training_dbs.py \
+  --list offline_training/db_list.txt \
+  --out db/combined_offline_training.db
+
+cargo run --bin analyze -- --training-db db/combined_offline_training.db
+```
+
+### Top 10 Champions (Reference)
+
+| Rank | Profile | Record |
+|------|---------|--------|
+| 1 | T17_v15_EvoAG_Speed | 10-2 |
+| 2 | T14_v13_EvoD_Patient | 8-2 |
+| 3 | T17_v17_EvoAGPatie_Speed | 7-0 |
+| 4 | T15_v15_EvoJZone_Aggro | 6-2 |
+| 5 | T16_v14_EvoQSpeed_Patient | 5-2 |
+
+Full list in `tools/offline/champions_profiles.txt`.
 
 ---
 

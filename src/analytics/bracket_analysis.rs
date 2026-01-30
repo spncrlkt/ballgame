@@ -17,6 +17,8 @@ pub struct BracketTournament {
     pub entrant_count: u32,
     pub champion_profile: Option<String>,
     pub is_complete: bool,
+    /// Profiles file used for this tournament (from session config)
+    pub profiles_file: Option<String>,
 }
 
 /// Bracket entry with standings
@@ -254,13 +256,27 @@ pub fn load_latest_bracket(db_path: &Path) -> Result<Option<BracketReport>> {
 
 /// Load a specific bracket tournament by ID
 pub fn load_bracket_tournament(conn: &Connection, tournament_id: i64) -> Result<BracketReport> {
-    // Load tournament metadata
+    // Load tournament metadata with session config
     let tournament = conn.query_row(
-        r#"SELECT id, session_id, format_best_of, format_score_limit, format_duration_limit,
-                  seeding_method, entrant_count, champion_profile, is_complete
-           FROM bracket_tournaments WHERE id = ?1"#,
+        r#"SELECT bt.id, bt.session_id, bt.format_best_of, bt.format_score_limit, bt.format_duration_limit,
+                  bt.seeding_method, bt.entrant_count, bt.champion_profile, bt.is_complete, s.config_json
+           FROM bracket_tournaments bt
+           LEFT JOIN sessions s ON s.id = bt.session_id
+           WHERE bt.id = ?1"#,
         params![tournament_id],
         |row| {
+            let config_json: Option<String> = row.get(9)?;
+            let profiles_file = config_json.and_then(|json| {
+                // Parse profiles_file from JSON config
+                // Format: {"profiles_file":"config/ai_profiles_v13.txt",...}
+                if let Some(start) = json.find("\"profiles_file\":\"") {
+                    let start = start + 17; // length of "\"profiles_file\":\""
+                    if let Some(end) = json[start..].find('"') {
+                        return Some(json[start..start + end].to_string());
+                    }
+                }
+                None
+            });
             Ok(BracketTournament {
                 id: row.get(0)?,
                 session_id: row.get(1)?,
@@ -271,6 +287,7 @@ pub fn load_bracket_tournament(conn: &Connection, tournament_id: i64) -> Result<
                 entrant_count: row.get(6)?,
                 champion_profile: row.get(7)?,
                 is_complete: row.get::<_, i32>(8)? != 0,
+                profiles_file,
             })
         },
     )?;
@@ -410,14 +427,25 @@ pub fn list_bracket_tournaments(db_path: &Path) -> Result<Vec<BracketTournament>
     let conn = Connection::open(db_path)?;
 
     let mut stmt = conn.prepare(
-        r#"SELECT id, session_id, format_best_of, format_score_limit, format_duration_limit,
-                  seeding_method, entrant_count, champion_profile, is_complete
-           FROM bracket_tournaments
-           ORDER BY id DESC"#,
+        r#"SELECT bt.id, bt.session_id, bt.format_best_of, bt.format_score_limit, bt.format_duration_limit,
+                  bt.seeding_method, bt.entrant_count, bt.champion_profile, bt.is_complete, s.config_json
+           FROM bracket_tournaments bt
+           LEFT JOIN sessions s ON s.id = bt.session_id
+           ORDER BY bt.id DESC"#,
     )?;
 
     let tournaments = stmt
         .query_map([], |row| {
+            let config_json: Option<String> = row.get(9)?;
+            let profiles_file = config_json.and_then(|json| {
+                if let Some(start) = json.find("\"profiles_file\":\"") {
+                    let start = start + 17;
+                    if let Some(end) = json[start..].find('"') {
+                        return Some(json[start..start + end].to_string());
+                    }
+                }
+                None
+            });
             Ok(BracketTournament {
                 id: row.get(0)?,
                 session_id: row.get(1)?,
@@ -428,6 +456,7 @@ pub fn list_bracket_tournaments(db_path: &Path) -> Result<Vec<BracketTournament>
                 entrant_count: row.get(6)?,
                 champion_profile: row.get(7)?,
                 is_complete: row.get::<_, i32>(8)? != 0,
+                profiles_file,
             })
         })?
         .collect::<Result<Vec<_>>>()?;

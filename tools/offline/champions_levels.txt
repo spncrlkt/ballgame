@@ -1,0 +1,6 @@
+# Tournament of Champions levels (with full AI heatmaps)
+Open Floor
+Pursuit Arena
+Pursuit Arena 2
+Skyway
+Slopes

@@ -231,24 +231,28 @@ impl RunSummary {
             }
         }
 
-        // Next steps section
+        // Bottom border (close the box before next steps)
+        print_border(BOTTOM_LEFT, BOTTOM_RIGHT);
+
+        // Next steps section - printed OUTSIDE the box for easy copy/paste
         if !self.next_steps.is_empty() {
-            print_separator();
-            print_line("NEXT STEPS");
-            print_line_chars(THIN_HORIZONTAL, 10);
+            println!();
+            println!("NEXT STEPS");
+            println!("{}", THIN_HORIZONTAL.to_string().repeat(10));
 
             for (i, step) in self.next_steps.iter().enumerate() {
                 if i > 0 {
-                    print_empty_line();
+                    println!();
                 }
                 let bullet = step.priority.bullet();
-                print_line(&format!("{} {}", bullet, step.command));
-                print_line(&format!("  {}", step.description));
+                println!("{} {}", bullet, step.description);
+                println!();
+                // Print command without box edges so it can be copied directly
+                for line in step.command.lines() {
+                    println!("  {}", line);
+                }
             }
         }
-
-        // Bottom border
-        print_border(BOTTOM_LEFT, BOTTOM_RIGHT);
 
         println!();
     }
@@ -336,7 +340,19 @@ fn print_centered(text: &str) {
 fn print_line(text: &str) {
     let content_width = BOX_WIDTH - 4; // Account for borders and padding
 
-    // Handle multi-line by wrapping
+    // Handle embedded newlines by splitting first
+    for segment in text.split('\n') {
+        print_line_segment(segment, content_width);
+    }
+}
+
+/// Print a single line segment (no newlines) with word wrapping
+fn print_line_segment(text: &str, content_width: usize) {
+    if text.is_empty() {
+        print_empty_line();
+        return;
+    }
+
     let mut remaining = text;
     while !remaining.is_empty() {
         let (line, rest) = if remaining.chars().count() <= content_width {

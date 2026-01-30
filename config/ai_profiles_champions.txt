@@ -1,0 +1,1194 @@
+# AI Profiles - Tournament of Champions (64 profiles)
+#
+# DEPRECATION POLICY: Never remove profiles from this file.
+# Mark deprecated profiles with "# DEPRECATED" comment instead.
+# This preserves historical data for tournament analysis.
+#
+# WARMUP_SEED: T14_v14_EvoQSpeed_Patient
+#
+# Tournament of Champions: 64-profile bracket featuring the top 16 finishers
+# from each of the last 4 bracket tournaments (v14, v15, v16, v17).
+#
+# Duplicates allowed: If a profile made top 16 in multiple tournaments, it gets
+# multiple entries representing its performance in each era.
+#
+# Source Tournaments:
+#   T14: db/bracket_20260129_184607.db (Champion: v13_EvoAN_Speed)
+#   T15: db/bracket_20260129_185808.db (Champion: v15_EvoJAggro_Patient)
+#   T16: db/bracket_20260129_190211.db (Champion: v15_EvoDZoneSp_Speed)
+#   T17: db/bracket_20260129_191644.db (Champion: v15_EvoAG_Speed)
+#
+# Generation method: Manual extraction from bracket results
+
+# =============================================================================
+# T14 ENTRIES (from v14 tournament top 16)
+# Source: db/bracket_20260129_184607.db
+# =============================================================================
+
+# T14 Seed 1 - v14_EvoQSpeed_Patient
+profile: T14_v14_EvoQSpeed_Patient
+id: 72a8e1c4b3d94f01
+position_tolerance: 25
+shoot_range: 545
+charge_min: 0.31
+charge_max: 0.71
+steal_range: 110
+defense_offset: 247
+min_shot_quality: 0.40
+pressure_distance: 90
+aggression: 0.93
+defensive_iq: 0.85
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T14 Seed 2 - v13_EvoAN_Speed (CHAMPION)
+profile: T14_v13_EvoAN_Speed
+id: 83b9d2e5c4a06f12
+position_tolerance: 25
+shoot_range: 586
+charge_min: 0.30
+charge_max: 0.66
+steal_range: 121
+defense_offset: 250
+min_shot_quality: 0.27
+pressure_distance: 70
+aggression: 0.90
+defensive_iq: 0.50
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.15
+
+# T14 Seed 3 - v14_EvoJ_Zone
+profile: T14_v14_EvoJ_Zone
+id: 94cae3f6d5b17023
+position_tolerance: 25
+shoot_range: 529
+charge_min: 0.32
+charge_max: 0.78
+steal_range: 80
+defense_offset: 245
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.13
+button_presses_per_sec: 13
+position_patience: 0.54
+seek_threshold: 0.26
+
+# T14 Seed 4 - v12_Evo_AG
+profile: T14_v12_Evo_AG
+id: a5dbf407e6c28134
+position_tolerance: 24
+shoot_range: 556
+charge_min: 0.27
+charge_max: 0.66
+steal_range: 132
+defense_offset: 236
+min_shot_quality: 0.27
+pressure_distance: 73
+aggression: 0.90
+defensive_iq: 0.56
+steal_reaction_time: 0.11
+button_presses_per_sec: 14
+position_patience: 0.42
+seek_threshold: 0.16
+
+# T14 Seed 5 - v14_EvoJ_Aggro
+profile: T14_v14_EvoJ_Aggro
+id: b6ecg518f7d39245
+position_tolerance: 26
+shoot_range: 520
+charge_min: 0.31
+charge_max: 0.76
+steal_range: 200
+defense_offset: 245
+min_shot_quality: 0.10
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.62
+steal_reaction_time: 0.06
+button_presses_per_sec: 13
+position_patience: 0.25
+seek_threshold: 0.25
+
+# T14 Seed 6 - v14_EvoAG_Patient
+profile: T14_v14_EvoAG_Patient
+id: c7fdh629g8e4a356
+position_tolerance: 24
+shoot_range: 576
+charge_min: 0.26
+charge_max: 0.65
+steal_range: 134
+defense_offset: 244
+min_shot_quality: 0.40
+pressure_distance: 71
+aggression: 0.93
+defensive_iq: 0.85
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T14 Seed 7 - v14_EvoDZone_Speed
+profile: T14_v14_EvoDZone_Speed
+id: d8gei73ah9f5b467
+position_tolerance: 24
+shoot_range: 580
+charge_min: 0.28
+charge_max: 0.65
+steal_range: 79
+defense_offset: 244
+min_shot_quality: 0.29
+pressure_distance: 252
+aggression: 0.90
+defensive_iq: 0.87
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+# T14 Seed 8 - v14_EvoQSpeed_Zone
+profile: T14_v14_EvoQSpeed_Zone
+id: e9hfj84bi0g6c578
+position_tolerance: 23
+shoot_range: 578
+charge_min: 0.33
+charge_max: 0.76
+steal_range: 80
+defense_offset: 237
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.31
+seek_threshold: 0.12
+
+# T14 Seed 9 - v13_EvoAR_Brawl
+profile: T14_v13_EvoAR_Brawl
+id: f0igk95cj1h7d689
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 236
+min_shot_quality: 0.24
+pressure_distance: 75
+aggression: 0.93
+defensive_iq: 0.55
+steal_reaction_time: 0.11
+button_presses_per_sec: 14
+position_patience: 0.44
+seek_threshold: 0.16
+
+# T14 Seed 10 - v13_EvoQ_Speed
+profile: T14_v13_EvoQ_Speed
+id: g1jhl06dk2i8e79a
+position_tolerance: 24
+shoot_range: 564
+charge_min: 0.32
+charge_max: 0.73
+steal_range: 115
+defense_offset: 237
+min_shot_quality: 0.29
+pressure_distance: 92
+aggression: 0.90
+defensive_iq: 0.55
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.12
+
+# T14 Seed 11 - v14_EvoAG_Speed
+profile: T14_v14_EvoAG_Speed
+id: h2kim17el3j9f8ab
+position_tolerance: 24
+shoot_range: 529
+charge_min: 0.26
+charge_max: 0.64
+steal_range: 137
+defense_offset: 239
+min_shot_quality: 0.27
+pressure_distance: 71
+aggression: 0.90
+defensive_iq: 0.56
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.16
+
+# T14 Seed 12 - v14_EvoARZone_Zone
+profile: T14_v14_EvoARZone_Zone
+id: i3ljn28fm4ka09bc
+position_tolerance: 23
+shoot_range: 547
+charge_min: 0.27
+charge_max: 0.65
+steal_range: 80
+defense_offset: 234
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.11
+button_presses_per_sec: 14
+position_patience: 0.43
+seek_threshold: 0.18
+
+# T14 Seed 13 - v14_EvoYZone_Patient
+profile: T14_v14_EvoYZone_Patient
+id: j4mko39gn5lb1acd
+position_tolerance: 25
+shoot_range: 577
+charge_min: 0.33
+charge_max: 0.80
+steal_range: 80
+defense_offset: 261
+min_shot_quality: 0.40
+pressure_distance: 241
+aggression: 0.30
+defensive_iq: 0.85
+steal_reaction_time: 0.14
+button_presses_per_sec: 12
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T14 Seed 14 - v14_EvoYZone_Speed
+profile: T14_v14_EvoYZone_Speed
+id: k5nlp4aho6mc2bde
+position_tolerance: 24
+shoot_range: 561
+charge_min: 0.32
+charge_max: 0.82
+steal_range: 82
+defense_offset: 256
+min_shot_quality: 0.31
+pressure_distance: 245
+aggression: 0.90
+defensive_iq: 0.89
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.13
+
+# T14 Seed 15 - v14_EvoQPatien_Sniper
+profile: T14_v14_EvoQPatien_Sniper
+id: l6omq5bip7nd3cef
+position_tolerance: 23
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 122
+defense_offset: 243
+min_shot_quality: 0.35
+pressure_distance: 81
+aggression: 0.91
+defensive_iq: 0.88
+steal_reaction_time: 0.14
+button_presses_per_sec: 13
+position_patience: 1.20
+seek_threshold: 0.05
+
+# T14 Seed 16 - v13_EvoD_Patient
+profile: T14_v13_EvoD_Patient
+id: m7pnr6cjq8oe4dfg
+position_tolerance: 25
+shoot_range: 553
+charge_min: 0.28
+charge_max: 0.71
+steal_range: 122
+defense_offset: 229
+min_shot_quality: 0.40
+pressure_distance: 75
+aggression: 0.95
+defensive_iq: 0.85
+steal_reaction_time: 0.11
+button_presses_per_sec: 14
+position_patience: 1.50
+seek_threshold: 0.05
+
+# =============================================================================
+# T15 ENTRIES (from v15 tournament top 16)
+# Source: db/bracket_20260129_185808.db
+# =============================================================================
+
+# T15 Seed 1 - v15_EvoAGPatie_Aggro
+profile: T15_v15_EvoAGPatie_Aggro
+id: n8qos7dkr9pf5egh
+position_tolerance: 23
+shoot_range: 585
+charge_min: 0.25
+charge_max: 0.64
+steal_range: 200
+defense_offset: 235
+min_shot_quality: 0.38
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.82
+steal_reaction_time: 0.06
+button_presses_per_sec: 14
+position_patience: 0.25
+seek_threshold: 0.05
+
+# T15 Seed 2 - v15_EvoQSpeedP_Aggro
+profile: T15_v15_EvoQSpeedP_Aggro
+id: o9rpt8elsaqg6fhi
+position_tolerance: 26
+shoot_range: 533
+charge_min: 0.32
+charge_max: 0.70
+steal_range: 200
+defense_offset: 238
+min_shot_quality: 0.40
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 0.25
+seek_threshold: 0.05
+
+# T15 Seed 3 - v15_EvoJAggro_Patient (CHAMPION)
+profile: T15_v15_EvoJAggro_Patient
+id: pasqu9fmtbrh7gij
+position_tolerance: 25
+shoot_range: 523
+charge_min: 0.31
+charge_max: 0.80
+steal_range: 196
+defense_offset: 235
+min_shot_quality: 0.40
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.85
+steal_reaction_time: 0.06
+button_presses_per_sec: 13
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T15 Seed 4 - v15_EvoQSpeedZ_Speed
+profile: T15_v15_EvoQSpeedZ_Speed
+id: qbtrv0gnucsi8hjk
+position_tolerance: 23
+shoot_range: 562
+charge_min: 0.34
+charge_max: 0.79
+steal_range: 84
+defense_offset: 247
+min_shot_quality: 0.31
+pressure_distance: 257
+aggression: 0.90
+defensive_iq: 0.88
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.12
+
+# T15 Seed 5 - v14_EvoDZone_Speed
+profile: T15_v14_EvoDZone_Speed
+id: rcusw1hovdtj9ikl
+position_tolerance: 24
+shoot_range: 580
+charge_min: 0.28
+charge_max: 0.65
+steal_range: 79
+defense_offset: 244
+min_shot_quality: 0.29
+pressure_distance: 252
+aggression: 0.90
+defensive_iq: 0.87
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+# T15 Seed 6 - v13_EvoD_Patient
+profile: T15_v13_EvoD_Patient
+id: sdvtx2ipweukajlm
+position_tolerance: 25
+shoot_range: 553
+charge_min: 0.28
+charge_max: 0.71
+steal_range: 122
+defense_offset: 229
+min_shot_quality: 0.40
+pressure_distance: 75
+aggression: 0.95
+defensive_iq: 0.85
+steal_reaction_time: 0.11
+button_presses_per_sec: 14
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T15 Seed 7 - v15_EvoJZone_Zone
+profile: T15_v15_EvoJZone_Zone
+id: tewuy3jqxfvlbkmn
+position_tolerance: 24
+shoot_range: 521
+charge_min: 0.33
+charge_max: 0.80
+steal_range: 80
+defense_offset: 253
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.13
+button_presses_per_sec: 13
+position_patience: 0.52
+seek_threshold: 0.26
+
+# T15 Seed 8 - v15_EvoDZoneSp_Speed
+profile: T15_v15_EvoDZoneSp_Speed
+id: ufxvz4krygwmclno
+position_tolerance: 25
+shoot_range: 560
+charge_min: 0.28
+charge_max: 0.64
+steal_range: 80
+defense_offset: 241
+min_shot_quality: 0.30
+pressure_distance: 242
+aggression: 0.90
+defensive_iq: 0.89
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+# T15 Seed 9 - v15_EvoQSpeedZ_Zone
+profile: T15_v15_EvoQSpeedZ_Zone
+id: vgyw05lszhxndmop
+position_tolerance: 22
+shoot_range: 557
+charge_min: 0.33
+charge_max: 0.77
+steal_range: 80
+defense_offset: 241
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.31
+seek_threshold: 0.12
+
+# T15 Seed 10 - v15_EvoJZone_Aggro
+profile: T15_v15_EvoJZone_Aggro
+id: whzx16mtaiyoenpq
+position_tolerance: 25
+shoot_range: 509
+charge_min: 0.33
+charge_max: 0.79
+steal_range: 200
+defense_offset: 255
+min_shot_quality: 0.31
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.92
+steal_reaction_time: 0.06
+button_presses_per_sec: 13
+position_patience: 0.25
+seek_threshold: 0.26
+
+# T15 Seed 11 - v15_EvoAGPatie_Zone
+profile: T15_v15_EvoAGPatie_Zone
+id: xia027nubjzpfoqr
+position_tolerance: 24
+shoot_range: 585
+charge_min: 0.27
+charge_max: 0.66
+steal_range: 80
+defense_offset: 249
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.12
+button_presses_per_sec: 13
+position_patience: 1.48
+seek_threshold: 0.05
+
+# T15 Seed 12 - v15_EvoJAggro_Aggro
+profile: T15_v15_EvoJAggro_Aggro
+id: yjb138ovckaqgprs
+position_tolerance: 27
+shoot_range: 505
+charge_min: 0.31
+charge_max: 0.79
+steal_range: 200
+defense_offset: 252
+min_shot_quality: 0.10
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.61
+steal_reaction_time: 0.06
+button_presses_per_sec: 13
+position_patience: 0.25
+seek_threshold: 0.24
+
+# T15 Seed 13 - v15_EvoDZoneSp_Patient
+profile: T15_v15_EvoDZoneSp_Patient
+id: zkc249pwdlbrhqst
+position_tolerance: 24
+shoot_range: 604
+charge_min: 0.28
+charge_max: 0.65
+steal_range: 78
+defense_offset: 252
+min_shot_quality: 0.40
+pressure_distance: 249
+aggression: 0.92
+defensive_iq: 0.85
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T15 Seed 14 - v14_EvoJ_Zone
+profile: T15_v14_EvoJ_Zone
+id: ald35aqxemcsirtu
+position_tolerance: 25
+shoot_range: 529
+charge_min: 0.32
+charge_max: 0.78
+steal_range: 80
+defense_offset: 245
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.13
+button_presses_per_sec: 13
+position_patience: 0.54
+seek_threshold: 0.26
+
+# T15 Seed 15 - v14_EvoQSpeed_Patient
+profile: T15_v14_EvoQSpeed_Patient
+id: bme46bryfndtjsuv
+position_tolerance: 25
+shoot_range: 545
+charge_min: 0.31
+charge_max: 0.71
+steal_range: 110
+defense_offset: 247
+min_shot_quality: 0.40
+pressure_distance: 90
+aggression: 0.93
+defensive_iq: 0.85
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T15 Seed 16 - v15_EvoAG_Speed
+profile: T15_v15_EvoAG_Speed
+id: cnf57cszgoeuktvw
+position_tolerance: 23
+shoot_range: 535
+charge_min: 0.27
+charge_max: 0.64
+steal_range: 134
+defense_offset: 228
+min_shot_quality: 0.27
+pressure_distance: 70
+aggression: 0.90
+defensive_iq: 0.58
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.16
+
+# =============================================================================
+# T16 ENTRIES (from v16 tournament top 16)
+# Source: db/bracket_20260129_190211.db
+# =============================================================================
+
+# T16 Seed 1 - v16_EvoJZoneZo_Zone
+profile: T16_v16_EvoJZoneZo_Zone
+id: dog68dtahpfvluwx
+position_tolerance: 24
+shoot_range: 518
+charge_min: 0.32
+charge_max: 0.80
+steal_range: 80
+defense_offset: 246
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.13
+button_presses_per_sec: 14
+position_patience: 0.51
+seek_threshold: 0.25
+
+# T16 Seed 2 - v16_EvoJZoneZo_Speed
+profile: T16_v16_EvoJZoneZo_Speed
+id: eph79eubiqgwmvxy
+position_tolerance: 23
+shoot_range: 508
+charge_min: 0.32
+charge_max: 0.82
+steal_range: 77
+defense_offset: 261
+min_shot_quality: 0.31
+pressure_distance: 257
+aggression: 0.90
+defensive_iq: 0.92
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.26
+
+# T16 Seed 3 - v15_EvoDZoneSp_Speed (CHAMPION)
+profile: T16_v15_EvoDZoneSp_Speed
+id: fqi8afvcjrhxnwyz
+position_tolerance: 25
+shoot_range: 560
+charge_min: 0.28
+charge_max: 0.64
+steal_range: 80
+defense_offset: 241
+min_shot_quality: 0.30
+pressure_distance: 242
+aggression: 0.90
+defensive_iq: 0.89
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+# T16 Seed 4 - v16_EvoAGPatie_Zone
+profile: T16_v16_EvoAGPatie_Zone
+id: grj9bgwdksiyoxza
+position_tolerance: 24
+shoot_range: 593
+charge_min: 0.25
+charge_max: 0.65
+steal_range: 80
+defense_offset: 228
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.06
+button_presses_per_sec: 15
+position_patience: 0.26
+seek_threshold: 0.05
+
+# T16 Seed 5 - v16_EvoQSpeedP_Sniper
+profile: T16_v16_EvoQSpeedP_Sniper
+id: hskachxeltjzpyab
+position_tolerance: 25
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 200
+defense_offset: 226
+min_shot_quality: 0.35
+pressure_distance: 36
+aggression: 0.97
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 1.20
+seek_threshold: 0.05
+
+# T16 Seed 6 - v16_EvoDPatien_Zone
+profile: T16_v16_EvoDPatien_Zone
+id: itlbdiyfmukaqzbc
+position_tolerance: 25
+shoot_range: 552
+charge_min: 0.29
+charge_max: 0.73
+steal_range: 80
+defense_offset: 218
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.11
+button_presses_per_sec: 14
+position_patience: 1.45
+seek_threshold: 0.05
+
+# T16 Seed 7 - v15_EvoAG_Speed
+profile: T16_v15_EvoAG_Speed
+id: jumcejzgnvlbracd
+position_tolerance: 23
+shoot_range: 535
+charge_min: 0.27
+charge_max: 0.64
+steal_range: 134
+defense_offset: 228
+min_shot_quality: 0.27
+pressure_distance: 70
+aggression: 0.90
+defensive_iq: 0.58
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.16
+
+# T16 Seed 8 - v16_EvoDPatien_Patient
+profile: T16_v16_EvoDPatien_Patient
+id: kvndfkahowmcsbde
+position_tolerance: 25
+shoot_range: 565
+charge_min: 0.28
+charge_max: 0.68
+steal_range: 118
+defense_offset: 227
+min_shot_quality: 0.40
+pressure_distance: 76
+aggression: 0.96
+defensive_iq: 0.85
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T16 Seed 9 - v16_EvoDZoneSp_Brawl
+profile: T16_v16_EvoDZoneSp_Brawl
+id: lwoeglbipxndtcef
+position_tolerance: 30
+shoot_range: 380
+charge_min: 0.10
+charge_max: 0.35
+steal_range: 200
+defense_offset: 241
+min_shot_quality: 0.29
+pressure_distance: 238
+aggression: 0.92
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 19
+position_patience: 0.31
+seek_threshold: 0.15
+
+# T16 Seed 10 - v16_EvoDPatien_Aggro
+profile: T16_v16_EvoDPatien_Aggro
+id: mxpfhmcjqyoeudgf
+position_tolerance: 25
+shoot_range: 547
+charge_min: 0.27
+charge_max: 0.74
+steal_range: 200
+defense_offset: 222
+min_shot_quality: 0.40
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.88
+steal_reaction_time: 0.06
+button_presses_per_sec: 14
+position_patience: 0.25
+seek_threshold: 0.05
+
+# T16 Seed 11 - v14_EvoQSpeed_Patient
+profile: T16_v14_EvoQSpeed_Patient
+id: nyqgindkrzpfvegh
+position_tolerance: 25
+shoot_range: 545
+charge_min: 0.31
+charge_max: 0.71
+steal_range: 110
+defense_offset: 247
+min_shot_quality: 0.40
+pressure_distance: 90
+aggression: 0.93
+defensive_iq: 0.85
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T16 Seed 12 - v16_EvoDZoneSp_Speed
+profile: T16_v16_EvoDZoneSp_Speed
+id: ozrhjoelsaqgwfhi
+position_tolerance: 23
+shoot_range: 570
+charge_min: 0.29
+charge_max: 0.65
+steal_range: 78
+defense_offset: 232
+min_shot_quality: 0.30
+pressure_distance: 242
+aggression: 0.90
+defensive_iq: 0.89
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+# T16 Seed 13 - v16_EvoQSpeedZ_Aggro
+profile: T16_v16_EvoQSpeedZ_Aggro
+id: pasikpfmtbrhxgij
+position_tolerance: 23
+shoot_range: 565
+charge_min: 0.33
+charge_max: 0.78
+steal_range: 200
+defense_offset: 247
+min_shot_quality: 0.30
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.89
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 0.25
+seek_threshold: 0.12
+
+# T16 Seed 14 - v16_EvoJZoneZo_Patient
+profile: T16_v16_EvoJZoneZo_Patient
+id: qbtjlqgnucsiyhjk
+position_tolerance: 25
+shoot_range: 539
+charge_min: 0.33
+charge_max: 0.82
+steal_range: 79
+defense_offset: 263
+min_shot_quality: 0.40
+pressure_distance: 257
+aggression: 0.31
+defensive_iq: 0.85
+steal_reaction_time: 0.13
+button_presses_per_sec: 13
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T16 Seed 15 - v16_EvoAGPatie_Speed
+profile: T16_v16_EvoAGPatie_Speed
+id: rcukmrhovdtjzikl
+position_tolerance: 22
+shoot_range: 560
+charge_min: 0.24
+charge_max: 0.62
+steal_range: 200
+defense_offset: 226
+min_shot_quality: 0.37
+pressure_distance: 36
+aggression: 0.90
+defensive_iq: 0.83
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.05
+
+# T16 Seed 16 - v16_EvoDZoneSp_Aggro
+profile: T16_v16_EvoDZoneSp_Aggro
+id: sdvlnsipweukajlm
+position_tolerance: 24
+shoot_range: 562
+charge_min: 0.28
+charge_max: 0.62
+steal_range: 200
+defense_offset: 229
+min_shot_quality: 0.31
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 19
+position_patience: 0.25
+seek_threshold: 0.14
+
+# =============================================================================
+# T17 ENTRIES (from v17 tournament top 16)
+# Source: db/bracket_20260129_191644.db
+# =============================================================================
+
+# T17 Seed 1 - v17_EvoDPatien_Zone
+profile: T17_v17_EvoDPatien_Zone
+id: tewmotjqxfvlbkmn
+position_tolerance: 25
+shoot_range: 577
+charge_min: 0.28
+charge_max: 0.76
+steal_range: 80
+defense_offset: 217
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.12
+button_presses_per_sec: 14
+position_patience: 1.45
+seek_threshold: 0.05
+
+# T17 Seed 2 - v17_EvoJZoneZo_Patient
+profile: T17_v17_EvoJZoneZo_Patient
+id: ufxnpukrygwmclno
+position_tolerance: 24
+shoot_range: 540
+charge_min: 0.31
+charge_max: 0.83
+steal_range: 81
+defense_offset: 236
+min_shot_quality: 0.40
+pressure_distance: 258
+aggression: 0.29
+defensive_iq: 0.85
+steal_reaction_time: 0.13
+button_presses_per_sec: 15
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T17 Seed 3 - v15_EvoAG_Speed (CHAMPION)
+profile: T17_v15_EvoAG_Speed
+id: vgyoqvlszhxndmop
+position_tolerance: 23
+shoot_range: 535
+charge_min: 0.27
+charge_max: 0.64
+steal_range: 134
+defense_offset: 228
+min_shot_quality: 0.27
+pressure_distance: 70
+aggression: 0.90
+defensive_iq: 0.58
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.16
+
+# T17 Seed 4 - v17_EvoAGPatie_Speed
+profile: T17_v17_EvoAGPatie_Speed
+id: whzprwmtaiyoenpq
+position_tolerance: 25
+shoot_range: 589
+charge_min: 0.25
+charge_max: 0.68
+steal_range: 82
+defense_offset: 239
+min_shot_quality: 0.30
+pressure_distance: 262
+aggression: 0.90
+defensive_iq: 0.89
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.05
+
+# T17 Seed 5 - v17_EvoJZoneZo_Speed
+profile: T17_v17_EvoJZoneZo_Speed
+id: xiaqsxnubjzpfoqr
+position_tolerance: 25
+shoot_range: 528
+charge_min: 0.31
+charge_max: 0.80
+steal_range: 77
+defense_offset: 238
+min_shot_quality: 0.29
+pressure_distance: 243
+aggression: 0.90
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.25
+
+# T17 Seed 6 - v17_EvoDZoneSp_Speed
+profile: T17_v17_EvoDZoneSp_Speed
+id: yjbrtyovckaqgprs
+position_tolerance: 25
+shoot_range: 561
+charge_min: 0.28
+charge_max: 0.65
+steal_range: 78
+defense_offset: 243
+min_shot_quality: 0.30
+pressure_distance: 246
+aggression: 0.90
+defensive_iq: 0.91
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+# T17 Seed 7 - v17_EvoAGSpeed_Aggro
+profile: T17_v17_EvoAGSpeed_Aggro
+id: zkcuzpwdlbrhqst
+position_tolerance: 24
+shoot_range: 519
+charge_min: 0.27
+charge_max: 0.67
+steal_range: 200
+defense_offset: 217
+min_shot_quality: 0.27
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.57
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 0.25
+seek_threshold: 0.16
+
+# T17 Seed 8 - v16_EvoAGPatie_Speed
+profile: T17_v16_EvoAGPatie_Speed
+id: ald3aqxemcsirtua
+position_tolerance: 22
+shoot_range: 560
+charge_min: 0.24
+charge_max: 0.62
+steal_range: 200
+defense_offset: 226
+min_shot_quality: 0.37
+pressure_distance: 36
+aggression: 0.90
+defensive_iq: 0.83
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.05
+
+# T17 Seed 9 - v17_EvoDZoneSp_Aggro
+profile: T17_v17_EvoDZoneSp_Aggro
+id: bme4bryfndtjsuvb
+position_tolerance: 26
+shoot_range: 544
+charge_min: 0.29
+charge_max: 0.63
+steal_range: 200
+defense_offset: 234
+min_shot_quality: 0.30
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.85
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 0.25
+seek_threshold: 0.13
+
+# T17 Seed 10 - v17_EvoJZoneZo_Patient (duplicate from different ranking)
+profile: T17_v17_EvoJZoneZo_Patient_B
+id: cnf5cszgoeuktvwc
+position_tolerance: 24
+shoot_range: 506
+charge_min: 0.31
+charge_max: 0.78
+steal_range: 74
+defense_offset: 254
+min_shot_quality: 0.40
+pressure_distance: 245
+aggression: 0.88
+defensive_iq: 0.85
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T17 Seed 11 - v17_EvoDPatien_Patient
+profile: T17_v17_EvoDPatien_Patient
+id: dog6dtahpfvluwxd
+position_tolerance: 24
+shoot_range: 571
+charge_min: 0.28
+charge_max: 0.74
+steal_range: 82
+defense_offset: 215
+min_shot_quality: 0.40
+pressure_distance: 251
+aggression: 0.30
+defensive_iq: 0.85
+steal_reaction_time: 0.11
+button_presses_per_sec: 14
+position_patience: 1.50
+seek_threshold: 0.05
+
+# T17 Seed 12 - v16_EvoQSpeedP_Sniper
+profile: T17_v16_EvoQSpeedP_Sniper
+id: eph7eubiqgwmvxye
+position_tolerance: 25
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.90
+steal_range: 200
+defense_offset: 226
+min_shot_quality: 0.35
+pressure_distance: 36
+aggression: 0.97
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 1.20
+seek_threshold: 0.05
+
+# T17 Seed 13 - v17_EvoAGSpeed_Speed
+profile: T17_v17_EvoAGSpeed_Speed
+id: fqi8fvcjrhxnwyzf
+position_tolerance: 24
+shoot_range: 527
+charge_min: 0.26
+charge_max: 0.61
+steal_range: 132
+defense_offset: 228
+min_shot_quality: 0.26
+pressure_distance: 70
+aggression: 0.90
+defensive_iq: 0.61
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.15
+
+# T17 Seed 14 - v17_EvoDZoneSp_Zone
+profile: T17_v17_EvoDZoneSp_Zone
+id: grj9gwdksiyoxzag
+position_tolerance: 24
+shoot_range: 551
+charge_min: 0.29
+charge_max: 0.66
+steal_range: 80
+defense_offset: 247
+min_shot_quality: 0.30
+pressure_distance: 250
+aggression: 0.30
+defensive_iq: 0.90
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.14
+
+# T17 Seed 15 - v17_EvoQSpeedP_Speed
+profile: T17_v17_EvoQSpeedP_Speed
+id: hskhxeltjzpyabh
+position_tolerance: 24
+shoot_range: 700
+charge_min: 0.35
+charge_max: 0.91
+steal_range: 200
+defense_offset: 216
+min_shot_quality: 0.35
+pressure_distance: 35
+aggression: 0.90
+defensive_iq: 0.83
+steal_reaction_time: 0.05
+button_presses_per_sec: 20
+position_patience: 0.30
+seek_threshold: 0.05
+
+# T17 Seed 16 - v17_EvoQSpeedP_Aggro
+profile: T17_v17_EvoQSpeedP_Aggro
+id: itlbyfmukaqzbci
+position_tolerance: 24
+shoot_range: 676
+charge_min: 0.35
+charge_max: 0.92
+steal_range: 200
+defense_offset: 234
+min_shot_quality: 0.36
+pressure_distance: 35
+aggression: 1.00
+defensive_iq: 0.87
+steal_reaction_time: 0.06
+button_presses_per_sec: 20
+position_patience: 0.25
+seek_threshold: 0.05
+

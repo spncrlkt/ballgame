@@ -200,6 +200,10 @@ pub struct TrainingState {
     pub reachability_collector: Option<ReachabilityCollector>,
     /// Whether advance button has been released at least once (prevents spurious input on startup)
     pub advance_button_armed: bool,
+    /// List of profile names to iterate through (if profile-list mode)
+    pub profile_list: Option<Vec<String>>,
+    /// Current index in profile list
+    pub profile_list_index: usize,
 }
 
 impl Default for TrainingState {
@@ -230,6 +234,8 @@ impl Default for TrainingState {
             level_sequence_index: 0,
             reachability_collector: None,
             advance_button_armed: false,
+            profile_list: None,
+            profile_list_index: 0,
         }
     }
 }
@@ -338,5 +344,26 @@ impl TrainingState {
     /// Get current level index from sequence (0-based)
     pub fn current_sequence_level(&self) -> Option<usize> {
         self.level_sequence.get(self.level_sequence_index).copied()
+    }
+
+    /// Advance to next profile in list (for profile-list mode)
+    /// Returns true if there are more profiles, false if list is exhausted
+    pub fn advance_profile(&mut self) -> bool {
+        if let Some(ref list) = self.profile_list {
+            self.profile_list_index += 1;
+            if self.profile_list_index < list.len() {
+                self.ai_profile = list[self.profile_list_index].clone();
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Get current profile name from list (if in profile-list mode)
+    pub fn current_profile(&self) -> Option<&str> {
+        self.profile_list
+            .as_ref()
+            .and_then(|list| list.get(self.profile_list_index))
+            .map(|s| s.as_str())
     }
 }

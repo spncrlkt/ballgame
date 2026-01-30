@@ -62,6 +62,10 @@ pub struct TrainingSettings {
     pub exclude_levels: Vec<String>,
     /// Optional allowlist file for offline training levels
     pub offline_levels_file: Option<String>,
+    /// Custom AI profiles file path (default: config/ai_profiles.txt)
+    pub profiles_file: Option<String>,
+    /// Profile list file for multi-profile training (one profile per iteration)
+    pub profile_list: Option<String>,
 
     /// RNG seed for determinism (null = random)
     pub seed: Option<u64>,
@@ -95,6 +99,8 @@ impl Default for TrainingSettings {
             level: None,
             exclude_levels: vec!["Pit".to_string()],
             offline_levels_file: None,
+            profiles_file: None,
+            profile_list: None,
             seed: None,
             time_limit_secs: None,
             first_point_timeout_secs: None,
@@ -271,6 +277,18 @@ impl TrainingSettings {
                         i += 1;
                     }
                 }
+                "--profiles-file" => {
+                    if let Some(val) = args.get(i + 1) {
+                        self.profiles_file = Some(val.clone());
+                        i += 1;
+                    }
+                }
+                "--profile-list" => {
+                    if let Some(val) = args.get(i + 1) {
+                        self.profile_list = Some(val.clone());
+                        i += 1;
+                    }
+                }
                 "--drive-mode" => {
                     self.drive_mode = true;
                     self.mode = TrainingMode::Goal;
@@ -330,6 +348,8 @@ OPTIONS:
     --viewport N               Viewport preset index (default: 2)
     --palette N                Color palette index (default: 0)
     --ball-style NAME          Ball visual style (default: random)
+    --profiles-file PATH       AI profiles file (default: config/ai_profiles.txt)
+    --profile-list PATH        File with profile names (one per line) for multi-profile training
     --debug-log                Enable debug sample logging to SQLite
     --headless                 Run without window (for auto-reachability)
     -h, --help                 Show this help
@@ -348,6 +368,7 @@ EXAMPLES:
     cargo run --bin training -- --protocol pursuit
     cargo run --bin training -- --protocol pursuit --time-limit 60
     cargo run --bin training -- --protocol advanced-platform --iterations 3
+    cargo run --bin training -- --profiles-file config/ai_profiles_champions.txt --profile-list tools/offline/champions_profiles.txt
 "#
     );
 }

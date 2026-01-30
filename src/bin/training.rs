@@ -262,6 +262,26 @@ fn main() {
     let settings = TrainingSettings::from_args();
     let allowed_levels = load_allowed_levels(&settings);
 
+    // Load profile list if specified
+    let profile_list: Option<Vec<String>> = if let Some(ref path) = settings.profile_list {
+        let content = std::fs::read_to_string(path).unwrap_or_else(|e| {
+            eprintln!("Failed to read profile list file '{}': {}", path, e);
+            std::process::exit(1);
+        });
+        let profiles: Vec<String> = content
+            .lines()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty() && !s.starts_with('#'))
+            .collect();
+        if profiles.is_empty() {
+            eprintln!("Profile list file '{}' is empty or contains only comments", path);
+            std::process::exit(1);
+        }
+        Some(profiles)
+    } else {
+        None
+    };
+
     println!("========================================");
     println!("       TRAINING MODE");
     println!("========================================");
@@ -272,11 +292,25 @@ fn main() {
         TrainingMode::Game => "Full games",
     };
     println!("  Mode: {}", mode_str);
-    println!("  Iterations: {}", settings.iterations);
-    if settings.mode == TrainingMode::Game {
-        println!("  Win Score: {}", settings.win_score);
+
+    // Show profile list info or iterations/profile
+    if let Some(ref profiles) = profile_list {
+        println!("  Profile List: {} profiles from {}", profiles.len(), settings.profile_list.as_ref().unwrap());
+        for (i, name) in profiles.iter().enumerate().take(5) {
+            println!("    {}. {}", i + 1, name);
+        }
+        if profiles.len() > 5 {
+            println!("    ... and {} more", profiles.len() - 5);
+        }
+        println!("  Starting with: {}", profiles[0]);
+    } else {
+        println!("  Iterations: {}", settings.iterations);
+        if settings.mode == TrainingMode::Game {
+            println!("  Win Score: {}", settings.win_score);
+        }
+        println!("  AI Profile: {}", settings.ai_profile);
     }
-    println!("  AI Profile: {}", settings.ai_profile);
+
     if let Some(ref level) = settings.level {
         println!("  Level: {} (fixed)", level);
     } else {
@@ -325,7 +359,14 @@ fn main() {
         .unwrap_or(DEFAULT_BACKGROUND_COLOR);
 
     // Create training state with settings
-    let mut training_state = TrainingState::new(settings.iterations, &settings.ai_profile);
+    // If profile list is provided, use first profile and set iterations to list length
+    let (initial_profile, iterations) = if let Some(ref profiles) = profile_list {
+        (profiles[0].clone(), profiles.len() as u32)
+    } else {
+        (settings.ai_profile.clone(), settings.iterations)
+    };
+
+    let mut training_state = TrainingState::new(iterations, &initial_profile);
     training_state.protocol = settings.protocol;
     training_state.win_score = if settings.mode == TrainingMode::Game {
         settings.win_score
@@ -334,6 +375,12 @@ fn main() {
     };
     training_state.time_limit_secs = settings.time_limit_secs;
     training_state.first_point_timeout_secs = settings.first_point_timeout_secs;
+
+    // Configure profile list mode
+    if let Some(profiles) = profile_list {
+        training_state.profile_list = Some(profiles);
+        training_state.profile_list_index = 0;
+    }
 
     // Pick level - either fixed from settings, sequential (Reachability), or random
     if settings.protocol.iterates_all_levels() {
@@ -433,10 +480,17 @@ fn main() {
             training_state.current_level_name
         );
         println!("  Explore the level, press LB/Q when done");
+    } else if training_state.profile_list.is_some() {
+        println!(
+            "Starting iteration 1/{} vs {} on {}",
+            training_state.games_total,
+            training_state.ai_profile,
+            training_state.current_level_name
+        );
     } else {
         println!(
             "Starting iteration 1/{} on {}",
-            settings.iterations, training_state.current_level_name
+            training_state.games_total, training_state.current_level_name
         );
     }
     println!();
@@ -457,6 +511,12 @@ fn main() {
 
     let db_path_resource = TrainingDbPath(db_path_buf);
     let is_headless = settings.headless;
+
+    // Load AI profiles from custom file if specified
+    let ai_profile_db = match &settings.profiles_file {
+        Some(path) => AiProfileDatabase::load_from_file(path),
+        None => AiProfileDatabase::default(),
+    };
 
     let mut app = App::new();
 
@@ -516,7 +576,7 @@ fn main() {
             tweaks
         })
         .init_resource::<LastShotInfo>()
-        .init_resource::<AiProfileDatabase>()
+        .insert_resource(ai_profile_db)
         .init_resource::<NavGraph>()
         .init_resource::<AiCapabilities>()
         .init_resource::<ai::HeatmapBundle>()
@@ -1575,6 +1635,8 @@ fn training_state_machine(
     mut current_level: ResMut<CurrentLevel>,
     sqlite_logger: Res<SqliteEventLogger>,
     db_path: Res<TrainingDbPath>,
+    profile_db: Res<AiProfileDatabase>,
+    mut ai_query: Query<&mut AiState, (With<Player>, With<Team>)>,
 ) {
     match training_state.phase {
         TrainingPhase::WaitingToStart => {
@@ -1720,6 +1782,21 @@ fn training_state_machine(
 
                     training_state.next_game();
 
+                    // Advance to next profile if in profile-list mode
+                    if training_state.profile_list.is_some() {
+                        training_state.advance_profile();
+
+                        // Update the AI player's profile_id
+                        let new_profile_id = profile_db
+                            .get_by_name(&training_state.ai_profile)
+                            .map(|p| p.id.clone())
+                            .unwrap_or_else(|| profile_db.default_profile().id.clone());
+
+                        for mut ai_state in ai_query.iter_mut() {
+                            ai_state.profile_id = new_profile_id.clone();
+                        }
+                    }
+
                     // Reset score and steal tracker for new game
                     score.left = 0;
                     score.right = 0;
@@ -1755,12 +1832,23 @@ fn training_state_machine(
                         },
                     );
 
-                    println!(
-                        "\nStarting Game {}/{} on {}",
-                        training_state.game_number,
-                        training_state.games_total,
-                        training_state.current_level_name
-                    );
+                    // Show profile info if in profile-list mode
+                    if training_state.profile_list.is_some() {
+                        println!(
+                            "\nStarting Game {}/{} vs {} on {}",
+                            training_state.game_number,
+                            training_state.games_total,
+                            training_state.ai_profile,
+                            training_state.current_level_name
+                        );
+                    } else {
+                        println!(
+                            "\nStarting Game {}/{} on {}",
+                            training_state.game_number,
+                            training_state.games_total,
+                            training_state.current_level_name
+                        );
+                    }
                 }
             }
         }

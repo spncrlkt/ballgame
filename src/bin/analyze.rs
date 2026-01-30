@@ -217,7 +217,16 @@ fn main() {
             .bracket_output
             .clone()
             .unwrap_or_else(default_bracket_output_dir);
-        let rankings_file = config.bracket_rankings.as_deref();
+
+        // Auto-generate rankings path from db path if export requested
+        let rankings_path = if config.export_bracket_rankings {
+            let db_str = db_path.to_string_lossy();
+            let rankings_str = db_str.replace(".db", "_rankings.txt");
+            Some(PathBuf::from(rankings_str))
+        } else {
+            None
+        };
+        let rankings_file = rankings_path.as_deref();
 
         match run_bracket_analysis(db_path, &output_dir, rankings_file) {
             Ok(report) => {
@@ -254,28 +263,46 @@ fn main() {
                     );
                 }
 
-                // Print next steps
+                // Print next steps with correct profiles file from db
                 println!("\n=== Next Steps ===\n");
                 println!("Generate evolved profiles from bracket results:\n");
+
+                // Extract version info from profiles_file path
+                let (input_profiles, output_profiles, next_version) =
+                    if let Some(ref pf) = report.tournament.profiles_file {
+                        // Parse version number from path like "config/ai_profiles_v13.txt"
+                        let version_num = pf
+                            .find("_v")
+                            .and_then(|i| {
+                                let start = i + 2;
+                                let end = pf[start..].find(|c: char| !c.is_ascii_digit())
+                                    .map(|j| start + j)
+                                    .unwrap_or(pf.len());
+                                pf[start..end].parse::<u32>().ok()
+                            });
+
+                        if let Some(v) = version_num {
+                            let next_v = v + 1;
+                            let output = pf.replace(&format!("_v{}", v), &format!("_v{}", next_v));
+                            (pf.clone(), output, format!("v{}", next_v))
+                        } else {
+                            // Couldn't parse version, use the file as-is with generic output
+                            (pf.clone(), format!("{}.next", pf), "vnext".to_string())
+                        }
+                    } else {
+                        // No profiles_file in db, fall back to defaults
+                        ("config/ai_profiles_v13.txt".to_string(),
+                         "config/ai_profiles_v14.txt".to_string(),
+                         "v14".to_string())
+                    };
+
                 println!("  python3 scripts/generate_bracket_profiles.py \\");
                 println!("    --db {} \\", db_path.display());
-                println!("    --profiles config/ai_profiles_v12.txt \\");
-                println!("    --output config/ai_profiles_v13.txt \\");
-                println!("    --version v13");
+                println!("    --profiles {} \\", input_profiles);
+                println!("    --output {} \\", output_profiles);
+                println!("    --version {}", next_version);
                 println!();
-                println!("Or export rankings first, then generate:");
-                println!();
-                println!(
-                    "  cargo run --bin analyze -- --bracket --bracket-db {} \\",
-                    db_path.display()
-                );
-                println!("    --bracket-rankings config/bracket_rankings.txt");
-                println!();
-                println!("  python3 scripts/generate_bracket_profiles.py \\");
-                println!("    --rankings config/bracket_rankings.txt \\");
-                println!("    --profiles config/ai_profiles_v12.txt \\");
-                println!("    --output config/ai_profiles_v13.txt \\");
-                println!("    --version v13");
+                println!("Note: Rankings file was auto-generated alongside the db file.");
             }
             Err(e) => {
                 eprintln!("Failed to run bracket analysis: {}", e);
@@ -394,7 +421,7 @@ struct AnalyzeConfig {
     bracket_analysis: bool,
     bracket_db: Option<PathBuf>,
     bracket_output: Option<PathBuf>,
-    bracket_rankings: Option<PathBuf>,
+    export_bracket_rankings: bool,
     update_defaults: bool,
     show_help: bool,
 }
@@ -424,7 +451,7 @@ impl Default for AnalyzeConfig {
             bracket_analysis: false,
             bracket_db: None,
             bracket_output: None,
-            bracket_rankings: None,
+            export_bracket_rankings: false,
             update_defaults: false,
             show_help: false,
         }
@@ -561,10 +588,7 @@ impl AnalyzeConfig {
                     }
                 }
                 "--bracket-rankings" => {
-                    if i + 1 < args.len() {
-                        config.bracket_rankings = Some(PathBuf::from(&args[i + 1]));
-                        i += 1;
-                    }
+                    config.export_bracket_rankings = true;
                 }
                 "--update-defaults" => {
                     config.update_defaults = true;
@@ -617,7 +641,7 @@ OPTIONS:
     --bracket           Analyze most recent bracket tournament
     --bracket-db <DB>   Override DB path for bracket analysis
     --bracket-output <DIR> Output directory for bracket reports
-    --bracket-rankings <FILE> Export standings to rankings file
+    --bracket-rankings  Export standings to auto-generated rankings file
     --update-defaults   Update default profiles in src/constants.rs
     --help, -h          Show this help
 
@@ -650,7 +674,7 @@ EXAMPLES:
     cargo run --bin analyze -- --bracket
 
     # Bracket analysis with specific DB and rankings export
-    cargo run --bin analyze -- --bracket --bracket-db db/bracket_20260129_143022.db --bracket-rankings config/rankings.txt
+    cargo run --bin analyze -- --bracket --bracket-db db/bracket_20260129_143022.db --bracket-rankings
 
 TARGETS FILE FORMAT (TOML):
     [targets]

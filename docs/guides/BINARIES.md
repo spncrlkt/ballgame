@@ -183,7 +183,7 @@ cargo run --bin analyze -- --event-audit db/baseline.db db/current.db
 | `--bracket` | Analyze most recent bracket tournament |
 | `--bracket-db DB` | Override DB path for bracket analysis |
 | `--bracket-output DIR` | Output directory for bracket reports |
-| `--bracket-rankings FILE` | Export standings to rankings file |
+| `--bracket-rankings` | Export standings to auto-generated rankings file |
 | `--request NAME` | Run a stored SQL analysis request |
 | `--request-output FILE` | Write request report to file |
 | `--request-db DB` | Override DB path for request |

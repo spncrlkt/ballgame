@@ -708,6 +708,11 @@ pub fn run_simulation(config: SimConfig) {
                 let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
                 Some(format!("db/tournament_{}.db", timestamp))
             }
+            super::config::SimMode::Bracket { .. } => {
+                std::fs::create_dir_all("db").ok();
+                let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+                Some(format!("db/bracket_{}.db", timestamp))
+            }
             _ => config.db_path.clone(),
         }
     };
@@ -1126,14 +1131,14 @@ pub fn run_simulation(config: SimConfig) {
                 summary = summary
                     .next_step(NextStep::primary(
                         format!(
-                            "cargo run --bin analyze -- --bracket --bracket-db {}",
+                            "cargo run --bin analyze -- \\\n    --bracket \\\n    --bracket-db {}",
                             db_path.as_deref().unwrap_or("db/tournament_*.db")
                         ),
                         "Analyze tournament results",
                     ))
                     .next_step(NextStep::secondary(
                         format!(
-                            "cargo run --bin simulate -- --tournament {} --parallel 8",
+                            "cargo run --bin simulate -- \\\n    --tournament {} \\\n    --parallel 8",
                             matches_per_pair
                         ),
                         "Run more tournament matches",
@@ -1288,6 +1293,7 @@ pub fn run_simulation(config: SimConfig) {
                 &level_db,
                 &profile_db,
                 db.as_ref(),
+                db_path.as_deref(),
             );
         }
     }
@@ -1645,6 +1651,7 @@ fn run_bracket_tournament(
     level_db: &LevelDatabase,
     profile_db: &AiProfileDatabase,
     external_db: Option<&SimDatabase>,
+    external_db_path: Option<&str>,
 ) {
     use super::bracket::{
         BracketExecutor, BracketState, MatchFormat, SeedingMethod, format_standings,
@@ -1858,13 +1865,27 @@ fn run_bracket_tournament(
         }
 
         if !config.quiet {
-            if let Some(path) = &db_path {
+            if let Some(path) = external_db_path.or(db_path.as_deref()) {
                 println!("Tournament results saved to {}", path);
             }
         }
 
-        // Export rankings file
-        let rankings_path = std::path::Path::new("config/bracket_rankings.txt");
+        // Use external_db_path if provided, otherwise fall back to internally created db_path
+        let effective_db_path = external_db_path.or(db_path.as_deref());
+
+        // Export rankings file (derive path from db path for uniqueness)
+        let effective_db_path = match effective_db_path {
+            Some(path) => path,
+            None => {
+                eprintln!("ERROR: No database path available for bracket tournament.");
+                eprintln!("This is a bug - bracket mode should always have a database path.");
+                eprintln!("Please report this issue.");
+                return;
+            }
+        };
+        let rankings_path_str = effective_db_path.replace(".db", "_rankings.txt");
+        let rankings_path = std::path::Path::new(&rankings_path_str);
+
         if let Err(e) = export_bracket_rankings(&bracket, rankings_path, best_of, game_score_limit)
         {
             eprintln!("Warning: Failed to export rankings: {}", e);
@@ -1883,31 +1904,28 @@ fn run_bracket_tournament(
                 .duration(start.elapsed())
                 .stat("Entrants", bracket.entries.len().to_string())
                 .stat("Format", format!("BO{} FT{}", best_of, game_score_limit))
-                .stat("Champion", champion)
-                .file(FileEntry::new(
-                    rankings_path.display().to_string(),
-                    FileCategory::Data,
-                ));
+                .stat("Champion", champion);
 
-            if let Some(path) = &db_path {
-                summary = summary.file(FileEntry::new(path.clone(), FileCategory::Database));
-            }
+            // Show database file
+            summary = summary.file(FileEntry::new(
+                effective_db_path.to_string(),
+                FileCategory::Database,
+            ));
 
-            summary = summary
-                .next_step(NextStep::primary(
-                    format!(
-                        "python3 scripts/generate_bracket_profiles.py --db {}",
-                        db_path.as_deref().unwrap_or("db/bracket_*.db")
-                    ),
-                    "Generate improved AI profiles from bracket results",
-                ))
-                .next_step(NextStep::secondary(
-                    format!(
-                        "cargo run --bin analyze -- --bracket --bracket-db {}",
-                        db_path.as_deref().unwrap_or("db/bracket_*.db")
-                    ),
-                    "Analyze bracket tournament results",
-                ));
+            // Then rankings file
+            summary = summary.file(FileEntry::new(
+                rankings_path.display().to_string(),
+                FileCategory::Data,
+            ));
+
+            // Add analyze command as primary next step
+            summary = summary.next_step(NextStep::primary(
+                format!(
+                    "cargo run --bin analyze -- \\\n    --bracket \\\n    --bracket-db {}",
+                    effective_db_path
+                ),
+                "Analyze bracket tournament results",
+            ));
 
             summary.print();
         }
