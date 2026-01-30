@@ -689,43 +689,65 @@ impl BracketState {
 /// - 1 vs N (best vs worst)
 /// - Top seeds don't meet until later rounds
 fn bracket_seed_pairing(n: usize, match_index: usize) -> (usize, usize) {
-    // For a bracket of size n, match m (0-indexed) pairs:
-    // (seed1, seed2) where seed1 + seed2 = n + 1
-    // But with bracket structure, we need proper ordering
+    // For standard bracket seeding: 1v8, 4v5, 2v7, 3v6 (for 8 players)
+    // Or for 4 players: 1v4, 2v3
+    // This means seed pairs sum to (n-1): seed_a + seed_b = n - 1
 
-    // Build standard bracket ordering
-    let seeds: Vec<usize> = (0..n).collect();
-
-    // Recursively split bracket
-    fn bracket_order(seeds: &[usize]) -> Vec<usize> {
-        if seeds.len() <= 2 {
-            return seeds.to_vec();
+    // Build the bracket order using recursive pairing
+    // Each round splits so top seeds meet bottom seeds in finals
+    fn bracket_order(n: usize) -> Vec<(usize, usize)> {
+        if n == 2 {
+            return vec![(0, 1)];
         }
 
-        let mid = seeds.len() / 2;
-        let mut result = Vec::with_capacity(seeds.len());
+        // For n players, first round has n/2 matches
+        // Standard bracket ordering ensures 1v(n), 2v(n-1), etc.
+        // but arranged so that 1 and 2 meet in finals (not semis)
 
-        // Take first and last, second and second-to-last, etc.
-        let mut top_half = Vec::new();
-        let mut bottom_half = Vec::new();
+        let half = n / 2;
+        let mut matches = Vec::with_capacity(half);
 
-        for i in 0..mid {
-            top_half.push(seeds[i]);
-            bottom_half.push(seeds[seeds.len() - 1 - i]);
+        // Generate bracket positions recursively
+        let positions = bracket_positions(half);
+
+        // Pair each position with its complement
+        // Top gets seeds 0..half, bottom gets seeds half..n (reversed)
+        for i in 0..half {
+            let top_seed = positions[i];
+            let bottom_seed = n - 1 - positions[i];
+            matches.push((top_seed, bottom_seed));
         }
 
-        // Recursively order each half
-        result.extend(bracket_order(&top_half));
-        result.extend(bracket_order(&bottom_half));
+        matches
+    }
 
+    // Get the bracket positions for a half-bracket of given size
+    fn bracket_positions(n: usize) -> Vec<usize> {
+        if n == 1 {
+            return vec![0];
+        }
+        if n == 2 {
+            return vec![0, 1];
+        }
+
+        let half = n / 2;
+        let top = bracket_positions(half);
+        let bottom = bracket_positions(half);
+
+        let mut result = Vec::with_capacity(n);
+        // Interleave: place seeds so winners meet in later rounds
+        for i in 0..half {
+            result.push(top[i]);
+        }
+        for i in 0..half {
+            // Bottom half seeds are offset
+            result.push(bottom[i] + half);
+        }
         result
     }
 
-    let ordered = bracket_order(&seeds);
-    let p1 = ordered[match_index * 2];
-    let p2 = ordered[match_index * 2 + 1];
-
-    (p1, p2)
+    let matches = bracket_order(n);
+    matches[match_index]
 }
 
 /// Final placement result

@@ -1,0 +1,51 @@
+# Test: AI chases free ball
+# Verifies AI moves toward ball when ball is free
+#
+# Note: This test uses manual input to simulate expected AI behavior.
+# It validates the game state that AI should produce, not the AI itself.
+# Full AI testing requires the training workflow audit.
+
+name = "AI chases ball (behavior validation)"
+description = "Validates game state when player moves toward ball and picks it up"
+
+[setup]
+level = "test_flat_floor"
+
+# Player starts 50px left of ball (same as pickup_stationary)
+# Floor is at y=-450, spawn at -350 (100 above floor)
+[[setup.entities]]
+type = "player"
+id = "chaser"
+team = "left"
+x = 0.0
+y = -350.0
+
+# Ball 50px to the right
+[[setup.entities]]
+type = "ball"
+x = 50.0
+y = -350.0
+
+# Move toward ball
+[[input]]
+frame = 0
+chaser = { move_right = true }
+
+# Stop and pickup
+[[input]]
+frame = 20
+chaser = { move_right = false, pickup = true }
+
+# Verify pickup succeeded
+[[expect.sequence]]
+event = "Pickup"
+player = "chaser"
+frame_min = 15
+frame_max = 30
+
+[[expect.state]]
+after_frame = 30
+checks = [
+    "chaser.holding_ball = true",
+    "ball.state = Held",
+]

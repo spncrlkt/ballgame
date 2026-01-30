@@ -500,24 +500,36 @@ Use these checklists when reviewing any code changes:
 - [ ] Components small and focused
 - [ ] Flag fields preferred over frequent add/remove component
 
-### Audit Checklist
+### Audit Tiers
 
-When asked to "audit", "review", or "check the repo", perform these checks:
+When asked to "audit", "review", or "check the repo", use the appropriate tier:
 
-**Quick Checks (every audit):**
-1. **Compilation** - Run `cargo check` and `cargo clippy`
-2. **Visual regression** - Run `./scripts/regression.sh` to capture and compare against baseline
-3. **CLAUDE.md accuracy** - Verify architecture section matches actual code
-4. **Pattern violations** - Check for raw input reads in FixedUpdate, unbuffered press inputs, missing collision epsilon
-5. **Constants** - No magic numbers in code; all tunable values in `src/constants.rs`
+**Tier 1: Quick Check (every change)**
+- [ ] `cargo check` - compilation
+- [ ] `cargo clippy` - lints
+- [ ] `cargo test` - unit tests (62 expected)
+- [ ] `cargo run --bin test-scenarios` - scenario tests (35 expected)
 
-**Code Review (every audit):**
-Run the full code review process from `docs/archive/code_review_prompt.md`. This includes:
-- Deep investigation of codebase for anti-patterns
-- Research game dev best practices from authoritative sources
-- Grade each area: Physics, Input, ECS, AI, Performance, Game Design
-- Create dated review file: `docs/archive/code_review_YYYY-MM-DD.md`
-- Update `docs/dev/code_review_guidelines.md` with new patterns/resources discovered
+**Tier 2: Standard Audit (every ~10 changes)**
+- [ ] All Tier 1 checks
+- [ ] `./scripts/regression.sh` - visual regression
+- [ ] `./scripts/collect_metrics.sh` - track metrics to SQLite
+- [ ] Pattern violations - raw input in FixedUpdate, unbuffered presses, missing collision epsilon
+- [ ] Constants check - no magic numbers; tunable values in `src/constants.rs`
+- [ ] CLAUDE.md accuracy - verify architecture section matches code
+- [ ] Update `docs/project/todo.md` - mark done items, add discovered tasks
+- [ ] Update `docs/dev/audit_record.md` - document findings
+
+**Tier 3: Deep Audit (weekly or before release)**
+- [ ] All Tier 2 checks
+- [ ] `./scripts/coverage.sh` - code coverage report (requires cargo-llvm-cov)
+- [ ] `./scripts/metrics_report.sh` - review metrics trends
+- [ ] Training workflow audit - see `docs/dev/training_audit.md`
+- [ ] Simulation workflow audit - see `docs/dev/simulation_audit.md`
+- [ ] Review `docs/dev/spec_coverage_matrix.md` - check for new gaps
+- [ ] Review `docs/dev/binary_test_matrix.md` - check for new untested modes
+- [ ] Run full code review from `docs/archive/code_review_prompt.md`
+- [ ] Create dated review file: `docs/archive/code_review_YYYY-MM-DD.md`
 
 **Balance Testing (when relevant):**
 - `cargo run --bin simulate -- --shot-test 30 --level 3` (target: 40-60% over/under ratio)
@@ -528,6 +540,32 @@ Run the full code review process from `docs/archive/code_review_prompt.md`. This
 - Write findings to `docs/dev/audit_record.md` with commit reference
 - Update `docs/project/todo.md` - add improvement tasks from code review, move completed items to Done
 - Archive old done records to `docs/project/todone.md` with dated header
+
+### Workflow-Specific Audits
+
+When modifying these systems, run their specific audit checklist:
+
+| Changed Code | Audit Required | Checklist |
+|-------------|----------------|-----------|
+| `src/ai/` | Training workflow | `docs/dev/training_audit.md` |
+| `src/bin/training.rs` | Training workflow | `docs/dev/training_audit.md` |
+| `src/shooting/` | Simulation shot test | `docs/dev/simulation_audit.md` |
+| `src/simulation/` | Full simulation audit | `docs/dev/simulation_audit.md` |
+| `src/bin/heatmap.rs` | Heatmap audit | `docs/dev/heatmap_audit.md` |
+| `config/*.txt` | Reload test + visual check | Manual verification |
+
+### Test Coverage Resources
+
+| Resource | Description |
+|----------|-------------|
+| `docs/dev/spec_coverage_matrix.md` | Maps functional spec IDs → test coverage |
+| `docs/dev/binary_test_matrix.md` | Maps binary modes/flags → test coverage |
+| `docs/dev/training_audit.md` | Training workflow checklist with SQL verification |
+| `docs/dev/simulation_audit.md` | Simulation workflow checklist |
+| `docs/dev/heatmap_audit.md` | Heatmap workflow checklist |
+| `scripts/coverage.sh` | Code coverage via cargo-llvm-cov |
+| `scripts/collect_metrics.sh` | Collect audit metrics to SQLite |
+| `scripts/metrics_report.sh` | Generate metrics trend report |
 
 ### Scaling Concerns to Monitor
 

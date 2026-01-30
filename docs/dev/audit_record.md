@@ -4,6 +4,100 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Session: 2026-01-30 - Audit Process Improvement
+
+**Commit:** `b77fe8f` (pre-change baseline)
+
+### Summary
+
+Major overhaul of the audit process to address gaps discovered during review:
+- Fixed failing unit test (`test_bracket_seed_pairing_4`)
+- Created comprehensive test coverage documentation
+- Added code coverage and metrics tracking infrastructure
+- Created workflow-specific audit checklists
+- Restructured CLAUDE.md with 3-tier audit system
+
+### Bug Fix: Bracket Seeding
+
+**File:** `src/simulation/bracket/types.rs:691-750`
+
+The `bracket_seed_pairing` function had incorrect logic for pairing seeds in tournament brackets.
+
+**Before (broken):**
+- 4-player bracket produced: match 0 = (0, 1), match 1 = (3, 2)
+- Expected: match 0 = (0, 3) [1v4], match 1 = (1, 2) [2v3]
+
+**Root cause:** The recursive splitting algorithm placed both low seeds in the top half instead of pairing complementary seeds.
+
+**Fix:** Rewrote `bracket_seed_pairing` to use proper complement pairing where each seed pairs with `(n - 1 - seed)`.
+
+### New Documentation
+
+| File | Description |
+|------|-------------|
+| `docs/dev/spec_coverage_matrix.md` | Maps 234 functional spec IDs to test coverage |
+| `docs/dev/binary_test_matrix.md` | Maps 11 binaries and 49 modes to test coverage |
+| `docs/dev/training_audit.md` | Training workflow checklist with SQL verification |
+| `docs/dev/simulation_audit.md` | Simulation workflow checklist |
+| `docs/dev/heatmap_audit.md` | Heatmap workflow checklist |
+
+### New Scripts
+
+| Script | Description |
+|--------|-------------|
+| `scripts/coverage.sh` | Code coverage via cargo-llvm-cov |
+| `scripts/collect_metrics.sh` | Collect audit metrics to SQLite |
+| `scripts/metrics_report.sh` | Generate metrics trend report |
+
+### New Tests
+
+| Test | Description |
+|------|-------------|
+| `tests/scenarios/ai/ai_chases_ball.toml` | Validates chase → pickup sequence |
+| `tests/scenarios/ai/ai_goal_transitions.toml` | Validates pickup → move → shoot sequence |
+
+### CLAUDE.md Updates
+
+Replaced single audit checklist with 3-tier structure:
+- **Tier 1: Quick Check** - Every change (compile, lint, unit tests, scenario tests)
+- **Tier 2: Standard Audit** - Every ~10 changes (visual regression, metrics, patterns)
+- **Tier 3: Deep Audit** - Weekly/release (coverage, workflow audits, full review)
+
+Added workflow-specific audit references table.
+
+### Test Results
+
+| Test Type | Before | After | Change |
+|-----------|--------|-------|--------|
+| Unit tests | 61 passed, 1 failed | 62 passed, 0 failed | +1 fixed |
+| Scenario tests | 35 passed | 37 passed | +2 added |
+
+### Key Findings from Spec Coverage Analysis
+
+**Coverage Summary:**
+- 234 total spec behaviors identified
+- 56 (24%) automated
+- 20 (8.5%) partial
+- 77 (33%) gaps
+- 81 (34.5%) manual-only
+
+**Priority Gaps (highest impact):**
+1. AI System (AI1-AI2): 15 behaviors, no automated tests
+2. Ghost System (GH1-GH3): 12 behaviors, no automated tests
+3. Training Mode (M2): 7 behaviors, manual only
+4. Level System (L3): 7 behaviors, manual only
+
+### Compilation Status
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| `cargo check` | ✅ Pass | Clean compile |
+| `cargo clippy` | ✅ Pass | No warnings |
+| `cargo test` | ✅ Pass | 62 passed, 0 failed |
+| `cargo run --bin test-scenarios` | ✅ Pass | 37 passed, 0 failed |
+
+---
+
 ## Session: 2026-01-28 - Reachability Integration & Engine Tuning
 
 **Commits:** `a82b3b1` → `0c34cc8` (5 commits)
