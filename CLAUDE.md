@@ -165,20 +165,51 @@ src/
 ├── lib.rs           # Re-exports all public types
 ├── constants.rs     # All tunable values
 ├── helpers.rs       # Utility functions (move_toward, basket_x_from_offset)
-├── input/           # PlayerInput resource, capture_input system
-├── player/          # Player components + physics systems
+├── ai/              # AI decision-making, navigation, goals, profiles
+├── analytics/       # Analytics and metrics collection
 ├── ball/            # Ball components, physics, interaction systems
-├── shooting/        # Charge, throw, targeting systems
-├── scoring/         # Score resource, check_scoring system
-├── snapshot.rs      # Game state + screenshot capture on events (F2/F3/F4)
-├── steal.rs         # StealContest resource + steal cooldown system
+├── config_watcher.rs # Auto-reload config files on change
+├── countdown.rs     # Match countdown system
+├── debug_logging.rs # Debug logging configuration
+├── events/          # Event bus, game events, SQLite event logging
+├── generate/        # Asset generation utilities
+├── input/           # PlayerInput resource, capture_input system
 ├── levels/          # LevelDatabase, spawning, hot reload
+├── palettes/        # Color palette system
+├── player/          # Player components + physics systems
 ├── presets/         # Game tuning presets (movement, ball, shooting, composite)
 ├── replay/          # Replay system for playing back matches from SQLite
-├── training/        # Training mode state, session management, summary generation
-├── world/           # Platform, Collider, Basket, BasketRim components
-└── ui/              # Debug, HUD, animations, charge gauge, tweak panel
+├── run_summary.rs   # Run summary generation for analysis
+├── scoring/         # Score resource, check_scoring system
+├── settings.rs      # Settings persistence
+├── shooting/        # Charge, throw, targeting systems
+├── simulation/      # Headless simulation engine
+├── snapshot.rs      # Game state + screenshot capture on events (F2/F3/F4)
+├── steal.rs         # StealContest resource + steal cooldown system
+├── testing/         # Testing utilities
+├── training/        # Training mode state, session management
+├── tuning.rs        # Gameplay tuning system
+├── ui/              # Debug, HUD, animations, charge gauge, tweak panel
+└── world/           # Platform, Collider, Basket, BasketRim components
 ```
+
+### Binaries
+
+See `docs/guides/BINARIES.md` for complete reference with all flags and examples.
+
+| Binary | Purpose |
+|--------|---------|
+| `ballgame` | Main game - interactive 2v2 ball sport |
+| `training` | 1v1 vs AI with comprehensive event logging |
+| `simulate` | Headless AI vs AI simulation and tournaments |
+| `analyze` | Analytics, reports, and database analysis |
+| `test-scenarios` | Deterministic mechanics tests |
+| `heatmap` | Generate shot/reachability heatmaps |
+| `run-ghost` | Play back recorded inputs against AI |
+| `generate` | Generate ball textures and showcase images |
+| `extract-drives` | Extract input sequences from SQLite logs |
+| `verify_reachability` | Verify heatmap coverage |
+| `gamepad_debug` | Controller debugging tool |
 
 ### ECS Structure
 
@@ -187,7 +218,7 @@ src/
 - `StealContest` - Steal feedback (fail_flash_timer, out_of_range_timer, entities)
 - `Score` - Left/right team scores
 - `DebugSettings` - Debug UI visibility
-- `CurrentLevel` - Current level number (1-10)
+- `CurrentLevel` - Current level ID (String, 16-char hex identifier)
 - `CurrentPalette` - Current color palette index (default: 0)
 - `PhysicsTweaks` - Runtime-adjustable physics values with panel UI
 - `LevelDatabase` - Loaded level definitions from config/levels.txt
@@ -248,7 +279,7 @@ src/
 
 ### System Execution Order
 
-**Update schedule (chained input group):** `capture_input` → `copy_human_input` → `swap_control` → `mark_nav_dirty_on_level_change` → `rebuild_nav_graph` → `ai_navigation_update` → `ai_decision_update`
+**Update schedule (chained input group):** `capture_input` → `copy_human_input` → `swap_control` → `mark_nav_dirty_on_level_change` → `load_heatmaps_on_level_change` → `rebuild_nav_graph` → `ai_navigation_update` → `ai_decision_update`
 
 **Update schedule (other systems):** `check_settings_reset` → `respawn_player` → `steal_cooldown_update` → `toggle_debug` → `check_config_changes` → `update_debug_text` → `update_score_level_text` → `animate_pickable_ball` → `animate_score_flash` → `update_charge_gauge` → `update_steal_indicators` → `display_ball_wave` → `toggle_tweak_panel` → `update_tweak_panel` → `cycle_viewport` → `unified_cycle_system` → `update_cycle_indicator` → `apply_palette_colors` → `apply_preset_to_tweaks` → `snapshot_trigger_system` → `toggle_snapshot_system` → `toggle_screenshot_capture` → `manual_snapshot` → `save_settings_system`
 
