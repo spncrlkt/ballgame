@@ -1,5 +1,15 @@
 # Ballgame Done Archive
 
+## Archived 2026-01-30 (Todo Audit)
+
+- [x] **Accuracy/Cadence Tuning** - Extended preset system with 10 shot params, tested V1-V6 variants (2026-01-28)
+  - V3-Forgiving now default: 3.2 goals/match (↑88%), 34.8% accuracy (↑61%)
+- [x] **Training Reachability Protocol** - Solo exploration mode for coverage mapping (2026-01-28)
+  - `--protocol reachability` flag for level exploration
+  - Q/LB advances to next level during exploration
+
+---
+
 ## Archived 2026-01-29 (Binary Reference + Run Summary)
 
 - [x] **Binary Reference Guide** - Created `docs/guides/BINARIES.md`

@@ -1,62 +1,31 @@
-# Open Questions & Decisions
-
-*Questions that need answers before proceeding with certain work.*
+# Open Questions
 
 ---
 
-## Training Pipeline (P0-P2)
+## Training Pipeline
 
-- [ ] **Ghost segmentation** - How to detect "drive" boundaries in the event stream?
-  - By goal events? By possession changes? By time windows?
-- [ ] **Defense success metric** - What counts as "AI stopped the play"?
-  - Steal? Block? Shot miss? Any non-score outcome?
-- [ ] **Input format** - Store raw inputs or preprocessed actions?
+- [ ] **Ghost segmentation** - How to detect drive boundaries? (goals, possession, time?)
+- [ ] **Defense metric** - What counts as "AI stopped the play"?
 
-## AI Behavior (P3)
+## AI Behavior
 
-- [ ] **Bad shot definition** - What makes a shot "bad"?
-  - Distance? Angle? Defender proximity? Shot quality score?
-- [ ] **Good positioning** - What defines correct positioning?
-  - Near basket? Between ball and basket? Based on ball holder?
-- [ ] **Profile tuning** - Should profiles affect positioning or just timing?
+- [ ] **Bad shot definition** - Distance? Angle? Defender proximity?
+- [ ] **Good positioning** - Near basket? Between ball and basket?
 
-## AI Navigation (P2)
+## Architecture
 
-- [ ] **Ramp-less level handling** - How should AI reach elevated opponents in levels without corner steps?
-  - Option A: Always use NavGraph pathfinding (requires valid edges to platforms)
-  - Option B: Direct jump toward platform if reachable
-  - Option C: Give up and patrol floor (wait for opponent to come down)
-- [ ] **Goal oscillation** - AI rapidly switches goals (7 instances in 23s test). Causes:
-  - Conditions flip-flop near thresholds?
-  - Need longer commitment timers?
-  - Hysteresis (different thresholds for entering vs exiting goal)?
-
-## Code Quality
-
-- [ ] **Clippy warnings** - ~7 warnings remain (type_complexity, collapsible_if)
-  - Worth fixing or leave as standard Bevy patterns?
-- [ ] **ghost-visual.rs** - Fix or delete? (Currently broken)
-
-## System Architecture (from Codex investigation)
-
-- [ ] **System wiring divergence** - main/training/simulation/run-ghost have duplicated system chains that have already diverged. Options:
-  - Create shared plugins (e.g., AiPlugin, PhysicsPlugin) used by all binaries
-  - Accept divergence and document differences
-  - Merge some binaries (e.g., training mode into main game)
-
-- [ ] **EventBus memory growth** - `export_events`/`drain` append to `processed` without clearing. Options:
-  - Clear after each frame
-  - Limit to last N events
-  - Only retain if replay system needs history
+- [ ] **System wiring** - Shared plugins vs accept divergence?
+- [ ] **EventBus cleanup** - Clear per frame or limit history?
 
 ---
 
 ## Resolved
 
-- [x] **MVP definition** - Both AI + Movement need to feel good
-- [x] **Training relation to MVP** - Training tools ARE MVP blockers (how we make AI good)
-- [x] **Done item verification** - All 63 tests pass, items verified
+- [x] MVP definition - AI + Movement need to feel good
+- [x] Training relation to MVP - Training tools ARE MVP blockers
+- [x] ghost-visual.rs - Deleted
+- [x] Cooldown timing bug - Fixed (FixedUpdate only)
 
 ---
 
-*Last reviewed: 2026-01-26 (Codex evlog elimination)*
+*Last reviewed: 2026-01-30*

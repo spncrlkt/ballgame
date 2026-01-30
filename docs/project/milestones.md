@@ -1,110 +1,79 @@
 # Ballgame Milestones
 
-## Dependency Chain
-
 ```
-Training Tools → AI Quality → MVP (playable) → V0 (polished) → V1 (multiplayer)
+Training Tools → AI Quality → MVP → V0 → V1
 ```
 
 ---
 
 ## Pre-MVP: Training Pipeline
 
-*The training tools are how we make AI good. They come first.*
-
 **Training Binary UX:**
-- [ ] Reset button (Start) wipes logs and restarts session
-- [ ] Preserve CLI args on reset, cycle defaults otherwise
+- [ ] Reset button (Start) wipes logs and restarts
 - [ ] Clear status display between games
 
-**AI Navigation:**
-- [ ] Fix ramp-less level fallback (InterceptDefense assumes ramps exist)
-- [ ] Reduce goal oscillation (hysteresis or commitment timers)
-- [ ] Teach AI its jump capability (skip intermediate steps)
-- [ ] Verify AI can climb corner steps on levels 7-8
-
 **AI Plugin Consolidation:**
-- [ ] Create `AiPlugin` - single source of truth for AI systems
-- [ ] Fix ghost mode to use full AI (not simplified)
+- [ ] Create `AiPlugin` - single source of truth
+- [ ] Fix ghost mode to use full AI
 
 **Done:**
-- [x] Ghost System MVP (extract-drives, run-ghost, defense metrics)
-- [x] Reachability-aware navigation (exploration data → shooting positions)
-- [x] SQLite event logging infrastructure
-- [x] Simulation infrastructure (parallel, analytics)
+- [x] Ghost System MVP
+- [x] Reachability-aware navigation
+- [x] SQLite event logging
+- [x] Simulation infrastructure
 
 ---
 
 ## MVP
 
-*Playable solo vs AI - core loop works, games feel competitive*
+*Playable solo vs AI - core loop works*
 
 **AI Behavior:**
-- [ ] AI plays competently (no obvious mistakes)
-- [ ] Fix shooting - stops taking bad shots, hits easy ones
-- [ ] Fix positioning - covers basket, doesn't stand in wrong places
+- [ ] Fix shooting - stops taking bad shots
+- [ ] Fix positioning - covers basket correctly
 
 **Movement/Physics:**
-- [ ] Tune player movement - speed, acceleration, air control
-- [ ] Tune jump feel - height, coyote time, responsiveness
+- [ ] Tune player movement
+- [ ] Tune jump feel
 
 **Done:**
-- [x] Stealing mechanics (33% base, 50% if charging, cooldowns)
-- [x] AI profiles (10 personas with tunable parameters)
-- [x] Scenario test suite (35 tests across 6 categories)
+- [x] Stealing mechanics
+- [x] AI profiles (10 personas)
+- [x] Scenario tests (42 tests)
 
 ---
 
 ## V0
 
-*Polished core + levels - ready to share*
+*Polished - ready to share*
 
-**Polish:**
-- [ ] Debug capture cleanup (flag/config audit, schema finalize, sampling validation)
-- [ ] UI fix flash on score color
-- [ ] D-pad menu UX improvements
-- [ ] Viewport testing at all resolutions
-
-**Gameplay Structure:**
-- [ ] Win conditions (score limit or time limit)
-- [ ] Game state flow (start → play → end → restart)
-
-**Level Design:**
+- [ ] Win conditions (score/time limit)
+- [ ] Game state flow (start → play → end)
 - [ ] Polish existing 10 levels
-- [ ] Level editor or easier creation workflow
+- [ ] Viewport testing
 
 ---
 
 ## V1 / Beyond
 
-*Multiplayer, audio, deeper systems*
-
 **Multiplayer:**
-- [ ] 1v1 local multiplayer
+- [ ] Local multiplayer
 - [ ] 4-player support
-- [ ] Netcode architecture
+- [ ] Netcode
 
 **Audio:**
-- [ ] Sound effects (jumps, shots, scores, steals)
+- [ ] Sound effects
 - [ ] Music
 
 **Menus:**
-- [ ] Start screen / main menu
+- [ ] Main menu
 - [ ] Pause menu
 - [ ] Settings UI
 
-**Physics Overhaul:**
-- [ ] Shot trajectory rework (distance-dependent angles)
-- [ ] Ball physics tuning
-
-**Persistence:**
-- [ ] Save data / player profiles
-- [ ] Stats tracking
-- [ ] Settings persistence
-
 ---
 
-## Decision Docs Needed
+## Technical Debt
 
-- [ ] **Netcode architecture** - Required before multiplayer (V1)
-- [ ] **Input-first logging** - Refactor event logging to be replay-deterministic
+- [ ] PlayerId → CharacterId migration
+- [ ] System wiring consolidation
+- [ ] EventBus memory cleanup
