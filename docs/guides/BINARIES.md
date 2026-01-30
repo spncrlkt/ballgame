@@ -75,6 +75,9 @@ cargo run --bin training -- --help                    # Show all options
 | `--ball-style NAME` | | Ball visual style | random |
 | `--drive-mode` | | Start with ball, first point wins | off |
 | `--headless` | | Run without window | off |
+| `--profiles-file PATH` | | Custom AI profiles file | `config/ai_profiles.txt` |
+| `--profile-list PATH` | | Profile names file for multi-profile testing | |
+| `--debug-log` | | Enable debug sample logging to SQLite | off |
 | `--help` | `-h` | Show help | |
 
 ### Protocols

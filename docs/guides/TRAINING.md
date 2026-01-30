@@ -28,6 +28,8 @@ cargo run --bin training -- -l 3                # Force level 3
 | `--viewport N` | Viewport preset index | 2 |
 | `--palette N` | Color palette index | 0 |
 | `--drive-mode` | Start with ball, regain on loss | off |
+| `--profiles-file PATH` | AI profiles file | `config/ai_profiles.txt` |
+| `--profile-list PATH` | File with profile names (one per line) | |
 
 **Protocols:**
 - `advanced-platform` - Full 1v1 games on random levels (default)
@@ -297,3 +299,40 @@ Ask Claude Code to analyze the training session:
 ```
 
 **Analysis goal:** When analyzing training sessions, the objective is to identify ways to improve AI behavior. Review the events, player notes, and AI goal transitions to find patterns where the AI makes poor decisions. Then examine the AI code in `src/ai/` and suggest specific changes.
+
+## Multi-Profile Testing
+
+Test against multiple AI profiles in sequence:
+
+```bash
+# Test against tournament champions
+cargo run --bin training -- \
+  --profile-list tools/offline/champions_profiles.txt \
+  -l Skyway \
+  -n 1
+```
+
+The `--profile-list` flag reads profile names from a file (one per line) and runs iterations against each.
+
+## Debug Logging
+
+Enable debug sample logging to SQLite with the `--debug-log` flag:
+
+```bash
+cargo run --bin training -- \
+  --profiles-file config/ai_profiles_champions.txt \
+  --profile-list tools/offline/champions_profiles.txt \
+  --debug-log
+```
+
+Debug samples are stored in the session's SQLite database (`db/training_*.db`). Query with:
+
+```bash
+sqlite3 db/training_*.db "SELECT * FROM debug_samples ORDER BY tick DESC LIMIT 10;"
+```
+
+Look for:
+- NavNode reachability values
+- Shot position filtering decisions
+- Pathfinding failures
+- Navigation state transitions

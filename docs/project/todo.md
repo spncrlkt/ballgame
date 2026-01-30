@@ -45,7 +45,12 @@ Benefits: ~120 lines deleted, full AI defense in ghost mode, cleaner architectur
 
 - [ ] **Verify corner step fix** - run training on levels 7-8, check AI climbs
 - [ ] **Teach AI jump capability** - skip intermediate steps when direct jump possible
-- [ ] **Debug logging** - nav graph already has logging, verify it shows Jump edges
+- [x] **Debug logging** - Added comprehensive nav/pathfinding logging (2026-01-30)
+  - Logs node reachability during graph build
+  - Logs find_shooting_node filtering decisions
+  - Logs AttackWithBall pathfinding success/failure
+  - Logs nav state active/inactive
+- [ ] **Verify navigation fix** - Run against 10 champions on Skyway, check AI jump rate
 - [ ] **Fix ramp-less level fallback** - InterceptDefense assumes ramps exist; in `steps: 0` levels, AI targets nonexistent corner ramps instead of using platforms or direct pursuit (see decision.rs:953-974)
 - [ ] **Reduce goal oscillation** - 7 oscillation instances observed in pursuit2 test; may need hysteresis or commitment timers
 
