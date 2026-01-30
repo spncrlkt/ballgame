@@ -1,0 +1,67 @@
+# Test: 2v2 Player Collision
+# Verifies players collide and push apart (don't overlap)
+#
+# FAIL conditions this test catches:
+# - Players pass through each other
+# - Collision pushback not working
+# - Overlap detection failing with 4 players
+
+name = "2v2 Player Collision"
+description = "Players push apart when colliding, don't overlap"
+
+[setup]
+level = "test_flat_floor"
+
+# Two players close together will collide
+[[setup.entities]]
+type = "player"
+id = "L0"
+team = "left"
+x = -50.0
+y = -350.0
+
+[[setup.entities]]
+type = "player"
+id = "R0"
+team = "right"
+x = 50.0
+y = -350.0
+
+# Other two players spaced apart
+[[setup.entities]]
+type = "player"
+id = "L1"
+team = "left"
+x = -300.0
+y = -350.0
+
+[[setup.entities]]
+type = "player"
+id = "R1"
+team = "right"
+x = 300.0
+y = -350.0
+
+# L0 and R0 walk toward each other
+[[input]]
+frame = 0
+L0 = { move_right = true }
+R0 = { move_left = true }
+
+[[input]]
+frame = 30
+L0 = { move_right = false }
+R0 = { move_left = false }
+
+# After collision, both should have moved but been pushed back
+# L0 starts at -50, walks right, should end up around 0 or pushed back slightly
+# R0 starts at 50, walks left, should end up around 0 or pushed back slightly
+# Key: they should both have moved toward center but not passed each other
+[[expect.state]]
+after_frame = 40
+checks = [
+    "L0.x > -60",      # L0 moved toward center (started at -50)
+    "L0.x < 30",       # L0 didn't pass through to far right
+    "R0.x < 60",       # R0 moved toward center (started at 50)
+    "R0.x > -30",      # R0 didn't pass through to far left
+]

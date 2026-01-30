@@ -53,7 +53,24 @@ pub fn not_replay_active(replay_mode: Res<ReplayMode>) -> bool {
 pub struct MatchInfo {
     pub level: u32,
     pub level_name: String,
+    /// Game mode: "1v1" or "2v2"
+    pub game_mode: String,
+    /// AI profiles by character slot (L0, L1, R0, R1)
+    /// For 1v1, only L0 and R0 are populated
+    pub profiles: std::collections::HashMap<crate::events::CharacterId, String>,
+    /// Legacy: left profile (for backward compatibility)
     pub left_profile: String,
+    /// Legacy: right profile (for backward compatibility)
     pub right_profile: String,
     pub seed: u64,
+}
+
+impl MatchInfo {
+    /// Get number of characters based on game mode
+    pub fn character_count(&self) -> usize {
+        match self.game_mode.as_str() {
+            "2v2" => 4,
+            _ => 2,
+        }
+    }
 }

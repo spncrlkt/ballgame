@@ -3,7 +3,21 @@
 use bevy::prelude::*;
 
 use super::MatchInfo;
-use crate::events::{GameEvent, PlayerId};
+use crate::events::{CharacterId, GameEvent, PlayerId};
+use crate::input::InputSourceId;
+
+/// Character frame data for 2v2 replay format
+#[derive(Debug, Clone)]
+pub struct CharacterFrame {
+    /// Character ID (L0, L1, R0, R1)
+    pub id: CharacterId,
+    /// Position
+    pub pos: Vec2,
+    /// Velocity
+    pub vel: Vec2,
+    /// Controller source ID
+    pub controller: InputSourceId,
+}
 
 /// A single tick frame with positions and velocities for interpolation.
 #[derive(Debug, Clone)]
@@ -12,13 +26,16 @@ pub struct TickFrame {
     pub time_ms: u32,
     /// Frame number.
     pub frame: u64,
-    /// Left player position.
+    /// Character data (variable length for 1v1 vs 2v2)
+    /// If empty, falls back to legacy left_pos/right_pos fields
+    pub characters: Vec<CharacterFrame>,
+    /// Left player position (legacy 1v1 format).
     pub left_pos: Vec2,
-    /// Left player velocity.
+    /// Left player velocity (legacy 1v1 format).
     pub left_vel: Vec2,
-    /// Right player position.
+    /// Right player position (legacy 1v1 format).
     pub right_pos: Vec2,
-    /// Right player velocity.
+    /// Right player velocity (legacy 1v1 format).
     pub right_vel: Vec2,
     /// Ball position.
     pub ball_pos: Vec2,
@@ -26,6 +43,34 @@ pub struct TickFrame {
     pub ball_vel: Vec2,
     /// Ball state: 'F' = Free, 'H' = Held, 'I' = InFlight.
     pub ball_state: char,
+}
+
+impl TickFrame {
+    /// Get position for a character (uses characters vec if available, else legacy fields)
+    pub fn position_for(&self, char_id: CharacterId) -> Vec2 {
+        // First try new format
+        if let Some(cf) = self.characters.iter().find(|c| c.id == char_id) {
+            return cf.pos;
+        }
+        // Fall back to legacy format
+        match char_id {
+            CharacterId::L0 | CharacterId::L1 => self.left_pos,
+            CharacterId::R0 | CharacterId::R1 => self.right_pos,
+        }
+    }
+
+    /// Get velocity for a character (uses characters vec if available, else legacy fields)
+    pub fn velocity_for(&self, char_id: CharacterId) -> Vec2 {
+        // First try new format
+        if let Some(cf) = self.characters.iter().find(|c| c.id == char_id) {
+            return cf.vel;
+        }
+        // Fall back to legacy format
+        match char_id {
+            CharacterId::L0 | CharacterId::L1 => self.left_vel,
+            CharacterId::R0 | CharacterId::R1 => self.right_vel,
+        }
+    }
 }
 
 /// A timed game event (non-tick events like goals, pickups, AI goals).

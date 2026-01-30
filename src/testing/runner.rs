@@ -18,7 +18,7 @@ use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
 use crate::player::{
     CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, TargetBasket, Team,
-    apply_gravity, apply_input, check_collisions,
+    apply_gravity, apply_input, check_collisions, player_player_collision,
 };
 use crate::scoring::{CurrentLevel, Score, check_scoring};
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
@@ -201,6 +201,7 @@ pub fn run_test(test: &TestDefinition, debug_config: DebugLogConfig) -> TestResu
             ball_spin,
             apply_velocity,
             check_collisions,
+            player_player_collision,
             ball_collisions,
             ball_state_update,
             ball_player_collision,

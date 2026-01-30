@@ -1,0 +1,64 @@
+# Test: 2v2 Opponent Steal
+# Verifies opponents can attempt steals (steal system works in 2v2)
+#
+# FAIL conditions this test catches:
+# - Steal system broken in 2v2 mode
+# - Opponents can't trigger steal attempts
+# - StealAttempt event not firing
+
+name = "2v2 Opponent Steal"
+description = "Opponents can attempt steals in 2v2 mode"
+
+[setup]
+level = "test_steal_arena"
+
+# Left team - L0 holds ball
+[[setup.entities]]
+type = "player"
+id = "L0"
+team = "left"
+x = 0.0
+y = -398.0
+holding_ball = true
+
+[[setup.entities]]
+type = "player"
+id = "L1"
+team = "left"
+x = -200.0
+y = -398.0
+
+# Right team - R0 close enough to steal
+[[setup.entities]]
+type = "player"
+id = "R0"
+team = "right"
+x = 40.0
+y = -398.0
+
+[[setup.entities]]
+type = "player"
+id = "R1"
+team = "right"
+x = 300.0
+y = -398.0
+
+# R0 (opponent) attempts to steal from L0
+[[input]]
+frame = 10
+R0 = { pickup = true }
+
+# Steal attempt should trigger (even if it fails due to RNG)
+[[expect.sequence]]
+event = "StealAttempt"
+player = "R0"
+frame_min = 5
+frame_max = 20
+
+# After attempt, game state should be consistent
+[[expect.state]]
+after_frame = 30
+checks = [
+    "L0.x > -200",    # L0 still in arena
+    "R0.x > -100",    # R0 still in arena
+]

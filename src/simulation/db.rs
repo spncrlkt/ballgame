@@ -769,6 +769,7 @@ impl SimDatabase {
                     ticks.push(TickFrame {
                         time_ms,
                         frame,
+                        characters: Vec::new(), // Legacy format - use left/right fields
                         left_pos: Vec2::new(left_pos.0, left_pos.1),
                         left_vel: Vec2::new(left_vel.0, left_vel.1),
                         right_pos: Vec2::new(right_pos.0, right_pos.1),
@@ -789,6 +790,8 @@ impl SimDatabase {
             match_info: MatchInfo {
                 level,
                 level_name,
+                game_mode: "1v1".to_string(), // Legacy format is always 1v1
+                profiles: std::collections::HashMap::new(), // Legacy format doesn't have per-character profiles
                 left_profile,
                 right_profile,
                 seed: seed as u64,

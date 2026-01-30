@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use crate::ai::AiState;
 use crate::ball::{Ball, BallState, CurrentPalette};
-use crate::player::{HoldingBall, HumanControlled, Player, Team, Velocity};
+use crate::player::{Character, HoldingBall, HumanControlled, Player, Team, Velocity};
 use crate::scoring::{CurrentLevel, Score};
 use crate::shooting::LastShotInfo;
 use crate::steal::StealContest;
@@ -120,6 +120,7 @@ pub struct BallSnapshot {
 
 #[derive(Serialize)]
 pub struct PlayerSnapshot {
+    pub character_id: Option<String>,
     pub team: String,
     pub position: (f32, f32),
     pub velocity: (f32, f32),
@@ -156,6 +157,7 @@ pub fn snapshot_trigger_system(
             Option<&HumanControlled>,
             Option<&HoldingBall>,
             &AiState,
+            Option<&Character>,
         ),
         With<Player>,
     >,
@@ -231,8 +233,8 @@ pub fn snapshot_trigger_system(
                 // Find which team is holding the ball (if any)
                 let holder_team = player_query
                     .iter()
-                    .find(|(_, _, _, _, holding, _)| holding.is_some())
-                    .map(|(_, _, team, _, _, _)| format!("{:?}", team));
+                    .find(|(_, _, _, _, holding, _, _)| holding.is_some())
+                    .map(|(_, _, team, _, _, _, _)| format!("{:?}", team));
 
                 BallSnapshot {
                     position: (transform.translation.x, transform.translation.y),
@@ -245,7 +247,8 @@ pub fn snapshot_trigger_system(
         let players: Vec<PlayerSnapshot> = player_query
             .iter()
             .map(
-                |(transform, velocity, team, human, holding, ai_state)| PlayerSnapshot {
+                |(transform, velocity, team, human, holding, ai_state, character)| PlayerSnapshot {
+                    character_id: character.map(|c| format!("{:?}", c.0)),
                     team: format!("{:?}", team),
                     position: (transform.translation.x, transform.translation.y),
                     velocity: (velocity.0.x, velocity.0.y),
@@ -393,6 +396,7 @@ pub fn manual_snapshot(
             Option<&HumanControlled>,
             Option<&HoldingBall>,
             &AiState,
+            Option<&Character>,
         ),
         With<Player>,
     >,
@@ -425,7 +429,8 @@ pub fn manual_snapshot(
     let players: Vec<PlayerSnapshot> = player_query
         .iter()
         .map(
-            |(transform, velocity, team, human, holding, ai_state)| PlayerSnapshot {
+            |(transform, velocity, team, human, holding, ai_state, character)| PlayerSnapshot {
+                character_id: character.map(|c| format!("{:?}", c.0)),
                 team: format!("{:?}", team),
                 position: (transform.translation.x, transform.translation.y),
                 velocity: (velocity.0.x, velocity.0.y),

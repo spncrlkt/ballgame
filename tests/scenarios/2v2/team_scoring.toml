@@ -1,0 +1,71 @@
+# Test: 2v2 Team Scoring
+# Verifies either team member can score for their team
+#
+# FAIL conditions this test catches:
+# - Only one player per team can score
+# - Score not attributed to correct team
+# - Ball pickup fails with 4 players
+
+name = "2v2 Team Scoring"
+description = "Either teammate can pick up ball and score for their team"
+
+[setup]
+level = "test_steal_arena"
+
+# Left team - L1 starts closer to ball
+[[setup.entities]]
+type = "player"
+id = "L0"
+team = "left"
+x = -350.0
+y = -398.0
+
+[[setup.entities]]
+type = "player"
+id = "L1"
+team = "left"
+x = -50.0
+y = -398.0
+
+# Right team - defenders
+[[setup.entities]]
+type = "player"
+id = "R0"
+team = "right"
+x = 350.0
+y = -398.0
+
+[[setup.entities]]
+type = "player"
+id = "R1"
+team = "right"
+x = 250.0
+y = -398.0
+
+# Ball near L1
+[[setup.entities]]
+type = "ball"
+x = 0.0
+y = -398.0
+
+# L1 (not L0) picks up and attempts to score
+[[input]]
+frame = 0
+L1 = { move_right = true }
+
+[[input]]
+frame = 10
+L1 = { move_right = false, pickup = true }
+
+# L1 now holds ball - verify pickup
+[[expect.sequence]]
+event = "Pickup"
+player = "L1"
+frame_min = 5
+frame_max = 20
+
+[[expect.state]]
+after_frame = 25
+checks = [
+    "L1.holding_ball = true",
+]

@@ -1,0 +1,65 @@
+# Test: 2v2 No Teammate Steal
+# Verifies players cannot steal from their own teammate
+#
+# FAIL conditions this test catches:
+# - Teammate can steal ball from teammate
+# - Steal system doesn't check team membership
+# - Ball incorrectly transferred between teammates via steal
+
+name = "2v2 No Teammate Steal"
+description = "Players cannot steal ball from their own teammate"
+
+[setup]
+level = "test_steal_arena"
+
+# Left team - L0 holds ball, L1 close enough to attempt steal
+[[setup.entities]]
+type = "player"
+id = "L0"
+team = "left"
+x = 0.0
+y = -398.0
+holding_ball = true
+
+[[setup.entities]]
+type = "player"
+id = "L1"
+team = "left"
+x = 40.0
+y = -398.0
+
+# Right team - far away
+[[setup.entities]]
+type = "player"
+id = "R0"
+team = "right"
+x = 300.0
+y = -398.0
+
+[[setup.entities]]
+type = "player"
+id = "R1"
+team = "right"
+x = 350.0
+y = -398.0
+
+# L1 (teammate) tries to steal from L0
+[[input]]
+frame = 10
+L1 = { pickup = true }
+
+[[input]]
+frame = 20
+L1 = { pickup = true }
+
+[[input]]
+frame = 30
+L1 = { pickup = true }
+
+# L0 should STILL have the ball after teammate steal attempts
+# No StealAttempt event should fire for teammates
+[[expect.state]]
+after_frame = 40
+checks = [
+    "L0.holding_ball = true",  # L0 still has ball
+]

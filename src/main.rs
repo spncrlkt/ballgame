@@ -323,7 +323,14 @@ fn main() {
         )
         .add_systems(
             Update,
-            (ui::update_debug_text, ui::update_score_level_text).run_if(replay::not_replay_active),
+            (
+                ui::update_debug_text,
+                ui::update_score_level_text,
+                ui::spawn_character_indicators,
+                ui::update_character_indicators,
+                ui::update_indicator_colors,
+            )
+                .run_if(replay::not_replay_active),
         )
         .add_systems(
             Update,
