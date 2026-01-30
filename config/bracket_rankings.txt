@@ -1,14 +1,14 @@
-# Bracket Rankings (Tournament 20260129_150125)
-# Generated: 2026-01-29 15:01:25
+# Bracket Rankings (Tournament 20260129_162922)
+# Generated: 2026-01-29 16:29:22
 # Format: BO3 FT5
 #
 # Rank | Profile                  | Match W-L | Game W-L
 # -----+--------------------------+-----------+---------
-     8 | v4_RS_Hawk               |    4-3    |  11-9  
-     1 | v12_Evo_E                |    4-1    |   8-5  
-     4 | v12_Evo_H                |    2-2    |   6-5  
-     5 | v4_RS_Eagle              |    2-2    |   4-4  
-     6 | v12_Evo_K                |    1-2    |   3-4  
-     7 | v12_Evo_J                |    1-2    |   3-5  
-     3 | v4_Tri_B                 |    0-1    |   1-2  
-     4 | v12_Evo_AO               |    0-1    |   0-2  
+     1 | v4_Agg_88                |    5-2    |  10-6  
+     2 | v4_Agg_82                |    4-1    |   8-3  
+     3 | v4_Tri_D                 |    2-2    |   6-4  
+     4 | v4_Qual_32               |    2-2    |   4-4  
+     5 | v4_RA_Core               |    1-2    |   3-5  
+     6 | v4_Tri_B                 |    1-2    |   2-4  
+     7 | v4_RA_Prime              |    0-2    |   1-4  
+     8 | v1_Rusher                |    0-2    |   0-4  

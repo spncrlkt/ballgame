@@ -1946,11 +1946,10 @@ fn export_bracket_rankings(
     content.push_str("# Rank | Profile                  | Match W-L | Game W-L\n");
     content.push_str("# -----+--------------------------+-----------+---------\n");
 
-    for (_idx, entry) in &sorted_entries {
-        let rank = entry.final_placement.unwrap_or(0);
+    for (rank, (_idx, entry)) in sorted_entries.iter().enumerate() {
         content.push_str(&format!(
             "{:>6} | {:<24} | {:>4}-{:<4} | {:>3}-{:<3}\n",
-            rank,
+            rank + 1,
             entry.profile_name,
             entry.match_wins,
             entry.match_losses,

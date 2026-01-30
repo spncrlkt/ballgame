@@ -113,13 +113,13 @@ impl BracketReport {
             self.total_games, self.total_events
         ));
 
-        // Standings table
+        // Standings table - ranks are 1-indexed based on sort order (by match wins, game wins)
         md.push_str("## Final Standings\n\n");
         md.push_str("| Rank | Profile | Seed | Match W-L | Game W-L | Match% | Game% |\n");
         md.push_str("|------|---------|------|-----------|----------|--------|-------|\n");
 
-        for standing in &self.standings {
-            let rank = standing.final_placement.unwrap_or(0);
+        for (i, standing) in self.standings.iter().enumerate() {
+            let rank = i + 1;
             md.push_str(&format!(
                 "| {} | {} | {} | {}-{} | {}-{} | {:.1}% | {:.1}% |\n",
                 rank,
@@ -216,8 +216,8 @@ impl BracketReport {
         content.push_str("#\n");
         content.push_str("# Rank, Profile, MatchW, MatchL, GameW, GameL\n");
 
-        for standing in &self.standings {
-            let rank = standing.final_placement.unwrap_or(0);
+        for (i, standing) in self.standings.iter().enumerate() {
+            let rank = i + 1;
             content.push_str(&format!(
                 "{},{},{},{},{},{}\n",
                 rank,

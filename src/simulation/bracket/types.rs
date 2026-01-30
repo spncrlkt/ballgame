@@ -554,9 +554,11 @@ impl BracketState {
                         if *feeder == Some(match_id) {
                             // Determine if this slot wants winner or loser
                             // In losers bracket, we might want the loser from winners bracket
+                            // In Losers Round 1, BOTH slots receive losers from Winners Round 1
+                            // In Losers Round 2+, only slot 1 receives new losers from Winners
                             let wants_loser = m.side == BracketSide::Losers
                                 && side == BracketSide::Winners
-                                && slot == 1;
+                                && (m.round == 1 || slot == 1);
                             return Some((m.id, slot, wants_loser));
                         }
                     }

@@ -614,7 +614,7 @@ pub fn format_standings(bracket: &BracketState) -> String {
 
     output.push_str("\n=== Double Elimination Bracket Results ===\n\n");
 
-    // Final standings
+    // Final standings - sort by performance (match wins, then game wins, then fewer losses)
     output.push_str("Final Standings:\n");
     output.push_str(&format!(
         "{:>4} | {:>16} | {:>4} | {:>5} | {:>5}\n",
@@ -625,12 +625,20 @@ pub fn format_standings(bracket: &BracketState) -> String {
         "", "", "", "", ""
     ));
 
-    let placements = bracket.placements();
-    for entry in placements.iter().take(16) {
-        // Show top 16
+    // Sort by match wins (desc), then game wins (desc), then game losses (asc)
+    let mut entries: Vec<_> = bracket.entries.iter().collect();
+    entries.sort_by(|a, b| {
+        b.match_wins
+            .cmp(&a.match_wins)
+            .then_with(|| b.game_wins.cmp(&a.game_wins))
+            .then_with(|| a.game_losses.cmp(&b.game_losses))
+    });
+
+    for (rank, entry) in entries.iter().enumerate().take(32) {
+        // Show top 32
         output.push_str(&format!(
             "{:>4} | {:>16} | {:>4} | {:>2}-{:<2} | {:>2}-{:<2}\n",
-            entry.final_placement.unwrap_or(0),
+            rank + 1,
             truncate_name(&entry.profile_name, 16),
             entry.seed,
             entry.match_wins,
@@ -640,8 +648,8 @@ pub fn format_standings(bracket: &BracketState) -> String {
         ));
     }
 
-    if bracket.entries.len() > 16 {
-        output.push_str(&format!("... and {} more\n", bracket.entries.len() - 16));
+    if bracket.entries.len() > 32 {
+        output.push_str(&format!("... and {} more\n", bracket.entries.len() - 32));
     }
 
     // Champion highlight

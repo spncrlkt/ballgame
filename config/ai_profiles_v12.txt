@@ -4,6 +4,8 @@
 # Mark deprecated profiles with "# DEPRECATED" comment instead.
 # This preserves historical data for tournament analysis.
 #
+# WARMUP_SEED: v1_Rusher
+#
 # Lineage:
 #   v1 = Original 5 profiles
 #   v2 = Top 4 from 25-profile tournament

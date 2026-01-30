@@ -242,10 +242,10 @@ fn main() {
                     "Rank", "Profile", "Match", "Game"
                 );
                 println!("{:-<4} {:-<24} {:->8} {:->10}", "", "", "", "");
-                for standing in report.standings.iter().take(10) {
+                for (i, standing) in report.standings.iter().enumerate().take(10) {
                     println!(
                         "{:<4} {:<24} {:>3}-{:<3} {:>4}-{:<4}",
-                        standing.final_placement.unwrap_or(0),
+                        i + 1,
                         &standing.profile_name[..standing.profile_name.len().min(24)],
                         standing.match_wins,
                         standing.match_losses,
@@ -253,6 +253,29 @@ fn main() {
                         standing.game_losses
                     );
                 }
+
+                // Print next steps
+                println!("\n=== Next Steps ===\n");
+                println!("Generate evolved profiles from bracket results:\n");
+                println!("  python3 scripts/generate_bracket_profiles.py \\");
+                println!("    --db {} \\", db_path.display());
+                println!("    --profiles config/ai_profiles_v12.txt \\");
+                println!("    --output config/ai_profiles_v13.txt \\");
+                println!("    --version v13");
+                println!();
+                println!("Or export rankings first, then generate:");
+                println!();
+                println!(
+                    "  cargo run --bin analyze -- --bracket --bracket-db {} \\",
+                    db_path.display()
+                );
+                println!("    --bracket-rankings config/bracket_rankings.txt");
+                println!();
+                println!("  python3 scripts/generate_bracket_profiles.py \\");
+                println!("    --rankings config/bracket_rankings.txt \\");
+                println!("    --profiles config/ai_profiles_v12.txt \\");
+                println!("    --output config/ai_profiles_v13.txt \\");
+                println!("    --version v13");
             }
             Err(e) => {
                 eprintln!("Failed to run bracket analysis: {}", e);
