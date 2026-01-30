@@ -53,16 +53,23 @@ pub use countdown::{
     trigger_countdown_on_level_change, update_countdown,
 };
 pub use events::{
-    BusEvent, ControllerSource, EventBuffer, EventBus, GameConfig, GameEvent, LevelChangeTracker,
-    PlayerId, emit_level_change_events, update_event_bus_time,
+    BusEvent, CharacterId, CharacterTickData, ControllerSource, EventBuffer, EventBus, GameConfig,
+    GameEvent, LevelChangeTracker, PlayerId, TeamId, emit_level_change_events,
+    update_event_bus_time,
 };
 pub use helpers::*;
-pub use input::PlayerInput;
+pub use input::{
+    ControllerMapping, GameMode, GamepadInfo, GamepadRegistry, InputBuffers, InputSource,
+    InputSourceId, InputSourceType, PersistentMapping, PlayerInput, RawInput,
+    AI_SOURCE_ID_START, CONTROLLER_MAPPING_FILE, GAMEPAD_SOURCE_ID_START, KEYBOARD_SOURCE_ID,
+};
 pub use levels::{LevelData, LevelDatabase, PlatformDef};
 pub use palettes::{PALETTES_FILE, Palette, PaletteDatabase};
 pub use player::{
-    CoyoteTimer, Facing, Grounded, HoldingBall, HumanControlTarget, HumanControlled, JumpState,
-    Player, TargetBasket, Team, Velocity,
+    Character, CharacterSpawnConfig, ControlledBy, CoyoteTimer, Facing, Grounded, HoldingBall,
+    HumanControlTarget, HumanControlled, JumpState, Player, TargetBasket, Team, Velocity,
+    color_for_character, initial_facing, spawn_character, spawn_characters_for_mode,
+    spawn_position, target_basket_for_character, team_for_character,
 };
 pub use presets::{
     BallPreset, CompositePreset, CurrentPresets, MovementPreset, PRESETS_FILE, PresetDatabase,

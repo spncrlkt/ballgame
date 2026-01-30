@@ -21,7 +21,7 @@
 //!          ^frame|left_pos|left_vel|right_pos|right_vel|ball_pos|ball_vel|state
 //! ```
 
-use super::types::{ControllerSource, GameConfig, GameEvent, PlayerId};
+use super::types::{CharacterId, CharacterTickData, ControllerSource, GameConfig, GameEvent, PlayerId};
 
 /// Format a float with fixed precision (1 decimal)
 fn fmt_f1(v: f32) -> String {
@@ -190,6 +190,140 @@ pub fn serialize_event(time_ms: u32, event: &GameEvent) -> String {
         GameEvent::ResetScores => String::new(),
         GameEvent::ResetBall => String::new(),
         GameEvent::LevelChange { level_id } => level_id.clone(),
+        // === 2v2 Events with CharacterId ===
+        GameEvent::Goal2 {
+            character,
+            score_left,
+            score_right,
+        } => {
+            format!("{}|{}|{}", character, score_left, score_right)
+        }
+        GameEvent::Pickup2 { character } => character.to_string(),
+        GameEvent::Drop2 { character } => character.to_string(),
+        GameEvent::ShotStart2 {
+            character,
+            pos,
+            quality,
+        } => {
+            format!("{}|{}|{:.2}", character, fmt_pos(*pos), quality)
+        }
+        GameEvent::ShotRelease2 {
+            character,
+            charge,
+            angle,
+            power,
+        } => {
+            format!("{}|{:.2}|{:.1}|{:.1}", character, charge, angle, power)
+        }
+        GameEvent::Pass { from, to } => {
+            format!("{}|{}", from, to)
+        }
+        GameEvent::StealAttempt2 { attacker } => attacker.to_string(),
+        GameEvent::StealSuccess2 { attacker } => attacker.to_string(),
+        GameEvent::StealFail2 { attacker } => attacker.to_string(),
+        GameEvent::StealOutOfRange2 { attacker } => attacker.to_string(),
+        GameEvent::Jump2 { character } => character.to_string(),
+        GameEvent::Land2 { character } => character.to_string(),
+        GameEvent::AiGoal2 { character, goal } => {
+            format!("{}|{}", character, goal)
+        }
+        GameEvent::NavStart2 { character, target } => {
+            format!("{}|{}", character, fmt_pos(*target))
+        }
+        GameEvent::NavComplete2 { character } => character.to_string(),
+        GameEvent::Input2 {
+            character,
+            source,
+            move_x,
+            jump,
+            throw,
+            pickup,
+            pass,
+        } => {
+            let mut flags = String::new();
+            if *jump {
+                flags.push('J');
+            }
+            if *throw {
+                flags.push('T');
+            }
+            if *pickup {
+                flags.push('P');
+            }
+            if *pass {
+                flags.push('X'); // X for pass to avoid conflict
+            }
+            if flags.is_empty() {
+                flags.push('-');
+            }
+            format!("{}|{}|{:.1}|{}", character, source, move_x, flags)
+        }
+        GameEvent::Tick2 {
+            frame,
+            characters,
+            ball_pos,
+            ball_vel,
+            ball_state,
+        } => {
+            // Format: frame|char_count|c1_id:pos,vel,ctrl|c2_id:...|ball_pos|ball_vel|state
+            let char_data: Vec<String> = characters
+                .iter()
+                .map(|c| {
+                    format!(
+                        "{}:{},{},{},{},{}",
+                        c.id, c.pos.0, c.pos.1, c.vel.0, c.vel.1, c.controller
+                    )
+                })
+                .collect();
+            format!(
+                "{}|{}|{}|{}|{}|{}",
+                frame,
+                characters.len(),
+                char_data.join("|"),
+                fmt_pos(*ball_pos),
+                fmt_pos(*ball_vel),
+                ball_state
+            )
+        }
+        GameEvent::ControllerInput2 {
+            character,
+            source_id,
+            move_x,
+            jump,
+            jump_pressed,
+            throw,
+            throw_released,
+            pickup,
+            pass,
+        } => {
+            format!(
+                "{}|{}|{:.2}|{}|{}|{}|{}|{}|{}",
+                character,
+                source_id,
+                move_x,
+                if *jump { 1 } else { 0 },
+                if *jump_pressed { 1 } else { 0 },
+                if *throw { 1 } else { 0 },
+                if *throw_released { 1 } else { 0 },
+                if *pickup { 1 } else { 0 },
+                if *pass { 1 } else { 0 }
+            )
+        }
+        GameEvent::ControllerAssign {
+            character,
+            source_id,
+            descriptor,
+        } => {
+            format!("{}|{}|{}", character, source_id, descriptor)
+        }
+        GameEvent::ControllerSwap2 {
+            character,
+            old_source,
+            new_source,
+        } => {
+            format!("{}|{}|{}", character, old_source, new_source)
+        }
+        GameEvent::ResetAiState2 { character } => character.to_string(),
     };
 
     format!("{}|{}|{}", ts, code, data)
@@ -330,6 +464,135 @@ pub fn parse_event(line: &str) -> Option<(u32, GameEvent)> {
         "LC" if !data.is_empty() => GameEvent::LevelChange {
             level_id: data[0].to_string(),
         },
+        // === 2v2 Event Parsing ===
+        "G2" if data.len() >= 3 => GameEvent::Goal2 {
+            character: parse_character(data[0])?,
+            score_left: data[1].parse().ok()?,
+            score_right: data[2].parse().ok()?,
+        },
+        "P2" if !data.is_empty() => GameEvent::Pickup2 {
+            character: parse_character(data[0])?,
+        },
+        "D2" if !data.is_empty() => GameEvent::Drop2 {
+            character: parse_character(data[0])?,
+        },
+        "S2" if data.len() >= 3 => GameEvent::ShotStart2 {
+            character: parse_character(data[0])?,
+            pos: parse_pos(data[1])?,
+            quality: data[2].parse().ok()?,
+        },
+        "R2" if data.len() >= 4 => GameEvent::ShotRelease2 {
+            character: parse_character(data[0])?,
+            charge: data[1].parse().ok()?,
+            angle: data[2].parse().ok()?,
+            power: data[3].parse().ok()?,
+        },
+        "PA" if data.len() >= 2 => GameEvent::Pass {
+            from: parse_character(data[0])?,
+            to: parse_character(data[1])?,
+        },
+        "A2" if !data.is_empty() => GameEvent::StealAttempt2 {
+            attacker: parse_character(data[0])?,
+        },
+        "+2" if !data.is_empty() => GameEvent::StealSuccess2 {
+            attacker: parse_character(data[0])?,
+        },
+        "-2" if !data.is_empty() => GameEvent::StealFail2 {
+            attacker: parse_character(data[0])?,
+        },
+        "O2" if !data.is_empty() => GameEvent::StealOutOfRange2 {
+            attacker: parse_character(data[0])?,
+        },
+        "J2" if !data.is_empty() => GameEvent::Jump2 {
+            character: parse_character(data[0])?,
+        },
+        "L2" if !data.is_empty() => GameEvent::Land2 {
+            character: parse_character(data[0])?,
+        },
+        "AI" if data.len() >= 2 => GameEvent::AiGoal2 {
+            character: parse_character(data[0])?,
+            goal: data[1].to_string(),
+        },
+        "N2" if data.len() >= 2 => GameEvent::NavStart2 {
+            character: parse_character(data[0])?,
+            target: parse_pos(data[1])?,
+        },
+        "C2" if !data.is_empty() => GameEvent::NavComplete2 {
+            character: parse_character(data[0])?,
+        },
+        "I2" if data.len() >= 4 => GameEvent::Input2 {
+            character: parse_character(data[0])?,
+            source: data[1].parse().ok()?,
+            move_x: data[2].parse().ok()?,
+            jump: data[3].contains('J'),
+            throw: data[3].contains('T'),
+            pickup: data[3].contains('P'),
+            pass: data[3].contains('X'),
+        },
+        "T2" if data.len() >= 3 => {
+            let frame: u64 = data[0].parse().ok()?;
+            let char_count: usize = data[1].parse().ok()?;
+            // Parse character data starting at data[2] for char_count entries
+            let mut characters = Vec::with_capacity(char_count);
+            for i in 0..char_count {
+                if data.len() <= 2 + i {
+                    return None;
+                }
+                let char_str = data[2 + i];
+                // Format: id:x,y,vx,vy,ctrl
+                let parts: Vec<&str> = char_str.split(':').collect();
+                if parts.len() != 2 {
+                    return None;
+                }
+                let id = parse_character(parts[0])?;
+                let nums: Vec<&str> = parts[1].split(',').collect();
+                if nums.len() != 5 {
+                    return None;
+                }
+                characters.push(CharacterTickData {
+                    id,
+                    pos: (nums[0].parse().ok()?, nums[1].parse().ok()?),
+                    vel: (nums[2].parse().ok()?, nums[3].parse().ok()?),
+                    controller: nums[4].parse().ok()?,
+                });
+            }
+            // After characters, we have ball_pos|ball_vel|ball_state
+            let ball_idx = 2 + char_count;
+            if data.len() < ball_idx + 3 {
+                return None;
+            }
+            GameEvent::Tick2 {
+                frame,
+                characters,
+                ball_pos: parse_pos(data[ball_idx])?,
+                ball_vel: parse_pos(data[ball_idx + 1])?,
+                ball_state: data[ball_idx + 2].chars().next()?,
+            }
+        }
+        "CA" if data.len() >= 3 => GameEvent::ControllerAssign {
+            character: parse_character(data[0])?,
+            source_id: data[1].parse().ok()?,
+            descriptor: data[2].to_string(),
+        },
+        "W2" if data.len() >= 3 => GameEvent::ControllerSwap2 {
+            character: parse_character(data[0])?,
+            old_source: data[1].parse().ok()?,
+            new_source: data[2].parse().ok()?,
+        },
+        "X2" if data.len() >= 9 => GameEvent::ControllerInput2 {
+            character: parse_character(data[0])?,
+            source_id: data[1].parse().ok()?,
+            move_x: data[2].parse().ok()?,
+            jump: data[3] == "1",
+            jump_pressed: data[4] == "1",
+            throw: data[5] == "1",
+            throw_released: data[6] == "1",
+            pickup: data[7] == "1",
+            pass: data[8] == "1",
+        },
+        "Z2" if !data.is_empty() => GameEvent::ResetAiState2 {
+            character: parse_character(data[0])?,
+        },
         _ => return None,
     };
 
@@ -342,6 +605,10 @@ fn parse_player(s: &str) -> Option<PlayerId> {
         "R" => Some(PlayerId::R),
         _ => None,
     }
+}
+
+fn parse_character(s: &str) -> Option<CharacterId> {
+    CharacterId::from_str(s)
 }
 
 fn parse_source(s: &str) -> Option<ControllerSource> {

@@ -1,5 +1,16 @@
 //! Input module - PlayerInput resource and capture_input system
 
+pub mod mapping;
+pub mod source;
+
+pub use mapping::{
+    ControllerMapping, GameMode, PersistentMapping, CONTROLLER_MAPPING_FILE,
+};
+pub use source::{
+    GamepadInfo, GamepadRegistry, InputBuffers, InputSource, InputSourceId, InputSourceType,
+    RawInput, AI_SOURCE_ID_START, GAMEPAD_SOURCE_ID_START, KEYBOARD_SOURCE_ID,
+};
+
 use bevy::prelude::*;
 
 use crate::constants::*;

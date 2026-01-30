@@ -23,9 +23,9 @@ pub use world_model::{PlatformBounds, extract_platform_data, extract_platforms_f
 
 use bevy::prelude::*;
 
-use crate::events::{EventBus, GameEvent, PlayerId};
+use crate::events::{CharacterId, EventBus, GameEvent, PlayerId};
 use crate::input::PlayerInput;
-use crate::player::{HumanControlTarget, HumanControlled, Player, Team};
+use crate::player::{Character, HumanControlTarget, HumanControlled, Player, Team};
 
 /// Per-entity input buffer used by physics systems.
 /// All players have this component - human input is copied here, AI writes directly.
@@ -38,6 +38,8 @@ pub struct InputState {
     pub pickup_pressed: bool,
     pub throw_held: bool,
     pub throw_released: bool,
+    /// Pass button pressed (for 2v2 mode - pass to teammate)
+    pub pass_pressed: bool,
 }
 
 /// AI state machine tracking current goal and parameters
@@ -134,13 +136,14 @@ pub fn copy_human_input(
 }
 
 /// Swap which player the human controls (Q key / L bumper).
-/// Cycles through: Left player → Right player → Observer (both AI) → Left player
+/// For 1v1: Cycles through L0 → R0 → Observer → L0
+/// For 2v2: Cycles through L0 → L1 → R0 → R1 → Observer → L0
 /// Emits ControlSwap event to EventBus for auditability.
 pub fn swap_control(
     mut commands: Commands,
     mut input: ResMut<PlayerInput>,
-    players: Query<(Entity, &Team), With<Player>>,
-    human_query: Query<(Entity, &Team), (With<Player>, With<HumanControlled>)>,
+    players: Query<(Entity, &Team, Option<&Character>), With<Player>>,
+    human_query: Query<(Entity, &Team, Option<&Character>), (With<Player>, With<HumanControlled>)>,
     mut input_states: Query<&mut InputState>,
     mut human_target: ResMut<HumanControlTarget>,
     mut event_bus: ResMut<EventBus>,
@@ -150,46 +153,111 @@ pub fn swap_control(
     }
     input.swap_pressed = false;
 
-    // Find left and right players
-    let mut left_player = None;
-    let mut right_player = None;
-    for (entity, team) in &players {
-        match team {
-            Team::Left => left_player = Some(entity),
-            Team::Right => right_player = Some(entity),
+    // Collect all players by character ID (or team if no Character component)
+    let mut player_entities: std::collections::HashMap<CharacterId, Entity> =
+        std::collections::HashMap::new();
+
+    for (entity, team, character) in &players {
+        if let Some(char) = character {
+            player_entities.insert(char.0, entity);
+        } else {
+            // Legacy: no Character component, use Team to determine
+            match team {
+                Team::Left => {
+                    player_entities.insert(CharacterId::L0, entity);
+                }
+                Team::Right => {
+                    player_entities.insert(CharacterId::R0, entity);
+                }
+            }
         }
     }
 
-    let (Some(left), Some(right)) = (left_player, right_player) else {
-        return;
-    };
+    // Build cycle order based on which characters exist
+    // Order: L0 → L1 → R0 → R1 → Observer (None)
+    let all_chars = [
+        CharacterId::L0,
+        CharacterId::L1,
+        CharacterId::R0,
+        CharacterId::R1,
+    ];
+    let available_chars: Vec<CharacterId> = all_chars
+        .iter()
+        .filter(|c| player_entities.contains_key(c))
+        .copied()
+        .collect();
 
-    // Determine current state and cycle to next
-    // Left → Right → Observer → Left
-    let (from_player, to_player) = match human_query.iter().next() {
-        Some((_, Team::Left)) => {
-            // Currently controlling left, switch to right
-            commands.entity(left).remove::<HumanControlled>();
-            commands.entity(right).insert(HumanControlled);
-            human_target.0 = Some(PlayerId::R);
-            info!("Control: Right player");
-            (Some(PlayerId::L), Some(PlayerId::R))
+    if available_chars.is_empty() {
+        return;
+    }
+
+    // Find current controlled character
+    let current_char: Option<CharacterId> = human_query.iter().next().and_then(|(_, team, character)| {
+        if let Some(char) = character {
+            Some(char.0)
+        } else {
+            // Legacy: derive from team
+            match team {
+                Team::Left => Some(CharacterId::L0),
+                Team::Right => Some(CharacterId::R0),
+            }
         }
-        Some((_, Team::Right)) => {
-            // Currently controlling right, switch to observer mode
-            commands.entity(right).remove::<HumanControlled>();
-            human_target.0 = None;
-            info!("Control: Observer (both AI)");
-            (Some(PlayerId::R), None)
+    });
+
+    // Determine next character in cycle
+    // cycle: [L0, L1, R0, R1] → None → [L0, ...]
+    let next_char: Option<CharacterId> = match current_char {
+        Some(current) => {
+            // Find index of current in available_chars
+            if let Some(idx) = available_chars.iter().position(|c| *c == current) {
+                if idx + 1 < available_chars.len() {
+                    // Move to next character
+                    Some(available_chars[idx + 1])
+                } else {
+                    // End of list, go to observer mode
+                    None
+                }
+            } else {
+                // Current not found, go to first
+                Some(available_chars[0])
+            }
         }
         None => {
-            // Observer mode, switch to left
-            commands.entity(left).insert(HumanControlled);
-            human_target.0 = Some(PlayerId::L);
-            info!("Control: Left player");
-            (None, Some(PlayerId::L))
+            // Observer mode, go to first character
+            Some(available_chars[0])
         }
     };
+
+    // Remove HumanControlled from current
+    if let Some((entity, _, _)) = human_query.iter().next() {
+        commands.entity(entity).remove::<HumanControlled>();
+    }
+
+    // Add HumanControlled to next (if not observer mode)
+    if let Some(next) = next_char {
+        if let Some(&entity) = player_entities.get(&next) {
+            commands.entity(entity).insert(HumanControlled);
+            // Update human_target using legacy PlayerId format for compatibility
+            human_target.0 = match next {
+                CharacterId::L0 | CharacterId::L1 => Some(PlayerId::L),
+                CharacterId::R0 | CharacterId::R1 => Some(PlayerId::R),
+            };
+            info!("Control: {} player", next);
+        }
+    } else {
+        human_target.0 = None;
+        info!("Control: Observer (all AI)");
+    }
+
+    // Convert to legacy PlayerId format for event (for backward compatibility)
+    let from_player = current_char.map(|c| match c.team() {
+        crate::events::TeamId::Left => PlayerId::L,
+        crate::events::TeamId::Right => PlayerId::R,
+    });
+    let to_player = next_char.map(|c| match c.team() {
+        crate::events::TeamId::Left => PlayerId::L,
+        crate::events::TeamId::Right => PlayerId::R,
+    });
 
     // Emit ControlSwap event for auditability
     event_bus.emit(GameEvent::ControlSwap {
@@ -197,7 +265,7 @@ pub fn swap_control(
         to_player,
     });
 
-    // Reset both players' InputState to prevent stale input
+    // Reset all players' InputState to prevent stale input
     for mut input_state in &mut input_states {
         *input_state = InputState::default();
     }

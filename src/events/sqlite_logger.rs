@@ -384,6 +384,107 @@ impl SqliteEventLogger {
         )
         .ok()
     }
+
+    /// Record an input source for the current match
+    ///
+    /// # Arguments
+    /// * `source_id` - Unique ID for this input source
+    /// * `source_type` - Type of source: "keyboard", "gamepad", or "ai"
+    /// * `source_detail` - Additional details (gamepad name or AI profile)
+    pub fn record_input_source(
+        &self,
+        source_id: u32,
+        source_type: &str,
+        source_detail: Option<&str>,
+    ) {
+        if !self.enabled {
+            return;
+        }
+
+        let match_id = match self.current_match_id.lock() {
+            Ok(guard) => match *guard {
+                Some(id) => id,
+                None => return,
+            },
+            Err(_) => return,
+        };
+
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        if let Err(e) = conn.execute(
+            "INSERT OR REPLACE INTO input_sources (match_id, source_id, source_type, source_detail) VALUES (?1, ?2, ?3, ?4)",
+            params![match_id, source_id, source_type, source_detail],
+        ) {
+            warn!("Failed to record input source: {}", e);
+        }
+    }
+
+    /// Record a character assignment for the current match
+    ///
+    /// # Arguments
+    /// * `character_id` - Character ID (e.g., "L0", "L1", "R0", "R1")
+    /// * `initial_source_id` - Source controlling this character at match start (None = AI)
+    /// * `ai_profile` - AI profile name if AI-controlled
+    pub fn record_match_character(
+        &self,
+        character_id: &str,
+        initial_source_id: Option<u32>,
+        ai_profile: Option<&str>,
+    ) {
+        if !self.enabled {
+            return;
+        }
+
+        let match_id = match self.current_match_id.lock() {
+            Ok(guard) => match *guard {
+                Some(id) => id,
+                None => return,
+            },
+            Err(_) => return,
+        };
+
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        if let Err(e) = conn.execute(
+            "INSERT OR REPLACE INTO match_characters (match_id, character_id, initial_source_id, ai_profile) VALUES (?1, ?2, ?3, ?4)",
+            params![match_id, character_id, initial_source_id, ai_profile],
+        ) {
+            warn!("Failed to record match character: {}", e);
+        }
+    }
+
+    /// Update the game mode for the current match
+    pub fn set_game_mode(&self, game_mode: &str) {
+        if !self.enabled {
+            return;
+        }
+
+        let match_id = match self.current_match_id.lock() {
+            Ok(guard) => match *guard {
+                Some(id) => id,
+                None => return,
+            },
+            Err(_) => return,
+        };
+
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        if let Err(e) = conn.execute(
+            "UPDATE matches SET game_mode = ?1 WHERE id = ?2",
+            params![game_mode, match_id],
+        ) {
+            warn!("Failed to set game mode: {}", e);
+        }
+    }
 }
 
 /// Initialize the database schema
@@ -410,7 +511,8 @@ fn init_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
             score_left INTEGER NOT NULL,
             score_right INTEGER NOT NULL,
             duration_secs REAL NOT NULL,
-            winner TEXT NOT NULL
+            winner TEXT NOT NULL,
+            game_mode TEXT DEFAULT '1v1'
         );
 
         CREATE TABLE IF NOT EXISTS points (
@@ -441,10 +543,33 @@ fn init_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
             avg_shot_quality REAL NOT NULL DEFAULT 0.0
         );
 
+        -- Input sources for a match (keyboard, gamepads, AI)
+        CREATE TABLE IF NOT EXISTS input_sources (
+            id INTEGER PRIMARY KEY,
+            match_id INTEGER REFERENCES matches(id),
+            source_id INTEGER NOT NULL,
+            source_type TEXT NOT NULL,
+            source_detail TEXT,
+            UNIQUE(match_id, source_id)
+        );
+
+        -- Character assignments for a match (which characters exist and their initial controllers)
+        CREATE TABLE IF NOT EXISTS match_characters (
+            id INTEGER PRIMARY KEY,
+            match_id INTEGER REFERENCES matches(id),
+            character_id TEXT NOT NULL,
+            initial_source_id INTEGER,
+            ai_profile TEXT,
+            UNIQUE(match_id, character_id)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_matches_session ON matches(session_id);
         CREATE INDEX IF NOT EXISTS idx_matches_profiles ON matches(left_profile, right_profile);
         CREATE INDEX IF NOT EXISTS idx_matches_level ON matches(level);
+        CREATE INDEX IF NOT EXISTS idx_matches_game_mode ON matches(game_mode);
         CREATE INDEX IF NOT EXISTS idx_player_stats_match ON player_stats(match_id);
+        CREATE INDEX IF NOT EXISTS idx_input_sources_match ON input_sources(match_id);
+        CREATE INDEX IF NOT EXISTS idx_match_characters_match ON match_characters(match_id);
 
         -- Event bus events table for full auditability
         CREATE TABLE IF NOT EXISTS events (
@@ -496,8 +621,10 @@ fn init_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         "#,
     )?;
 
+    // Migration: add columns to existing tables if they don't exist
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);
     let _ = conn.execute("ALTER TABLE matches ADD COLUMN display_name TEXT", []);
+    let _ = conn.execute("ALTER TABLE matches ADD COLUMN game_mode TEXT DEFAULT '1v1'", []);
     let _ = conn.execute("ALTER TABLE events ADD COLUMN point_id INTEGER", []);
     let _ = conn.execute("ALTER TABLE events ADD COLUMN tick_frame INTEGER", []);
     Ok(())

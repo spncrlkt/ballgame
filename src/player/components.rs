@@ -2,11 +2,29 @@
 
 use bevy::prelude::*;
 
+use crate::events::CharacterId;
+use crate::input::InputSourceId;
 use crate::world::Basket;
 
 /// Marker for player entities
 #[derive(Component)]
 pub struct Player;
+
+/// Identifies which character this entity represents (L0, L1, R0, R1)
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Character(pub CharacterId);
+
+impl Character {
+    pub fn id(&self) -> CharacterId {
+        self.0
+    }
+}
+
+/// Identifies which input source controls this character
+/// For human players: keyboard (0) or gamepad ID
+/// For AI players: AI source ID (1000+)
+#[derive(Component, Debug, Clone, Copy)]
+pub struct ControlledBy(pub InputSourceId);
 
 /// 2D velocity vector - shared by player and ball
 #[derive(Component, Default)]
