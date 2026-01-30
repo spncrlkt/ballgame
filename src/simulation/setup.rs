@@ -11,7 +11,11 @@ use crate::ball::{
 };
 use crate::constants::*;
 use crate::levels::LevelDatabase;
-use crate::player::{CoyoteTimer, Facing, Grounded, JumpState, Player, TargetBasket, Team};
+use crate::events::CharacterId;
+use crate::input::{AI_SOURCE_ID_START, InputSourceId};
+use crate::player::{
+    Character, ControlledBy, CoyoteTimer, Facing, Grounded, JumpState, Player, TargetBasket, Team,
+};
 use crate::scoring::CurrentLevel;
 use crate::shooting::ChargingShot;
 use crate::steal::StealCooldown;
@@ -39,6 +43,10 @@ pub fn sim_setup(
         .map(|p| p.id.clone())
         .unwrap_or_else(|| profile_db.default_profile().id.clone());
 
+    // Source IDs for AI players
+    let left_ai_source: InputSourceId = AI_SOURCE_ID_START;
+    let right_ai_source: InputSourceId = AI_SOURCE_ID_START + 1;
+
     // Spawn left player (AI controlled)
     commands
         .spawn((
@@ -57,6 +65,8 @@ pub fn sim_setup(
             TargetBasket(Basket::Right),
             Collider,
             Team::Left,
+            Character(CharacterId::L0),
+            ControlledBy(left_ai_source),
         ))
         .insert((
             InputState::default(),
@@ -87,6 +97,8 @@ pub fn sim_setup(
             TargetBasket(Basket::Left),
             Collider,
             Team::Right,
+            Character(CharacterId::R0),
+            ControlledBy(right_ai_source),
         ))
         .insert((
             InputState::default(),

@@ -35,29 +35,39 @@ impl CapturedEvent {
         event: &GameEvent,
         entity_map: &std::collections::HashMap<bevy::prelude::Entity, String>,
     ) -> Option<Self> {
-        let (event_type, player_entity) = match event {
-            GameEvent::Pickup { player } => ("Pickup".to_string(), Some(player)),
-            GameEvent::Drop { player } => ("Drop".to_string(), Some(player)),
-            GameEvent::ShotStart { player, .. } => ("ShotStart".to_string(), Some(player)),
-            GameEvent::ShotRelease { player, .. } => ("ShotRelease".to_string(), Some(player)),
-            GameEvent::StealAttempt { attacker } => ("StealAttempt".to_string(), Some(attacker)),
-            GameEvent::StealSuccess { attacker } => ("StealSuccess".to_string(), Some(attacker)),
-            GameEvent::StealFail { attacker } => ("StealFail".to_string(), Some(attacker)),
-            GameEvent::StealOutOfRange { attacker } => {
-                ("StealOutOfRange".to_string(), Some(attacker))
-            }
-            GameEvent::Goal { player, .. } => ("Goal".to_string(), Some(player)),
+        // Extract event type and character ID from both legacy PlayerId and new CharacterId events
+        let (event_type, character_id) = match event {
+            // Prefer *2 variants (CharacterId)
+            GameEvent::Pickup2 { character } => ("Pickup".to_string(), Some(*character)),
+            GameEvent::Drop2 { character } => ("Drop".to_string(), Some(*character)),
+            GameEvent::ShotStart2 { character, .. } => ("ShotStart".to_string(), Some(*character)),
+            GameEvent::ShotRelease2 { character, .. } => ("ShotRelease".to_string(), Some(*character)),
+            GameEvent::StealAttempt2 { attacker } => ("StealAttempt".to_string(), Some(*attacker)),
+            GameEvent::StealSuccess2 { attacker } => ("StealSuccess".to_string(), Some(*attacker)),
+            GameEvent::StealFail2 { attacker } => ("StealFail".to_string(), Some(*attacker)),
+            GameEvent::StealOutOfRange2 { attacker } => ("StealOutOfRange".to_string(), Some(*attacker)),
+            GameEvent::Goal2 { character, .. } => ("Goal".to_string(), Some(*character)),
+            // Fall back to legacy PlayerId events (convert to CharacterId)
+            GameEvent::Pickup { player } => ("Pickup".to_string(), Some(player.to_character_id())),
+            GameEvent::Drop { player } => ("Drop".to_string(), Some(player.to_character_id())),
+            GameEvent::ShotStart { player, .. } => ("ShotStart".to_string(), Some(player.to_character_id())),
+            GameEvent::ShotRelease { player, .. } => ("ShotRelease".to_string(), Some(player.to_character_id())),
+            GameEvent::StealAttempt { attacker } => ("StealAttempt".to_string(), Some(attacker.to_character_id())),
+            GameEvent::StealSuccess { attacker } => ("StealSuccess".to_string(), Some(attacker.to_character_id())),
+            GameEvent::StealFail { attacker } => ("StealFail".to_string(), Some(attacker.to_character_id())),
+            GameEvent::StealOutOfRange { attacker } => ("StealOutOfRange".to_string(), Some(attacker.to_character_id())),
+            GameEvent::Goal { player, .. } => ("Goal".to_string(), Some(player.to_character_id())),
             _ => return None,
         };
 
-        let player = player_entity.and_then(|p| {
-            // Map PlayerId to entity ID string
-            match p {
-                crate::events::PlayerId::L => entity_map
+        let player = character_id.and_then(|c| {
+            // Map CharacterId to entity ID string based on team
+            match c.team() {
+                crate::events::TeamId::Left => entity_map
                     .iter()
                     .find(|(_, id)| id.contains("left") || **id == "attacker" || **id == "p1")
                     .map(|(_, id)| id.clone()),
-                crate::events::PlayerId::R => entity_map
+                crate::events::TeamId::Right => entity_map
                     .iter()
                     .find(|(_, id)| id.contains("right") || **id == "victim" || **id == "p2")
                     .map(|(_, id)| id.clone()),
@@ -348,4 +358,467 @@ fn check_float_comparison(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::events::{CharacterId, GameEvent};
+    #[allow(deprecated)]
+    use crate::events::PlayerId;
+    use bevy::prelude::Entity;
+    use std::collections::HashMap;
+
+    fn create_entity_map() -> HashMap<Entity, String> {
+        let mut map = HashMap::new();
+        // Create fake entities with incrementing indices
+        map.insert(Entity::from_raw_u32(1).expect("valid entity"), "left".to_string());
+        map.insert(Entity::from_raw_u32(2).expect("valid entity"), "right".to_string());
+        map.insert(Entity::from_raw_u32(3).expect("valid entity"), "attacker".to_string());
+        map.insert(Entity::from_raw_u32(4).expect("valid entity"), "victim".to_string());
+        map
+    }
+
+    // === CapturedEvent::from_game_event tests ===
+
+    #[test]
+    fn test_captured_event_from_pickup2() {
+        let entity_map = create_entity_map();
+        let event = GameEvent::Pickup2 {
+            character: CharacterId::L0,
+        };
+        let captured = CapturedEvent::from_game_event(100, &event, &entity_map);
+        assert!(captured.is_some());
+        let captured = captured.unwrap();
+        assert_eq!(captured.frame, 100);
+        assert_eq!(captured.event_type, "Pickup");
+        // Should map to left team entity
+        assert!(captured.player.is_some());
+    }
+
+    #[test]
+    fn test_captured_event_from_goal2_all_characters() {
+        let entity_map = create_entity_map();
+        for character in CharacterId::all() {
+            let event = GameEvent::Goal2 {
+                character,
+                score_left: 1,
+                score_right: 0,
+            };
+            let captured = CapturedEvent::from_game_event(200, &event, &entity_map);
+            assert!(captured.is_some());
+            let captured = captured.unwrap();
+            assert_eq!(captured.event_type, "Goal");
+        }
+    }
+
+    #[test]
+    fn test_captured_event_from_steal_events_2v2() {
+        let entity_map = create_entity_map();
+
+        // StealAttempt2
+        let event = GameEvent::StealAttempt2 { attacker: CharacterId::R0 };
+        let captured = CapturedEvent::from_game_event(300, &event, &entity_map).unwrap();
+        assert_eq!(captured.event_type, "StealAttempt");
+
+        // StealSuccess2
+        let event = GameEvent::StealSuccess2 { attacker: CharacterId::L1 };
+        let captured = CapturedEvent::from_game_event(400, &event, &entity_map).unwrap();
+        assert_eq!(captured.event_type, "StealSuccess");
+
+        // StealFail2
+        let event = GameEvent::StealFail2 { attacker: CharacterId::R1 };
+        let captured = CapturedEvent::from_game_event(500, &event, &entity_map).unwrap();
+        assert_eq!(captured.event_type, "StealFail");
+
+        // StealOutOfRange2
+        let event = GameEvent::StealOutOfRange2 { attacker: CharacterId::L0 };
+        let captured = CapturedEvent::from_game_event(600, &event, &entity_map).unwrap();
+        assert_eq!(captured.event_type, "StealOutOfRange");
+    }
+
+    #[test]
+    fn test_captured_event_from_shot_events_2v2() {
+        let entity_map = create_entity_map();
+
+        // ShotStart2
+        let event = GameEvent::ShotStart2 {
+            character: CharacterId::L0,
+            pos: (-100.0, -350.0),
+            quality: 0.8,
+        };
+        let captured = CapturedEvent::from_game_event(700, &event, &entity_map).unwrap();
+        assert_eq!(captured.event_type, "ShotStart");
+
+        // ShotRelease2
+        let event = GameEvent::ShotRelease2 {
+            character: CharacterId::R1,
+            charge: 0.75,
+            angle: 45.0,
+            power: 600.0,
+        };
+        let captured = CapturedEvent::from_game_event(800, &event, &entity_map).unwrap();
+        assert_eq!(captured.event_type, "ShotRelease");
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_captured_event_from_legacy_pickup() {
+        let entity_map = create_entity_map();
+        let event = GameEvent::Pickup { player: PlayerId::L };
+        let captured = CapturedEvent::from_game_event(900, &event, &entity_map);
+        assert!(captured.is_some());
+        let captured = captured.unwrap();
+        assert_eq!(captured.event_type, "Pickup");
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_captured_event_from_legacy_goal() {
+        let entity_map = create_entity_map();
+        let event = GameEvent::Goal {
+            player: PlayerId::R,
+            score_left: 0,
+            score_right: 1,
+        };
+        let captured = CapturedEvent::from_game_event(1000, &event, &entity_map).unwrap();
+        assert_eq!(captured.event_type, "Goal");
+    }
+
+    #[test]
+    fn test_captured_event_unsupported_events() {
+        let entity_map = create_entity_map();
+
+        // Events that don't have player/character should return None
+        let event = GameEvent::ResetScores;
+        assert!(CapturedEvent::from_game_event(0, &event, &entity_map).is_none());
+
+        let event = GameEvent::ResetBall;
+        assert!(CapturedEvent::from_game_event(0, &event, &entity_map).is_none());
+
+        let event = GameEvent::LevelChange {
+            level_id: "test".to_string(),
+        };
+        assert!(CapturedEvent::from_game_event(0, &event, &entity_map).is_none());
+    }
+
+    // === check_sequence tests ===
+
+    #[test]
+    fn test_check_sequence_simple() {
+        let expected = vec![
+            ExpectedEvent {
+                event: "Pickup".to_string(),
+                player: None,
+                frame_min: None,
+                frame_max: None,
+                tolerance: 5,
+            },
+            ExpectedEvent {
+                event: "Goal".to_string(),
+                player: None,
+                frame_min: None,
+                frame_max: None,
+                tolerance: 5,
+            },
+        ];
+
+        let captured = vec![
+            CapturedEvent {
+                frame: 100,
+                event_type: "Pickup".to_string(),
+                player: Some("left".to_string()),
+            },
+            CapturedEvent {
+                frame: 200,
+                event_type: "Goal".to_string(),
+                player: Some("left".to_string()),
+            },
+        ];
+
+        assert!(check_sequence(&expected, &captured).is_ok());
+    }
+
+    #[test]
+    fn test_check_sequence_with_player_filter() {
+        let expected = vec![ExpectedEvent {
+            event: "Pickup".to_string(),
+            player: Some("left".to_string()),
+            frame_min: None,
+            frame_max: None,
+            tolerance: 5,
+        }];
+
+        let captured = vec![
+            CapturedEvent {
+                frame: 50,
+                event_type: "Pickup".to_string(),
+                player: Some("right".to_string()),
+            },
+            CapturedEvent {
+                frame: 100,
+                event_type: "Pickup".to_string(),
+                player: Some("left".to_string()),
+            },
+        ];
+
+        assert!(check_sequence(&expected, &captured).is_ok());
+    }
+
+    #[test]
+    fn test_check_sequence_with_frame_bounds() {
+        let expected = vec![ExpectedEvent {
+            event: "Goal".to_string(),
+            player: None,
+            frame_min: Some(50),
+            frame_max: Some(150),
+            tolerance: 5,
+        }];
+
+        // Within bounds
+        let captured = vec![CapturedEvent {
+            frame: 100,
+            event_type: "Goal".to_string(),
+            player: None,
+        }];
+        assert!(check_sequence(&expected, &captured).is_ok());
+
+        // Too early
+        let captured_early = vec![CapturedEvent {
+            frame: 30,
+            event_type: "Goal".to_string(),
+            player: None,
+        }];
+        assert!(check_sequence(&expected, &captured_early).is_err());
+
+        // Too late
+        let captured_late = vec![CapturedEvent {
+            frame: 200,
+            event_type: "Goal".to_string(),
+            player: None,
+        }];
+        assert!(check_sequence(&expected, &captured_late).is_err());
+    }
+
+    #[test]
+    fn test_check_sequence_missing_event() {
+        let expected = vec![ExpectedEvent {
+            event: "Goal".to_string(),
+            player: None,
+            frame_min: None,
+            frame_max: None,
+            tolerance: 5,
+        }];
+
+        let captured = vec![CapturedEvent {
+            frame: 100,
+            event_type: "Pickup".to_string(),
+            player: None,
+        }];
+
+        let result = check_sequence(&expected, &captured);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.message.contains("not found"));
+    }
+
+    #[test]
+    fn test_check_sequence_multiple_events() {
+        let expected = vec![
+            ExpectedEvent {
+                event: "Pickup".to_string(),
+                player: Some("left".to_string()),
+                frame_min: None,
+                frame_max: None,
+                tolerance: 5,
+            },
+            ExpectedEvent {
+                event: "ShotStart".to_string(),
+                player: Some("left".to_string()),
+                frame_min: None,
+                frame_max: None,
+                tolerance: 5,
+            },
+            ExpectedEvent {
+                event: "ShotRelease".to_string(),
+                player: Some("left".to_string()),
+                frame_min: None,
+                frame_max: None,
+                tolerance: 5,
+            },
+            ExpectedEvent {
+                event: "Goal".to_string(),
+                player: Some("left".to_string()),
+                frame_min: None,
+                frame_max: None,
+                tolerance: 5,
+            },
+        ];
+
+        let captured = vec![
+            CapturedEvent {
+                frame: 100,
+                event_type: "Pickup".to_string(),
+                player: Some("left".to_string()),
+            },
+            CapturedEvent {
+                frame: 150,
+                event_type: "ShotStart".to_string(),
+                player: Some("left".to_string()),
+            },
+            CapturedEvent {
+                frame: 200,
+                event_type: "ShotRelease".to_string(),
+                player: Some("left".to_string()),
+            },
+            CapturedEvent {
+                frame: 300,
+                event_type: "Goal".to_string(),
+                player: Some("left".to_string()),
+            },
+        ];
+
+        assert!(check_sequence(&expected, &captured).is_ok());
+    }
+
+    // === check_state tests ===
+
+    #[test]
+    fn test_check_state_score() {
+        let state = WorldState {
+            entities: HashMap::new(),
+            ball: None,
+            score_left: 3,
+            score_right: 2,
+        };
+
+        let assertion = StateAssertion {
+            after_frame: 0,
+            checks: vec!["score.left = 3".to_string(), "score.right = 2".to_string()],
+        };
+
+        assert!(check_state(&assertion, &state).is_ok());
+
+        let assertion_fail = StateAssertion {
+            after_frame: 0,
+            checks: vec!["score.left = 5".to_string()],
+        };
+        assert!(check_state(&assertion_fail, &state).is_err());
+    }
+
+    #[test]
+    fn test_check_state_entity_position() {
+        let mut entities = HashMap::new();
+        entities.insert(
+            "player1".to_string(),
+            EntityState {
+                x: 100.0,
+                y: -350.0,
+                velocity_x: 10.0,
+                velocity_y: 0.0,
+                holding_ball: false,
+                grounded: true,
+            },
+        );
+
+        let state = WorldState {
+            entities,
+            ball: None,
+            score_left: 0,
+            score_right: 0,
+        };
+
+        let assertion = StateAssertion {
+            after_frame: 0,
+            checks: vec![
+                "player1.x >= 50".to_string(),
+                "player1.y < -300".to_string(),
+                "player1.grounded = true".to_string(),
+            ],
+        };
+
+        assert!(check_state(&assertion, &state).is_ok());
+    }
+
+    #[test]
+    fn test_check_state_ball() {
+        let state = WorldState {
+            entities: HashMap::new(),
+            ball: Some(BallState {
+                x: 0.0,
+                y: 50.0,
+                velocity_x: 100.0,
+                velocity_y: -200.0,
+                state: "InFlight".to_string(),
+            }),
+            score_left: 0,
+            score_right: 0,
+        };
+
+        let assertion = StateAssertion {
+            after_frame: 0,
+            checks: vec![
+                "ball.x = 0".to_string(),
+                "ball.velocity_y < 0".to_string(),
+                "ball.state = InFlight".to_string(),
+            ],
+        };
+
+        assert!(check_state(&assertion, &state).is_ok());
+    }
+
+    #[test]
+    fn test_check_state_comparisons() {
+        let mut entities = HashMap::new();
+        entities.insert(
+            "test".to_string(),
+            EntityState {
+                x: 100.0,
+                y: 200.0,
+                velocity_x: 50.0,
+                velocity_y: -30.0,
+                holding_ball: true,
+                grounded: false,
+            },
+        );
+
+        let state = WorldState {
+            entities,
+            ball: None,
+            score_left: 0,
+            score_right: 0,
+        };
+
+        // Test all operators
+        let checks = vec![
+            ("test.x >= 100", true),
+            ("test.x > 99", true),
+            ("test.x <= 100", true),
+            ("test.x < 101", true),
+            ("test.x = 100", true),
+            ("test.x != 50", true),
+            ("test.holding_ball = true", true),
+            ("test.grounded = false", true),
+        ];
+
+        for (check, should_pass) in checks {
+            let assertion = StateAssertion {
+                after_frame: 0,
+                checks: vec![check.to_string()],
+            };
+            let result = check_state(&assertion, &state);
+            assert_eq!(result.is_ok(), should_pass, "Check '{}' should {}pass", check, if should_pass { "" } else { "not " });
+        }
+    }
+
+    #[test]
+    fn test_parse_check() {
+        assert_eq!(parse_check("x >= 10"), Some(("x", ">=", "10")));
+        assert_eq!(parse_check("y <= -5"), Some(("y", "<=", "-5")));
+        assert_eq!(parse_check("value = 100"), Some(("value", "=", "100")));
+        assert_eq!(parse_check("score.left != 0"), Some(("score.left", "!=", "0")));
+        assert_eq!(parse_check("pos > 50"), Some(("pos", ">", "50")));
+        assert_eq!(parse_check("pos < 50"), Some(("pos", "<", "50")));
+        assert_eq!(parse_check("invalid"), None);
+    }
 }

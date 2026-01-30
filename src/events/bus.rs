@@ -170,22 +170,23 @@ pub fn emit_level_change_events(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::types::{ControllerSource, PlayerId};
+    use crate::events::types::CharacterId;
 
     #[test]
     fn test_emit_and_drain() {
         let mut bus = EventBus::new();
         bus.update_time(1.5);
 
-        bus.emit(GameEvent::ControllerInput {
-            player: PlayerId::L,
-            source: ControllerSource::Human,
+        bus.emit(GameEvent::ControllerInput2 {
+            character: CharacterId::L0,
+            source_id: 0,
             move_x: 0.5,
             jump: true,
             jump_pressed: true,
             throw: false,
             throw_released: false,
             pickup: false,
+            pass: false,
         });
 
         assert_eq!(bus.pending_count(), 1);
@@ -208,20 +209,23 @@ mod tests {
     #[test]
     fn test_control_swap_event() {
         let mut bus = EventBus::new();
-        bus.emit(GameEvent::ControlSwap {
-            from_player: Some(PlayerId::L),
-            to_player: Some(PlayerId::R),
+        bus.emit(GameEvent::ControllerSwap2 {
+            character: CharacterId::L0,
+            old_source: 0,
+            new_source: 1000,
         });
 
         let events = bus.drain();
         assert_eq!(events.len(), 1);
-        if let GameEvent::ControlSwap {
-            from_player,
-            to_player,
+        if let GameEvent::ControllerSwap2 {
+            character,
+            old_source,
+            new_source,
         } = &events[0].event
         {
-            assert_eq!(*from_player, Some(PlayerId::L));
-            assert_eq!(*to_player, Some(PlayerId::R));
+            assert_eq!(*character, CharacterId::L0);
+            assert_eq!(*old_source, 0);
+            assert_eq!(*new_source, 1000);
         } else {
             panic!("Wrong event type");
         }

@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use super::MatchInfo;
-use crate::events::{CharacterId, GameEvent, PlayerId};
+use crate::events::{CharacterId, GameEvent};
 use crate::input::InputSourceId;
 
 /// Character frame data for 2v2 replay format
@@ -142,19 +142,30 @@ impl ReplayData {
         self.events.iter().filter(move |e| e.time_ms <= time_ms)
     }
 
-    /// Get the most recent AI goal for a player at a given time.
-    pub fn current_ai_goal(&self, time_ms: u32, player: PlayerId) -> Option<&str> {
+    /// Get the most recent AI goal for a character at a given time.
+    /// Checks both legacy AiGoal (PlayerId) and new AiGoal2 (CharacterId) events.
+    pub fn current_ai_goal(&self, time_ms: u32, character: CharacterId) -> Option<&str> {
         self.events
             .iter()
             .filter(|e| e.time_ms <= time_ms)
             .rev()
             .find_map(|e| {
-                if let GameEvent::AiGoal { player: p, goal } = &e.event {
-                    if *p == player {
-                        return Some(goal.as_str());
+                match &e.event {
+                    // Prefer CharacterId-based events
+                    GameEvent::AiGoal2 { character: c, goal } if *c == character => {
+                        Some(goal.as_str())
                     }
+                    // Fall back to legacy PlayerId-based events (L→L0, R→R0)
+                    GameEvent::AiGoal { player, goal } => {
+                        let player_char = player.to_character_id();
+                        if player_char == character {
+                            Some(goal.as_str())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
                 }
-                None
             })
     }
 }

@@ -260,7 +260,7 @@ impl SqliteEventLogger {
         };
 
         for sample in samples {
-            let player = sample.player.to_string();
+            let player = sample.character.to_string();
             let input_jump = if sample.input_jump { 1 } else { 0 };
             let grounded = if sample.grounded { 1 } else { 0 };
             let is_jumping = if sample.is_jumping { 1 } else { 0 };
@@ -755,7 +755,9 @@ pub fn flush_debug_samples_to_sqlite(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(deprecated)]
     use crate::events::types::PlayerId;
+    use crate::events::types::CharacterId;
 
     fn create_test_logger() -> SqliteEventLogger {
         let conn = Connection::open_in_memory().unwrap();
@@ -784,6 +786,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_log_events() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
@@ -810,6 +813,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_batch_log_events() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
@@ -857,5 +861,341 @@ mod tests {
         // Should not panic
         logger.log_event(0, &GameEvent::ResetScores);
         logger.end_match(0, 0, 0.0);
+    }
+
+    // === 2v2 Event Tests ===
+
+    #[test]
+    fn test_log_2v2_pickup_events() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        // Log pickup events for all characters
+        for (i, character) in CharacterId::all().iter().enumerate() {
+            logger.log_event(
+                (i as u32 + 1) * 100,
+                &GameEvent::Pickup2 { character: *character },
+            );
+        }
+
+        let count = logger.event_count().unwrap();
+        assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn test_log_2v2_goal_events() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        // Log goals for all 4 characters
+        logger.log_event(
+            100,
+            &GameEvent::Goal2 {
+                character: CharacterId::L0,
+                score_left: 1,
+                score_right: 0,
+            },
+        );
+        logger.log_event(
+            200,
+            &GameEvent::Goal2 {
+                character: CharacterId::R0,
+                score_left: 1,
+                score_right: 1,
+            },
+        );
+        logger.log_event(
+            300,
+            &GameEvent::Goal2 {
+                character: CharacterId::L1,
+                score_left: 2,
+                score_right: 1,
+            },
+        );
+        logger.log_event(
+            400,
+            &GameEvent::Goal2 {
+                character: CharacterId::R1,
+                score_left: 2,
+                score_right: 2,
+            },
+        );
+
+        let count = logger.event_count().unwrap();
+        assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn test_log_2v2_shot_events() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        // Log shot start and release for a 2v2 character
+        logger.log_event(
+            100,
+            &GameEvent::ShotStart2 {
+                character: CharacterId::L0,
+                pos: (-100.0, -350.0),
+                quality: 0.8,
+            },
+        );
+        logger.log_event(
+            150,
+            &GameEvent::ShotRelease2 {
+                character: CharacterId::L0,
+                charge: 0.75,
+                angle: 45.0,
+                power: 600.0,
+            },
+        );
+        logger.log_event(
+            200,
+            &GameEvent::ShotStart2 {
+                character: CharacterId::R1,
+                pos: (100.0, -300.0),
+                quality: 0.9,
+            },
+        );
+        logger.log_event(
+            250,
+            &GameEvent::ShotRelease2 {
+                character: CharacterId::R1,
+                charge: 0.85,
+                angle: 55.0,
+                power: 650.0,
+            },
+        );
+
+        let count = logger.event_count().unwrap();
+        assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn test_log_2v2_steal_events() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        // Log all steal event types
+        logger.log_event(
+            100,
+            &GameEvent::StealAttempt2 {
+                attacker: CharacterId::L0,
+            },
+        );
+        logger.log_event(
+            200,
+            &GameEvent::StealSuccess2 {
+                attacker: CharacterId::R0,
+            },
+        );
+        logger.log_event(
+            300,
+            &GameEvent::StealFail2 {
+                attacker: CharacterId::L1,
+            },
+        );
+        logger.log_event(
+            400,
+            &GameEvent::StealOutOfRange2 {
+                attacker: CharacterId::R1,
+            },
+        );
+
+        let count = logger.event_count().unwrap();
+        assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn test_log_pass_event() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        // Log pass events between teammates
+        logger.log_event(
+            100,
+            &GameEvent::Pass {
+                from: CharacterId::L0,
+                to: CharacterId::L1,
+            },
+        );
+        logger.log_event(
+            200,
+            &GameEvent::Pass {
+                from: CharacterId::R1,
+                to: CharacterId::R0,
+            },
+        );
+
+        let count = logger.event_count().unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_log_mixed_legacy_and_2v2_events() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        // Mix legacy PlayerId and new CharacterId events
+        logger.log_event(
+            100,
+            &GameEvent::Pickup {
+                player: PlayerId::L,
+            },
+        );
+        logger.log_event(
+            200,
+            &GameEvent::Pickup2 {
+                character: CharacterId::R1,
+            },
+        );
+        logger.log_event(
+            300,
+            &GameEvent::Goal {
+                player: PlayerId::R,
+                score_left: 0,
+                score_right: 1,
+            },
+        );
+        logger.log_event(
+            400,
+            &GameEvent::Goal2 {
+                character: CharacterId::L1,
+                score_left: 1,
+                score_right: 1,
+            },
+        );
+
+        let count = logger.event_count().unwrap();
+        assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn test_log_controller_events_2v2() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        // Log controller assignment and swap events
+        logger.log_event(
+            100,
+            &GameEvent::ControllerAssign {
+                character: CharacterId::L0,
+                source_id: 0,
+                descriptor: "keyboard".to_string(),
+            },
+        );
+        logger.log_event(
+            200,
+            &GameEvent::ControllerSwap2 {
+                character: CharacterId::L0,
+                old_source: 0,
+                new_source: 1000,
+            },
+        );
+        logger.log_event(
+            300,
+            &GameEvent::ControllerInput2 {
+                character: CharacterId::L0,
+                source_id: 1000,
+                move_x: 0.5,
+                jump: true,
+                jump_pressed: true,
+                throw: false,
+                throw_released: false,
+                pickup: false,
+                pass: false,
+            },
+        );
+
+        let count = logger.event_count().unwrap();
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_log_tick2_event() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        use crate::events::types::CharacterTickData;
+
+        logger.log_event(
+            100,
+            &GameEvent::Tick2 {
+                frame: 50,
+                characters: vec![
+                    CharacterTickData {
+                        id: CharacterId::L0,
+                        pos: (-200.0, -350.0),
+                        vel: (10.0, 0.0),
+                        controller: 0,
+                    },
+                    CharacterTickData {
+                        id: CharacterId::L1,
+                        pos: (-100.0, -350.0),
+                        vel: (0.0, 0.0),
+                        controller: 1000,
+                    },
+                    CharacterTickData {
+                        id: CharacterId::R0,
+                        pos: (100.0, -350.0),
+                        vel: (-5.0, 0.0),
+                        controller: 1001,
+                    },
+                    CharacterTickData {
+                        id: CharacterId::R1,
+                        pos: (200.0, -350.0),
+                        vel: (0.0, -50.0),
+                        controller: 1002,
+                    },
+                ],
+                ball_pos: (0.0, 50.0),
+                ball_vel: (10.0, -100.0),
+                ball_state: 'F',
+            },
+        );
+
+        let count = logger.event_count().unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_record_match_character() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        // Record all 4 characters
+        logger.record_match_character("L0", Some(0), None);
+        logger.record_match_character("L1", None, Some("Aggressive"));
+        logger.record_match_character("R0", None, Some("Passive"));
+        logger.record_match_character("R1", None, Some("Passive"));
+
+        // Verify they were recorded (no panics, no errors)
+        // The actual verification would require querying the database
+        assert!(logger.current_match_id().is_some());
+    }
+
+    #[test]
+    fn test_set_game_mode() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        logger.set_game_mode("2v2");
+
+        // Verify no panics
+        assert!(logger.current_match_id().is_some());
+    }
+
+    #[test]
+    fn test_record_input_source() {
+        let logger = create_test_logger();
+        logger.start_match(1, "Test Level", "Human", "AI", 12345);
+
+        // Record various input sources
+        logger.record_input_source(0, "keyboard", None);
+        logger.record_input_source(1, "gamepad", Some("Xbox Controller"));
+        logger.record_input_source(1000, "ai", Some("Aggressive"));
+
+        // Verify no panics
+        assert!(logger.current_match_id().is_some());
     }
 }

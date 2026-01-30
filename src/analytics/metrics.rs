@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use super::parser::ParsedMatch;
-use crate::events::PlayerId;
+use crate::events::TeamId;
 
 /// Per-profile aggregated metrics
 #[derive(Debug, Clone, Default)]
@@ -123,17 +123,17 @@ impl ProfileMetrics {
         // Goals
         self.total_goals += m.score_left;
         self.total_goals_against += m.score_right;
-        self.shots_made += m.goals_for(PlayerId::L) as u32;
+        self.shots_made += m.goals_for_team(TeamId::Left) as u32;
 
         // Shots
-        self.total_shots += m.shots_for(PlayerId::L) as u32;
+        self.total_shots += m.shots_for_team(TeamId::Left) as u32;
 
         // Steals
-        self.steal_attempts += m.steal_attempts_for(PlayerId::L) as u32;
-        self.steal_successes += m.steal_successes_for(PlayerId::L) as u32;
+        self.steal_attempts += m.steal_attempts_for_team(TeamId::Left) as u32;
+        self.steal_successes += m.steal_successes_for_team(TeamId::Left) as u32;
 
         // Pickups
-        self.pickups += m.pickups_for(PlayerId::L) as u32;
+        self.pickups += m.pickups_for_team(TeamId::Left) as u32;
     }
 
     /// Add stats from a match where this profile was the right player
@@ -151,17 +151,17 @@ impl ProfileMetrics {
         // Goals
         self.total_goals += m.score_right;
         self.total_goals_against += m.score_left;
-        self.shots_made += m.goals_for(PlayerId::R) as u32;
+        self.shots_made += m.goals_for_team(TeamId::Right) as u32;
 
         // Shots
-        self.total_shots += m.shots_for(PlayerId::R) as u32;
+        self.total_shots += m.shots_for_team(TeamId::Right) as u32;
 
         // Steals
-        self.steal_attempts += m.steal_attempts_for(PlayerId::R) as u32;
-        self.steal_successes += m.steal_successes_for(PlayerId::R) as u32;
+        self.steal_attempts += m.steal_attempts_for_team(TeamId::Right) as u32;
+        self.steal_successes += m.steal_successes_for_team(TeamId::Right) as u32;
 
         // Pickups
-        self.pickups += m.pickups_for(PlayerId::R) as u32;
+        self.pickups += m.pickups_for_team(TeamId::Right) as u32;
     }
 }
 

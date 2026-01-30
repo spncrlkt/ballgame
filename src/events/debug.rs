@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use crate::ai::{AiNavState, InputState};
-use crate::events::types::PlayerId;
+use crate::events::types::CharacterId;
 use crate::player::{CoyoteTimer, Facing, Grounded, JumpState, Player, Team, Velocity};
 
 pub const DEBUG_TICK_MS: u32 = 50;
@@ -12,7 +12,7 @@ pub const DEBUG_TICK_MS: u32 = 50;
 pub struct DebugSample {
     pub time_ms: u32,
     pub tick_frame: u64,
-    pub player: PlayerId,
+    pub character: CharacterId,
     pub pos_x: f32,
     pub pos_y: f32,
     pub vel_x: f32,
@@ -74,9 +74,9 @@ pub fn push_debug_samples(
         human_controlled,
     ) in query.iter()
     {
-        let player_id = match team {
-            Team::Left => PlayerId::L,
-            Team::Right => PlayerId::R,
+        let character = match team {
+            Team::Left => CharacterId::L0,
+            Team::Right => CharacterId::R0,
         };
         let nav_action = nav_state
             .and_then(|nav| nav.current_action())
@@ -87,7 +87,7 @@ pub fn push_debug_samples(
         buffer.samples.push(DebugSample {
             time_ms,
             tick_frame,
-            player: player_id,
+            character,
             pos_x: transform.translation.x,
             pos_y: transform.translation.y,
             vel_x: velocity.0.x,

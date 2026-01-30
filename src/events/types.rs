@@ -104,8 +104,9 @@ impl std::fmt::Display for CharacterId {
     }
 }
 
-/// Player identifier (Left or Right) - DEPRECATED, use CharacterId
-/// Kept for backward compatibility during transition
+/// Player identifier (Left or Right) - use CharacterId instead
+/// Kept for backward compatibility with old replay files and event logs.
+#[deprecated(since = "0.2.0", note = "Use CharacterId instead for 2v2 support")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlayerId {
     L,
@@ -426,6 +427,115 @@ pub enum GameEvent {
     ResetBall,
     /// Level changed
     LevelChange { level_id: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_characterid_from_str_all_variants() {
+        assert_eq!(CharacterId::from_str("L0"), Some(CharacterId::L0));
+        assert_eq!(CharacterId::from_str("L1"), Some(CharacterId::L1));
+        assert_eq!(CharacterId::from_str("R0"), Some(CharacterId::R0));
+        assert_eq!(CharacterId::from_str("R1"), Some(CharacterId::R1));
+        // Legacy backward compat
+        assert_eq!(CharacterId::from_str("L"), Some(CharacterId::L0));
+        assert_eq!(CharacterId::from_str("R"), Some(CharacterId::R0));
+        // Invalid strings
+        assert_eq!(CharacterId::from_str("X"), None);
+        assert_eq!(CharacterId::from_str(""), None);
+        assert_eq!(CharacterId::from_str("L2"), None);
+    }
+
+    #[test]
+    fn test_characterid_team_and_slot() {
+        // Team assignments
+        assert_eq!(CharacterId::L0.team(), TeamId::Left);
+        assert_eq!(CharacterId::L1.team(), TeamId::Left);
+        assert_eq!(CharacterId::R0.team(), TeamId::Right);
+        assert_eq!(CharacterId::R1.team(), TeamId::Right);
+        // Slot assignments
+        assert_eq!(CharacterId::L0.slot(), 0);
+        assert_eq!(CharacterId::L1.slot(), 1);
+        assert_eq!(CharacterId::R0.slot(), 0);
+        assert_eq!(CharacterId::R1.slot(), 1);
+    }
+
+    #[test]
+    fn test_characterid_teammate() {
+        assert_eq!(CharacterId::L0.teammate(), CharacterId::L1);
+        assert_eq!(CharacterId::L1.teammate(), CharacterId::L0);
+        assert_eq!(CharacterId::R0.teammate(), CharacterId::R1);
+        assert_eq!(CharacterId::R1.teammate(), CharacterId::R0);
+    }
+
+    #[test]
+    fn test_characterid_opponents() {
+        assert_eq!(CharacterId::L0.opponents(), [CharacterId::R0, CharacterId::R1]);
+        assert_eq!(CharacterId::L1.opponents(), [CharacterId::R0, CharacterId::R1]);
+        assert_eq!(CharacterId::R0.opponents(), [CharacterId::L0, CharacterId::L1]);
+        assert_eq!(CharacterId::R1.opponents(), [CharacterId::L0, CharacterId::L1]);
+    }
+
+    #[test]
+    fn test_characterid_all() {
+        let all = CharacterId::all();
+        assert_eq!(all.len(), 4);
+        assert!(all.contains(&CharacterId::L0));
+        assert!(all.contains(&CharacterId::L1));
+        assert!(all.contains(&CharacterId::R0));
+        assert!(all.contains(&CharacterId::R1));
+    }
+
+    #[test]
+    fn test_characterid_team_members() {
+        assert_eq!(
+            CharacterId::team_members(TeamId::Left),
+            [CharacterId::L0, CharacterId::L1]
+        );
+        assert_eq!(
+            CharacterId::team_members(TeamId::Right),
+            [CharacterId::R0, CharacterId::R1]
+        );
+    }
+
+    #[test]
+    fn test_characterid_display() {
+        assert_eq!(CharacterId::L0.to_string(), "L0");
+        assert_eq!(CharacterId::L1.to_string(), "L1");
+        assert_eq!(CharacterId::R0.to_string(), "R0");
+        assert_eq!(CharacterId::R1.to_string(), "R1");
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_playerid_to_characterid() {
+        assert_eq!(PlayerId::L.to_character_id(), CharacterId::L0);
+        assert_eq!(PlayerId::R.to_character_id(), CharacterId::R0);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_playerid_into_characterid() {
+        let l: CharacterId = PlayerId::L.into();
+        let r: CharacterId = PlayerId::R.into();
+        assert_eq!(l, CharacterId::L0);
+        assert_eq!(r, CharacterId::R0);
+    }
+
+    #[test]
+    fn test_teamid_display() {
+        assert_eq!(TeamId::Left.to_string(), "left");
+        assert_eq!(TeamId::Right.to_string(), "right");
+    }
+
+    #[test]
+    fn test_controller_source_display() {
+        assert_eq!(ControllerSource::Human.to_string(), "H");
+        assert_eq!(ControllerSource::Ai.to_string(), "A");
+        assert_eq!(ControllerSource::External.to_string(), "X");
+    }
 }
 
 impl GameEvent {

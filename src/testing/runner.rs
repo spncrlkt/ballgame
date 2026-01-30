@@ -9,7 +9,7 @@ use crate::ai::InputState;
 use crate::ball::{
     Ball, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
     CurrentPalette, Velocity, apply_velocity, ball_collisions, ball_follow_holder, ball_gravity,
-    ball_player_collision, ball_spin, ball_state_update, pickup_ball,
+    ball_player_collision, ball_spin, ball_state_update, handle_pass, pickup_ball,
 };
 use crate::constants::*;
 use crate::debug_logging::DebugLogConfig;
@@ -210,6 +210,7 @@ pub fn run_test(test: &TestDefinition, debug_config: DebugLogConfig) -> TestResu
             steal_cooldown_update,
             update_shot_charge,
             throw_ball,
+            handle_pass,
             check_scoring,
         )
             .chain(),

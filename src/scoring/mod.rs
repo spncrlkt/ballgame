@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::ai::{AiGoal, AiNavState, AiState, InputState};
 use crate::ball::{Ball, BallState, CurrentPalette, Velocity};
 use crate::constants::*;
-use crate::events::{CharacterId, EventBus, GameEvent, PlayerId, TeamId};
+use crate::events::{CharacterId, EventBus, GameEvent, TeamId};
 use crate::palettes::PaletteDatabase;
 use crate::player::{Character, HoldingBall, Player, Team};
 use crate::ui::ScoreFlash;
@@ -107,14 +107,14 @@ pub fn check_scoring(
                 let points = if is_held { 2 } else { 1 };
 
                 // Determine which team scored and the scoring character
-                let (scoring_team_id, scoring_player_id, scorer_entity) = match basket {
+                let (scoring_team_id, scorer_entity) = match basket {
                     Basket::Left => {
                         score.right += points; // Right team scores in left basket
-                        (TeamId::Right, PlayerId::R, get_scorer_entity(&ball_state))
+                        (TeamId::Right, get_scorer_entity(&ball_state))
                     }
                     Basket::Right => {
                         score.left += points; // Left team scores in right basket
-                        (TeamId::Left, PlayerId::L, get_scorer_entity(&ball_state))
+                        (TeamId::Left, get_scorer_entity(&ball_state))
                     }
                 };
 
@@ -135,21 +135,17 @@ pub fn check_scoring(
                     time_ms,
                 });
 
-                // Emit Goal event for auditability (legacy format)
-                event_bus.emit(GameEvent::Goal {
-                    player: scoring_player_id,
+                // Emit Goal2 event with CharacterId
+                // Use scorer_character if known, otherwise derive from team
+                let character = scorer_character.unwrap_or_else(|| match scoring_team_id {
+                    TeamId::Left => CharacterId::L0,
+                    TeamId::Right => CharacterId::R0,
+                });
+                event_bus.emit(GameEvent::Goal2 {
+                    character,
                     score_left: score.left,
                     score_right: score.right,
                 });
-
-                // Also emit Goal2 event with CharacterId (new format)
-                if let Some(character) = scorer_character {
-                    event_bus.emit(GameEvent::Goal2 {
-                        character,
-                        score_left: score.left,
-                        score_right: score.right,
-                    });
-                }
 
                 // Basket color based on its side (from current palette)
                 let basket_original_color = match basket {

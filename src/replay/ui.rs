@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use crate::constants::*;
-use crate::events::{GameEvent, PlayerId};
+use crate::events::{CharacterId, GameEvent};
 use crate::player::Team;
 
 use super::ReplayData;
@@ -261,12 +261,12 @@ pub fn update_replay_ui(
                 transform.translation.y =
                     player_transform.translation.y + PLAYER_SIZE.y / 2.0 + 25.0;
 
-                // Get current AI goal
-                let player_id = match team {
-                    Team::Left => PlayerId::L,
-                    Team::Right => PlayerId::R,
+                // Get current AI goal using CharacterId (primary character on each team)
+                let character = match team {
+                    Team::Left => CharacterId::L0,
+                    Team::Right => CharacterId::R0,
                 };
-                if let Some(goal) = replay_data.current_ai_goal(state.current_time_ms, player_id) {
+                if let Some(goal) = replay_data.current_ai_goal(state.current_time_ms, character) {
                     **text = goal.to_string();
                 } else {
                     **text = "---".to_string();

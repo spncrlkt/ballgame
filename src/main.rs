@@ -9,9 +9,9 @@ use ballgame::{
     ChargeGaugeBackground, ChargeGaugeFill, ChargingShot, ConfigWatcher, CoyoteTimer, CurrentLevel,
     CurrentPalette, CurrentPresets, CurrentSettings, CycleIndicator, CycleSelection,
     DebugLogConfig, DebugSettings, DebugText, DisplayBallWave, EventBus, Facing, Grounded,
-    HumanControlTarget, HumanControlled, InputState, JumpState, LastShotInfo, LevelChangeTracker,
+    HumanControlled, InputState, JumpState, LastShotInfo, LevelChangeTracker,
     LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase,
-    PhysicsTweaks, Player, PlayerId, PlayerInput, PresetDatabase, Score, ScoreLevelText,
+    PhysicsTweaks, Player, PlayerInput, PresetDatabase, Score, ScoreLevelText,
     SnapshotConfig, SnapshotTriggerState, StealContest, StealCooldown, StealTracker, StyleTextures,
     TargetBasket, Team, TweakPanel, TweakPanelState, TweakRow, Velocity, ViewportScale, ai,
     apply_preset_to_tweaks, ball, config_watcher, constants::*, countdown, display_ball_wave,
@@ -234,8 +234,6 @@ fn main() {
         .init_resource::<ai::HeatmapBundle>()
         // Event bus for cross-module communication
         .insert_resource(EventBus::new())
-        // Human control target (initialized in setup based on settings)
-        .init_resource::<HumanControlTarget>()
         // Level change tracker for event emission
         .init_resource::<LevelChangeTracker>()
         .insert_resource(SnapshotConfig {
@@ -440,7 +438,6 @@ fn setup(
     current_level: Res<CurrentLevel>,
     current_settings: Res<CurrentSettings>,
     profile_db: Res<AiProfileDatabase>,
-    mut human_target: ResMut<HumanControlTarget>,
 ) {
     // Camera - orthographic, shows entire arena
     // FixedVertical ensures the full arena height is always visible regardless of window size
@@ -477,13 +474,6 @@ fn setup(
 
     // Determine if left player is human or AI based on settings
     let left_is_human = current_settings.settings.left_ai_profile.is_none();
-
-    // Initialize HumanControlTarget based on whether left player is human-controlled
-    human_target.0 = if left_is_human {
-        Some(PlayerId::L)
-    } else {
-        None // Observer mode or all AI
-    };
 
     // Check if this is a debug or regression level early (for AI goal)
     let is_special_level = level_data.map(|l| l.debug || l.regression).unwrap_or(false);

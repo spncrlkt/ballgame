@@ -601,8 +601,22 @@ fn build_ai_behavior_from_transitions(
     let mut recent_goals: Vec<&str> = Vec::new();
     const OSCILLATION_WINDOW: usize = 6;
 
-    // Filter for AI (R) goals
-    let ai_goals: Vec<_> = transitions.iter().filter(|t| t.player == "R").collect();
+    // Filter for AI-controlled characters
+    // In training mode, L0 is typically human-controlled, all others are AI
+    // Use CharacterId::from_str for backward compatibility with both "R" and "R0" formats
+    let ai_goals: Vec<_> = transitions
+        .iter()
+        .filter(|t| {
+            // Parse the player string as CharacterId
+            crate::events::CharacterId::from_str(&t.player)
+                .map(|c| {
+                    // Consider anything on the Right team as AI
+                    // Also consider L1 as AI (for 2v2 where L0 is human)
+                    matches!(c, crate::events::CharacterId::R0 | crate::events::CharacterId::R1 | crate::events::CharacterId::L1)
+                })
+                .unwrap_or(false)
+        })
+        .collect();
 
     let mut last_goal: Option<(&str, u32)> = None;
     let mut longest_goal_duration_secs = 0.0f32;

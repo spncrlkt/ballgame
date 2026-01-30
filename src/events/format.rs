@@ -632,7 +632,10 @@ fn parse_pos(s: &str) -> Option<(f32, f32)> {
 mod tests {
     use super::*;
 
+    // === Legacy PlayerId Tests (backward compatibility) ===
+
     #[test]
+    #[allow(deprecated)]
     fn test_roundtrip_goal() {
         let event = GameEvent::Goal {
             player: PlayerId::L,
@@ -657,6 +660,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_roundtrip_shot() {
         let event = GameEvent::ShotRelease {
             player: PlayerId::R,
@@ -676,6 +680,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_roundtrip_tick() {
         let event = GameEvent::Tick {
             frame: 150,
@@ -707,5 +712,541 @@ mod tests {
         } else {
             panic!("Wrong event type");
         }
+    }
+
+    // === 2v2 CharacterId Tests ===
+
+    #[test]
+    fn test_roundtrip_goal2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::Goal2 {
+                character,
+                score_left: 2,
+                score_right: 1,
+            };
+            let line = serialize_event(1500, &event);
+            assert!(line.contains("|G2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 1500);
+            if let GameEvent::Goal2 {
+                character: c,
+                score_left,
+                score_right,
+            } = parsed
+            {
+                assert_eq!(c, character);
+                assert_eq!(score_left, 2);
+                assert_eq!(score_right, 1);
+            } else {
+                panic!("Wrong event type for {:?}", character);
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_pickup2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::Pickup2 { character };
+            let line = serialize_event(200, &event);
+            assert!(line.contains("|P2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 200);
+            if let GameEvent::Pickup2 { character: c } = parsed {
+                assert_eq!(c, character);
+            } else {
+                panic!("Wrong event type for {:?}", character);
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_drop2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::Drop2 { character };
+            let line = serialize_event(300, &event);
+            assert!(line.contains("|D2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 300);
+            if let GameEvent::Drop2 { character: c } = parsed {
+                assert_eq!(c, character);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_shotstart2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::ShotStart2 {
+                character,
+                pos: (-150.0, -300.5),
+                quality: 0.75,
+            };
+            let line = serialize_event(400, &event);
+            assert!(line.contains("|S2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 400);
+            if let GameEvent::ShotStart2 {
+                character: c,
+                pos,
+                quality,
+            } = parsed
+            {
+                assert_eq!(c, character);
+                assert!((pos.0 - -150.0).abs() < 0.1);
+                assert!((pos.1 - -300.5).abs() < 0.1);
+                assert!((quality - 0.75).abs() < 0.01);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_shotrelease2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::ShotRelease2 {
+                character,
+                charge: 0.85,
+                angle: 55.5,
+                power: 650.0,
+            };
+            let line = serialize_event(500, &event);
+            assert!(line.contains("|R2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 500);
+            if let GameEvent::ShotRelease2 {
+                character: c,
+                charge,
+                angle,
+                power,
+            } = parsed
+            {
+                assert_eq!(c, character);
+                assert!((charge - 0.85).abs() < 0.01);
+                assert!((angle - 55.5).abs() < 0.1);
+                assert!((power - 650.0).abs() < 0.1);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_pass() {
+        // Test pass from each character to their teammate
+        let test_cases = [
+            (CharacterId::L0, CharacterId::L1),
+            (CharacterId::L1, CharacterId::L0),
+            (CharacterId::R0, CharacterId::R1),
+            (CharacterId::R1, CharacterId::R0),
+        ];
+        for (from, to) in test_cases {
+            let event = GameEvent::Pass { from, to };
+            let line = serialize_event(600, &event);
+            assert!(line.contains("|PA|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 600);
+            if let GameEvent::Pass { from: f, to: t } = parsed {
+                assert_eq!(f, from);
+                assert_eq!(t, to);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_steal_attempt2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::StealAttempt2 { attacker: character };
+            let line = serialize_event(700, &event);
+            assert!(line.contains("|A2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 700);
+            if let GameEvent::StealAttempt2 { attacker } = parsed {
+                assert_eq!(attacker, character);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_steal_success2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::StealSuccess2 { attacker: character };
+            let line = serialize_event(800, &event);
+            assert!(line.contains("|+2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 800);
+            if let GameEvent::StealSuccess2 { attacker } = parsed {
+                assert_eq!(attacker, character);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_steal_fail2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::StealFail2 { attacker: character };
+            let line = serialize_event(900, &event);
+            assert!(line.contains("|-2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 900);
+            if let GameEvent::StealFail2 { attacker } = parsed {
+                assert_eq!(attacker, character);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_steal_outofrange2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::StealOutOfRange2 { attacker: character };
+            let line = serialize_event(1000, &event);
+            assert!(line.contains("|O2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 1000);
+            if let GameEvent::StealOutOfRange2 { attacker } = parsed {
+                assert_eq!(attacker, character);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_jump2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::Jump2 { character };
+            let line = serialize_event(1100, &event);
+            assert!(line.contains("|J2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 1100);
+            if let GameEvent::Jump2 { character: c } = parsed {
+                assert_eq!(c, character);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_land2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::Land2 { character };
+            let line = serialize_event(1200, &event);
+            assert!(line.contains("|L2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 1200);
+            if let GameEvent::Land2 { character: c } = parsed {
+                assert_eq!(c, character);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_tick2_single_character() {
+        let event = GameEvent::Tick2 {
+            frame: 200,
+            characters: vec![CharacterTickData {
+                id: CharacterId::L0,
+                pos: (-100.0, -350.0),
+                vel: (25.0, -10.0),
+                controller: 0,
+            }],
+            ball_pos: (50.0, 100.0),
+            ball_vel: (0.0, -150.0),
+            ball_state: 'F',
+        };
+        let line = serialize_event(1300, &event);
+        assert!(line.contains("|T2|"));
+        let (ts, parsed) = parse_event(&line).unwrap();
+        assert_eq!(ts, 1300);
+        if let GameEvent::Tick2 {
+            frame,
+            characters,
+            ball_pos,
+            ball_vel: _,
+            ball_state,
+        } = parsed
+        {
+            assert_eq!(frame, 200);
+            assert_eq!(characters.len(), 1);
+            assert_eq!(characters[0].id, CharacterId::L0);
+            assert!((ball_pos.0 - 50.0).abs() < 0.1);
+            assert_eq!(ball_state, 'F');
+        } else {
+            panic!("Wrong event type");
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_tick2_all_characters() {
+        let event = GameEvent::Tick2 {
+            frame: 300,
+            characters: vec![
+                CharacterTickData {
+                    id: CharacterId::L0,
+                    pos: (-200.0, -350.0),
+                    vel: (10.0, 0.0),
+                    controller: 0,
+                },
+                CharacterTickData {
+                    id: CharacterId::L1,
+                    pos: (-100.0, -350.0),
+                    vel: (0.0, 0.0),
+                    controller: 1000,
+                },
+                CharacterTickData {
+                    id: CharacterId::R0,
+                    pos: (100.0, -350.0),
+                    vel: (-5.0, 0.0),
+                    controller: 1001,
+                },
+                CharacterTickData {
+                    id: CharacterId::R1,
+                    pos: (200.0, -350.0),
+                    vel: (0.0, -50.0),
+                    controller: 1002,
+                },
+            ],
+            ball_pos: (0.0, 50.0),
+            ball_vel: (10.0, -100.0),
+            ball_state: 'H',
+        };
+        let line = serialize_event(1400, &event);
+        let (ts, parsed) = parse_event(&line).unwrap();
+        assert_eq!(ts, 1400);
+        if let GameEvent::Tick2 {
+            frame,
+            characters,
+            ball_state,
+            ..
+        } = parsed
+        {
+            assert_eq!(frame, 300);
+            assert_eq!(characters.len(), 4);
+            assert_eq!(characters[0].id, CharacterId::L0);
+            assert_eq!(characters[1].id, CharacterId::L1);
+            assert_eq!(characters[2].id, CharacterId::R0);
+            assert_eq!(characters[3].id, CharacterId::R1);
+            assert_eq!(ball_state, 'H');
+        } else {
+            panic!("Wrong event type");
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_controller_input2() {
+        let event = GameEvent::ControllerInput2 {
+            character: CharacterId::L0,
+            source_id: 1,
+            move_x: 0.75,
+            jump: true,
+            jump_pressed: true,
+            throw: false,
+            throw_released: false,
+            pickup: true,
+            pass: false,
+        };
+        let line = serialize_event(1500, &event);
+        assert!(line.contains("|X2|"));
+        let (ts, parsed) = parse_event(&line).unwrap();
+        assert_eq!(ts, 1500);
+        if let GameEvent::ControllerInput2 {
+            character,
+            source_id,
+            move_x,
+            jump,
+            jump_pressed,
+            throw,
+            pickup,
+            pass,
+            ..
+        } = parsed
+        {
+            assert_eq!(character, CharacterId::L0);
+            assert_eq!(source_id, 1);
+            assert!((move_x - 0.75).abs() < 0.01);
+            assert!(jump);
+            assert!(jump_pressed);
+            assert!(!throw);
+            assert!(pickup);
+            assert!(!pass);
+        } else {
+            panic!("Wrong event type");
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_controller_swap2() {
+        let event = GameEvent::ControllerSwap2 {
+            character: CharacterId::R1,
+            old_source: 1000,
+            new_source: 0,
+        };
+        let line = serialize_event(1600, &event);
+        assert!(line.contains("|W2|"));
+        let (ts, parsed) = parse_event(&line).unwrap();
+        assert_eq!(ts, 1600);
+        if let GameEvent::ControllerSwap2 {
+            character,
+            old_source,
+            new_source,
+        } = parsed
+        {
+            assert_eq!(character, CharacterId::R1);
+            assert_eq!(old_source, 1000);
+            assert_eq!(new_source, 0);
+        } else {
+            panic!("Wrong event type");
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_controller_assign() {
+        let event = GameEvent::ControllerAssign {
+            character: CharacterId::L1,
+            source_id: 1001,
+            descriptor: "ai:Aggressive".to_string(),
+        };
+        let line = serialize_event(1700, &event);
+        assert!(line.contains("|CA|"));
+        let (ts, parsed) = parse_event(&line).unwrap();
+        assert_eq!(ts, 1700);
+        if let GameEvent::ControllerAssign {
+            character,
+            source_id,
+            descriptor,
+        } = parsed
+        {
+            assert_eq!(character, CharacterId::L1);
+            assert_eq!(source_id, 1001);
+            assert_eq!(descriptor, "ai:Aggressive");
+        } else {
+            panic!("Wrong event type");
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_input2() {
+        let event = GameEvent::Input2 {
+            character: CharacterId::R0,
+            source: 5,
+            move_x: -0.5,
+            jump: false,
+            throw: true,
+            pickup: false,
+            pass: true,
+        };
+        let line = serialize_event(1800, &event);
+        assert!(line.contains("|I2|"));
+        let (ts, parsed) = parse_event(&line).unwrap();
+        assert_eq!(ts, 1800);
+        if let GameEvent::Input2 {
+            character,
+            source,
+            move_x,
+            jump,
+            throw,
+            pickup,
+            pass,
+        } = parsed
+        {
+            assert_eq!(character, CharacterId::R0);
+            assert_eq!(source, 5);
+            assert!((move_x - -0.5).abs() < 0.1);
+            assert!(!jump);
+            assert!(throw);
+            assert!(!pickup);
+            assert!(pass);
+        } else {
+            panic!("Wrong event type");
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_aigoal2() {
+        let event = GameEvent::AiGoal2 {
+            character: CharacterId::L0,
+            goal: "GetBall".to_string(),
+        };
+        let line = serialize_event(1900, &event);
+        assert!(line.contains("|AI|"));
+        let (ts, parsed) = parse_event(&line).unwrap();
+        assert_eq!(ts, 1900);
+        if let GameEvent::AiGoal2 { character, goal } = parsed {
+            assert_eq!(character, CharacterId::L0);
+            assert_eq!(goal, "GetBall");
+        } else {
+            panic!("Wrong event type");
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_navstart2() {
+        let event = GameEvent::NavStart2 {
+            character: CharacterId::R1,
+            target: (150.0, -300.0),
+        };
+        let line = serialize_event(2000, &event);
+        assert!(line.contains("|N2|"));
+        let (ts, parsed) = parse_event(&line).unwrap();
+        assert_eq!(ts, 2000);
+        if let GameEvent::NavStart2 { character, target } = parsed {
+            assert_eq!(character, CharacterId::R1);
+            assert!((target.0 - 150.0).abs() < 0.1);
+            assert!((target.1 - -300.0).abs() < 0.1);
+        } else {
+            panic!("Wrong event type");
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_navcomplete2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::NavComplete2 { character };
+            let line = serialize_event(2100, &event);
+            assert!(line.contains("|C2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 2100);
+            if let GameEvent::NavComplete2 { character: c } = parsed {
+                assert_eq!(c, character);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_reset_ai_state2() {
+        for character in CharacterId::all() {
+            let event = GameEvent::ResetAiState2 { character };
+            let line = serialize_event(2200, &event);
+            assert!(line.contains("|Z2|"));
+            let (ts, parsed) = parse_event(&line).unwrap();
+            assert_eq!(ts, 2200);
+            if let GameEvent::ResetAiState2 { character: c } = parsed {
+                assert_eq!(c, character);
+            } else {
+                panic!("Wrong event type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_legacy_as_characterid() {
+        // Ensure CharacterId::from_str handles "L" -> L0 and "R" -> R0
+        assert_eq!(CharacterId::from_str("L"), Some(CharacterId::L0));
+        assert_eq!(CharacterId::from_str("R"), Some(CharacterId::R0));
     }
 }

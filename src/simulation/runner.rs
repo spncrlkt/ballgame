@@ -12,7 +12,7 @@ use crate::ai::{
 };
 use crate::ball::{
     Ball, BallState, CurrentPalette, Velocity, apply_velocity, ball_collisions, ball_follow_holder,
-    ball_gravity, ball_player_collision, ball_spin, ball_state_update, pickup_ball,
+    ball_gravity, ball_player_collision, ball_spin, ball_state_update, handle_pass, pickup_ball,
 };
 use crate::constants::*;
 use crate::debug_logging::DebugLogConfig;
@@ -25,6 +25,7 @@ use crate::palettes::PaletteDatabase;
 use crate::player::TargetBasket;
 use crate::player::{
     HoldingBall, JumpState, Player, Team, apply_gravity, apply_input, check_collisions,
+    player_player_collision,
 };
 use crate::run_summary::{FileCategory, FileEntry, NextStep, RunSummary};
 use crate::scoring::{CurrentLevel, Score, check_scoring};
@@ -240,6 +241,7 @@ pub fn run_match(
             ball_spin,
             apply_velocity,
             check_collisions,
+            player_player_collision,
             ball_collisions,
             ball_state_update,
             ball_player_collision,
@@ -248,6 +250,7 @@ pub fn run_match(
             steal_cooldown_update,
             update_shot_charge,
             throw_ball,
+            handle_pass,
             check_scoring,
             sim_check_end_conditions,
         )
@@ -2317,6 +2320,7 @@ pub fn run_ghost_trial(
             ball_spin,
             apply_velocity,
             check_collisions,
+            player_player_collision,
             ball_collisions,
             ball_state_update,
             ball_player_collision,
@@ -2325,6 +2329,7 @@ pub fn run_ghost_trial(
             steal_cooldown_update,
             update_shot_charge,
             throw_ball,
+            handle_pass,
             check_scoring,
         )
             .chain(),

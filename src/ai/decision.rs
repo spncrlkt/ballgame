@@ -11,7 +11,7 @@ use crate::ai::{
 };
 use crate::ball::{Ball, BallState};
 use crate::constants::*;
-use crate::events::{CharacterId, ControllerSource, EventBus, GameEvent, PlayerId};
+use crate::events::{CharacterId, EventBus, GameEvent};
 use crate::levels::LevelDatabase;
 use crate::player::{Character, Grounded, HoldingBall, HumanControlled, Player, TargetBasket, Team};
 use crate::scoring::CurrentLevel;
@@ -1487,37 +1487,25 @@ pub fn ai_decision_update(
         // Decay jump buffer timer
         input.jump_buffer_timer = (input.jump_buffer_timer - dt).max(0.0);
 
-        // Emit ControllerInput event for auditability
-        // Use new CharacterId if Character component present, otherwise fall back to legacy PlayerId
-        if let Some(char_comp) = ai_character {
-            event_bus.emit(GameEvent::ControllerInput2 {
-                character: char_comp.0,
-                source_id: crate::input::AI_SOURCE_ID_START, // AI uses a reserved source ID
-                move_x: input.move_x,
-                jump: input.jump_held,
-                jump_pressed: input.jump_buffer_timer > 0.0,
-                throw: input.throw_held,
-                throw_released: input.throw_released,
-                pickup: input.pickup_pressed,
-                pass: input.pass_pressed,
+        // Emit ControllerInput2 event for auditability
+        // Use CharacterId from Character component, or derive from Team for backward compat
+        let character = ai_character
+            .map(|c| c.0)
+            .unwrap_or_else(|| match *ai_team {
+                Team::Left => CharacterId::L0,
+                Team::Right => CharacterId::R0,
             });
-        } else {
-            // Legacy fallback for entities without Character component
-            let player_id = match *ai_team {
-                Team::Left => PlayerId::L,
-                Team::Right => PlayerId::R,
-            };
-            event_bus.emit(GameEvent::ControllerInput {
-                player: player_id,
-                source: ControllerSource::Ai,
-                move_x: input.move_x,
-                jump: input.jump_held,
-                jump_pressed: input.jump_buffer_timer > 0.0,
-                throw: input.throw_held,
-                throw_released: input.throw_released,
-                pickup: input.pickup_pressed,
-            });
-        }
+        event_bus.emit(GameEvent::ControllerInput2 {
+            character,
+            source_id: crate::input::AI_SOURCE_ID_START, // AI uses a reserved source ID
+            move_x: input.move_x,
+            jump: input.jump_held,
+            jump_pressed: input.jump_buffer_timer > 0.0,
+            throw: input.throw_held,
+            throw_released: input.throw_released,
+            pickup: input.pickup_pressed,
+            pass: input.pass_pressed,
+        });
     }
 }
 

@@ -14,8 +14,8 @@ pub use source::{
 use bevy::prelude::*;
 
 use crate::constants::*;
-use crate::events::{ControllerSource, EventBus, GameEvent};
-use crate::player::HumanControlTarget;
+use crate::events::{CharacterId, EventBus, GameEvent};
+use crate::player::{Character, HumanControlled, Player, Team};
 use crate::ui::TweakPanelState;
 
 /// Buffered input state for the human-controlled player
@@ -41,7 +41,7 @@ pub fn capture_input(
     panel_state: Res<TweakPanelState>,
     time: Res<Time>,
     mut event_bus: ResMut<EventBus>,
-    human_target: Res<HumanControlTarget>,
+    human_query: Query<(Option<&Character>, &Team), (With<Player>, With<HumanControlled>)>,
 ) {
     // Don't capture game input when tweak panel is open (uses arrow keys)
     if panel_state.panel_visible {
@@ -130,18 +130,27 @@ pub fn capture_input(
         input.pass_pressed = true;
     }
 
-    // Emit ControllerInput event to EventBus for auditability
+    // Emit ControllerInput2 event to EventBus for auditability
     // Only emit if there's a human-controlled player
-    if let Some(player) = human_target.0 {
-        event_bus.emit(GameEvent::ControllerInput {
-            player,
-            source: ControllerSource::Human,
+    if let Ok((character_opt, team)) = human_query.single() {
+        // Get CharacterId from Character component, or derive from Team
+        let character = character_opt
+            .map(|c| c.0)
+            .unwrap_or_else(|| match team {
+                Team::Left => CharacterId::L0,
+                Team::Right => CharacterId::R0,
+            });
+
+        event_bus.emit(GameEvent::ControllerInput2 {
+            character,
+            source_id: crate::input::KEYBOARD_SOURCE_ID,
             move_x: input.move_x,
             jump: input.jump_held,
             jump_pressed,
             throw: input.throw_held,
             throw_released: throw_just_released,
             pickup: pickup_just_pressed,
+            pass: false, // Pass detection handled separately
         });
     }
 }

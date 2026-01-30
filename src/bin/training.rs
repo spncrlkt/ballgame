@@ -22,16 +22,17 @@ use ballgame::training::{
 };
 use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
-    AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball, BallPlayerContact,
-    BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
-    ChargeGaugeBackground, ChargeGaugeFill, ChargingShot, CoyoteTimer, CurrentLevel,
-    CurrentPalette, DebugSettings, EventBuffer, EventBus, Facing, GameConfig, GameEvent, Grounded,
-    HoldingBall, HumanControlTarget, HumanControlled, InputState, JumpState, LastShotInfo,
-    LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase,
-    PhysicsTweaks, Player, PlayerId, PlayerInput, Score, SnapshotConfig, StealContest,
-    StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, TweakPanelState, Velocity, ai,
-    ball, constants::*, countdown, emit_level_change_events, helpers::*, input, levels, player,
-    scoring, shooting, spawn_countdown_text, steal, tuning, update_event_bus_time, world,
+    AI_SOURCE_ID_START, AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball,
+    BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
+    BallTextures, Character, CharacterId, ChargeGaugeBackground, ChargeGaugeFill, ChargingShot,
+    ControlledBy, CoyoteTimer, CurrentLevel, CurrentPalette, DebugSettings, EventBuffer, EventBus,
+    Facing, GameConfig, GameEvent, Grounded, HoldingBall, HumanControlled,
+    InputState, JumpState, KEYBOARD_SOURCE_ID, LastShotInfo, LevelChangeTracker, LevelDatabase,
+    MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase, PhysicsTweaks, Player,
+    PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown, StealTracker, StyleTextures,
+    TargetBasket, Team, TweakPanelState, Velocity, ai, ball, constants::*, countdown,
+    emit_level_change_events, helpers::*, input, levels, player, scoring, shooting,
+    spawn_countdown_text, steal, tuning, update_event_bus_time, world,
 };
 use bevy::{app::ScheduleRunnerPlugin, camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
@@ -585,7 +586,6 @@ fn main() {
         .init_resource::<MatchCountdown>()
         // Event bus resources
         .insert_resource(EventBus::new())
-        .insert_resource(HumanControlTarget(Some(PlayerId::L))) // Left player is human
         .init_resource::<LevelChangeTracker>()
         .insert_resource(debug_config)
         .init_resource::<DebugSampleBuffer>()
@@ -651,6 +651,7 @@ fn main() {
         .add_systems(Update, reset_positions_on_new_game.after(training_state_machine))
         .add_systems(Update, check_pause_restart.after(reset_positions_on_new_game))
         // Fixed update physics chain - only runs when countdown is finished
+        // Fixed update physics chain (core physics)
         .add_systems(
             FixedUpdate,
             (
@@ -660,6 +661,7 @@ fn main() {
                 ball::ball_spin,
                 ball::apply_velocity,
                 player::check_collisions,
+                player::player_player_collision,
                 ball::ball_collisions,
                 ball::ball_state_update,
                 ball::ball_player_collision,
@@ -668,13 +670,24 @@ fn main() {
                 steal::steal_cooldown_update,
                 shooting::update_shot_charge,
                 shooting::throw_ball,
+                ball::handle_pass,
                 scoring::check_scoring,
+            )
+                .chain()
+                .run_if(countdown::not_in_countdown)
+                .run_if(not_paused),
+        )
+        // Training-specific FixedUpdate systems (after core physics)
+        .add_systems(
+            FixedUpdate,
+            (
                 give_ball_to_human,
                 collect_training_debug_samples,
                 collect_reachability_positions,
                 spawn_shadow_trail,
             )
                 .chain()
+                .after(scoring::check_scoring)
                 .run_if(countdown::not_in_countdown)
                 .run_if(not_paused),
         )
@@ -1153,6 +1166,8 @@ fn training_setup(
             CoyoteTimer::default(),
             JumpState::default(),
             Facing::default(),
+            Character(CharacterId::L0),
+            ControlledBy(KEYBOARD_SOURCE_ID),
         ))
         .insert((
             ChargingShot::default(),
@@ -1195,6 +1210,8 @@ fn training_setup(
             CoyoteTimer::default(),
             JumpState::default(),
             Facing(-1.0),
+            Character(CharacterId::R0),
+            ControlledBy(AI_SOURCE_ID_START),
         ))
         .insert((
             ChargingShot::default(),

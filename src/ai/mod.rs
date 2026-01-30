@@ -23,9 +23,9 @@ pub use world_model::{PlatformBounds, extract_platform_data, extract_platforms_f
 
 use bevy::prelude::*;
 
-use crate::events::{CharacterId, EventBus, GameEvent, PlayerId};
+use crate::events::{CharacterId, EventBus, GameEvent};
 use crate::input::PlayerInput;
-use crate::player::{Character, HumanControlTarget, HumanControlled, Player, Team};
+use crate::player::{Character, HumanControlled, Player, Team};
 
 /// Per-entity input buffer used by physics systems.
 /// All players have this component - human input is copied here, AI writes directly.
@@ -142,14 +142,13 @@ pub fn copy_human_input(
 /// Swap which player the human controls (Q key / L bumper).
 /// For 1v1: Cycles through L0 → R0 → Observer → L0
 /// For 2v2: Cycles through L0 → L1 → R0 → R1 → Observer → L0
-/// Emits ControlSwap event to EventBus for auditability.
+/// Emits ControllerSwap2 event to EventBus for auditability.
 pub fn swap_control(
     mut commands: Commands,
     mut input: ResMut<PlayerInput>,
     players: Query<(Entity, &Team, Option<&Character>), With<Player>>,
     human_query: Query<(Entity, &Team, Option<&Character>), (With<Player>, With<HumanControlled>)>,
     mut input_states: Query<&mut InputState>,
-    mut human_target: ResMut<HumanControlTarget>,
     mut event_bus: ResMut<EventBus>,
 ) {
     if !input.swap_pressed {
@@ -241,33 +240,27 @@ pub fn swap_control(
     if let Some(next) = next_char {
         if let Some(&entity) = player_entities.get(&next) {
             commands.entity(entity).insert(HumanControlled);
-            // Update human_target using legacy PlayerId format for compatibility
-            human_target.0 = match next {
-                CharacterId::L0 | CharacterId::L1 => Some(PlayerId::L),
-                CharacterId::R0 | CharacterId::R1 => Some(PlayerId::R),
-            };
             info!("Control: {} player", next);
+
+            // Emit ControllerSwap2 for the character gaining control
+            event_bus.emit(GameEvent::ControllerSwap2 {
+                character: next,
+                old_source: crate::input::AI_SOURCE_ID_START, // Was AI
+                new_source: crate::input::KEYBOARD_SOURCE_ID, // Now human
+            });
         }
     } else {
-        human_target.0 = None;
         info!("Control: Observer (all AI)");
     }
 
-    // Convert to legacy PlayerId format for event (for backward compatibility)
-    let from_player = current_char.map(|c| match c.team() {
-        crate::events::TeamId::Left => PlayerId::L,
-        crate::events::TeamId::Right => PlayerId::R,
-    });
-    let to_player = next_char.map(|c| match c.team() {
-        crate::events::TeamId::Left => PlayerId::L,
-        crate::events::TeamId::Right => PlayerId::R,
-    });
-
-    // Emit ControlSwap event for auditability
-    event_bus.emit(GameEvent::ControlSwap {
-        from_player,
-        to_player,
-    });
+    // If we had a previous character, emit swap event for it losing control
+    if let Some(prev) = current_char {
+        event_bus.emit(GameEvent::ControllerSwap2 {
+            character: prev,
+            old_source: crate::input::KEYBOARD_SOURCE_ID, // Was human
+            new_source: crate::input::AI_SOURCE_ID_START, // Now AI
+        });
+    }
 
     // Reset all players' InputState to prevent stale input
     for mut input_state in &mut input_states {
