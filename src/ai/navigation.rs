@@ -221,6 +221,22 @@ impl NavGraph {
                     return None;
                 }
 
+                // Skip positions behind the basket (impossible to score from there)
+                // For left basket: must be to the right of it (node.x > target.x)
+                // For right basket: must be to the left of it (node.x < target.x)
+                let is_behind_basket = if shooting_at_left_basket {
+                    node.center.x < target.x
+                } else {
+                    node.center.x > target.x
+                };
+                if is_behind_basket {
+                    debug!(
+                        "find_shooting_node: Rejecting node {} (behind basket) @ ({:.0},{:.0})",
+                        i, node.center.x, node.center.y
+                    );
+                    return None;
+                }
+
                 let dist = node.center.distance(target);
                 if dist <= shoot_range {
                     // Use pre-computed shot quality
@@ -273,6 +289,16 @@ impl NavGraph {
                         "find_shooting_node (fallback): Rejecting node {} (reachability {:.2} < {:.2}) @ ({:.0},{:.0})",
                         i, node.reachability, MIN_REACHABILITY_FOR_SHOT, node.center.x, node.center.y
                     );
+                    return None;
+                }
+
+                // Skip positions behind the basket
+                let is_behind_basket = if shooting_at_left_basket {
+                    node.center.x < target.x
+                } else {
+                    node.center.x > target.x
+                };
+                if is_behind_basket {
                     return None;
                 }
 

@@ -565,9 +565,28 @@ pub fn ai_decision_update(
             // This discourages but doesn't prevent close-range shots
             let front_court_quality_penalty = if in_front_court { 0.15 } else { 0.0 };
 
+            // Check if AI is behind the basket (impossible to score from there)
+            // For left basket: AI must be to the right of it (ai_pos.x > basket.x)
+            // For right basket: AI must be to the left of it (ai_pos.x < basket.x)
+            let is_behind_basket = if target_basket_pos.x < 0.0 {
+                ai_pos.x < target_basket_pos.x // Behind left basket
+            } else {
+                ai_pos.x > target_basket_pos.x // Behind right basket
+            };
+
+            // Check if already charging - once committed, don't abort
+            let already_charging = ai_state.current_goal == AiGoal::ChargeShot;
+
             // Force shot after holding ball for 2+ seconds (prevents stalling)
+            // BUT NOT if behind the basket - that would guarantee a miss
             // Reduced from 3s to increase shooting activity
-            if ai_state.ball_hold_time > 2.0 {
+            if ai_state.ball_hold_time > 2.0 && !is_behind_basket {
+                AiGoal::ChargeShot
+            } else if is_behind_basket && !already_charging {
+                // Behind basket and not yet charging - must reposition first
+                AiGoal::AttackWithBall
+            } else if already_charging {
+                // Already charging - commit to the shot (don't abort mid-charge)
                 AiGoal::ChargeShot
             } else {
                 let horizontal_distance = (ai_pos.x - target_basket_pos.x).abs();

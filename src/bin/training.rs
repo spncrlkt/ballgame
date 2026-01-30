@@ -641,13 +641,15 @@ fn main() {
             (
                 check_advance_level,
                 emit_training_events,
-                training_state_machine,
                 update_training_hud,
                 flush_training_events_to_sqlite,
                 check_escape_quit,
-                check_pause_restart,
             ),
         )
+        // State machine and restart have conflicting mutable queries, must run in separate add_systems calls
+        .add_systems(Update, training_state_machine)
+        .add_systems(Update, reset_positions_on_new_game.after(training_state_machine))
+        .add_systems(Update, check_pause_restart.after(reset_positions_on_new_game))
         // Fixed update physics chain - only runs when countdown is finished
         .add_systems(
             FixedUpdate,
@@ -1647,7 +1649,7 @@ fn training_state_machine(
                 training_state.start_game_timer();
             } else {
                 for ball_state in &balls {
-                    if matches!(ball_state, BallState::Held(_)) {
+                    if matches!(*ball_state, BallState::Held(_)) {
                         training_state.start_game_timer();
                         break;
                     }
@@ -1801,6 +1803,9 @@ fn training_state_machine(
                     score.left = 0;
                     score.right = 0;
                     steal_tracker.reset();
+
+                    // Flag for position reset (handled by separate system)
+                    training_state.needs_position_reset = true;
 
                     // Start countdown for new game
                     countdown.start();
@@ -1960,6 +1965,57 @@ fn training_state_machine(
             }
 
             app_exit.write(AppExit::Success);
+        }
+    }
+}
+
+/// Reset player and ball positions when starting a new game
+fn reset_positions_on_new_game(
+    mut commands: Commands,
+    mut training_state: ResMut<TrainingState>,
+    settings: Res<TrainingSettings>,
+    mut players: Query<(Entity, &mut Transform, &Team), With<Player>>,
+    mut balls: Query<
+        (Entity, &mut Transform, &mut BallState, &mut Velocity),
+        (With<Ball>, Without<Player>),
+    >,
+) {
+    if !training_state.needs_position_reset {
+        return;
+    }
+    training_state.needs_position_reset = false;
+
+    // Reset players to spawn positions and find human player (left team)
+    let mut left_player_entity = None;
+    for (entity, mut player_transform, team) in &mut players {
+        match team {
+            Team::Left => {
+                player_transform.translation = PLAYER_SPAWN_LEFT;
+                left_player_entity = Some(entity);
+            }
+            Team::Right => {
+                player_transform.translation = PLAYER_SPAWN_RIGHT;
+            }
+        }
+        commands.entity(entity).remove::<HoldingBall>();
+    }
+
+    // Reset ball - jump ball by default, drive mode gives human possession
+    for (ball_entity, mut ball_transform, mut ball_state, mut velocity) in &mut balls {
+        if settings.drive_mode {
+            if let Some(left_player) = left_player_entity {
+                ball_transform.translation.x = PLAYER_SPAWN_LEFT.x;
+                ball_transform.translation.y = PLAYER_SPAWN_LEFT.y;
+                *ball_state = BallState::Held(left_player);
+                velocity.0 = Vec2::ZERO;
+                commands
+                    .entity(left_player)
+                    .insert(HoldingBall(ball_entity));
+            }
+        } else {
+            ball_transform.translation = BALL_SPAWN;
+            *ball_state = BallState::Free;
+            velocity.0 = Vec2::ZERO;
         }
     }
 }

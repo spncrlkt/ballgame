@@ -322,7 +322,9 @@ Enable debug sample logging to SQLite with the `--debug-log` flag:
 cargo run --bin training -- \
   --profiles-file config/ai_profiles_champions.txt \
   --profile-list tools/offline/champions_profiles.txt \
-  --debug-log
+  --debug-log \
+  -m game \
+  -w 5
 ```
 
 Debug samples are stored in the session's SQLite database (`db/training_*.db`). Query with:

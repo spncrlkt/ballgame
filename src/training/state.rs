@@ -204,6 +204,8 @@ pub struct TrainingState {
     pub profile_list: Option<Vec<String>>,
     /// Current index in profile list
     pub profile_list_index: usize,
+    /// Flag indicating positions should be reset (set when transitioning to new game)
+    pub needs_position_reset: bool,
 }
 
 impl Default for TrainingState {
@@ -236,6 +238,7 @@ impl Default for TrainingState {
             advance_button_armed: false,
             profile_list: None,
             profile_list_index: 0,
+            needs_position_reset: false,
         }
     }
 }

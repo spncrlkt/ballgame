@@ -68,9 +68,11 @@ pub fn evaluate_shot_quality(shooter_pos: Vec2, basket_pos: Vec2) -> f32 {
         };
         quality += dist_bonus;
     } else {
-        // Behind basket - significant penalty (shooting through backboard area)
-        let behind_penalty = (horizontal_dist / 150.0).min(1.0) * 0.25;
-        quality -= behind_penalty;
+        // Behind basket - CRITICAL penalty
+        // Shooting from behind the basket produces wrong trajectory angles and
+        // geometrically cannot score (ball would need to go through backboard).
+        // Return minimum quality immediately to prevent AI from shooting here.
+        return 0.1;
     }
 
     // === Directly under penalty ===
