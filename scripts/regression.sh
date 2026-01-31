@@ -139,8 +139,10 @@ run_scenario() {
     rm -rf showcase/snapshots/
 
     # Run game with scenario-specific flags
+    # --freeze-countdown ensures physics don't run, making screenshots deterministic
     cargo run --quiet -- \
         --screenshot-and-quit \
+        --freeze-countdown \
         --level "$level" \
         --palette "$palette" \
         --viewport "$width" "$height" \
