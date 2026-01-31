@@ -3,6 +3,9 @@
 *See `milestones.md` for full plan | `ideas.md` for notes*
 
 ---
+## immediate todo
+- [ ] fix step climbing by training / analysis
+- [ ] fix auto reachability by using speed w/ jumps to reach platforms / fix ai to know how to do running jump estimation
 
 ## Testing: DB Path & Generated Assets Consolidation
 
