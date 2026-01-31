@@ -10,8 +10,8 @@ use crate::events::CharacterId;
 use crate::input::{GameMode, InputSourceId, AI_SOURCE_ID_START, KEYBOARD_SOURCE_ID};
 use crate::palettes::Palette;
 use crate::player::{
-    Character, ControlledBy, CoyoteTimer, Facing, Grounded, HumanControlled, JumpState, Player,
-    TargetBasket, Team, Velocity,
+    BlockState, Character, ControlledBy, CoyoteTimer, Facing, Grounded, HumanControlled,
+    JumpState, Player, TargetBasket, Team, TurboGauge, Velocity,
 };
 use crate::shooting::ChargingShot;
 use crate::steal::StealCooldown;
@@ -150,6 +150,9 @@ pub fn spawn_character(
         AiNavState::default(),
         StealCooldown::default(),
     ));
+
+    // Turbo and block components for new mechanics
+    entity_commands.insert((TurboGauge::default(), BlockState::default()));
 
     // Add HumanControlled marker if this is the human-controlled character
     if config.is_human_controlled {

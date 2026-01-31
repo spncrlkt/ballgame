@@ -80,3 +80,99 @@ impl Default for TargetBasket {
         Self(Basket::Right) // Default targeting right basket
     }
 }
+
+/// Turbo gauge for speed boost mechanic
+/// Drains while turbo is held, refills when released
+#[derive(Component)]
+pub struct TurboGauge {
+    /// Current gauge value (0.0 - 1.0)
+    pub current: f32,
+    /// Maximum gauge value
+    pub max: f32,
+    /// Drain rate per second while active
+    pub drain_rate: f32,
+    /// Refill rate per second when inactive
+    pub refill_rate: f32,
+}
+
+impl Default for TurboGauge {
+    fn default() -> Self {
+        use crate::constants::*;
+        Self {
+            current: TURBO_MAX_GAUGE,
+            max: TURBO_MAX_GAUGE,
+            drain_rate: TURBO_DRAIN_RATE,
+            refill_rate: TURBO_REFILL_RATE,
+        }
+    }
+}
+
+impl TurboGauge {
+    /// Check if turbo can be used (has gauge remaining)
+    pub fn can_use(&self) -> bool {
+        self.current > 0.0
+    }
+
+    /// Drain the gauge by the given delta time
+    /// Returns true if gauge was drained (still had charge)
+    pub fn drain(&mut self, dt: f32) -> bool {
+        if self.current > 0.0 {
+            self.current = (self.current - self.drain_rate * dt).max(0.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Refill the gauge by the given delta time
+    pub fn refill(&mut self, dt: f32) {
+        self.current = (self.current + self.refill_rate * dt).min(self.max);
+    }
+}
+
+/// Block state for defensive interception mechanic
+/// When active, creates a larger hitbox that can intercept passes/shots
+#[derive(Component, Default)]
+pub struct BlockState {
+    /// Whether block is currently active
+    pub active: bool,
+    /// Remaining duration of active block
+    pub active_timer: f32,
+    /// Remaining cooldown before can block again
+    pub cooldown: f32,
+}
+
+impl BlockState {
+    /// Check if can initiate a new block
+    pub fn can_block(&self) -> bool {
+        !self.active && self.cooldown <= 0.0
+    }
+
+    /// Start a block
+    pub fn start_block(&mut self, duration: f32) {
+        self.active = true;
+        self.active_timer = duration;
+    }
+
+    /// Update block timers
+    /// Returns true if block just ended this frame
+    pub fn update(&mut self, dt: f32, cooldown_duration: f32) -> bool {
+        let mut just_ended = false;
+
+        if self.active {
+            self.active_timer -= dt;
+            if self.active_timer <= 0.0 {
+                self.active = false;
+                self.active_timer = 0.0;
+                self.cooldown = cooldown_duration;
+                just_ended = true;
+            }
+        }
+
+        if self.cooldown > 0.0 {
+            self.cooldown = (self.cooldown - dt).max(0.0);
+        }
+
+        just_ended
+    }
+}

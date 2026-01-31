@@ -77,6 +77,15 @@ Verify the new centralized db_paths and generated_assets modules work correctly:
 
 ## Done (Last 5)
 
+- [x] **Team Interactions Implementation** - Full 2v2 mechanics (2026-01-30)
+  - Modal input system: Pass/Steal (LB), Throw/Block (RB), Turbo (West)
+  - New mechanics: Pass (auto-aim at teammate), Block (intercept zone), Turbo (speed boost with gauge)
+  - CatchPartner debug AI profile for pass practice
+  - TeamInteraction training protocol (`--protocol team-interaction`)
+  - Event instrumentation: PassCompleted, PassIntercepted, PassMissed, TurboActivated/Deactivated, BlockActivated/Deactivated/Intercepted
+  - AI profile fields: turbo_modifier, block_slow_modifier, turbo_usage, block_reaction, pass_willingness
+  - AI uses turbo when chasing, block when defending
+  - 42 scenario tests passing, 146 unit tests passing
 - [x] **Database & Generated Assets Consolidation** - Central path management (2026-01-30)
   - Created `src/db_paths.rs` - Central database path module (DbType enum, timestamped paths, find_latest)
   - Created `src/db_schema.rs` - Shared schema definitions (CORE_SCHEMA, TRAINING_SCHEMA, BRACKET_SCHEMA)

@@ -36,7 +36,7 @@ pub fn ball_gravity(
         }
 
         match state {
-            BallState::Free | BallState::InFlight { .. } => {
+            BallState::Free | BallState::InFlight { .. } | BallState::PassInFlight { .. } => {
                 if rolling.0 {
                     // Rolling on ground - no gravity, apply rolling friction (skip if grace active)
                     velocity.0.y = 0.0;

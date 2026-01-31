@@ -356,6 +356,44 @@ pub fn ai_navigation_update(
                     Some(intercept_pos)
                 }
             }
+
+            // === CatchPartner goals - debug teammate behavior ===
+            AiGoal::MoveToOpenSpot => {
+                // Move to a position where we can receive a pass from teammate
+                // Open spot: away from walls, not too close to teammate
+                if let Some(tm_pos) = all_players
+                    .iter()
+                    .filter(|(e, _, t, _, _)| *e != ai_entity && *t == ai_team)
+                    .map(|(_, tr, _, _, _)| tr.translation.truncate())
+                    .next()
+                {
+                    // Find a spot on the opposite side of the arena from teammate
+                    let open_x = if tm_pos.x > 0.0 {
+                        -200.0 // Left side if teammate is on right
+                    } else {
+                        200.0 // Right side if teammate is on left
+                    };
+                    Some(Vec2::new(open_x, ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0))
+                } else {
+                    // No teammate found, just stand in center
+                    Some(Vec2::new(0.0, ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0))
+                }
+            }
+
+            AiGoal::ReceivePass => {
+                // Track incoming ball, move toward where it will land
+                ball_pos
+            }
+
+            AiGoal::ChaseMissedBall => {
+                // Chase a missed/loose ball to retrieve it
+                ball_pos
+            }
+
+            AiGoal::HoldAndPass => {
+                // Stay in place while holding the ball before passing
+                None
+            }
         };
 
         // Check if we need to update the path
@@ -507,6 +545,9 @@ pub fn ai_decision_update(
             .get_by_id(&ai_state.profile_id)
             .unwrap_or_else(|| profile_db.default_profile());
 
+        // Update CatchPartner mode from profile
+        ai_state.catch_partner_mode = profile.catch_partner;
+
         // Decrement button press cooldown (simulates human mashing speed limit)
         // Use a minimum dt of 1/60 to handle headless mode where delta can be tiny
         let dt = time.delta_secs().max(1.0 / 60.0);
@@ -614,7 +655,29 @@ pub fn ai_decision_update(
         };
 
         // Decide current goal (using profile values)
-        let new_goal = if ai_has_ball {
+        // CatchPartner mode uses completely different goal logic
+        let new_goal = if ai_state.catch_partner_mode {
+            // CatchPartner AI: cooperative catch/pass behavior
+            if ai_has_ball {
+                // Holding ball - wait 3s then pass back
+                AiGoal::HoldAndPass
+            } else if matches!(ball_state, BallState::PassInFlight { target, .. } if *target == ai_entity) {
+                // Ball is being passed to us - track and receive it
+                AiGoal::ReceivePass
+            } else if matches!(ball_state, BallState::Free) {
+                // Ball is loose (missed pass, etc.) - chase it
+                let distance_to_ball = ai_pos.distance(ball_pos);
+                if distance_to_ball < 300.0 {
+                    AiGoal::ChaseMissedBall
+                } else {
+                    // Ball is far away, move to open spot
+                    AiGoal::MoveToOpenSpot
+                }
+            } else {
+                // Teammate has ball or ball in flight - move to open position
+                AiGoal::MoveToOpenSpot
+            }
+        } else if ai_has_ball {
             // Check if AI is in "front court" (front 1/3 of arena, close to target basket)
             // Front court = near target basket, where shots are too close/easy to block
             // If targeting right basket (x > 0): front court = right 1/3 (x > ARENA_WIDTH/6)
@@ -924,6 +987,9 @@ pub fn ai_decision_update(
         // Reset inputs each frame (will be set below)
         input.move_x = 0.0;
         input.jump_held = false;
+        input.turbo_held = false;
+        input.block_pressed = false;
+        input.pass_pressed = false;
         // Don't reset jump_buffer_timer - it counts down
         // Don't reset throw_released - it's consumed by throw system
 
@@ -1365,6 +1431,88 @@ pub fn ai_decision_update(
                     }
                     input.throw_held = false;
                 }
+
+                // === CatchPartner goals - debug teammate behavior ===
+                AiGoal::MoveToOpenSpot => {
+                    // Move to open position to receive a pass
+                    // Find teammate position
+                    let tm_pos = all_players
+                        .iter()
+                        .filter(|(e, _, t, _, _, _)| *e != ai_entity && *t == ai_team)
+                        .map(|(_, tr, _, _, _, _)| tr.translation.truncate())
+                        .next();
+
+                    if let Some(tm) = tm_pos {
+                        // Position on opposite side from teammate
+                        let target_x = if tm.x > 0.0 { -200.0 } else { 200.0 };
+                        let dx = target_x - ai_pos.x;
+                        if dx.abs() > profile.position_tolerance {
+                            input.move_x = dx.signum();
+                        }
+                    }
+                    input.throw_held = false;
+                }
+
+                AiGoal::ReceivePass => {
+                    // Track incoming ball and move toward it
+                    let dx = ball_pos.x - ai_pos.x;
+                    if dx.abs() > profile.position_tolerance {
+                        input.move_x = dx.signum();
+                    }
+
+                    // Jump if ball is above and close horizontally
+                    let dy = ball_pos.y - ai_pos.y;
+                    if dy > PLAYER_SIZE.y && dx.abs() < BALL_PICKUP_RADIUS * 2.0 && grounded.0 {
+                        input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                        input.jump_held = true;
+                    }
+
+                    // Try to catch the ball
+                    let distance_to_ball = ai_pos.distance(ball_pos);
+                    if distance_to_ball < BALL_PICKUP_RADIUS
+                        && ai_state.button_press_cooldown <= 0.0
+                    {
+                        input.pickup_pressed = true;
+                        ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
+                    }
+                    input.throw_held = false;
+                }
+
+                AiGoal::ChaseMissedBall => {
+                    // Same as ChaseBall - move toward ball and pick it up
+                    let dx = ball_pos.x - ai_pos.x;
+                    if dx.abs() > profile.position_tolerance {
+                        input.move_x = dx.signum();
+                    }
+
+                    let dy = ball_pos.y - ai_pos.y;
+                    if dy > PLAYER_SIZE.y && dx.abs() < BALL_PICKUP_RADIUS * 2.0 && grounded.0 {
+                        input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                        input.jump_held = true;
+                    }
+
+                    let distance_to_ball = ai_pos.distance(ball_pos);
+                    if distance_to_ball < BALL_PICKUP_RADIUS
+                        && matches!(ball_state, BallState::Free)
+                        && ai_state.button_press_cooldown <= 0.0
+                    {
+                        input.pickup_pressed = true;
+                        ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
+                    }
+                    input.throw_held = false;
+                }
+
+                AiGoal::HoldAndPass => {
+                    // Hold the ball, count up timer, then pass back to teammate
+                    ai_state.hold_and_pass_timer += dt;
+
+                    // After 3 seconds, pass to teammate
+                    if ai_state.hold_and_pass_timer >= 3.0 {
+                        input.pass_pressed = true;
+                        ai_state.hold_and_pass_timer = 0.0;
+                    }
+                    input.throw_held = false;
+                }
             }
         }
 
@@ -1421,6 +1569,64 @@ pub fn ai_decision_update(
             input.pickup_pressed = true;
             ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
         }
+
+        // === TURBO DECISION ===
+        // Use turbo when chasing and there's distance to close, based on turbo_usage profile
+        let should_turbo = match ai_state.current_goal {
+            AiGoal::ChaseBall => {
+                // Use turbo when chasing ball and it's far away
+                let distance_to_ball = ai_pos.distance(ball_pos);
+                distance_to_ball > 150.0 && profile.turbo_usage > 0.3
+            }
+            AiGoal::InterceptDefense | AiGoal::PressureDefense | AiGoal::AttemptSteal => {
+                // Use turbo when chasing opponent with ball
+                if let Some(opp_pos) = opponent_pos {
+                    let distance_to_opponent = ai_pos.distance(opp_pos);
+                    // More likely to turbo the higher turbo_usage is
+                    // Also more likely when opponent is farther away
+                    distance_to_opponent > 100.0 && rand::thread_rng().gen_range(0.0..1.0) < profile.turbo_usage * 0.5
+                } else {
+                    false
+                }
+            }
+            AiGoal::AttackWithBall => {
+                // Use turbo when escaping with ball and defender is close
+                if let Some(opp_pos) = opponent_pos {
+                    let distance_to_opponent = ai_pos.distance(opp_pos);
+                    // Turbo to create separation when defender is close
+                    distance_to_opponent < 200.0 && profile.turbo_usage > 0.4
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+        input.turbo_held = should_turbo;
+
+        // === BLOCK DECISION ===
+        // Use block when defending and opponent is charging a shot
+        let should_block = match ai_state.current_goal {
+            AiGoal::InterceptDefense | AiGoal::PressureDefense => {
+                // Check if any opponent is charging a shot
+                let opponent_charging = all_players
+                    .iter()
+                    .filter(|(e, _, t, _, _, _)| *e != ai_entity && *t != ai_team)
+                    .any(|(_e, _, _, _, holding, _)| {
+                        // Check if this opponent has ball and might be shooting
+                        holding.is_some()
+                    });
+
+                if opponent_charging {
+                    // Block based on reaction threshold
+                    // Higher block_reaction = more likely to block
+                    rand::thread_rng().gen_range(0.0..1.0) < profile.block_reaction * 0.3
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+        input.block_pressed = should_block;
 
         // Stuck detection: track cumulative movement over a time window
         // This catches cases where micro-jitter prevents frame-to-frame detection

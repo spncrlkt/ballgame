@@ -17,8 +17,8 @@ use crate::events::EventBus;
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
 use crate::player::{
-    CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, TargetBasket, Team,
-    apply_gravity, apply_input, check_collisions, player_player_collision,
+    BlockState, CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, TargetBasket, Team,
+    TurboGauge, apply_gravity, apply_input, check_collisions, player_player_collision,
 };
 use crate::scoring::{CurrentLevel, Score, check_scoring};
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
@@ -400,11 +400,16 @@ fn test_setup(
                         TargetBasket(target),
                         Collider,
                         team_enum,
-                        InputState::default(),
-                        StealCooldown::default(),
-                        TestEntityId(id.clone()),
                     ))
                     .id();
+                // Insert additional components separately to avoid Bevy tuple size limit
+                commands.entity(entity).insert((
+                    InputState::default(),
+                    StealCooldown::default(),
+                    TurboGauge::default(),
+                    BlockState::default(),
+                    TestEntityId(id.clone()),
+                ));
 
                 capture.entity_map.insert(entity, id.clone());
 
@@ -687,6 +692,7 @@ fn extract_world_state(world: &mut World) -> WorldState {
                 BallState::Free => "Free".to_string(),
                 BallState::Held(_) => "Held".to_string(),
                 BallState::InFlight { .. } => "InFlight".to_string(),
+                BallState::PassInFlight { .. } => "PassInFlight".to_string(),
             },
         });
 

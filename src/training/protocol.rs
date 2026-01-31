@@ -44,6 +44,13 @@ pub enum TrainingProtocol {
     /// - Auto-advances when coverage plateaus or time limit reached
     /// - Generates comprehensive reachability heatmaps
     AutoReachability,
+
+    /// Team interaction training - practice passing with CatchPartner AI
+    /// - Fixed flat level with center platform
+    /// - Teammate uses CatchPartner AI profile (catches and returns passes)
+    /// - No enemy AI, no scoring - purely cooperative pass practice
+    /// - D-pad: Down=restart, Left=advance level
+    TeamInteraction,
 }
 
 // TODO: add a shooting training protocol for basket position calculations.
@@ -62,6 +69,9 @@ impl TrainingProtocol {
             "auto-reachability" | "autoreachability" | "auto-reach" | "autoreach" | "auto" => {
                 Some(TrainingProtocol::AutoReachability)
             }
+            "team-interaction" | "teaminteraction" | "team" | "catch" | "catch-partner" => {
+                Some(TrainingProtocol::TeamInteraction)
+            }
             _ => None,
         }
     }
@@ -74,6 +84,7 @@ impl TrainingProtocol {
             TrainingProtocol::Pursuit2 => "Pursuit Test Level 2",
             TrainingProtocol::Reachability => "Reachability Exploration",
             TrainingProtocol::AutoReachability => "Auto Reachability",
+            TrainingProtocol::TeamInteraction => "Team Interaction",
         }
     }
 
@@ -85,6 +96,7 @@ impl TrainingProtocol {
             TrainingProtocol::Pursuit2 => "pursuit2",
             TrainingProtocol::Reachability => "reachability",
             TrainingProtocol::AutoReachability => "auto-reachability",
+            TrainingProtocol::TeamInteraction => "team-interaction",
         }
     }
 
@@ -102,6 +114,9 @@ impl TrainingProtocol {
             TrainingProtocol::AutoReachability => {
                 "Automated random walk/hop exploration for comprehensive reachability mapping"
             }
+            TrainingProtocol::TeamInteraction => {
+                "Cooperative pass practice with CatchPartner AI teammate"
+            }
         }
     }
 
@@ -113,6 +128,7 @@ impl TrainingProtocol {
             TrainingProtocol::Pursuit2 => Some("Pursuit Arena 2"),
             TrainingProtocol::Reachability => None, // Iterates all levels
             TrainingProtocol::AutoReachability => None, // Iterates all levels
+            TrainingProtocol::TeamInteraction => Some("Team Interaction"),
         }
     }
 
@@ -124,6 +140,7 @@ impl TrainingProtocol {
             TrainingProtocol::Pursuit2 => Some(30.0), // 30 second default for pursuit2
             TrainingProtocol::Reachability => None,  // Player decides when done
             TrainingProtocol::AutoReachability => Some(60.0), // 60 seconds per level
+            TrainingProtocol::TeamInteraction => None, // No time limit - practice mode
         }
     }
 
@@ -132,7 +149,9 @@ impl TrainingProtocol {
         match self {
             TrainingProtocol::AdvancedPlatform => true,
             TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => true, // Ends on score OR time
-            TrainingProtocol::Reachability | TrainingProtocol::AutoReachability => false, // No win condition
+            TrainingProtocol::Reachability
+            | TrainingProtocol::AutoReachability
+            | TrainingProtocol::TeamInteraction => false, // No win condition
         }
     }
 
@@ -143,6 +162,7 @@ impl TrainingProtocol {
             TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => true, // AI must chase
             TrainingProtocol::Reachability => true,     // Exploration mode
             TrainingProtocol::AutoReachability => false, // No ball needed for exploration
+            TrainingProtocol::TeamInteraction => true,  // Player starts with ball to pass
         }
     }
 
@@ -152,6 +172,11 @@ impl TrainingProtocol {
             self,
             TrainingProtocol::Reachability | TrainingProtocol::AutoReachability
         )
+    }
+
+    /// Whether this protocol uses CatchPartner AI for teammate
+    pub fn uses_catch_partner(&self) -> bool {
+        matches!(self, TrainingProtocol::TeamInteraction)
     }
 
     /// Whether this protocol iterates through all levels sequentially
@@ -165,6 +190,11 @@ impl TrainingProtocol {
     /// Whether this protocol uses automated input (no human control)
     pub fn is_automated(&self) -> bool {
         matches!(self, TrainingProtocol::AutoReachability)
+    }
+
+    /// Whether this is a cooperative 2-player mode (no enemy AI)
+    pub fn is_coop_mode(&self) -> bool {
+        matches!(self, TrainingProtocol::TeamInteraction)
     }
 }
 
@@ -197,7 +227,9 @@ impl ProtocolConfig {
             win_score: match protocol {
                 TrainingProtocol::AdvancedPlatform => 5,
                 TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => 1, // End on first score
-                TrainingProtocol::Reachability | TrainingProtocol::AutoReachability => 0, // No score-based win
+                TrainingProtocol::Reachability
+                | TrainingProtocol::AutoReachability
+                | TrainingProtocol::TeamInteraction => 0, // No score-based win
             },
         }
     }

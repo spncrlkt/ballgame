@@ -188,6 +188,7 @@ fn emit_tick_events(
                 BallState::Free => 'F',
                 BallState::Held(_) => 'H',
                 BallState::InFlight { .. } => 'I',
+                BallState::PassInFlight { .. } => 'P',
             };
             (b.position, b.velocity, state_char)
         })
@@ -439,6 +440,15 @@ fn emit_ball_state_events(
         }
         BallState::Held(_) => {
             // Ball is held - already tracked in possession events
+        }
+        BallState::PassInFlight { passer, target } => {
+            // Pass in flight - similar handling to shot, clears holder
+            if state.prev_ball_holder.is_some() {
+                // A pass event is already emitted in handle_pass, so just clear holder
+                state.prev_ball_holder = None;
+            }
+            // Could add pass tracking here in future
+            let _ = (passer, target); // Silence unused warnings for now
         }
     }
 }

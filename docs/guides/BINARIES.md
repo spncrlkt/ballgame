@@ -89,6 +89,7 @@ cargo run --bin training -- --help                    # Show all options
 | `pursuit2` | Platform chase test (pursuit with obstacle) |
 | `reachability` | Solo level exploration for coverage mapping (LB to advance) |
 | `auto-reachability` | Automated random walk/hop exploration (headless compatible) |
+| `team-interaction` | Cooperative pass practice with CatchPartner AI |
 
 ### Output
 

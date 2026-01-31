@@ -62,6 +62,24 @@ pub struct AiProfile {
     /// Minimum utility required to seek better position (0.05-0.20)
     /// Higher = shoots more quickly from current position
     pub seek_threshold: f32,
+    /// Whether this is a CatchPartner debug profile
+    /// CatchPartner AI only catches/passes, never scores or defends
+    pub catch_partner: bool,
+    /// Turbo speed multiplier modifier (0.8-1.5, scales TURBO_SPEED_MULTIPLIER)
+    /// Lower = weaker turbo, Higher = stronger turbo
+    pub turbo_modifier: f32,
+    /// Block horizontal slowdown modifier (0.3-0.7, overrides BLOCK_HORIZONTAL_SLOW)
+    /// Lower = more slowdown during block, Higher = less slowdown
+    pub block_slow_modifier: f32,
+    /// How aggressively AI uses turbo (0.0-1.0)
+    /// 0.0 = never uses turbo, 1.0 = uses turbo whenever chasing or creating space
+    pub turbo_usage: f32,
+    /// How quickly AI reacts with block (0.0-1.0)
+    /// 0.0 = never blocks, 1.0 = blocks when opponent is charging shot
+    pub block_reaction: f32,
+    /// How often AI attempts passes when teammate has better position (0.0-1.0)
+    /// 0.0 = never passes, 1.0 = always passes to better-positioned teammate
+    pub pass_willingness: f32,
 }
 
 impl Default for AiProfile {
@@ -83,6 +101,12 @@ impl Default for AiProfile {
             button_presses_per_sec: 12.0, // ~12 presses/sec (typical human mashing)
             position_patience: 1.0,   // Moderate willingness to seek better positions
             seek_threshold: 0.10,     // Moderate threshold for seeking
+            catch_partner: false,     // Normal competitive AI by default
+            turbo_modifier: 1.0,      // No modification to turbo speed
+            block_slow_modifier: 0.5, // Default slowdown during block
+            turbo_usage: 0.5,         // Moderate turbo usage
+            block_reaction: 0.5,      // Moderate block reaction
+            pass_willingness: 0.5,    // Moderate pass willingness
         }
     }
 }
@@ -278,6 +302,34 @@ fn parse_profiles(content: &str) -> Vec<AiProfile> {
                 "seek_threshold" => {
                     if let Ok(v) = value.parse() {
                         profile.seek_threshold = v;
+                    }
+                }
+                "catch_partner" => {
+                    profile.catch_partner = value == "true" || value == "1";
+                }
+                "turbo_modifier" => {
+                    if let Ok(v) = value.parse() {
+                        profile.turbo_modifier = v;
+                    }
+                }
+                "block_slow_modifier" => {
+                    if let Ok(v) = value.parse() {
+                        profile.block_slow_modifier = v;
+                    }
+                }
+                "turbo_usage" => {
+                    if let Ok(v) = value.parse() {
+                        profile.turbo_usage = v;
+                    }
+                }
+                "block_reaction" => {
+                    if let Ok(v) = value.parse() {
+                        profile.block_reaction = v;
+                    }
+                }
+                "pass_willingness" => {
+                    if let Ok(v) = value.parse() {
+                        profile.pass_willingness = v;
                     }
                 }
                 _ => {}

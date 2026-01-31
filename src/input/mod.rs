@@ -18,18 +18,64 @@ use crate::events::{CharacterId, EventBus, GameEvent};
 use crate::player::{Character, HumanControlled, Player, Team};
 use crate::ui::TweakPanelState;
 
+/// Possession context for modal input mapping
+/// Determines which actions are available based on ball possession
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PossessionContext {
+    /// Player is holding the ball
+    HoldingBall,
+    /// Teammate has the ball
+    TeammateHasBall,
+    /// Opponent has the ball
+    OpponentHasBall,
+    /// Free ball is nearby (within pickup range)
+    FreeBallNearby,
+    /// No special context (ball far away, no one has it)
+    #[default]
+    NoPossession,
+}
+
+impl PossessionContext {
+    /// Check if player should use "has ball" actions (pass, shoot)
+    pub fn has_ball(&self) -> bool {
+        matches!(self, PossessionContext::HoldingBall)
+    }
+
+    /// Check if player can attempt pickup
+    pub fn can_pickup(&self) -> bool {
+        matches!(self, PossessionContext::FreeBallNearby)
+    }
+
+    /// Check if player can attempt steal
+    pub fn can_steal(&self) -> bool {
+        matches!(self, PossessionContext::OpponentHasBall)
+    }
+
+    /// Check if player should use defensive actions (block)
+    pub fn is_defensive(&self) -> bool {
+        matches!(
+            self,
+            PossessionContext::OpponentHasBall
+                | PossessionContext::TeammateHasBall
+                | PossessionContext::NoPossession
+        )
+    }
+}
+
 /// Buffered input state for the human-controlled player
 #[derive(Resource, Default)]
 pub struct PlayerInput {
     pub move_x: f32,
     pub jump_buffer_timer: f32,      // Time remaining in jump buffer
     pub jump_held: bool,             // Is jump button currently held
-    pub pickup_pressed: bool,        // West button - pick up ball
-    pub throw_held: bool,            // R shoulder - charging throw
+    pub pickup_pressed: bool,        // West button - pick up ball (context: free ball)
+    pub throw_held: bool,            // R shoulder - charging throw (context: holding ball)
     pub throw_released: bool,        // R shoulder released - execute throw
     pub swap_pressed: bool,          // L shoulder / Q key - swap which player you control
     pub advance_level_pressed: bool, // L shoulder / Q key - advance to next level (Reachability)
-    pub pass_pressed: bool,          // East button / G key - pass to teammate (2v2)
+    pub pass_pressed: bool,          // L shoulder - pass to teammate (context: holding ball)
+    pub block_pressed: bool,         // R shoulder - block (context: not holding ball)
+    pub turbo_held: bool,            // West button held - turbo speed boost
 }
 
 /// Runs in Update to capture input state before it's cleared.
@@ -128,6 +174,23 @@ pub fn capture_input(
             .any(|gp| gp.just_pressed(GamepadButton::East))
     {
         input.pass_pressed = true;
+    }
+
+    // Turbo (Shift key / West button held) - speed boost
+    // Continuous state, not buffered
+    input.turbo_held = keyboard.pressed(KeyCode::ShiftLeft)
+        || keyboard.pressed(KeyCode::ShiftRight)
+        || gamepads.iter().any(|gp| gp.pressed(GamepadButton::West));
+
+    // Block (B key / RB when not throwing) - defensive interception
+    // This is a press, not hold - accumulate until consumed
+    // Note: RB is shared with throw, modal logic determines which action to take
+    let block_just_pressed = keyboard.just_pressed(KeyCode::KeyB)
+        || gamepads
+            .iter()
+            .any(|gp| gp.just_pressed(GamepadButton::RightTrigger));
+    if block_just_pressed {
+        input.block_pressed = true;
     }
 
     // Emit ControllerInput event to EventBus for auditability

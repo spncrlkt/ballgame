@@ -89,10 +89,11 @@ impl DownOption {
     }
 }
 
-/// Options available for D-pad Right (visual/level settings)
+/// Options available for D-pad Right (visual/level settings + character)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RightOption {
     #[default]
+    Character, // Cycle human-controlled character
     Level,
     Palette,
     BallStyle,
@@ -101,14 +102,16 @@ pub enum RightOption {
 impl RightOption {
     pub fn next(&self) -> Self {
         match self {
+            RightOption::Character => RightOption::Level,
             RightOption::Level => RightOption::Palette,
             RightOption::Palette => RightOption::BallStyle,
-            RightOption::BallStyle => RightOption::Level,
+            RightOption::BallStyle => RightOption::Character,
         }
     }
 
     pub fn name(&self) -> &'static str {
         match self {
+            RightOption::Character => "Character",
             RightOption::Level => "Level",
             RightOption::Palette => "Palette",
             RightOption::BallStyle => "BallStyle",
@@ -117,6 +120,7 @@ impl RightOption {
 
     pub fn from_str(s: &str) -> Self {
         match s {
+            "Character" => RightOption::Character,
             "Palette" => RightOption::Palette,
             "BallStyle" => RightOption::BallStyle,
             _ => RightOption::Level, // Default
@@ -304,6 +308,7 @@ pub fn unified_cycle_system(
     mut viewport_scale: ResMut<ViewportScale>,
     mut current_presets: ResMut<CurrentPresets>,
     mut current_settings: ResMut<CurrentSettings>,
+    mut player_input: ResMut<crate::input::PlayerInput>,
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
     profile_db: Res<AiProfileDatabase>,
@@ -612,6 +617,13 @@ pub fn unified_cycle_system(
                         info!("BallStyle: {}", style.name());
                     }
                 }
+                RightOption::Character => {
+                    // Trigger character swap via PlayerInput
+                    // LT or RT cycles through characters
+                    if cycle_next || cycle_prev {
+                        player_input.swap_pressed = true;
+                    }
+                }
             }
         }
     }
@@ -696,6 +708,21 @@ pub fn update_cycle_indicator(
     };
 
     let right_value = match cycle_selection.right_option {
+        RightOption::Character => {
+            // Show which character is human-controlled
+            let human_char = ai_query
+                .iter()
+                .find(|(_, _, human)| human.is_some())
+                .map(|(_, team, _)| {
+                    if *team == Team::Left {
+                        "L0"
+                    } else {
+                        "R0"
+                    }
+                })
+                .unwrap_or("Observer");
+            human_char.to_string()
+        }
         RightOption::Level => {
             let level_name = level_db
                 .get_by_id(&current_level.0)

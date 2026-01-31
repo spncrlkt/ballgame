@@ -654,24 +654,36 @@ fn main() {
         // Fixed update physics chain (core physics)
         .add_systems(
             FixedUpdate,
+            // Split into nested chains to avoid Bevy's tuple size limit
             (
-                player::apply_input,
-                player::apply_gravity,
-                ball::ball_gravity,
-                ball::ball_spin,
-                ball::apply_velocity,
-                player::check_collisions,
-                player::player_player_collision,
-                ball::ball_collisions,
-                ball::ball_state_update,
-                ball::ball_player_collision,
-                ball::ball_follow_holder,
-                ball::pickup_ball,
-                steal::steal_cooldown_update,
-                shooting::update_shot_charge,
-                shooting::throw_ball,
-                ball::handle_pass,
-                scoring::check_scoring,
+                (
+                    player::apply_input,
+                    player::apply_gravity,
+                    player::turbo_update,
+                    player::block_update,
+                    ball::ball_gravity,
+                    ball::ball_spin,
+                    ball::apply_velocity,
+                    player::check_collisions,
+                    player::player_player_collision,
+                    ball::ball_collisions,
+                )
+                    .chain(),
+                (
+                    ball::ball_state_update,
+                    ball::pass_state_update,
+                    ball::ball_player_collision,
+                    ball::block_intercept,
+                    ball::pass_completion,
+                    ball::ball_follow_holder,
+                    ball::pickup_ball,
+                    steal::steal_cooldown_update,
+                    shooting::update_shot_charge,
+                    shooting::throw_ball,
+                    ball::handle_pass,
+                    scoring::check_scoring,
+                )
+                    .chain(),
             )
                 .chain()
                 .run_if(countdown::not_in_countdown)
@@ -1928,6 +1940,11 @@ fn training_state_machine(
                     println!(
                         "\nRun offline analysis with:\n  ./offline_training/analyze_offline.sh"
                     );
+                }
+                TrainingProtocol::TeamInteraction => {
+                    // Team interaction practice - no specific analysis
+                    println!("\n## Team Interaction Practice Complete\n");
+                    println!("Practice session with CatchPartner AI teammate finished.");
                 }
             }
 

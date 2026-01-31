@@ -218,10 +218,45 @@ pub enum GameEvent {
         angle: f32,
         power: f32,
     },
-    /// Pass initiated
+    /// Pass initiated (basic event)
     Pass {
         from: CharacterId,
         to: CharacterId,
+    },
+    /// Pass completed successfully
+    PassCompleted {
+        passer: CharacterId,
+        receiver: CharacterId,
+    },
+    /// Pass intercepted by opponent
+    PassIntercepted {
+        passer: CharacterId,
+        interceptor: CharacterId,
+    },
+    /// Pass missed (not caught)
+    PassMissed {
+        passer: CharacterId,
+        target: CharacterId,
+    },
+
+    // === Turbo Events ===
+    /// Turbo activated (speed boost started)
+    TurboActivated { character: CharacterId },
+    /// Turbo deactivated (speed boost ended)
+    TurboDeactivated {
+        character: CharacterId,
+        remaining_gauge: f32,
+    },
+
+    // === Block Events ===
+    /// Block activated (defensive stance started)
+    BlockActivated { character: CharacterId },
+    /// Block deactivated (defensive stance ended)
+    BlockDeactivated { character: CharacterId },
+    /// Block intercepted a ball (pass or shot)
+    BlockIntercepted {
+        blocker: CharacterId,
+        ball_state: char, // P=Pass, S=Shot
     },
 
     // === Steal Events ===
@@ -434,6 +469,14 @@ impl GameEvent {
             GameEvent::ResetScores => "RS",
             GameEvent::ResetBall => "RB",
             GameEvent::LevelChange { .. } => "LC",
+            GameEvent::PassCompleted { .. } => "PC",
+            GameEvent::PassIntercepted { .. } => "PI",
+            GameEvent::PassMissed { .. } => "PM",
+            GameEvent::TurboActivated { .. } => "TA",
+            GameEvent::TurboDeactivated { .. } => "TD",
+            GameEvent::BlockActivated { .. } => "BA",
+            GameEvent::BlockDeactivated { .. } => "BD",
+            GameEvent::BlockIntercepted { .. } => "BI",
         }
     }
 }

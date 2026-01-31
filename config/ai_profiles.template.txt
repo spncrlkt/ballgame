@@ -1969,3 +1969,29 @@ steal_reaction_time: 0.08
 button_presses_per_sec: 15
 position_patience: 0.53
 seek_threshold: 0.13
+
+# =============================================================================
+# DEBUG PROFILES - Special behavior modes for testing
+# =============================================================================
+
+# CatchPartner: Debug teammate AI for testing pass mechanics
+# Behavior: Move to open spot → receive passes → hold 3s → pass back
+# If ball is missed: chase/retrieve/hold 3s/pass back
+# Never tries to score or play defense - purely cooperative catch partner
+profile: CatchPartner
+id: debug_catch_partner
+catch_partner: true
+position_tolerance: 30
+shoot_range: 999
+charge_min: 0.5
+charge_max: 1.0
+steal_range: 60
+defense_offset: 200
+min_shot_quality: 1.0
+pressure_distance: 150
+aggression: 0.0
+defensive_iq: 0.5
+steal_reaction_time: 0.15
+button_presses_per_sec: 10
+position_patience: 0.5
+seek_threshold: 0.1

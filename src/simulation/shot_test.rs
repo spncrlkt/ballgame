@@ -22,7 +22,7 @@ use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
 use crate::player::{
     CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, TargetBasket, Team,
-    apply_gravity, apply_input, check_collisions,
+    apply_gravity, apply_input, block_update, check_collisions, turbo_update,
 };
 use crate::scoring::{CurrentLevel, Score, check_scoring};
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
@@ -245,26 +245,35 @@ fn run_shots_at_position(
     );
 
     // Game systems
+    // Split into nested chains to avoid Bevy's tuple size limit
     app.add_systems(
         FixedUpdate,
         (
-            shot_test_control_system,
-            apply_input,
-            apply_gravity,
-            ball_gravity,
-            ball_spin,
-            apply_velocity,
-            check_collisions,
-            ball_collisions,
-            ball_state_update,
-            ball_player_collision,
-            crate::ball::ball_follow_holder,
-            crate::ball::pickup_ball,
-            update_shot_charge,
-            throw_ball,
-            check_scoring,
-            shot_test_track_ball,
-            shot_test_reset_system,
+            (
+                shot_test_control_system,
+                apply_input,
+                apply_gravity,
+                turbo_update,
+                block_update,
+                ball_gravity,
+                ball_spin,
+                apply_velocity,
+                check_collisions,
+                ball_collisions,
+            )
+                .chain(),
+            (
+                ball_state_update,
+                ball_player_collision,
+                crate::ball::ball_follow_holder,
+                crate::ball::pickup_ball,
+                update_shot_charge,
+                throw_ball,
+                check_scoring,
+                shot_test_track_ball,
+                shot_test_reset_system,
+            )
+                .chain(),
         )
             .chain(),
     );

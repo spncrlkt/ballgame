@@ -70,29 +70,40 @@ cargo run --bin generate levels             # Level showcase grid
 
 See [`docs/guides/HOW_TO_PLAY.md`](docs/guides/HOW_TO_PLAY.md) for full controls, or quick reference:
 
+**Modal input** - Controls change based on ball possession:
+
+| Context | LB / Q | RB / F | X / E |
+|---------|--------|--------|-------|
+| Holding ball | Pass | Shoot | Turbo |
+| Opponent has ball | Steal | Block | Turbo |
+| Free ball | Pickup | Pickup | Turbo |
+
 | Action | Keyboard | Gamepad |
 |--------|----------|---------|
 | Move | A/D | Left Stick |
 | Jump | Space/W | A (South) |
-| Pickup/Steal | E | X (West) |
-| Throw (hold) | F | RB (Right Bumper) |
-| Cycle player | Q | LB (Left Bumper) |
+| Turbo | E | X (West) |
+| Pass/Steal | Q | LB (Left Bumper) |
+| Throw/Block | F | RB (Right Bumper) |
+| Cycle character | ] | D-pad Right |
 | Reset level | R | Start |
 
 ---
 
 ## AI Profiles
 
-53 profiles organized by lineage:
-- `v1_*` - Original 5 profiles
-- `v2_*` - Tournament champions (4 profiles)
-- `v3_*` - Evolved variants (44 profiles)
+68 profiles organized by lineage:
+- `v1_*` to `v4_*` - Evolution from original to tournament optimized
+- `v5_*` to `v6_*` - Experimental playstyles (Sniper, Brawler, etc.)
+- `v7_*` to `v11_*` - Randomized and blended from top performers
+- `CatchPartner` - Debug AI for cooperative pass practice
 
 **Key profiles:**
-- `v2_Balanced` - Good all-around default
+- `v11_Blend_A` - Top performer from V11 tournament (default)
 - `v3_Rush_Smart` - Fast, aggressive, improved decision-making
-- `v3_Steady_Deep` - Patient, high-IQ defensive player
-- `v3_Spec_Chaos` - Unpredictable, fast, low shot quality threshold
+- `v5_Sniper` - Long range, patient, selective shooter
+- `v5_Brawler` - Close range, aggressive steals, pressure
+- `CatchPartner` - Catches and returns passes (for team-interaction protocol)
 
 ---
 

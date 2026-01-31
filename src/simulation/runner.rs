@@ -12,7 +12,8 @@ use crate::ai::{
 };
 use crate::ball::{
     Ball, BallState, CurrentPalette, Velocity, apply_velocity, ball_collisions, ball_follow_holder,
-    ball_gravity, ball_player_collision, ball_spin, ball_state_update, handle_pass, pickup_ball,
+    ball_gravity, ball_player_collision, ball_spin, ball_state_update, block_intercept, handle_pass,
+    pass_completion, pass_state_update, pickup_ball,
 };
 use crate::constants::*;
 use crate::debug_logging::DebugLogConfig;
@@ -24,8 +25,8 @@ use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
 use crate::player::TargetBasket;
 use crate::player::{
-    HoldingBall, JumpState, Player, Team, apply_gravity, apply_input, check_collisions,
-    player_player_collision,
+    HoldingBall, JumpState, Player, Team, apply_gravity, apply_input, block_update,
+    check_collisions, player_player_collision, turbo_update,
 };
 use crate::run_summary::{FileCategory, FileEntry, NextStep, RunSummary};
 use crate::scoring::{CurrentLevel, Score, check_scoring};
@@ -233,27 +234,39 @@ pub fn run_match(
     // Note: steal_cooldown_update is only in FixedUpdate to avoid double-ticking
     app.add_systems(Update, (metrics_update, emit_simulation_events));
 
+    // Split into nested chains to avoid Bevy's tuple size limit
     app.add_systems(
         FixedUpdate,
         (
-            apply_input,
-            apply_gravity,
-            ball_gravity,
-            ball_spin,
-            apply_velocity,
-            check_collisions,
-            player_player_collision,
-            ball_collisions,
-            ball_state_update,
-            ball_player_collision,
-            ball_follow_holder,
-            pickup_ball,
-            steal_cooldown_update,
-            update_shot_charge,
-            throw_ball,
-            handle_pass,
-            check_scoring,
-            sim_check_end_conditions,
+            (
+                apply_input,
+                apply_gravity,
+                turbo_update,
+                block_update,
+                ball_gravity,
+                ball_spin,
+                apply_velocity,
+                check_collisions,
+                player_player_collision,
+                ball_collisions,
+            )
+                .chain(),
+            (
+                ball_state_update,
+                pass_state_update,
+                ball_player_collision,
+                block_intercept,
+                pass_completion,
+                ball_follow_holder,
+                pickup_ball,
+                steal_cooldown_update,
+                update_shot_charge,
+                throw_ball,
+                handle_pass,
+                check_scoring,
+                sim_check_end_conditions,
+            )
+                .chain(),
         )
             .chain(),
     );
@@ -448,6 +461,10 @@ fn metrics_update(
                 metrics.prev_ball_holder = Some(*holder);
             }
             BallState::Free => {
+                metrics.prev_ball_holder = None;
+            }
+            BallState::PassInFlight { .. } => {
+                // Pass in flight - similar to shot, clear holder
                 metrics.prev_ball_holder = None;
             }
         }
@@ -2319,27 +2336,39 @@ pub fn run_ghost_trial(
     app.add_systems(Update, super::ghost::ghost_check_end_conditions);
 
     // Ghost input and physics in FixedUpdate for consistent timing
+    // Split into nested chains to avoid Bevy's tuple size limit
     app.add_systems(
         FixedUpdate,
         (
-            super::ghost::ghost_input_system, // Apply ghost inputs first
-            apply_input,
-            apply_gravity,
-            ball_gravity,
-            ball_spin,
-            apply_velocity,
-            check_collisions,
-            player_player_collision,
-            ball_collisions,
-            ball_state_update,
-            ball_player_collision,
-            ball_follow_holder,
-            pickup_ball,
-            steal_cooldown_update,
-            update_shot_charge,
-            throw_ball,
-            handle_pass,
-            check_scoring,
+            (
+                super::ghost::ghost_input_system, // Apply ghost inputs first
+                apply_input,
+                apply_gravity,
+                turbo_update,
+                block_update,
+                ball_gravity,
+                ball_spin,
+                apply_velocity,
+                check_collisions,
+                player_player_collision,
+            )
+                .chain(),
+            (
+                ball_collisions,
+                ball_state_update,
+                pass_state_update,
+                ball_player_collision,
+                block_intercept,
+                pass_completion,
+                ball_follow_holder,
+                pickup_ball,
+                steal_cooldown_update,
+                update_shot_charge,
+                throw_ball,
+                handle_pass,
+                check_scoring,
+            )
+                .chain(),
         )
             .chain(),
     );

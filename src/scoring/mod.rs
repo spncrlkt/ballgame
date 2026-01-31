@@ -219,11 +219,12 @@ pub fn check_scoring(
     }
 }
 
-/// Helper to get the entity that caused the score (holder or shooter)
+/// Helper to get the entity that caused the score (holder or shooter/passer)
 fn get_scorer_entity(ball_state: &BallState) -> Option<Entity> {
     match ball_state {
         BallState::Held(holder) => Some(*holder),
         BallState::InFlight { shooter, .. } => Some(*shooter),
+        BallState::PassInFlight { passer, .. } => Some(*passer),
         BallState::Free => None,
     }
 }

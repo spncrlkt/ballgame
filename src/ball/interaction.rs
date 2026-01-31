@@ -6,7 +6,7 @@ use rand::Rng;
 use crate::ai::{InputState, decision::defender_in_shot_path};
 use crate::ball::components::*;
 use crate::constants::*;
-use crate::player::{Facing, HoldingBall, Player, Team, Velocity};
+use crate::player::{BlockState, Facing, HoldingBall, Player, Team, Velocity};
 use crate::shooting::ChargingShot;
 use crate::steal::{StealContest, StealCooldown, StealTracker};
 
@@ -331,6 +331,168 @@ pub fn pickup_ball(
                 "STEAL OUT OF RANGE: {:?} at {:.1}px (need <{:.1}px)",
                 team, nearest_opponent_distance, STEAL_RANGE
             );
+        }
+    }
+}
+
+/// Handle block interception of balls in flight.
+/// When a player is blocking, their hitbox is expanded and can catch passes/shots.
+/// Runs in FixedUpdate after ball_player_collision.
+pub fn block_intercept(
+    mut commands: Commands,
+    mut ball_query: Query<(Entity, &Transform, &mut BallState, &Sprite), With<Ball>>,
+    player_query: Query<
+        (
+            Entity,
+            &Transform,
+            &Sprite,
+            &BlockState,
+            &Team,
+            Option<&HoldingBall>,
+        ),
+        With<Player>,
+    >,
+) {
+    for (ball_entity, ball_transform, mut ball_state, ball_sprite) in &mut ball_query {
+        // Only intercept balls that are in flight (shots or passes)
+        let thrower_entity = match *ball_state {
+            BallState::InFlight { shooter, .. } => Some(shooter),
+            BallState::PassInFlight { passer, .. } => Some(passer),
+            _ => continue,
+        };
+
+        let ball_pos = ball_transform.translation.truncate();
+        let ball_size = ball_sprite.custom_size.unwrap_or(BALL_SIZE);
+        let ball_half = ball_size / 2.0;
+
+        for (player_entity, player_transform, player_sprite, block_state, _team, holding) in
+            &player_query
+        {
+            // Can't intercept if:
+            // - Not blocking
+            // - Already holding a ball
+            // - Is the thrower of this ball
+            if !block_state.active || holding.is_some() {
+                continue;
+            }
+            if thrower_entity == Some(player_entity) {
+                continue;
+            }
+
+            let player_pos = player_transform.translation.truncate();
+            let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
+
+            // Block hitbox is larger than regular player hitbox
+            let block_half = Vec2::new(
+                player_size.x * BLOCK_HITBOX_WIDTH_FACTOR / 2.0,
+                player_size.y * BLOCK_HITBOX_HEIGHT_FACTOR / 2.0,
+            );
+
+            // Check for collision with expanded block hitbox
+            let diff = ball_pos - player_pos;
+            let overlap_x = ball_half.x + block_half.x - diff.x.abs();
+            let overlap_y = ball_half.y + block_half.y - diff.y.abs();
+
+            if overlap_x > 0.0 && overlap_y > 0.0 {
+                // Block interception successful!
+                // The ball becomes held by the blocking player
+                *ball_state = BallState::Held(player_entity);
+                commands
+                    .entity(player_entity)
+                    .insert(HoldingBall(ball_entity));
+
+                info!("BLOCK INTERCEPT: Player {:?} caught ball", player_entity);
+
+                // Only one player can intercept per frame
+                return;
+            }
+        }
+    }
+}
+
+/// Resource to track block interception for events (will be added in Phase 8)
+#[derive(Resource, Default)]
+pub struct BlockInterceptTracker {
+    /// Last block intercept (blocker entity, ball entity)
+    pub last_intercept: Option<(Entity, Entity)>,
+}
+
+/// Handle pass completion - when a pass reaches the intended target.
+/// When a player touches a ball that's in PassInFlight state and they are the target,
+/// they automatically catch it.
+/// Runs in FixedUpdate after block_intercept.
+pub fn pass_completion(
+    mut commands: Commands,
+    mut ball_query: Query<(Entity, &Transform, &mut BallState, &Sprite), With<Ball>>,
+    player_query: Query<
+        (Entity, &Transform, &Sprite, Option<&HoldingBall>),
+        With<Player>,
+    >,
+) {
+    for (ball_entity, ball_transform, mut ball_state, ball_sprite) in &mut ball_query {
+        // Only check balls that are in PassInFlight state
+        let target_entity = match *ball_state {
+            BallState::PassInFlight { target, .. } => target,
+            _ => continue,
+        };
+
+        let ball_pos = ball_transform.translation.truncate();
+        let ball_size = ball_sprite.custom_size.unwrap_or(BALL_SIZE);
+        let ball_half = ball_size / 2.0;
+
+        for (player_entity, player_transform, player_sprite, holding) in &player_query {
+            // Skip if already holding a ball
+            if holding.is_some() {
+                continue;
+            }
+
+            // Check if this is the target player
+            if player_entity != target_entity {
+                continue;
+            }
+
+            let player_pos = player_transform.translation.truncate();
+            let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
+            let player_half = player_size / 2.0;
+
+            // Check for collision
+            let diff = ball_pos - player_pos;
+            let overlap_x = ball_half.x + player_half.x - diff.x.abs();
+            let overlap_y = ball_half.y + player_half.y - diff.y.abs();
+
+            if overlap_x > 0.0 && overlap_y > 0.0 {
+                // Pass completed! Target catches the ball
+                *ball_state = BallState::Held(player_entity);
+                commands
+                    .entity(player_entity)
+                    .insert(HoldingBall(ball_entity));
+
+                info!("PASS COMPLETED: Player {:?} received pass", player_entity);
+
+                // Only one completion per frame
+                return;
+            }
+        }
+    }
+}
+
+/// Transition PassInFlight balls to Free when they slow down or hit ground.
+/// This handles missed passes - the ball becomes free and can be picked up by anyone.
+/// Uses the same ball_state_update logic for consistency.
+pub fn pass_state_update(
+    mut ball_query: Query<(&mut BallState, &Velocity, &BallRolling), With<Ball>>,
+) {
+    for (mut ball_state, velocity, rolling) in &mut ball_query {
+        // Only check PassInFlight balls
+        if !matches!(*ball_state, BallState::PassInFlight { .. }) {
+            continue;
+        }
+
+        // Convert to Free if ball has slowed down enough (same logic as InFlight->Free)
+        let speed = velocity.0.length();
+        if speed < BALL_FREE_SPEED || rolling.0 {
+            *ball_state = BallState::Free;
+            info!("PASS MISSED: Ball became free (speed={:.1})", speed);
         }
     }
 }

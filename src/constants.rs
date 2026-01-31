@@ -253,3 +253,42 @@ pub const SHADOW_TRAIL_LIGHTNESS: f32 = 0.7;
 pub const DEFAULT_LEFT_PROFILE: &str = "Defensive";
 /// Default AI profile for right player
 pub const DEFAULT_RIGHT_PROFILE: &str = "Rusher";
+
+// =============================================================================
+// TURBO SYSTEM
+// =============================================================================
+
+/// Speed multiplier when turbo is active (1.5 = 50% faster)
+pub const TURBO_SPEED_MULTIPLIER: f32 = 1.5;
+/// Turbo gauge drain rate (per second, 0.0-1.0 gauge depletes in 1/rate seconds)
+pub const TURBO_DRAIN_RATE: f32 = 0.4;
+/// Turbo gauge refill rate (per second when not using turbo)
+pub const TURBO_REFILL_RATE: f32 = 0.25;
+/// Initial/max turbo gauge value
+pub const TURBO_MAX_GAUGE: f32 = 1.0;
+
+// =============================================================================
+// BLOCK SYSTEM
+// =============================================================================
+
+/// Block activation duration (how long the block hitbox stays active)
+pub const BLOCK_DURATION: f32 = 0.4;
+/// Cooldown after block ends before can block again
+pub const BLOCK_COOLDOWN: f32 = 0.8;
+/// Block hitbox width multiplier relative to player width
+pub const BLOCK_HITBOX_WIDTH_FACTOR: f32 = 1.3;
+/// Block hitbox height multiplier relative to player height
+pub const BLOCK_HITBOX_HEIGHT_FACTOR: f32 = 1.4;
+/// Horizontal movement speed multiplier while blocking (0.3 = 70% slower)
+pub const BLOCK_HORIZONTAL_SLOW_FACTOR: f32 = 0.3;
+
+// =============================================================================
+// PASS SYSTEM (ENHANCED)
+// =============================================================================
+
+/// Pass speed multiplier relative to shot (faster than shot for quick passes)
+pub const PASS_SPEED_MULTIPLIER: f32 = 1.2;
+/// Distance within which a defender blocks the pass lane
+pub const OPEN_SPOT_INTERFERENCE_DISTANCE: f32 = 80.0;
+/// Minimum distance to consider pass target "open"
+pub const PASS_MIN_DISTANCE: f32 = 100.0;

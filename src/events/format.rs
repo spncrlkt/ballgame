@@ -204,6 +204,33 @@ pub fn serialize_event(time_ms: u32, event: &GameEvent) -> String {
         GameEvent::ResetScores => String::new(),
         GameEvent::ResetBall => String::new(),
         GameEvent::LevelChange { level_id } => level_id.clone(),
+        GameEvent::PassCompleted { passer, receiver } => {
+            format!("{}|{}", passer, receiver)
+        }
+        GameEvent::PassIntercepted {
+            passer,
+            interceptor,
+        } => {
+            format!("{}|{}", passer, interceptor)
+        }
+        GameEvent::PassMissed { passer, target } => {
+            format!("{}|{}", passer, target)
+        }
+        GameEvent::TurboActivated { character } => character.to_string(),
+        GameEvent::TurboDeactivated {
+            character,
+            remaining_gauge,
+        } => {
+            format!("{}|{:.2}", character, remaining_gauge)
+        }
+        GameEvent::BlockActivated { character } => character.to_string(),
+        GameEvent::BlockDeactivated { character } => character.to_string(),
+        GameEvent::BlockIntercepted {
+            blocker,
+            ball_state,
+        } => {
+            format!("{}|{}", blocker, ball_state)
+        }
     };
 
     format!("{}|{}|{}", ts, code, data)
@@ -378,6 +405,35 @@ pub fn parse_event(line: &str) -> Option<(u32, GameEvent)> {
         "RB" => GameEvent::ResetBall,
         "LC" if !data.is_empty() => GameEvent::LevelChange {
             level_id: data[0].to_string(),
+        },
+        "PC" if data.len() >= 2 => GameEvent::PassCompleted {
+            passer: parse_character(data[0])?,
+            receiver: parse_character(data[1])?,
+        },
+        "PI" if data.len() >= 2 => GameEvent::PassIntercepted {
+            passer: parse_character(data[0])?,
+            interceptor: parse_character(data[1])?,
+        },
+        "PM" if data.len() >= 2 => GameEvent::PassMissed {
+            passer: parse_character(data[0])?,
+            target: parse_character(data[1])?,
+        },
+        "TA" if !data.is_empty() => GameEvent::TurboActivated {
+            character: parse_character(data[0])?,
+        },
+        "TD" if data.len() >= 2 => GameEvent::TurboDeactivated {
+            character: parse_character(data[0])?,
+            remaining_gauge: data[1].parse().ok()?,
+        },
+        "BA" if !data.is_empty() => GameEvent::BlockActivated {
+            character: parse_character(data[0])?,
+        },
+        "BD" if !data.is_empty() => GameEvent::BlockDeactivated {
+            character: parse_character(data[0])?,
+        },
+        "BI" if data.len() >= 2 => GameEvent::BlockIntercepted {
+            blocker: parse_character(data[0])?,
+            ball_state: data[1].chars().next()?,
         },
         _ => return None,
     };

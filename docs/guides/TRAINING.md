@@ -36,6 +36,8 @@ cargo run --bin training -- -l 3                # Force level 3
 - `pursuit` - Flat level chase test (verifies AI pursues player)
 - `pursuit2` - Platform chase test (pursuit with center obstacle)
 - `reachability` - Solo level exploration for coverage mapping (see below)
+- `auto-reachability` - Automated random walk/hop exploration (headless compatible)
+- `team-interaction` - Cooperative pass practice with CatchPartner AI (see below)
 
 **Modes:**
 - `goal` - Each iteration ends after one goal, then resets
@@ -153,6 +155,62 @@ The export script requires 100+ samples per level by default:
 # Export with lower threshold (use most recent or specify path)
 python3 scripts/export_reachability.py $(ls -t db/training_*.db | head -1) --min-samples 50
 ```
+
+## Team Interaction Protocol
+
+Cooperative pass practice with an AI teammate. No opponents - purely for practicing passing mechanics.
+
+### Quick Start
+
+```bash
+# Start team interaction training
+cargo run --bin training -- --protocol team-interaction
+
+# Alternative aliases
+cargo run --bin training -- --protocol team
+cargo run --bin training -- --protocol catch
+```
+
+### How It Works
+
+1. **You control one player** on Team Left (L0)
+2. **CatchPartner AI** controls your teammate (L1)
+3. **No enemy players** - the right team positions are empty
+4. **No scoring** - focus purely on pass mechanics
+
+### CatchPartner AI Behavior
+
+The CatchPartner is a debug AI profile designed for pass practice:
+
+- **Moves to open spots** - Positions itself where you can pass
+- **Catches passes** - Receives the ball when you pass
+- **Holds briefly** - Waits ~3 seconds after catching
+- **Passes back** - Returns the ball to you
+- **Chases misses** - If you miss the pass, retrieves the ball
+
+### Controls
+
+| Action | Controller | Keyboard |
+|--------|------------|----------|
+| Move | Left Stick | A/D |
+| Jump | A (South) | Space/W |
+| Pass | LB | Q |
+| Turbo | X (West) | E |
+| Restart level | D-pad Down | R |
+| Advance level | D-pad Left | [ |
+
+### What to Practice
+
+- **Basic passing** - Pass to stationary teammate
+- **Moving passes** - Pass while moving
+- **Jump passes** - Pass while airborne
+- **Distance passes** - Long passes across the arena
+- **Platform passes** - Passes between different elevations
+- **Turbo + pass** - Speed boost into pass
+
+### Level
+
+The protocol uses "Team Interaction" - a flat level with a center platform, designed for pass practice.
 
 ## SQL Analysis
 

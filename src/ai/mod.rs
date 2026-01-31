@@ -40,6 +40,10 @@ pub struct InputState {
     pub throw_released: bool,
     /// Pass button pressed (for 2v2 mode - pass to teammate)
     pub pass_pressed: bool,
+    /// Block button pressed (RB when not holding ball)
+    pub block_pressed: bool,
+    /// Turbo button held (West button)
+    pub turbo_held: bool,
 }
 
 /// AI state machine tracking current goal and parameters
@@ -79,6 +83,12 @@ pub struct AiState {
     pub stuck_reverse_timer: f32,
     /// The reversed direction to use when stuck_reverse_timer > 0
     pub stuck_reverse_direction: f32,
+
+    // === CatchPartner mode state ===
+    /// Timer for HoldAndPass goal - passes after this reaches 3 seconds
+    pub hold_and_pass_timer: f32,
+    /// Whether this AI is in CatchPartner mode (debug teammate behavior)
+    pub catch_partner_mode: bool,
 }
 
 /// Goals the AI can pursue
@@ -99,6 +109,16 @@ pub enum AiGoal {
     InterceptDefense,
     /// Close-range: stay on opponent, attempt steals
     PressureDefense,
+
+    // === CatchPartner goals (debug teammate AI) ===
+    /// Position in open spot to receive passes from teammate
+    MoveToOpenSpot,
+    /// Track incoming pass and prepare to catch
+    ReceivePass,
+    /// Chase ball after missed pass, retrieve it
+    ChaseMissedBall,
+    /// Holding ball for 3 seconds before passing back to teammate
+    HoldAndPass,
 }
 
 /// Copy human PlayerInput into the human-controlled player's InputState.
@@ -137,6 +157,13 @@ pub fn copy_human_input(
         input_state.pass_pressed = true;
         human_input.pass_pressed = false;
     }
+    if human_input.block_pressed {
+        input_state.block_pressed = true;
+        human_input.block_pressed = false;
+    }
+
+    // Continuous turbo held state
+    input_state.turbo_held = human_input.turbo_held;
 }
 
 /// Swap which player the human controls (Q key / L bumper).

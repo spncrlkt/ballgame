@@ -4,7 +4,10 @@ mod components;
 mod physics;
 pub mod spawn;
 
-pub use components::*;
+pub use components::{
+    BlockState, Character, ControlledBy, CoyoteTimer, Facing, Grounded, HoldingBall,
+    HumanControlled, JumpState, Player, TargetBasket, Team, TurboGauge, Velocity,
+};
 pub use physics::*;
 pub use spawn::{
     CharacterSpawnConfig, color_for_character, initial_facing, spawn_character,

@@ -95,10 +95,10 @@ pub fn handle_pass(
         // Calculate velocity
         let pass_velocity = Vec2::new(pass_angle.cos(), pass_angle.sin()) * PASS_POWER;
 
-        // Set ball state to InFlight
-        *ball_state = BallState::InFlight {
-            shooter: holder_entity,
-            power: PASS_POWER,
+        // Set ball state to PassInFlight with the intended target
+        *ball_state = BallState::PassInFlight {
+            passer: holder_entity,
+            target: best_teammate.map(|(e, _, _)| e).unwrap(),
         };
         ball_velocity.0 = pass_velocity;
 

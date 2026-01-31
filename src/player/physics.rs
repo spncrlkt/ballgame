@@ -30,6 +30,8 @@ pub fn apply_input(
             &mut Facing,
             &Grounded,
             &mut InputState,
+            &TurboGauge,
+            &BlockState,
         ),
         With<Player>,
     >,
@@ -39,14 +41,30 @@ pub fn apply_input(
     // In windowed mode, this will use the actual delta. In headless, it enforces 60Hz behavior.
     let dt = time.delta_secs().max(1.0 / 60.0);
 
-    for (mut velocity, mut coyote, mut jump_state, mut facing, grounded, mut input) in &mut players
+    for (mut velocity, mut coyote, mut jump_state, mut facing, grounded, mut input, turbo, block) in
+        &mut players
     {
         let move_x = input.move_x;
         let jump_buffer_timer = input.jump_buffer_timer;
         let jump_held = input.jump_held;
 
-        // Acceleration-based horizontal movement
-        let target_speed = move_x * tweaks.move_speed;
+        // Calculate turbo speed multiplier: active if holding turbo and has gauge
+        let turbo_active = input.turbo_held && turbo.can_use();
+        let speed_mult = if turbo_active {
+            TURBO_SPEED_MULTIPLIER
+        } else {
+            1.0
+        };
+
+        // Apply block slowdown when blocking
+        let block_mult = if block.active {
+            BLOCK_HORIZONTAL_SLOW_FACTOR
+        } else {
+            1.0
+        };
+
+        // Acceleration-based horizontal movement with turbo and block multipliers
+        let target_speed = move_x * tweaks.move_speed * speed_mult * block_mult;
         let current_speed = velocity.0.x;
 
         // Determine if accelerating (toward input) or decelerating (stopping/reversing)
@@ -127,6 +145,50 @@ pub fn apply_gravity(
             };
             velocity.0.y -= gravity * dt;
         }
+    }
+}
+
+/// Update turbo gauge: drain while held, refill when released
+/// Runs in FixedUpdate for consistent behavior
+pub fn turbo_update(
+    mut players: Query<(&mut TurboGauge, &InputState), With<Player>>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
+    for (mut turbo, input) in &mut players {
+        if input.turbo_held {
+            turbo.drain(dt);
+        } else {
+            turbo.refill(dt);
+        }
+    }
+}
+
+/// Update block state: handle activation, timer countdown, and cooldown
+/// Runs in FixedUpdate for consistent behavior
+pub fn block_update(
+    mut players: Query<(&mut BlockState, &mut InputState, Option<&HoldingBall>), With<Player>>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
+    for (mut block, mut input, holding_ball) in &mut players {
+        // Can only initiate block if:
+        // - Block button pressed
+        // - Not holding a ball (modal: RB is shoot when holding, block when not)
+        // - Block is not on cooldown
+        if input.block_pressed {
+            input.block_pressed = false; // Consume the input
+
+            // Only block if not holding ball and can block
+            if holding_ball.is_none() && block.can_block() {
+                block.start_block(BLOCK_DURATION);
+            }
+        }
+
+        // Update block timers
+        block.update(dt, BLOCK_COOLDOWN);
     }
 }
 

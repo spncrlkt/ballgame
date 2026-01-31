@@ -287,14 +287,24 @@ See `docs/guides/BINARIES.md` for complete reference with all flags and examples
 
 ### Input
 
-Keyboard + Gamepad supported:
+Keyboard + Gamepad supported with **modal input** (controls change based on ball possession):
+
+**Modal Input Mapping:**
+| Context | LB / Q | RB / F | X / E | A / Space |
+|---------|--------|--------|-------|-----------|
+| Holding ball | Pass | Shoot | Turbo | Jump |
+| Teammate has ball | Steal | Block | Turbo | Jump |
+| Opponent has ball | Steal | Block | Turbo | Jump |
+| Free ball nearby | Pickup | Pickup | Turbo | Jump |
+
+**Core Controls:**
 - A/D or Left Stick: Horizontal movement
 - Space/W or South button: Jump
-- E or West button: Pickup ball / Steal
-- F or Right Bumper: Charge and throw (hold to charge, release to throw)
-- Q or Left Bumper: Cycle player control (Left → Right → Observer → Left)
-- R or Start: Reset current level (randomizes AI profile)
-- ] key: Next level (keyboard only)
+- E or West button: Turbo (speed boost, drains gauge)
+- Q or Left Bumper: Pass (with ball) / Steal (without) / Pickup (free ball)
+- F or Right Bumper: Throw (with ball) / Block (without)
+- R or Start: Reset current level
+- ] key or D-pad Right: Cycle character / Next level
 - [ key: Previous level (keyboard only)
 - V key: Cycle viewport size (keyboard only)
 - Tab: Toggle debug UI (shot info text)
@@ -311,7 +321,7 @@ Each D-pad direction controls different options. Press a direction to select it 
 | **Up** | Viewport (single) | Viewport sizes |
 | **Down** | Composite → Movement → Ball → Shooting | Preset values |
 | **Left** | AI (single) | LT: player, RT: profile |
-| **Right** | Level → Palette → BallStyle | Values |
+| **Right** | Character → Level → Palette → BallStyle | Values |
 
 Display (top-left, always visible):
 ```
@@ -354,8 +364,11 @@ cargo run --bin training -- -p Aggressive   # Specific AI profile
 **Controls:**
 - A/D or Left Stick: Move
 - Space/W or South button: Jump
-- E or West button: Pickup/Steal
-- F or Right Bumper: Throw (hold to charge)
+- E or West button: Turbo
+- Q or Left Bumper: Pass/Steal/Pickup (context-dependent)
+- F or Right Bumper: Throw/Block (context-dependent)
+- D-pad Down: Restart level
+- D-pad Left: Advance training level
 - Escape: Quit training session
 
 **Output:**

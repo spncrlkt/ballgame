@@ -98,7 +98,7 @@ impl Default for CurrentPalette {
     }
 }
 
-/// Ball state - Free, Held, or InFlight
+/// Ball state - Free, Held, InFlight, or PassInFlight
 #[derive(Component, Default, Debug, Clone, Copy, PartialEq)]
 pub enum BallState {
     #[default]
@@ -108,6 +108,10 @@ pub enum BallState {
         shooter: Entity,
         power: f32,
     }, // Who shot it and how hard
+    PassInFlight {
+        passer: Entity,
+        target: Entity,
+    }, // Pass in progress - who passed it and intended receiver
 }
 
 /// Track overlap for collision effects
