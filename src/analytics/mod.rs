@@ -14,6 +14,7 @@ pub mod parser;
 mod requests;
 pub mod suggestions;
 mod targets;
+mod team_interaction;
 mod training_debug;
 
 pub use bracket_analysis::{
@@ -35,4 +36,5 @@ pub use requests::{
 };
 pub use suggestions::{ParameterSuggestion, format_suggestions, generate_suggestions};
 pub use targets::{TargetDelta, TargetStatus, TuningTargets, default_targets, load_targets};
+pub use team_interaction::{TeamInteractionReport, run_team_interaction_analysis};
 pub use training_debug::{TrainingDebugReport, run_training_debug_analysis};

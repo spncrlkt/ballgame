@@ -6,6 +6,7 @@ use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
 
+use super::protocol::TrainingProtocol;
 use super::state::{TrainingState, Winner};
 use crate::generated_assets;
 use crate::run_summary::{FileCategory, FileEntry, NextStep, RunSummary};
@@ -131,7 +132,7 @@ pub fn print_session_summary(state: &TrainingState, db_path: &str) {
 
     let summary_path = state.session_dir.join("summary.json");
 
-    RunSummary::new("Training Session Complete")
+    let mut summary = RunSummary::new("Training Session Complete")
         .duration(Duration::from_secs_f32(total_duration_secs))
         .stat(
             "Result",
@@ -143,11 +144,22 @@ pub fn print_session_summary(state: &TrainingState, db_path: &str) {
         .file(FileEntry::new(
             summary_path.display().to_string(),
             FileCategory::Report,
-        ))
-        .next_step(NextStep::primary(
+        ));
+
+    // Add protocol-specific analysis next step
+    if state.protocol == TrainingProtocol::TeamInteraction {
+        summary = summary.next_step(NextStep::primary(
+            format!("cargo run --bin analyze -- --team-interaction {}", db_path),
+            "Analyze team interactions (passes, blocks)",
+        ));
+    } else {
+        summary = summary.next_step(NextStep::primary(
             format!("cargo run --bin analyze -- --training-db {}", db_path),
             "Generate detailed analysis report",
-        ))
+        ));
+    }
+
+    summary
         .next_step(NextStep::secondary(
             format!(
                 "cargo run --bin training -- -n {} -p {}",

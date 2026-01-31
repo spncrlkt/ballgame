@@ -17,7 +17,7 @@ use ballgame::analytics::{
     ParameterSuggestion, TrainingDebugReport, TuningTargets, default_targets, format_suggestions,
     format_update_report, generate_suggestions, load_targets, parse_all_matches_from_db,
     run_bracket_analysis, run_event_audit, run_focused_analysis, run_request,
-    run_training_debug_analysis, update_default_profiles,
+    run_team_interaction_analysis, run_training_debug_analysis, update_default_profiles,
 };
 
 fn main() {
@@ -207,6 +207,28 @@ fn main() {
             std::process::exit(1);
         }
         println!("Focused analysis written to {}", output_path.display());
+        return;
+    }
+
+    // Team interaction analysis
+    if let Some(db_path) = &config.team_interaction_db {
+        let report = run_team_interaction_analysis(db_path)
+            .unwrap_or_else(|e| {
+                eprintln!("Failed to run team interaction analysis: {}", e);
+                std::process::exit(1);
+            });
+        let output_path = config
+            .team_interaction_output
+            .clone()
+            .unwrap_or_else(default_team_interaction_output_path);
+        if let Some(parent) = output_path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        if let Err(e) = std::fs::write(&output_path, report.to_markdown()) {
+            eprintln!("Failed to write team interaction report: {}", e);
+            std::process::exit(1);
+        }
+        println!("Team interaction analysis written to {}", output_path.display());
         return;
     }
 
@@ -422,6 +444,8 @@ struct AnalyzeConfig {
     bracket_db: Option<PathBuf>,
     bracket_output: Option<PathBuf>,
     export_bracket_rankings: bool,
+    team_interaction_db: Option<PathBuf>,
+    team_interaction_output: Option<PathBuf>,
     update_defaults: bool,
     show_help: bool,
 }
@@ -452,6 +476,8 @@ impl Default for AnalyzeConfig {
             bracket_db: None,
             bracket_output: None,
             export_bracket_rankings: false,
+            team_interaction_db: None,
+            team_interaction_output: None,
             update_defaults: false,
             show_help: false,
         }
@@ -590,6 +616,18 @@ impl AnalyzeConfig {
                 "--bracket-rankings" => {
                     config.export_bracket_rankings = true;
                 }
+                "--team-interaction" => {
+                    if i + 1 < args.len() {
+                        config.team_interaction_db = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--team-interaction-output" => {
+                    if i + 1 < args.len() {
+                        config.team_interaction_output = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
                 "--update-defaults" => {
                     config.update_defaults = true;
                 }
@@ -642,6 +680,8 @@ OPTIONS:
     --bracket-db <DB>   Override DB path for bracket analysis
     --bracket-output <DIR> Output directory for bracket reports
     --bracket-rankings  Export standings to auto-generated rankings file
+    --team-interaction <DB> Analyze team interactions (passes, blocks) from training DB
+    --team-interaction-output <FILE> Output file for team interaction report
     --update-defaults   Update default profiles in src/constants.rs
     --help, -h          Show this help
 
@@ -675,6 +715,9 @@ EXAMPLES:
 
     # Bracket analysis with specific DB and rankings export
     cargo run --bin analyze -- --bracket --bracket-db db/bracket_20260129_143022.db --bracket-rankings
+
+    # Team interaction analysis (passes, blocks, coordination)
+    cargo run --bin analyze -- --team-interaction db/training_YYYYMMDD_HHMMSS.db
 
 TARGETS FILE FORMAT (TOML):
     [targets]
@@ -712,6 +755,14 @@ fn default_audit_output_path() -> PathBuf {
 fn default_focused_output_path() -> PathBuf {
     let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
     PathBuf::from(format!("notes/analysis_runs/focused_{}.md", timestamp))
+}
+
+fn default_team_interaction_output_path() -> PathBuf {
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    PathBuf::from(format!(
+        "notes/analysis_runs/team_interaction_{}.md",
+        timestamp
+    ))
 }
 
 fn default_request_output_path(name: &str) -> PathBuf {
