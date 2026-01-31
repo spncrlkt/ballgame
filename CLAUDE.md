@@ -545,6 +545,7 @@ When asked to "audit", "review", or "check the repo", use the appropriate tier:
 - [ ] All Tier 1 checks
 - [ ] `./scripts/regression.sh` - visual regression
 - [ ] `./scripts/collect_metrics.sh` - track metrics to SQLite
+- [ ] `./scripts/security_audit.sh` - prompt injection and SQL injection checks
 - [ ] Pattern violations - raw input in FixedUpdate, unbuffered presses, missing collision epsilon
 - [ ] Constants check - no magic numbers; tunable values in `src/constants.rs`
 - [ ] CLAUDE.md accuracy - verify architecture section matches code
@@ -594,9 +595,11 @@ When modifying these systems, run their specific audit checklist:
 | `docs/dev/training_audit.md` | Training workflow checklist with SQL verification |
 | `docs/dev/simulation_audit.md` | Simulation workflow checklist |
 | `docs/dev/heatmap_audit.md` | Heatmap workflow checklist |
+| `docs/dev/security_audit.md` | Security checklist (prompt injection, SQL injection) |
 | `scripts/coverage.sh` | Code coverage via cargo-llvm-cov |
 | `scripts/collect_metrics.sh` | Collect audit metrics to SQLite |
 | `scripts/metrics_report.sh` | Generate metrics trend report |
+| `scripts/security_audit.sh` | Automated security vulnerability scan |
 
 ### Scaling Concerns to Monitor
 
