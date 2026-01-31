@@ -179,11 +179,12 @@ compare_scenario() {
 
     # Compare using ImageMagick if available
     if command -v compare &> /dev/null; then
-        local diff_pixels
-        diff_pixels=$(compare -metric AE -fuzz 5% "$baseline" "$current" "$diff" 2>&1 || true)
+        local diff_output
+        diff_output=$(compare -metric AE -fuzz 5% "$baseline" "$current" "$diff" 2>&1 || true)
 
-        # Parse the number
-        if [[ "$diff_pixels" =~ ^[0-9]+$ ]]; then
+        # Parse the pixel count (first number in output, e.g. "14358 (0.00389486)")
+        if [[ "$diff_output" =~ ^([0-9]+) ]]; then
+            local diff_pixels="${BASH_REMATCH[1]}"
             if [ "$diff_pixels" -le "$PIXEL_TOLERANCE" ]; then
                 echo "  PASS: $diff_pixels pixels differ (tolerance: $PIXEL_TOLERANCE)"
                 rm -f "$diff"
@@ -194,7 +195,7 @@ compare_scenario() {
                 return 1
             fi
         else
-            echo "  WARNING: Could not parse diff result"
+            echo "  WARNING: Could not parse diff result: $diff_output"
         fi
     fi
 
