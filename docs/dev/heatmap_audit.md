@@ -48,7 +48,7 @@ Read the generated heatmap PNG to verify:
 cargo run --bin verify_reachability
 ```
 
-This binary validates all reachability heatmaps exist and have varied data. It's also run automatically at the end of `scripts/setup.sh`.
+This binary validates all reachability heatmaps exist and have varied data. It's also run automatically at the end of `./init.sh`.
 
 ### Basic Reachability
 
