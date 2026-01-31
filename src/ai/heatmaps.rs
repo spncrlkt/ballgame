@@ -131,66 +131,49 @@ pub fn load_heatmaps_on_level_change(
 
     let safe_name = sanitize_level_name(level.name.as_str());
 
-    let score_left = load_heatmap_grid(&resolve_heatmap_path(
-        "score",
-        &safe_name,
-        level.id.as_str(),
-        Some("left"),
-    ));
-    let score_right = load_heatmap_grid(&resolve_heatmap_path(
-        "score",
-        &safe_name,
-        level.id.as_str(),
-        Some("right"),
-    ));
-    let line_of_sight_left = load_heatmap_grid(&resolve_heatmap_path(
-        "line_of_sight",
-        &safe_name,
-        level.id.as_str(),
-        Some("left"),
-    ));
-    let line_of_sight_right = load_heatmap_grid(&resolve_heatmap_path(
-        "line_of_sight",
-        &safe_name,
-        level.id.as_str(),
-        Some("right"),
-    ));
-    let speed = load_heatmap_grid(&resolve_heatmap_path(
-        "speed",
-        &safe_name,
-        level.id.as_str(),
-        None,
-    ));
-    let reachability = load_heatmap_grid(&resolve_heatmap_path(
-        "reachability",
-        &safe_name,
-        level.id.as_str(),
-        None,
-    ));
-    let landing_safety = load_heatmap_grid(&resolve_heatmap_path(
-        "landing_safety",
-        &safe_name,
-        level.id.as_str(),
-        None,
-    ));
-    let path_cost = load_heatmap_grid(&resolve_heatmap_path(
-        "path_cost",
-        &safe_name,
-        level.id.as_str(),
-        None,
-    ));
-    let elevation = load_heatmap_grid(&resolve_heatmap_path(
-        "elevation",
-        &safe_name,
-        level.id.as_str(),
-        None,
-    ));
-    let escape_routes = load_heatmap_grid(&resolve_heatmap_path(
-        "escape_routes",
-        &safe_name,
-        level.id.as_str(),
-        None,
-    ));
+    // Default values: 0.5 = neutral/medium for most heatmaps
+    let score_left = load_heatmap_grid_optional(
+        resolve_heatmap_path("score", &safe_name, level.id.as_str(), Some("left")).as_deref(),
+        0.5,
+    );
+    let score_right = load_heatmap_grid_optional(
+        resolve_heatmap_path("score", &safe_name, level.id.as_str(), Some("right")).as_deref(),
+        0.5,
+    );
+    let line_of_sight_left = load_heatmap_grid_optional(
+        resolve_heatmap_path("line_of_sight", &safe_name, level.id.as_str(), Some("left"))
+            .as_deref(),
+        0.5,
+    );
+    let line_of_sight_right = load_heatmap_grid_optional(
+        resolve_heatmap_path("line_of_sight", &safe_name, level.id.as_str(), Some("right"))
+            .as_deref(),
+        0.5,
+    );
+    let speed = load_heatmap_grid_optional(
+        resolve_heatmap_path("speed", &safe_name, level.id.as_str(), None).as_deref(),
+        0.5,
+    );
+    let reachability = load_heatmap_grid_optional(
+        resolve_heatmap_path("reachability", &safe_name, level.id.as_str(), None).as_deref(),
+        0.5,
+    );
+    let landing_safety = load_heatmap_grid_optional(
+        resolve_heatmap_path("landing_safety", &safe_name, level.id.as_str(), None).as_deref(),
+        0.5,
+    );
+    let path_cost = load_heatmap_grid_optional(
+        resolve_heatmap_path("path_cost", &safe_name, level.id.as_str(), None).as_deref(),
+        0.5,
+    );
+    let elevation = load_heatmap_grid_optional(
+        resolve_heatmap_path("elevation", &safe_name, level.id.as_str(), None).as_deref(),
+        0.5,
+    );
+    let escape_routes = load_heatmap_grid_optional(
+        resolve_heatmap_path("escape_routes", &safe_name, level.id.as_str(), None).as_deref(),
+        0.5,
+    );
 
     *heatmaps = HeatmapBundle {
         built_for_level_id: level.id.clone(),
@@ -207,7 +190,16 @@ pub fn load_heatmaps_on_level_change(
     };
 }
 
-/// Load a heatmap grid from a file, or return a default grid with neutral values if file is missing.
+/// Load a heatmap grid from a file, or return a default grid with the given value if file is missing.
+fn load_heatmap_grid_optional(path: Option<&Path>, default_value: f32) -> HeatmapGrid {
+    match path {
+        Some(p) => load_heatmap_grid_with_default(p, Some(default_value)),
+        None => HeatmapGrid::new_with_value(default_value),
+    }
+}
+
+/// Load a heatmap grid from a file (used by tests).
+#[cfg(test)]
 fn load_heatmap_grid(path: &Path) -> HeatmapGrid {
     load_heatmap_grid_with_default(path, None)
 }
@@ -309,20 +301,21 @@ fn resolve_heatmap_path(
     safe_name: &str,
     level_id: &str,
     side: Option<&str>,
-) -> PathBuf {
+) -> Option<PathBuf> {
     let base = match side {
         Some(side) => format!("heatmap_{}_{}_{}_{}", label, safe_name, level_id, side),
         None => format!("heatmap_{}_{}_{}", label, safe_name, level_id),
     };
     let direct = Path::new(HEATMAP_DIR).join(format!("{}.txt", base));
     if direct.exists() {
-        return direct;
+        return Some(direct);
     }
 
     let prefix = format!("heatmap_{}_{}", label, safe_name);
     let mut matches = Vec::new();
     let Ok(entries) = fs::read_dir(HEATMAP_DIR) else {
-        panic!("Heatmaps: missing directory {}", HEATMAP_DIR);
+        // Directory missing or unreadable - no heatmaps available
+        return None;
     };
 
     for entry in entries.flatten() {
@@ -344,15 +337,15 @@ fn resolve_heatmap_path(
     }
 
     match matches.len() {
-        1 => matches.remove(0),
-        0 => panic!(
-            "Heatmaps: missing {} heatmap for level '{}' (expected {}, fallback by name failed)",
-            label, safe_name, base
-        ),
-        _ => panic!(
-            "Heatmaps: multiple {} heatmaps matched for level '{}' ({:?})",
-            label, safe_name, matches
-        ),
+        1 => Some(matches.remove(0)),
+        0 => None,
+        _ => {
+            warn!(
+                "Heatmaps: multiple {} heatmaps matched for level '{}' ({:?}), using first",
+                label, safe_name, matches
+            );
+            Some(matches.remove(0))
+        }
     }
 }
 
