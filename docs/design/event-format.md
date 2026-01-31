@@ -101,14 +101,14 @@ T:04500|ME|1|0|45.5
 ### In Simulation
 
 ```rust
-use ballgame::events::{EventBuffer, GameEvent, PlayerId};
+use ballgame::events::{EventBuffer, GameEvent, CharacterId};
 
 let mut buffer = EventBuffer::new();
 buffer.set_start_time(time.elapsed_secs());
 
 // Log events
 buffer.log(time, GameEvent::Goal {
-    player: PlayerId::L,
+    character: CharacterId::L0,
     score_left: 1,
     score_right: 0,
 });
@@ -120,7 +120,7 @@ let log_text = buffer.serialize();
 ### In Gameplay
 
 ```rust
-use ballgame::events::{EventLogger, EventLogConfig, GameEvent};
+use ballgame::events::{EventLogger, EventLogConfig, GameEvent, CharacterId};
 
 // Create logger resource
 let config = EventLogConfig {
@@ -135,7 +135,7 @@ let logger = EventLogger::new(config);
 logger.start_session("20260123_143052");
 
 // Log events during gameplay
-logger.log(time, GameEvent::Pickup { player: PlayerId::L });
+logger.log(time, GameEvent::Pickup { character: CharacterId::L0 });
 
 // End session
 logger.end_session();

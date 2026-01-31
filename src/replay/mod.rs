@@ -9,7 +9,7 @@ mod state;
 mod systems;
 mod ui;
 
-pub use data::{ReplayData, TickFrame, TimedEvent};
+pub use data::{CharacterFrame, ReplayData, TickFrame, TimedEvent};
 pub use sqlite_loader::load_replay_from_db;
 pub use state::ReplayState;
 pub use systems::{replay_input_handler, replay_playback, replay_setup};

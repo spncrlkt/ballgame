@@ -74,6 +74,6 @@ Training Tools → AI Quality → MVP → V0 → V1
 
 ## Technical Debt
 
-- [ ] PlayerId → CharacterId migration
+- [x] PlayerId → CharacterId migration (completed 2026-01-30)
 - [ ] System wiring consolidation
 - [ ] EventBus memory cleanup

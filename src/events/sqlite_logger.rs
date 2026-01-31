@@ -172,8 +172,8 @@ impl SqliteEventLogger {
             return;
         }
 
-        if let GameEvent::Goal { player, .. } = event {
-            if let Err(e) = end_point_for_goal(&conn, self, match_id, time_ms, *player) {
+        if let GameEvent::Goal { character, .. } = event {
+            if let Err(e) = end_point_for_goal(&conn, self, match_id, time_ms, *character) {
                 warn!("Failed to finalize point on goal: {}", e);
             }
         }
@@ -220,8 +220,8 @@ impl SqliteEventLogger {
                 return;
             }
 
-            if let GameEvent::Goal { player, .. } = event {
-                if let Err(e) = end_point_for_goal(&conn, self, match_id, *time_ms, *player) {
+            if let GameEvent::Goal { character, .. } = event {
+                if let Err(e) = end_point_for_goal(&conn, self, match_id, *time_ms, *character) {
                     warn!("Failed to finalize point on goal: {}", e);
                     let _ = conn.execute("ROLLBACK", []);
                     return;
@@ -555,11 +555,11 @@ fn end_point_for_goal(
     logger: &SqliteEventLogger,
     match_id: i64,
     time_ms: u32,
-    player: super::types::PlayerId,
+    character: super::types::CharacterId,
 ) -> Result<(), rusqlite::Error> {
-    let winner = match player {
-        super::types::PlayerId::L => "left",
-        super::types::PlayerId::R => "right",
+    let winner = match character.team() {
+        super::types::TeamId::Left => "left",
+        super::types::TeamId::Right => "right",
     };
     if let Some(point_id) = logger.current_point_id.lock().ok().and_then(|g| *g) {
         end_point(conn, point_id, time_ms, winner)?;
@@ -628,8 +628,6 @@ pub fn flush_debug_samples_to_sqlite(
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[allow(deprecated)]
-    use crate::events::types::PlayerId;
     use crate::events::types::CharacterId;
 
     fn create_test_logger() -> SqliteEventLogger {
@@ -659,7 +657,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_log_events() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
@@ -668,13 +665,13 @@ mod tests {
         logger.log_event(
             100,
             &GameEvent::Pickup {
-                player: PlayerId::L,
+                character: CharacterId::L0,
             },
         );
         logger.log_event(
             200,
             &GameEvent::Goal {
-                player: PlayerId::L,
+                character: CharacterId::L0,
                 score_left: 1,
                 score_right: 0,
             },
@@ -686,7 +683,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_batch_log_events() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
@@ -695,13 +691,13 @@ mod tests {
             (
                 100,
                 GameEvent::Pickup {
-                    player: PlayerId::L,
+                    character: CharacterId::L0,
                 },
             ),
             (
                 150,
                 GameEvent::ShotStart {
-                    player: PlayerId::L,
+                    character: CharacterId::L0,
                     pos: (-200.0, -350.0),
                     quality: 0.8,
                 },
@@ -709,7 +705,7 @@ mod tests {
             (
                 200,
                 GameEvent::ShotRelease {
-                    player: PlayerId::L,
+                    character: CharacterId::L0,
                     charge: 0.7,
                     angle: 45.0,
                     power: 600.0,
@@ -739,7 +735,7 @@ mod tests {
     // === 2v2 Event Tests ===
 
     #[test]
-    fn test_log_2v2_pickup_events() {
+    fn test_log_pickup_events_all_characters() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
 
@@ -747,7 +743,7 @@ mod tests {
         for (i, character) in CharacterId::all().iter().enumerate() {
             logger.log_event(
                 (i as u32 + 1) * 100,
-                &GameEvent::Pickup2 { character: *character },
+                &GameEvent::Pickup { character: *character },
             );
         }
 
@@ -756,14 +752,14 @@ mod tests {
     }
 
     #[test]
-    fn test_log_2v2_goal_events() {
+    fn test_log_goal_events_all_characters() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
 
         // Log goals for all 4 characters
         logger.log_event(
             100,
-            &GameEvent::Goal2 {
+            &GameEvent::Goal {
                 character: CharacterId::L0,
                 score_left: 1,
                 score_right: 0,
@@ -771,7 +767,7 @@ mod tests {
         );
         logger.log_event(
             200,
-            &GameEvent::Goal2 {
+            &GameEvent::Goal {
                 character: CharacterId::R0,
                 score_left: 1,
                 score_right: 1,
@@ -779,7 +775,7 @@ mod tests {
         );
         logger.log_event(
             300,
-            &GameEvent::Goal2 {
+            &GameEvent::Goal {
                 character: CharacterId::L1,
                 score_left: 2,
                 score_right: 1,
@@ -787,7 +783,7 @@ mod tests {
         );
         logger.log_event(
             400,
-            &GameEvent::Goal2 {
+            &GameEvent::Goal {
                 character: CharacterId::R1,
                 score_left: 2,
                 score_right: 2,
@@ -799,14 +795,14 @@ mod tests {
     }
 
     #[test]
-    fn test_log_2v2_shot_events() {
+    fn test_log_shot_events() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
 
-        // Log shot start and release for a 2v2 character
+        // Log shot start and release for characters
         logger.log_event(
             100,
-            &GameEvent::ShotStart2 {
+            &GameEvent::ShotStart {
                 character: CharacterId::L0,
                 pos: (-100.0, -350.0),
                 quality: 0.8,
@@ -814,7 +810,7 @@ mod tests {
         );
         logger.log_event(
             150,
-            &GameEvent::ShotRelease2 {
+            &GameEvent::ShotRelease {
                 character: CharacterId::L0,
                 charge: 0.75,
                 angle: 45.0,
@@ -823,7 +819,7 @@ mod tests {
         );
         logger.log_event(
             200,
-            &GameEvent::ShotStart2 {
+            &GameEvent::ShotStart {
                 character: CharacterId::R1,
                 pos: (100.0, -300.0),
                 quality: 0.9,
@@ -831,7 +827,7 @@ mod tests {
         );
         logger.log_event(
             250,
-            &GameEvent::ShotRelease2 {
+            &GameEvent::ShotRelease {
                 character: CharacterId::R1,
                 charge: 0.85,
                 angle: 55.0,
@@ -844,32 +840,32 @@ mod tests {
     }
 
     #[test]
-    fn test_log_2v2_steal_events() {
+    fn test_log_steal_events() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
 
         // Log all steal event types
         logger.log_event(
             100,
-            &GameEvent::StealAttempt2 {
+            &GameEvent::StealAttempt {
                 attacker: CharacterId::L0,
             },
         );
         logger.log_event(
             200,
-            &GameEvent::StealSuccess2 {
+            &GameEvent::StealSuccess {
                 attacker: CharacterId::R0,
             },
         );
         logger.log_event(
             300,
-            &GameEvent::StealFail2 {
+            &GameEvent::StealFail {
                 attacker: CharacterId::L1,
             },
         );
         logger.log_event(
             400,
-            &GameEvent::StealOutOfRange2 {
+            &GameEvent::StealOutOfRange {
                 attacker: CharacterId::R1,
             },
         );
@@ -904,35 +900,34 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn test_log_mixed_legacy_and_2v2_events() {
+    fn test_log_multiple_character_events() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
 
-        // Mix legacy PlayerId and new CharacterId events
+        // Log events from multiple characters
         logger.log_event(
             100,
             &GameEvent::Pickup {
-                player: PlayerId::L,
+                character: CharacterId::L0,
             },
         );
         logger.log_event(
             200,
-            &GameEvent::Pickup2 {
+            &GameEvent::Pickup {
                 character: CharacterId::R1,
             },
         );
         logger.log_event(
             300,
             &GameEvent::Goal {
-                player: PlayerId::R,
+                character: CharacterId::R0,
                 score_left: 0,
                 score_right: 1,
             },
         );
         logger.log_event(
             400,
-            &GameEvent::Goal2 {
+            &GameEvent::Goal {
                 character: CharacterId::L1,
                 score_left: 1,
                 score_right: 1,
@@ -944,7 +939,7 @@ mod tests {
     }
 
     #[test]
-    fn test_log_controller_events_2v2() {
+    fn test_log_controller_events() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
 
@@ -959,7 +954,7 @@ mod tests {
         );
         logger.log_event(
             200,
-            &GameEvent::ControllerSwap2 {
+            &GameEvent::ControllerSwap {
                 character: CharacterId::L0,
                 old_source: 0,
                 new_source: 1000,
@@ -967,7 +962,7 @@ mod tests {
         );
         logger.log_event(
             300,
-            &GameEvent::ControllerInput2 {
+            &GameEvent::ControllerInput {
                 character: CharacterId::L0,
                 source_id: 1000,
                 move_x: 0.5,
@@ -985,7 +980,7 @@ mod tests {
     }
 
     #[test]
-    fn test_log_tick2_event() {
+    fn test_log_tick_event() {
         let logger = create_test_logger();
         logger.start_match(1, "Test Level", "Human", "AI", 12345);
 
@@ -993,7 +988,7 @@ mod tests {
 
         logger.log_event(
             100,
-            &GameEvent::Tick2 {
+            &GameEvent::Tick {
                 frame: 50,
                 characters: vec![
                     CharacterTickData {

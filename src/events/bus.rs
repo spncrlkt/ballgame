@@ -177,7 +177,7 @@ mod tests {
         let mut bus = EventBus::new();
         bus.update_time(1.5);
 
-        bus.emit(GameEvent::ControllerInput2 {
+        bus.emit(GameEvent::ControllerInput {
             character: CharacterId::L0,
             source_id: 0,
             move_x: 0.5,
@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn test_control_swap_event() {
         let mut bus = EventBus::new();
-        bus.emit(GameEvent::ControllerSwap2 {
+        bus.emit(GameEvent::ControllerSwap {
             character: CharacterId::L0,
             old_source: 0,
             new_source: 1000,
@@ -217,7 +217,7 @@ mod tests {
 
         let events = bus.drain();
         assert_eq!(events.len(), 1);
-        if let GameEvent::ControllerSwap2 {
+        if let GameEvent::ControllerSwap {
             character,
             old_source,
             new_source,

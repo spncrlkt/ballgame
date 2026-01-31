@@ -10,7 +10,7 @@ use std::path::Path;
 use super::metrics::{MatchResult, PlayerStats};
 use crate::db_schema;
 use crate::events::{GameEvent, parse_event, serialize_event};
-use crate::replay::{MatchInfo, ReplayData, TickFrame, TimedEvent};
+use crate::replay::{CharacterFrame, MatchInfo, ReplayData, TickFrame, TimedEvent};
 
 /// Database wrapper for simulation results
 pub struct SimDatabase {
@@ -410,6 +410,7 @@ impl SimDatabase {
     }
 
     /// Insert points and events, assigning point_id to each event.
+    #[allow(deprecated)]
     pub fn insert_events_with_points(
         &self,
         match_id: i64,
@@ -433,10 +434,10 @@ impl SimDatabase {
                 params![match_id, point_id, time_ms, event_type, data],
             )?;
 
-            if let GameEvent::Goal { player, .. } = event {
-                let winner = match player {
-                    crate::events::PlayerId::L => "left",
-                    crate::events::PlayerId::R => "right",
+            if let GameEvent::Goal { character, .. } = event {
+                let winner = match character.team() {
+                    crate::events::TeamId::Left => "left",
+                    crate::events::TeamId::Right => "right",
                 };
                 self.end_point(point_id, *time_ms, winner)?;
                 point_index += 1;
@@ -567,22 +568,48 @@ impl SimDatabase {
             match event {
                 GameEvent::Tick {
                     frame,
-                    left_pos,
-                    left_vel,
-                    right_pos,
-                    right_vel,
+                    characters,
                     ball_pos,
                     ball_vel,
                     ball_state,
                 } => {
+                    // Convert CharacterTickData to CharacterFrame and extract left/right for backwards compat
+                    let mut left_pos = Vec2::ZERO;
+                    let mut left_vel = Vec2::ZERO;
+                    let mut right_pos = Vec2::ZERO;
+                    let mut right_vel = Vec2::ZERO;
+                    let character_frames: Vec<CharacterFrame> = characters
+                        .iter()
+                        .map(|c| {
+                            let pos = Vec2::new(c.pos.0, c.pos.1);
+                            let vel = Vec2::new(c.vel.0, c.vel.1);
+                            match c.id {
+                                crate::events::CharacterId::L0 => {
+                                    left_pos = pos;
+                                    left_vel = vel;
+                                }
+                                crate::events::CharacterId::R0 => {
+                                    right_pos = pos;
+                                    right_vel = vel;
+                                }
+                                _ => {}
+                            }
+                            CharacterFrame {
+                                id: c.id,
+                                pos,
+                                vel,
+                                controller: c.controller,
+                            }
+                        })
+                        .collect();
                     ticks.push(TickFrame {
                         time_ms,
                         frame,
-                        characters: Vec::new(), // Legacy format - use left/right fields
-                        left_pos: Vec2::new(left_pos.0, left_pos.1),
-                        left_vel: Vec2::new(left_vel.0, left_vel.1),
-                        right_pos: Vec2::new(right_pos.0, right_pos.1),
-                        right_vel: Vec2::new(right_vel.0, right_vel.1),
+                        characters: character_frames,
+                        left_pos,
+                        left_vel,
+                        right_pos,
+                        right_vel,
                         ball_pos: Vec2::new(ball_pos.0, ball_pos.1),
                         ball_vel: Vec2::new(ball_vel.0, ball_vel.1),
                         ball_state,
@@ -599,8 +626,8 @@ impl SimDatabase {
             match_info: MatchInfo {
                 level,
                 level_name,
-                game_mode: "1v1".to_string(), // Legacy format is always 1v1
-                profiles: std::collections::HashMap::new(), // Legacy format doesn't have per-character profiles
+                game_mode: "2v2".to_string(), // Now using 2v2 format
+                profiles: std::collections::HashMap::new(),
                 left_profile,
                 right_profile,
                 seed: seed as u64,

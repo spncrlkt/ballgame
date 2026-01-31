@@ -50,10 +50,10 @@ Complete implementation of 2v2 Readiness Audit & Test Coverage Plan:
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| `cargo check` | ✅ Pass | Clean (deprecation warnings for PlayerId expected) |
-| `cargo test` | ✅ Pass | 145 passed, 0 failed |
+| `cargo check` | ✅ Pass | Clean |
+| `cargo test` | ✅ Pass | 137 passed, 0 failed |
 | `cargo run --bin test-scenarios` | ✅ Pass | 42 passed, 0 failed |
-| `cargo clippy` | ✅ Pass | No errors, only deprecation warnings |
+| `cargo clippy` | ✅ Pass | No errors |
 | Visual regression | ⚠️ N/A | No baseline set |
 
 ### Files Modified

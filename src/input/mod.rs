@@ -130,7 +130,7 @@ pub fn capture_input(
         input.pass_pressed = true;
     }
 
-    // Emit ControllerInput2 event to EventBus for auditability
+    // Emit ControllerInput event to EventBus for auditability
     // Only emit if there's a human-controlled player
     if let Ok((character_opt, team)) = human_query.single() {
         // Get CharacterId from Character component, or derive from Team
@@ -141,7 +141,7 @@ pub fn capture_input(
                 Team::Right => CharacterId::R0,
             });
 
-        event_bus.emit(GameEvent::ControllerInput2 {
+        event_bus.emit(GameEvent::ControllerInput {
             character,
             source_id: crate::input::KEYBOARD_SOURCE_ID,
             move_x: input.move_x,

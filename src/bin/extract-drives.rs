@@ -116,7 +116,7 @@ fn parse_match_from_db(db: &SimDatabase, match_id: i64) -> Vec<Drive> {
                 level = lvl;
                 level_name = name;
             }
-            GameEvent::Pickup2 { character } => {
+            GameEvent::Pickup { character } => {
                 let player = character_char(character);
 
                 if let Some(ref mut drive) = current_drive {
@@ -149,41 +149,7 @@ fn parse_match_from_db(db: &SimDatabase, match_id: i64) -> Vec<Drive> {
 
                 current_possession = Some(player);
             }
-            // Legacy event - convert to CharacterId
-            GameEvent::Pickup { player } => {
-                let player = character_char(player.to_character_id());
-
-                if let Some(ref mut drive) = current_drive {
-                    if let Some(prev_poss) = current_possession {
-                        if prev_poss != player {
-                            drive.end_tick = tick;
-                            drive.end_reason = DriveEndReason::Turnover;
-                            drives.push(drive.clone());
-                            current_drive = None;
-                        }
-                    }
-                }
-
-                if current_drive.is_none() {
-                    drive_num += 1;
-                    current_drive = Some(Drive {
-                        source_file: source_file.clone(),
-                        drive_num,
-                        level,
-                        level_name: level_name.clone(),
-                        initial_possession: player,
-                        start_tick: tick,
-                        end_tick: tick,
-                        end_reason: DriveEndReason::MatchEnd,
-                        l_inputs: Vec::new(),
-                        r_inputs: Vec::new(),
-                        l_scored: false,
-                    });
-                }
-
-                current_possession = Some(player);
-            }
-            GameEvent::Input2 {
+            GameEvent::Input {
                 character,
                 move_x,
                 jump,
@@ -208,45 +174,8 @@ fn parse_match_from_db(db: &SimDatabase, match_id: i64) -> Vec<Drive> {
                     }
                 }
             }
-            // Legacy Input event
-            GameEvent::Input {
-                player,
-                move_x,
-                jump,
-                throw,
-                pickup,
-            } => {
-                let player = character_char(player.to_character_id());
-                let sample = InputSample {
-                    tick,
-                    move_x,
-                    jump,
-                    throw,
-                    pickup,
-                };
-
-                if let Some(ref mut drive) = current_drive {
-                    match player {
-                        'L' => drive.l_inputs.push(sample),
-                        'R' => drive.r_inputs.push(sample),
-                        _ => {}
-                    }
-                }
-            }
-            GameEvent::Goal2 { character, .. } => {
+            GameEvent::Goal { character, .. } => {
                 let scorer = character_char(character);
-                if let Some(ref mut drive) = current_drive {
-                    drive.end_tick = tick;
-                    drive.end_reason = DriveEndReason::Goal;
-                    drive.l_scored = scorer == 'L';
-                    drives.push(drive.clone());
-                    current_drive = None;
-                    current_possession = None;
-                }
-            }
-            // Legacy Goal event
-            GameEvent::Goal { player, .. } => {
-                let scorer = character_char(player.to_character_id());
                 if let Some(ref mut drive) = current_drive {
                     drive.end_tick = tick;
                     drive.end_reason = DriveEndReason::Goal;

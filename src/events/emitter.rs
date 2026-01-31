@@ -181,25 +181,6 @@ fn emit_tick_events(
     state.tick_frame_count += 1;
     let frame = state.tick_frame_count;
 
-    // Collect player data
-    let mut left_pos = (0.0, 0.0);
-    let mut left_vel = (0.0, 0.0);
-    let mut right_pos = (0.0, 0.0);
-    let mut right_vel = (0.0, 0.0);
-
-    for player in players {
-        match player.team {
-            Team::Left => {
-                left_pos = player.position;
-                left_vel = player.velocity;
-            }
-            Team::Right => {
-                right_pos = player.position;
-                right_vel = player.velocity;
-            }
-        }
-    }
-
     // Collect ball data
     let (ball_pos, ball_vel, ball_state_char) = ball
         .map(|b| {
@@ -212,14 +193,23 @@ fn emit_tick_events(
         })
         .unwrap_or(((0.0, 0.0), (0.0, 0.0), 'F'));
 
+    // Build CharacterTickData for 2v2 format
+    use super::types::CharacterTickData;
+    let characters: Vec<CharacterTickData> = players
+        .iter()
+        .map(|p| CharacterTickData {
+            id: team_to_character(p.team),
+            pos: p.position,
+            vel: p.velocity,
+            controller: 0, // Source ID not available in snapshot
+        })
+        .collect();
+
     buffer.log(
         elapsed,
         GameEvent::Tick {
             frame,
-            left_pos,
-            left_vel,
-            right_pos,
-            right_vel,
+            characters,
             ball_pos,
             ball_vel,
             ball_state: ball_state_char,
@@ -231,7 +221,7 @@ fn emit_tick_events(
         let character = team_to_character(player.team);
         buffer.log(
             elapsed,
-            GameEvent::Input2 {
+            GameEvent::Input {
                 character,
                 source: 0, // Source ID not available in snapshot, use 0 as placeholder
                 move_x: player.input_move_x,
@@ -253,7 +243,7 @@ fn emit_goal_events(
     if score.left > state.prev_score_left {
         buffer.log(
             elapsed,
-            GameEvent::Goal2 {
+            GameEvent::Goal {
                 character: CharacterId::L0,
                 score_left: score.left,
                 score_right: score.right,
@@ -264,7 +254,7 @@ fn emit_goal_events(
     if score.right > state.prev_score_right {
         buffer.log(
             elapsed,
-            GameEvent::Goal2 {
+            GameEvent::Goal {
                 character: CharacterId::R0,
                 score_left: score.left,
                 score_right: score.right,
@@ -297,7 +287,7 @@ fn emit_ai_goal_events(
             state.prev_ai_goals[idx] = Some(goal_str.clone());
             buffer.log(
                 elapsed,
-                GameEvent::AiGoal2 {
+                GameEvent::AiGoal {
                     character,
                     goal: goal_str.clone(),
                 },
@@ -333,18 +323,18 @@ fn emit_steal_events(
         if is_attacker_cooldown && cooldown_just_set {
             buffer.log(
                 elapsed,
-                GameEvent::StealAttempt2 { attacker: character },
+                GameEvent::StealAttempt { attacker: character },
             );
             // Check StealContest for success/fail (fail_flash_timer > 0 means fail)
             if steal_contest.fail_flash_timer > 0.0 {
                 buffer.log(
                     elapsed,
-                    GameEvent::StealFail2 { attacker: character },
+                    GameEvent::StealFail { attacker: character },
                 );
             } else {
                 buffer.log(
                     elapsed,
-                    GameEvent::StealSuccess2 { attacker: character },
+                    GameEvent::StealSuccess { attacker: character },
                 );
             }
         }
@@ -371,7 +361,7 @@ fn emit_possession_events(
         let was_holding = state.prev_ball_holder == Some(player.entity);
 
         if is_holding && !was_holding {
-            buffer.log(elapsed, GameEvent::Pickup2 { character });
+            buffer.log(elapsed, GameEvent::Pickup { character });
             state.prev_ball_holder = Some(player.entity);
         }
 
@@ -389,7 +379,7 @@ fn emit_possession_events(
                 .unwrap_or(0.0);
             buffer.log(
                 elapsed,
-                GameEvent::ShotStart2 {
+                GameEvent::ShotStart {
                     character,
                     pos: player.position,
                     quality,
@@ -423,7 +413,7 @@ fn emit_ball_state_events(
                         .unwrap_or((0.0, 60.0));
                     buffer.log(
                         elapsed,
-                        GameEvent::ShotRelease2 {
+                        GameEvent::ShotRelease {
                             character,
                             charge,
                             angle,
@@ -442,7 +432,7 @@ fn emit_ball_state_events(
                     .find(|p| Some(p.entity) == state.prev_ball_holder)
                 {
                     let character = team_to_character(player.team);
-                    buffer.log(elapsed, GameEvent::Drop2 { character });
+                    buffer.log(elapsed, GameEvent::Drop { character });
                 }
                 state.prev_ball_holder = None;
             }

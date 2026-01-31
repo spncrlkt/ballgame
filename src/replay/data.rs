@@ -143,7 +143,6 @@ impl ReplayData {
     }
 
     /// Get the most recent AI goal for a character at a given time.
-    /// Checks both legacy AiGoal (PlayerId) and new AiGoal2 (CharacterId) events.
     pub fn current_ai_goal(&self, time_ms: u32, character: CharacterId) -> Option<&str> {
         self.events
             .iter()
@@ -151,18 +150,8 @@ impl ReplayData {
             .rev()
             .find_map(|e| {
                 match &e.event {
-                    // Prefer CharacterId-based events
-                    GameEvent::AiGoal2 { character: c, goal } if *c == character => {
+                    GameEvent::AiGoal { character: c, goal } if *c == character => {
                         Some(goal.as_str())
-                    }
-                    // Fall back to legacy PlayerId-based events (L→L0, R→R0)
-                    GameEvent::AiGoal { player, goal } => {
-                        let player_char = player.to_character_id();
-                        if player_char == character {
-                            Some(goal.as_str())
-                        } else {
-                            None
-                        }
                     }
                     _ => None,
                 }

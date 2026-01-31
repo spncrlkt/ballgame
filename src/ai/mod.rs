@@ -142,7 +142,7 @@ pub fn copy_human_input(
 /// Swap which player the human controls (Q key / L bumper).
 /// For 1v1: Cycles through L0 → R0 → Observer → L0
 /// For 2v2: Cycles through L0 → L1 → R0 → R1 → Observer → L0
-/// Emits ControllerSwap2 event to EventBus for auditability.
+/// Emits ControllerSwap event to EventBus for auditability.
 pub fn swap_control(
     mut commands: Commands,
     mut input: ResMut<PlayerInput>,
@@ -242,8 +242,8 @@ pub fn swap_control(
             commands.entity(entity).insert(HumanControlled);
             info!("Control: {} player", next);
 
-            // Emit ControllerSwap2 for the character gaining control
-            event_bus.emit(GameEvent::ControllerSwap2 {
+            // Emit ControllerSwap for the character gaining control
+            event_bus.emit(GameEvent::ControllerSwap {
                 character: next,
                 old_source: crate::input::AI_SOURCE_ID_START, // Was AI
                 new_source: crate::input::KEYBOARD_SOURCE_ID, // Now human
@@ -255,7 +255,7 @@ pub fn swap_control(
 
     // If we had a previous character, emit swap event for it losing control
     if let Some(prev) = current_char {
-        event_bus.emit(GameEvent::ControllerSwap2 {
+        event_bus.emit(GameEvent::ControllerSwap {
             character: prev,
             old_source: crate::input::KEYBOARD_SOURCE_ID, // Was human
             new_source: crate::input::AI_SOURCE_ID_START, // Now AI

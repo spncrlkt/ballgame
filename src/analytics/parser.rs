@@ -189,41 +189,23 @@ pub fn parse_match_from_db(db: &SimDatabase, match_id: i64) -> Option<ParsedMatc
         };
         let time_secs = time_ms as f32 / 1000.0;
         match parsed {
-            // Prefer *2 variants (CharacterId), fall back to legacy PlayerId variants
-            GameEvent::Goal2 {
+            GameEvent::Goal {
                 character,
                 score_left: left,
                 score_right: right,
             } => goals.push((time_secs, character, left, right)),
-            GameEvent::Goal {
-                player,
-                score_left: left,
-                score_right: right,
-            } => goals.push((time_secs, player.to_character_id(), left, right)),
-            GameEvent::ShotRelease2 {
+            GameEvent::ShotRelease {
                 character,
                 charge,
                 angle,
                 power,
             } => shots.push((time_secs, character, charge, angle, power)),
-            GameEvent::ShotRelease {
-                player,
-                charge,
-                angle,
-                power,
-            } => shots.push((time_secs, player.to_character_id(), charge, angle, power)),
-            GameEvent::ShotStart2 { character, .. } => shot_starts.push((time_secs, character)),
-            GameEvent::ShotStart { player, .. } => shot_starts.push((time_secs, player.to_character_id())),
-            GameEvent::Pickup2 { character } => pickups.push((time_secs, character)),
-            GameEvent::Pickup { player } => pickups.push((time_secs, player.to_character_id())),
-            GameEvent::Drop2 { character } => drops.push((time_secs, character)),
-            GameEvent::Drop { player } => drops.push((time_secs, player.to_character_id())),
-            GameEvent::StealAttempt2 { attacker } => steal_attempts.push((time_secs, attacker)),
-            GameEvent::StealAttempt { attacker } => steal_attempts.push((time_secs, attacker.to_character_id())),
-            GameEvent::StealSuccess2 { attacker } => steal_successes.push((time_secs, attacker)),
-            GameEvent::StealSuccess { attacker } => steal_successes.push((time_secs, attacker.to_character_id())),
-            GameEvent::StealFail2 { attacker } => steal_failures.push((time_secs, attacker)),
-            GameEvent::StealFail { attacker } => steal_failures.push((time_secs, attacker.to_character_id())),
+            GameEvent::ShotStart { character, .. } => shot_starts.push((time_secs, character)),
+            GameEvent::Pickup { character } => pickups.push((time_secs, character)),
+            GameEvent::Drop { character } => drops.push((time_secs, character)),
+            GameEvent::StealAttempt { attacker } => steal_attempts.push((time_secs, attacker)),
+            GameEvent::StealSuccess { attacker } => steal_successes.push((time_secs, attacker)),
+            GameEvent::StealFail { attacker } => steal_failures.push((time_secs, attacker)),
             _ => {}
         }
     }

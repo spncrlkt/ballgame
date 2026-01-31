@@ -1487,7 +1487,7 @@ pub fn ai_decision_update(
         // Decay jump buffer timer
         input.jump_buffer_timer = (input.jump_buffer_timer - dt).max(0.0);
 
-        // Emit ControllerInput2 event for auditability
+        // Emit ControllerInput event for auditability
         // Use CharacterId from Character component, or derive from Team for backward compat
         let character = ai_character
             .map(|c| c.0)
@@ -1495,7 +1495,7 @@ pub fn ai_decision_update(
                 Team::Left => CharacterId::L0,
                 Team::Right => CharacterId::R0,
             });
-        event_bus.emit(GameEvent::ControllerInput2 {
+        event_bus.emit(GameEvent::ControllerInput {
             character,
             source_id: crate::input::AI_SOURCE_ID_START, // AI uses a reserved source ID
             move_x: input.move_x,

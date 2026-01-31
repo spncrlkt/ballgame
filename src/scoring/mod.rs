@@ -135,13 +135,13 @@ pub fn check_scoring(
                     time_ms,
                 });
 
-                // Emit Goal2 event with CharacterId
+                // Emit Goal event with CharacterId
                 // Use scorer_character if known, otherwise derive from team
                 let character = scorer_character.unwrap_or_else(|| match scoring_team_id {
                     TeamId::Left => CharacterId::L0,
                     TeamId::Right => CharacterId::R0,
                 });
-                event_bus.emit(GameEvent::Goal2 {
+                event_bus.emit(GameEvent::Goal {
                     character,
                     score_left: score.left,
                     score_right: score.right,

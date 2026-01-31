@@ -57,7 +57,7 @@ pub use countdown::{
 };
 pub use events::{
     BusEvent, CharacterId, CharacterTickData, ControllerSource, EventBuffer, EventBus, GameConfig,
-    GameEvent, LevelChangeTracker, PlayerId, TeamId, emit_level_change_events,
+    GameEvent, LevelChangeTracker, TeamId, emit_level_change_events,
     update_event_bus_time,
 };
 pub use helpers::*;

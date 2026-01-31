@@ -59,7 +59,6 @@ Verify the new centralized db_paths and generated_assets modules work correctly:
 ## Backlog
 
 **Technical Debt:**
-- PlayerId → CharacterId migration (~30 deprecation warnings)
 - System wiring drift across binaries
 - EventBus `processed` grows unbounded
 

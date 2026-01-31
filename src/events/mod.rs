@@ -37,5 +37,5 @@ pub use emitter::{
 pub use format::{parse_event, serialize_event};
 pub use sqlite_logger::{SqliteEventLogger, flush_debug_samples_to_sqlite, flush_events_to_sqlite};
 pub use types::{
-    CharacterId, CharacterTickData, ControllerSource, GameConfig, GameEvent, PlayerId, TeamId,
+    CharacterId, CharacterTickData, ControllerSource, GameConfig, GameEvent, TeamId,
 };

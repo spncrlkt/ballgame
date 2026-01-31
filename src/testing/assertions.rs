@@ -35,28 +35,17 @@ impl CapturedEvent {
         event: &GameEvent,
         entity_map: &std::collections::HashMap<bevy::prelude::Entity, String>,
     ) -> Option<Self> {
-        // Extract event type and character ID from both legacy PlayerId and new CharacterId events
+        // Extract event type and character ID from CharacterId-based events
         let (event_type, character_id) = match event {
-            // Prefer *2 variants (CharacterId)
-            GameEvent::Pickup2 { character } => ("Pickup".to_string(), Some(*character)),
-            GameEvent::Drop2 { character } => ("Drop".to_string(), Some(*character)),
-            GameEvent::ShotStart2 { character, .. } => ("ShotStart".to_string(), Some(*character)),
-            GameEvent::ShotRelease2 { character, .. } => ("ShotRelease".to_string(), Some(*character)),
-            GameEvent::StealAttempt2 { attacker } => ("StealAttempt".to_string(), Some(*attacker)),
-            GameEvent::StealSuccess2 { attacker } => ("StealSuccess".to_string(), Some(*attacker)),
-            GameEvent::StealFail2 { attacker } => ("StealFail".to_string(), Some(*attacker)),
-            GameEvent::StealOutOfRange2 { attacker } => ("StealOutOfRange".to_string(), Some(*attacker)),
-            GameEvent::Goal2 { character, .. } => ("Goal".to_string(), Some(*character)),
-            // Fall back to legacy PlayerId events (convert to CharacterId)
-            GameEvent::Pickup { player } => ("Pickup".to_string(), Some(player.to_character_id())),
-            GameEvent::Drop { player } => ("Drop".to_string(), Some(player.to_character_id())),
-            GameEvent::ShotStart { player, .. } => ("ShotStart".to_string(), Some(player.to_character_id())),
-            GameEvent::ShotRelease { player, .. } => ("ShotRelease".to_string(), Some(player.to_character_id())),
-            GameEvent::StealAttempt { attacker } => ("StealAttempt".to_string(), Some(attacker.to_character_id())),
-            GameEvent::StealSuccess { attacker } => ("StealSuccess".to_string(), Some(attacker.to_character_id())),
-            GameEvent::StealFail { attacker } => ("StealFail".to_string(), Some(attacker.to_character_id())),
-            GameEvent::StealOutOfRange { attacker } => ("StealOutOfRange".to_string(), Some(attacker.to_character_id())),
-            GameEvent::Goal { player, .. } => ("Goal".to_string(), Some(player.to_character_id())),
+            GameEvent::Pickup { character } => ("Pickup".to_string(), Some(*character)),
+            GameEvent::Drop { character } => ("Drop".to_string(), Some(*character)),
+            GameEvent::ShotStart { character, .. } => ("ShotStart".to_string(), Some(*character)),
+            GameEvent::ShotRelease { character, .. } => ("ShotRelease".to_string(), Some(*character)),
+            GameEvent::StealAttempt { attacker } => ("StealAttempt".to_string(), Some(*attacker)),
+            GameEvent::StealSuccess { attacker } => ("StealSuccess".to_string(), Some(*attacker)),
+            GameEvent::StealFail { attacker } => ("StealFail".to_string(), Some(*attacker)),
+            GameEvent::StealOutOfRange { attacker } => ("StealOutOfRange".to_string(), Some(*attacker)),
+            GameEvent::Goal { character, .. } => ("Goal".to_string(), Some(*character)),
             _ => return None,
         };
 
@@ -364,8 +353,6 @@ fn check_float_comparison(
 mod tests {
     use super::*;
     use crate::events::{CharacterId, GameEvent};
-    #[allow(deprecated)]
-    use crate::events::PlayerId;
     use bevy::prelude::Entity;
     use std::collections::HashMap;
 
@@ -382,9 +369,9 @@ mod tests {
     // === CapturedEvent::from_game_event tests ===
 
     #[test]
-    fn test_captured_event_from_pickup2() {
+    fn test_captured_event_from_pickup() {
         let entity_map = create_entity_map();
-        let event = GameEvent::Pickup2 {
+        let event = GameEvent::Pickup {
             character: CharacterId::L0,
         };
         let captured = CapturedEvent::from_game_event(100, &event, &entity_map);
@@ -397,10 +384,10 @@ mod tests {
     }
 
     #[test]
-    fn test_captured_event_from_goal2_all_characters() {
+    fn test_captured_event_from_goal_all_characters() {
         let entity_map = create_entity_map();
         for character in CharacterId::all() {
-            let event = GameEvent::Goal2 {
+            let event = GameEvent::Goal {
                 character,
                 score_left: 1,
                 score_right: 0,
@@ -413,36 +400,36 @@ mod tests {
     }
 
     #[test]
-    fn test_captured_event_from_steal_events_2v2() {
+    fn test_captured_event_from_steal_events() {
         let entity_map = create_entity_map();
 
-        // StealAttempt2
-        let event = GameEvent::StealAttempt2 { attacker: CharacterId::R0 };
+        // StealAttempt
+        let event = GameEvent::StealAttempt { attacker: CharacterId::R0 };
         let captured = CapturedEvent::from_game_event(300, &event, &entity_map).unwrap();
         assert_eq!(captured.event_type, "StealAttempt");
 
-        // StealSuccess2
-        let event = GameEvent::StealSuccess2 { attacker: CharacterId::L1 };
+        // StealSuccess
+        let event = GameEvent::StealSuccess { attacker: CharacterId::L1 };
         let captured = CapturedEvent::from_game_event(400, &event, &entity_map).unwrap();
         assert_eq!(captured.event_type, "StealSuccess");
 
-        // StealFail2
-        let event = GameEvent::StealFail2 { attacker: CharacterId::R1 };
+        // StealFail
+        let event = GameEvent::StealFail { attacker: CharacterId::R1 };
         let captured = CapturedEvent::from_game_event(500, &event, &entity_map).unwrap();
         assert_eq!(captured.event_type, "StealFail");
 
-        // StealOutOfRange2
-        let event = GameEvent::StealOutOfRange2 { attacker: CharacterId::L0 };
+        // StealOutOfRange
+        let event = GameEvent::StealOutOfRange { attacker: CharacterId::L0 };
         let captured = CapturedEvent::from_game_event(600, &event, &entity_map).unwrap();
         assert_eq!(captured.event_type, "StealOutOfRange");
     }
 
     #[test]
-    fn test_captured_event_from_shot_events_2v2() {
+    fn test_captured_event_from_shot_events() {
         let entity_map = create_entity_map();
 
-        // ShotStart2
-        let event = GameEvent::ShotStart2 {
+        // ShotStart
+        let event = GameEvent::ShotStart {
             character: CharacterId::L0,
             pos: (-100.0, -350.0),
             quality: 0.8,
@@ -450,8 +437,8 @@ mod tests {
         let captured = CapturedEvent::from_game_event(700, &event, &entity_map).unwrap();
         assert_eq!(captured.event_type, "ShotStart");
 
-        // ShotRelease2
-        let event = GameEvent::ShotRelease2 {
+        // ShotRelease
+        let event = GameEvent::ShotRelease {
             character: CharacterId::R1,
             charge: 0.75,
             angle: 45.0,
@@ -459,30 +446,6 @@ mod tests {
         };
         let captured = CapturedEvent::from_game_event(800, &event, &entity_map).unwrap();
         assert_eq!(captured.event_type, "ShotRelease");
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_captured_event_from_legacy_pickup() {
-        let entity_map = create_entity_map();
-        let event = GameEvent::Pickup { player: PlayerId::L };
-        let captured = CapturedEvent::from_game_event(900, &event, &entity_map);
-        assert!(captured.is_some());
-        let captured = captured.unwrap();
-        assert_eq!(captured.event_type, "Pickup");
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_captured_event_from_legacy_goal() {
-        let entity_map = create_entity_map();
-        let event = GameEvent::Goal {
-            player: PlayerId::R,
-            score_left: 0,
-            score_right: 1,
-        };
-        let captured = CapturedEvent::from_game_event(1000, &event, &entity_map).unwrap();
-        assert_eq!(captured.event_type, "Goal");
     }
 
     #[test]

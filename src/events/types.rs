@@ -85,9 +85,6 @@ impl CharacterId {
             "L1" => Some(CharacterId::L1),
             "R0" => Some(CharacterId::R0),
             "R1" => Some(CharacterId::R1),
-            // Backward compatibility with old PlayerId format
-            "L" => Some(CharacterId::L0),
-            "R" => Some(CharacterId::R0),
             _ => None,
         }
     }
@@ -101,31 +98,6 @@ impl std::fmt::Display for CharacterId {
             CharacterId::R0 => write!(f, "R0"),
             CharacterId::R1 => write!(f, "R1"),
         }
-    }
-}
-
-/// Player identifier (Left or Right) - use CharacterId instead
-/// Kept for backward compatibility with old replay files and event logs.
-#[deprecated(since = "0.2.0", note = "Use CharacterId instead for 2v2 support")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PlayerId {
-    L,
-    R,
-}
-
-impl PlayerId {
-    /// Convert to CharacterId (maps to slot 0 of each team)
-    pub fn to_character_id(&self) -> CharacterId {
-        match self {
-            PlayerId::L => CharacterId::L0,
-            PlayerId::R => CharacterId::R0,
-        }
-    }
-}
-
-impl From<PlayerId> for CharacterId {
-    fn from(player: PlayerId) -> Self {
-        player.to_character_id()
     }
 }
 
@@ -147,15 +119,6 @@ impl std::fmt::Display for ControllerSource {
             ControllerSource::Human => write!(f, "H"),
             ControllerSource::Ai => write!(f, "A"),
             ControllerSource::External => write!(f, "X"),
-        }
-    }
-}
-
-impl std::fmt::Display for PlayerId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PlayerId::L => write!(f, "L"),
-            PlayerId::R => write!(f, "R"),
         }
     }
 }
@@ -230,14 +193,8 @@ pub enum GameEvent {
     },
 
     // === Scoring Events ===
-    /// Goal scored (legacy format with PlayerId)
+    /// Goal scored
     Goal {
-        player: PlayerId,
-        score_left: u32,
-        score_right: u32,
-    },
-    /// Goal scored (2v2 format with CharacterId)
-    Goal2 {
         character: CharacterId,
         score_left: u32,
         score_right: u32,
@@ -245,40 +202,23 @@ pub enum GameEvent {
 
     // === Ball Events ===
     /// Ball picked up
-    Pickup { player: PlayerId },
-    /// Ball picked up (2v2)
-    Pickup2 { character: CharacterId },
+    Pickup { character: CharacterId },
     /// Ball dropped/lost without shot
-    Drop { player: PlayerId },
-    /// Ball dropped (2v2)
-    Drop2 { character: CharacterId },
+    Drop { character: CharacterId },
     /// Shot started (charge began)
     ShotStart {
-        player: PlayerId,
-        pos: (f32, f32),
-        quality: f32,
-    },
-    /// Shot started (2v2)
-    ShotStart2 {
         character: CharacterId,
         pos: (f32, f32),
         quality: f32,
     },
     /// Shot released
     ShotRelease {
-        player: PlayerId,
-        charge: f32,
-        angle: f32,
-        power: f32,
-    },
-    /// Shot released (2v2)
-    ShotRelease2 {
         character: CharacterId,
         charge: f32,
         angle: f32,
         power: f32,
     },
-    /// Pass initiated (new for 2v2)
+    /// Pass initiated
     Pass {
         from: CharacterId,
         to: CharacterId,
@@ -286,63 +226,34 @@ pub enum GameEvent {
 
     // === Steal Events ===
     /// Steal attempted
-    StealAttempt { attacker: PlayerId },
-    /// Steal attempted (2v2)
-    StealAttempt2 { attacker: CharacterId },
+    StealAttempt { attacker: CharacterId },
     /// Steal succeeded
-    StealSuccess { attacker: PlayerId },
-    /// Steal succeeded (2v2)
-    StealSuccess2 { attacker: CharacterId },
+    StealSuccess { attacker: CharacterId },
     /// Steal failed
-    StealFail { attacker: PlayerId },
-    /// Steal failed (2v2)
-    StealFail2 { attacker: CharacterId },
+    StealFail { attacker: CharacterId },
     /// Steal attempted but out of range
-    StealOutOfRange { attacker: PlayerId },
-    /// Steal out of range (2v2)
-    StealOutOfRange2 { attacker: CharacterId },
+    StealOutOfRange { attacker: CharacterId },
 
     // === Movement Events ===
     /// Player jumped
-    Jump { player: PlayerId },
-    /// Player jumped (2v2)
-    Jump2 { character: CharacterId },
+    Jump { character: CharacterId },
     /// Player landed
-    Land { player: PlayerId },
-    /// Player landed (2v2)
-    Land2 { character: CharacterId },
+    Land { character: CharacterId },
 
     // === AI State Events ===
     /// AI goal changed
-    AiGoal { player: PlayerId, goal: String },
-    /// AI goal changed (2v2)
-    AiGoal2 { character: CharacterId, goal: String },
+    AiGoal { character: CharacterId, goal: String },
     /// AI navigation path started
     NavStart {
-        player: PlayerId,
-        target: (f32, f32),
-    },
-    /// AI navigation started (2v2)
-    NavStart2 {
         character: CharacterId,
         target: (f32, f32),
     },
     /// AI navigation completed
-    NavComplete { player: PlayerId },
-    /// AI navigation completed (2v2)
-    NavComplete2 { character: CharacterId },
+    NavComplete { character: CharacterId },
 
     // === Input Events (for replay/analysis) ===
     /// Input state snapshot (periodic, every N frames)
     Input {
-        player: PlayerId,
-        move_x: f32,
-        jump: bool,
-        throw: bool,
-        pickup: bool,
-    },
-    /// Input state snapshot (2v2)
-    Input2 {
         character: CharacterId,
         source: u32, // InputSourceId
         move_x: f32,
@@ -354,40 +265,17 @@ pub enum GameEvent {
 
     // === Debug/Tick Events ===
     /// Frame tick with positions and velocities (sampled at 50ms / 20 Hz)
-    /// Legacy 1v1 format
     Tick {
-        frame: u64,
-        left_pos: (f32, f32),
-        left_vel: (f32, f32),
-        right_pos: (f32, f32),
-        right_vel: (f32, f32),
-        ball_pos: (f32, f32),
-        ball_vel: (f32, f32),
-        ball_state: char, // F=Free, H=Held, I=InFlight
-    },
-    /// Frame tick (2v2 format) - variable number of characters
-    Tick2 {
         frame: u64,
         characters: Vec<CharacterTickData>,
         ball_pos: (f32, f32),
         ball_vel: (f32, f32),
-        ball_state: char,
+        ball_state: char, // F=Free, H=Held, I=InFlight
     },
 
     // === Controller Events (event bus) ===
     /// Controller input from any source (human, AI, external)
     ControllerInput {
-        player: PlayerId,
-        source: ControllerSource,
-        move_x: f32,
-        jump: bool,
-        jump_pressed: bool,
-        throw: bool,
-        throw_released: bool,
-        pickup: bool,
-    },
-    /// Controller input (2v2 format)
-    ControllerInput2 {
         character: CharacterId,
         source_id: u32, // InputSourceId
         move_x: f32,
@@ -398,29 +286,22 @@ pub enum GameEvent {
         pickup: bool,
         pass: bool,
     },
-    /// Control transferred between players
-    ControlSwap {
-        from_player: Option<PlayerId>,
-        to_player: Option<PlayerId>,
-    },
-    /// Controller assigned to a character (2v2)
+    /// Controller assigned to a character
     ControllerAssign {
         character: CharacterId,
         source_id: u32,
         descriptor: String, // "keyboard", "gamepad:Xbox", "ai:Aggressive"
     },
-    /// Controller swapped between characters (2v2)
-    ControllerSwap2 {
+    /// Controller swapped between characters
+    ControllerSwap {
         character: CharacterId,
         old_source: u32,
         new_source: u32,
     },
 
     // === State Reset Events (event bus) ===
-    /// Reset AI state for a player
-    ResetAiState { player: PlayerId },
-    /// Reset AI state (2v2)
-    ResetAiState2 { character: CharacterId },
+    /// Reset AI state for a character
+    ResetAiState { character: CharacterId },
     /// Reset scores to 0-0
     ResetScores,
     /// Reset ball to spawn position
@@ -439,13 +320,12 @@ mod tests {
         assert_eq!(CharacterId::from_str("L1"), Some(CharacterId::L1));
         assert_eq!(CharacterId::from_str("R0"), Some(CharacterId::R0));
         assert_eq!(CharacterId::from_str("R1"), Some(CharacterId::R1));
-        // Legacy backward compat
-        assert_eq!(CharacterId::from_str("L"), Some(CharacterId::L0));
-        assert_eq!(CharacterId::from_str("R"), Some(CharacterId::R0));
         // Invalid strings
         assert_eq!(CharacterId::from_str("X"), None);
         assert_eq!(CharacterId::from_str(""), None);
         assert_eq!(CharacterId::from_str("L2"), None);
+        assert_eq!(CharacterId::from_str("L"), None); // Legacy format no longer supported
+        assert_eq!(CharacterId::from_str("R"), None);
     }
 
     #[test]
@@ -509,22 +389,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn test_playerid_to_characterid() {
-        assert_eq!(PlayerId::L.to_character_id(), CharacterId::L0);
-        assert_eq!(PlayerId::R.to_character_id(), CharacterId::R0);
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_playerid_into_characterid() {
-        let l: CharacterId = PlayerId::L.into();
-        let r: CharacterId = PlayerId::R.into();
-        assert_eq!(l, CharacterId::L0);
-        assert_eq!(r, CharacterId::R0);
-    }
-
-    #[test]
     fn test_teamid_display() {
         assert_eq!(TeamId::Left.to_string(), "left");
         assert_eq!(TeamId::Right.to_string(), "right");
@@ -547,45 +411,26 @@ impl GameEvent {
             GameEvent::MatchStart { .. } => "MS",
             GameEvent::MatchEnd { .. } => "ME",
             GameEvent::Goal { .. } => "G",
-            GameEvent::Goal2 { .. } => "G2",
             GameEvent::Pickup { .. } => "PU",
-            GameEvent::Pickup2 { .. } => "P2",
             GameEvent::Drop { .. } => "DR",
-            GameEvent::Drop2 { .. } => "D2",
             GameEvent::ShotStart { .. } => "SS",
-            GameEvent::ShotStart2 { .. } => "S2",
             GameEvent::ShotRelease { .. } => "SR",
-            GameEvent::ShotRelease2 { .. } => "R2",
             GameEvent::Pass { .. } => "PA",
             GameEvent::StealAttempt { .. } => "SA",
-            GameEvent::StealAttempt2 { .. } => "A2",
             GameEvent::StealSuccess { .. } => "S+",
-            GameEvent::StealSuccess2 { .. } => "+2",
             GameEvent::StealFail { .. } => "S-",
-            GameEvent::StealFail2 { .. } => "-2",
             GameEvent::StealOutOfRange { .. } => "SO",
-            GameEvent::StealOutOfRange2 { .. } => "O2",
             GameEvent::Jump { .. } => "J",
-            GameEvent::Jump2 { .. } => "J2",
             GameEvent::Land { .. } => "LD",
-            GameEvent::Land2 { .. } => "L2",
             GameEvent::AiGoal { .. } => "AG",
-            GameEvent::AiGoal2 { .. } => "AI",
             GameEvent::NavStart { .. } => "NS",
-            GameEvent::NavStart2 { .. } => "N2",
             GameEvent::NavComplete { .. } => "NC",
-            GameEvent::NavComplete2 { .. } => "C2",
             GameEvent::Input { .. } => "I",
-            GameEvent::Input2 { .. } => "I2",
             GameEvent::Tick { .. } => "T",
-            GameEvent::Tick2 { .. } => "T2",
             GameEvent::ControllerInput { .. } => "CI",
-            GameEvent::ControllerInput2 { .. } => "X2",
-            GameEvent::ControlSwap { .. } => "CS",
             GameEvent::ControllerAssign { .. } => "CA",
-            GameEvent::ControllerSwap2 { .. } => "W2",
+            GameEvent::ControllerSwap { .. } => "CS",
             GameEvent::ResetAiState { .. } => "RA",
-            GameEvent::ResetAiState2 { .. } => "Z2",
             GameEvent::ResetScores => "RS",
             GameEvent::ResetBall => "RB",
             GameEvent::LevelChange { .. } => "LC",
