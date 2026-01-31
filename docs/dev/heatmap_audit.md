@@ -42,6 +42,14 @@ Read the generated heatmap PNG to verify:
 
 ## Reachability Heatmap
 
+### Quick Verification
+
+```bash
+cargo run --bin verify_reachability
+```
+
+This binary validates all reachability heatmaps exist and have varied data. It's also run automatically at the end of `scripts/setup.sh`.
+
 ### Basic Reachability
 
 ```bash

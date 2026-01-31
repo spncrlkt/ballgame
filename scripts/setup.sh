@@ -73,6 +73,10 @@ else
   echo "  cargo-llvm-cov: not found (install with: cargo install cargo-llvm-cov)"
 fi
 
+# Verify reachability heatmaps are valid
+echo "Verifying reachability heatmaps..."
+cargo run --bin verify_reachability
+
 echo ""
 echo "=== Setup Complete ==="
 echo "Run 'cargo run' to start the game"
