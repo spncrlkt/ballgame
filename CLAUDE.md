@@ -551,8 +551,8 @@ When asked to "audit", "review", or "check the repo", use the appropriate tier:
 **Tier 1: Quick Check (every change)**
 - [ ] `cargo check` - compilation
 - [ ] `cargo clippy` - lints
-- [ ] `cargo test` - unit tests (62 expected)
-- [ ] `cargo run --bin test-scenarios` - scenario tests (35 expected)
+- [ ] `cargo test` - unit tests (151 expected)
+- [ ] `cargo run --bin test-scenarios` - scenario tests (42 expected)
 
 **Tier 2: Standard Audit (every ~10 changes)**
 - [ ] All Tier 1 checks
