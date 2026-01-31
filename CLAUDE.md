@@ -55,7 +55,7 @@ Run at the end of each working session (or after ~10 changes):
 - [ ] **Update baseline if needed** - `./scripts/regression.sh --update` (if UI changed intentionally)
 - [ ] **Review screenshot** - Read `showcase/regression/current/*.png` to verify UI looks correct
 - [ ] **Update `docs/project/todo.md`** - Mark completed items, add new items discovered
-- [ ] **Archive done items** - Keep only last 5 in todo.md, move older to `docs/project/todone.md`
+- [ ] **Archive done items** - Keep only last 5 in todo.md, move older to `docs/project/finished_todos.md`
 - [ ] **Update `docs/project/open_questions.md`** - Add any new questions or decisions needed
 - [ ] **Update `docs/dev/audit_record.md`** - Document changes and findings
 - [ ] **Verify CLAUDE.md accuracy** - Update if architecture changed
@@ -107,13 +107,13 @@ This pattern ensures:
 **Project planning uses three files in `docs/project/`:**
 - `milestones.md` - Master plan with MVP → V0 → V1/Beyond stages and all tasks
 - `todo.md` - Current sprint (active work items pulled from milestones)
-- `todone.md` - Archive of completed work
+- `finished_todos.md` - Archive of completed work
 
 **At the start of each session:** Check `docs/project/todo.md` for current sprint tasks.
 
 **When completing work:**
 - Mark items done in `docs/project/todo.md`, move to Done section
-- Keep only last 5 done items in todo.md; archive older ones to `docs/project/todone.md` with dated header
+- Keep only last 5 done items in todo.md; archive older ones to `docs/project/finished_todos.md` with dated header
 - Update `docs/project/milestones.md` if completing a milestone goal
 
 **When adding new tasks:**
@@ -125,7 +125,7 @@ This pattern ensures:
 Use this interactive process when the todo list needs reorganization or a new sprint needs planning:
 
 **Step 1: Clean up**
-- Archive all done items to `docs/project/todone.md` with dated header (e.g., `## Archived 2026-01-23`)
+- Archive all done items to `docs/project/finished_todos.md` with dated header (e.g., `## Archived 2026-01-23`)
 - Keep only last 5 done items in `docs/project/todo.md`
 
 **Step 2: Separate concerns**
@@ -584,7 +584,7 @@ When asked to "audit", "review", or "check the repo", use the appropriate tier:
 **After auditing:**
 - Write findings to `docs/dev/audit_record.md` with commit reference
 - Update `docs/project/todo.md` - add improvement tasks from code review, move completed items to Done
-- Archive old done records to `docs/project/todone.md` with dated header
+- Archive old done records to `docs/project/finished_todos.md` with dated header
 
 ### Workflow-Specific Audits
 

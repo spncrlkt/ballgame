@@ -1,79 +1,98 @@
 # Ballgame Milestones
 
 ```
-Training Tools → AI Quality → MVP → V0 → V1
+V0 (today) → V1 (future)
 ```
 
 ---
 
-## Pre-MVP: Training Pipeline
+## V0: Dev Friends Release
 
-**Training Binary UX:**
+*Tight, focused, fun game loop. Endless play, no win conditions. Ready to share.*
+
+**Status:** Closing out today (2026-01-31)
+
+**What's Done:**
+- [x] 2v2 gameplay with team mechanics (pass, steal, block, turbo)
+- [x] 10 AI profiles with human-realistic timing
+- [x] Reachability-aware navigation
+- [x] Ghost system (drive recording + replay)
+- [x] SQLite event logging
+- [x] Training mode with session summaries
+- [x] Simulation infrastructure (tournaments, brackets)
+- [x] 42 scenario tests + 151 unit tests
+- [x] 10 levels with hot-reload config
+- [x] 30 color palettes, 10 ball styles
+- [x] Preset system (movement, ball, shooting)
+- [x] Stealing mechanics with cooldowns
+- [x] Countdown system
+- [x] Visual regression testing
+
+**Remaining V0 Polish:**
+- [ ] Verify DB path consolidation works
+- [ ] Manual playtest - confirm game feels fun
+- [ ] Fix any critical bugs found during playtest
+
+---
+
+## V1: Full Release
+
+*Everything else. Will prioritize when V0 ships.*
+
+**Win Conditions & Game Flow:**
+- [ ] Score limit or time limit
+- [ ] Game state flow (start → play → end → rematch)
+- [ ] Victory screen
+
+**AI Tuning:**
+- [ ] Fix shooting - stops taking bad shots
+- [ ] Fix positioning - covers basket correctly
+- [ ] Define "bad shot" (distance? angle? defender?)
+- [ ] Define "good positioning" (shot line? basket coverage?)
+
+**Movement/Physics Tuning:**
+- [ ] Tune player movement (speed, acceleration, air control)
+- [ ] Tune jump feel (height, coyote time, responsiveness)
+- [ ] Fix step climbing issues
+- [ ] Fix AI running jump estimation
+
+**Training Pipeline Polish:**
 - [ ] Reset button (Start) wipes logs and restarts
 - [ ] Clear status display between games
-
-**AI Plugin Consolidation:**
 - [ ] Create `AiPlugin` - single source of truth
 - [ ] Fix ghost mode to use full AI
 
-**Done:**
-- [x] Ghost System MVP
-- [x] Reachability-aware navigation
-- [x] SQLite event logging
-- [x] Simulation infrastructure
-
----
-
-## MVP
-
-*Playable solo vs AI - core loop works*
-
-**AI Behavior:**
-- [ ] Fix shooting - stops taking bad shots
-- [ ] Fix positioning - covers basket correctly
-
-**Movement/Physics:**
-- [ ] Tune player movement
-- [ ] Tune jump feel
-
-**Done:**
-- [x] Stealing mechanics
-- [x] AI profiles (10 personas)
-- [x] Scenario tests (42 tests)
-
----
-
-## V0
-
-*Polished - ready to share*
-
-- [ ] Win conditions (score/time limit)
-- [ ] Game state flow (start → play → end)
+**Level Polish:**
 - [ ] Polish existing 10 levels
-- [ ] Viewport testing
-
----
-
-## V1 / Beyond
+- [ ] Viewport testing across sizes
 
 **Multiplayer:**
-- [ ] Local multiplayer
-- [ ] 4-player support
+- [ ] Local multiplayer (2 humans)
+- [ ] 4-player support (4 humans)
 - [ ] Netcode
 
 **Audio:**
 - [ ] Sound effects
 - [ ] Music
 
-**Menus:**
+**Menus & UI:**
 - [ ] Main menu
 - [ ] Pause menu
 - [ ] Settings UI
+- [ ] Animated gif for readme
+
+**Technical Debt:**
+- [ ] System wiring consolidation across binaries
+- [ ] EventBus memory cleanup (unbounded growth)
+- [ ] Input capture bug (tweak panel stale PlayerInput)
+
+**Ideas (unprioritized):**
+- More ball styles
+- AI debug level (both players AI)
+- Steal balance testing protocol
+- Platforming training protocol
+- Parallelize heatmap generation
 
 ---
 
-## Technical Debt
-
-- [x] PlayerId → CharacterId migration (completed 2026-01-30)
-- [ ] System wiring consolidation
-- [ ] EventBus memory cleanup
+*Last updated: 2026-01-31*

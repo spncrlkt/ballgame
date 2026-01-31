@@ -1,5 +1,32 @@
 # Ballgame Done Archive
 
+## Archived 2026-01-31 (V0 Closing)
+
+**V0 Release Complete** - Dev friends release ready
+
+- [x] **Team Interactions Implementation** - Full 2v2 mechanics (2026-01-30)
+  - Modal input system: Pass/Steal (LB), Throw/Block (RB), Turbo (West)
+  - New mechanics: Pass (auto-aim), Block (intercept zone), Turbo (speed boost with gauge)
+  - CatchPartner debug AI profile for pass practice
+  - TeamInteraction training protocol (`--protocol team-interaction`)
+  - Event instrumentation: PassCompleted, PassIntercepted, PassMissed, TurboActivated/Deactivated, BlockActivated/Deactivated/Intercepted
+  - AI profile fields: turbo_modifier, block_slow_modifier, turbo_usage, block_reaction, pass_willingness
+- [x] **Database & Generated Assets Consolidation** - Central path management (2026-01-30)
+  - Created `src/db_paths.rs` - Central database path module
+  - Created `src/db_schema.rs` - Shared schema definitions
+  - Created `src/generated_assets.rs` - Asset tracking module
+  - Updated all binaries to use timestamped database paths
+- [x] **2v2 Readiness & Test Coverage** - 151 unit tests, 42 scenario tests (2026-01-30)
+  - CharacterId, format round-trip, analytics parser tests
+  - Refactored player spawning to `spawn_characters_for_mode()`
+  - PlayerId → CharacterId migration complete
+- [x] **Project Documentation Cleanup** (2026-01-31)
+  - Reorganized milestones: V0 = dev friends, V1 = full release
+  - Moved all future work to V1 milestone
+  - Cleaned up todo.md, open_questions.md
+
+---
+
 ## Archived 2026-01-30 (Todo Audit)
 
 - [x] **Accuracy/Cadence Tuning** - Extended preset system with 10 shot params, tested V1-V6 variants (2026-01-28)

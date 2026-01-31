@@ -588,7 +588,7 @@ Run at the end of each session (or after ~10 changes):
 - [ ] Update baseline if needed - `./scripts/regression.sh --update`
 - [ ] Read `showcase/regression/current/*.png` - Verify UI looks correct
 - [ ] Update `docs/project/todo.md` - Mark completed, add new items
-- [ ] Archive done items - Keep only last 5, move older to `docs/project/todone.md`
+- [ ] Archive done items - Keep only last 5, move older to `docs/project/finished_todos.md`
 - [ ] Update `docs/project/open_questions.md` - Add new questions
 - [ ] Update `docs/dev/audit_record.md` - Document changes
 - [ ] Verify CLAUDE.md accuracy - Update if architecture changed

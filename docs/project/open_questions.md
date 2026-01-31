@@ -2,20 +2,21 @@
 
 ---
 
-## Training Pipeline
+## V1 Questions (Deferred)
 
-- [ ] **Ghost segmentation** - How to detect drive boundaries? (goals, possession, time?)
-- [ ] **Defense metric** - What counts as "AI stopped the play"?
+These questions will be addressed when prioritizing V1 work:
 
-## AI Behavior
+**AI Behavior:**
+- [ ] Bad shot definition - Distance? Angle? Defender proximity?
+- [ ] Good positioning - Near basket? Between ball and basket?
 
-- [ ] **Bad shot definition** - Distance? Angle? Defender proximity?
-- [ ] **Good positioning** - Near basket? Between ball and basket?
+**Training Pipeline:**
+- [ ] Ghost segmentation - How to detect drive boundaries?
+- [ ] Defense metric - What counts as "AI stopped the play"?
 
-## Architecture
-
-- [ ] **System wiring** - Shared plugins vs accept divergence?
-- [ ] **EventBus cleanup** - Clear per frame or limit history?
+**Architecture:**
+- [ ] System wiring - Shared plugins vs accept divergence?
+- [ ] EventBus cleanup - Clear per frame or limit history?
 
 ---
 
@@ -25,7 +26,8 @@
 - [x] Training relation to MVP - Training tools ARE MVP blockers
 - [x] ghost-visual.rs - Deleted
 - [x] Cooldown timing bug - Fixed (FixedUpdate only)
+- [x] V0/V1 scope - V0 = dev friends release, V1 = full release (2026-01-31)
 
 ---
 
-*Last reviewed: 2026-01-30*
+*Last reviewed: 2026-01-31*

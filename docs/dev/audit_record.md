@@ -412,12 +412,12 @@ Comprehensive code review session with deep investigation of codebase patterns, 
 
 ### Summary
 
-Cleaned up todo/todone structure, added commit references to all archived work, created 2v2.md for future multiplayer planning.
+Cleaned up todo/finished_todos structure, added commit references to all archived work, created 2v2.md for future multiplayer planning.
 
 ### Changes Made
 
 **Todo/Todone Cleanup:**
-- Archived all completed steal system items to `todone.md` with commit references
+- Archived all completed steal system items to `finished_todos.md` with commit references
 - Cleaned `todo.md` to show only active work (P0-P4 priorities)
 - Added "Known Issues" section for tracked bugs
 - All archive entries now have commit range references
@@ -435,7 +435,7 @@ Cleaned up todo/todone structure, added commit references to all archived work, 
 ### Files Modified
 
 - `todo.md` - Cleaned up, active work only
-- `todone.md` - Full archive with commit references
+- `finished_todos.md` - Full archive with commit references
 - `2v2.md` - Created for multiplayer planning
 - `audit_record.md` - This entry
 
@@ -556,7 +556,7 @@ Training Tools → AI Quality → MVP → V0 → V1
 
 ### Files Modified
 
-- `todone.md` - Archived verified done items with test counts
+- `finished_todos.md` - Archived verified done items with test counts
 - `milestones.md` - Rewrote with Training → AI → MVP structure
 - `todo.md` - Cleaned up with clear P0-P4 priorities
 - `open_questions.md` - Updated with current questions, marked resolved items
@@ -744,7 +744,7 @@ Added automated screenshot capture and visual regression testing infrastructure.
 - `.gitignore` - Added snapshots/, regression/current.png, regression/diff.png
 - `CLAUDE.md` - Updated documentation
 - `todo.md` - Archived done items, added new completions
-- `todone.md` - Archived older done items
+- `finished_todos.md` - Archived older done items
 
 ---
 
