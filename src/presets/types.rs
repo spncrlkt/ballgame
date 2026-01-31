@@ -41,6 +41,16 @@ pub struct ShootingPreset {
     pub speed_randomness_min: f32,
     pub speed_randomness_max: f32,
     pub shot_distance_variance: f32,
+    // Pass mechanics fields
+    pub pass_base_arc: f32,
+    pub pass_max_distance_arc: f32,
+    pub pass_distance_arc_scale: f32,
+    pub pass_max_height_arc: f32,
+    pub pass_height_arc_scale: f32,
+    pub pass_min_arc: f32,
+    pub pass_max_arc: f32,
+    pub pass_min_speed: f32,
+    pub pass_max_speed: f32,
 }
 
 /// Global preset - combines all settings into one preset

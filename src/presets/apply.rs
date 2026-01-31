@@ -69,6 +69,16 @@ pub fn apply_preset_to_tweaks(
         tweaks.speed_randomness_min = shooting.speed_randomness_min;
         tweaks.speed_randomness_max = shooting.speed_randomness_max;
         tweaks.shot_distance_variance = shooting.shot_distance_variance;
+        // Pass mechanics fields
+        tweaks.pass_base_arc = shooting.pass_base_arc;
+        tweaks.pass_max_distance_arc = shooting.pass_max_distance_arc;
+        tweaks.pass_distance_arc_scale = shooting.pass_distance_arc_scale;
+        tweaks.pass_max_height_arc = shooting.pass_max_height_arc;
+        tweaks.pass_height_arc_scale = shooting.pass_height_arc_scale;
+        tweaks.pass_min_arc = shooting.pass_min_arc;
+        tweaks.pass_max_arc = shooting.pass_max_arc;
+        tweaks.pass_min_speed = shooting.pass_min_speed;
+        tweaks.pass_max_speed = shooting.pass_max_speed;
     }
 
     info!(

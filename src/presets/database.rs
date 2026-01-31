@@ -205,6 +205,43 @@ impl PresetDatabase {
                 .get("shot_distance_variance")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0.00025),
+            // Pass mechanics fields
+            pass_base_arc: values
+                .get("pass_base_arc")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(10.0),
+            pass_max_distance_arc: values
+                .get("pass_max_distance_arc")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(25.0),
+            pass_distance_arc_scale: values
+                .get("pass_distance_arc_scale")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(500.0),
+            pass_max_height_arc: values
+                .get("pass_max_height_arc")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(15.0),
+            pass_height_arc_scale: values
+                .get("pass_height_arc_scale")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(200.0),
+            pass_min_arc: values
+                .get("pass_min_arc")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(5.0),
+            pass_max_arc: values
+                .get("pass_max_arc")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(45.0),
+            pass_min_speed: values
+                .get("pass_min_speed")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(400.0),
+            pass_max_speed: values
+                .get("pass_max_speed")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1000.0),
         })
     }
 
@@ -270,6 +307,16 @@ impl PresetDatabase {
             speed_randomness_min: 0.9,
             speed_randomness_max: 1.1,
             shot_distance_variance: 0.00025,
+            // Pass mechanics defaults
+            pass_base_arc: 10.0,
+            pass_max_distance_arc: 25.0,
+            pass_distance_arc_scale: 500.0,
+            pass_max_height_arc: 15.0,
+            pass_height_arc_scale: 200.0,
+            pass_min_arc: 5.0,
+            pass_max_arc: 45.0,
+            pass_min_speed: 400.0,
+            pass_max_speed: 1000.0,
         }
     }
 

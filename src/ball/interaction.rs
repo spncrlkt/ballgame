@@ -203,6 +203,11 @@ pub fn pickup_ball(
                 // Reset charge so it starts fresh (even if throw button is held)
                 charging.charge_time = 0.0;
                 picked_up = true;
+
+                // Clear pass/throw inputs to prevent immediate action from same button press
+                // (LB sets both pickup_pressed and pass_pressed; RB sets pickup_pressed and throw_released)
+                input.pass_pressed = false;
+                input.throw_released = false;
                 break;
             }
         }
@@ -308,6 +313,10 @@ pub fn pickup_ball(
 
                         // Short cooldown after successful steal
                         cooldown.0 = STEAL_COOLDOWN;
+
+                        // Clear pass/throw inputs to prevent immediate action from same button press
+                        input.pass_pressed = false;
+                        input.throw_released = false;
                     }
                 } else {
                     // Steal failed - set fail flash

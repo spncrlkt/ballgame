@@ -22,5 +22,14 @@
   "quick_power_threshold": 0.25,
   "speed_randomness_min": 0.95,
   "speed_randomness_max": 1.05,
-  "shot_distance_variance": 0.00025
+  "shot_distance_variance": 0.00025,
+  "pass_base_arc": 10.0,
+  "pass_max_distance_arc": 25.0,
+  "pass_distance_arc_scale": 500.0,
+  "pass_max_height_arc": 15.0,
+  "pass_height_arc_scale": 200.0,
+  "pass_min_arc": 5.0,
+  "pass_max_arc": 45.0,
+  "pass_min_speed": 400.0,
+  "pass_max_speed": 1000.0
 }

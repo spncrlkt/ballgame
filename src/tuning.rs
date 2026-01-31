@@ -38,6 +38,35 @@ fn default_shot_distance_variance() -> f32 {
     0.00025
 }
 
+// Pass mechanics defaults
+fn default_pass_base_arc() -> f32 {
+    10.0
+}
+fn default_pass_max_distance_arc() -> f32 {
+    25.0
+}
+fn default_pass_distance_arc_scale() -> f32 {
+    500.0
+}
+fn default_pass_max_height_arc() -> f32 {
+    15.0
+}
+fn default_pass_height_arc_scale() -> f32 {
+    200.0
+}
+fn default_pass_min_arc() -> f32 {
+    5.0
+}
+fn default_pass_max_arc() -> f32 {
+    45.0
+}
+fn default_pass_min_speed() -> f32 {
+    400.0
+}
+fn default_pass_max_speed() -> f32 {
+    1000.0
+}
+
 /// Path to global gameplay tuning config
 pub const GAMEPLAY_TUNING_FILE: &str = "config/gameplay_tuning.json";
 
@@ -79,6 +108,25 @@ pub struct GameplayTuning {
     pub speed_randomness_max: f32,
     #[serde(default = "default_shot_distance_variance")]
     pub shot_distance_variance: f32,
+    // Pass mechanics fields
+    #[serde(default = "default_pass_base_arc")]
+    pub pass_base_arc: f32,
+    #[serde(default = "default_pass_max_distance_arc")]
+    pub pass_max_distance_arc: f32,
+    #[serde(default = "default_pass_distance_arc_scale")]
+    pub pass_distance_arc_scale: f32,
+    #[serde(default = "default_pass_max_height_arc")]
+    pub pass_max_height_arc: f32,
+    #[serde(default = "default_pass_height_arc_scale")]
+    pub pass_height_arc_scale: f32,
+    #[serde(default = "default_pass_min_arc")]
+    pub pass_min_arc: f32,
+    #[serde(default = "default_pass_max_arc")]
+    pub pass_max_arc: f32,
+    #[serde(default = "default_pass_min_speed")]
+    pub pass_min_speed: f32,
+    #[serde(default = "default_pass_max_speed")]
+    pub pass_max_speed: f32,
 }
 
 impl Default for GameplayTuning {
@@ -109,6 +157,16 @@ impl Default for GameplayTuning {
             speed_randomness_min: default_speed_randomness_min(),
             speed_randomness_max: default_speed_randomness_max(),
             shot_distance_variance: default_shot_distance_variance(),
+            // Pass mechanics defaults
+            pass_base_arc: default_pass_base_arc(),
+            pass_max_distance_arc: default_pass_max_distance_arc(),
+            pass_distance_arc_scale: default_pass_distance_arc_scale(),
+            pass_max_height_arc: default_pass_max_height_arc(),
+            pass_height_arc_scale: default_pass_height_arc_scale(),
+            pass_min_arc: default_pass_min_arc(),
+            pass_max_arc: default_pass_max_arc(),
+            pass_min_speed: default_pass_min_speed(),
+            pass_max_speed: default_pass_max_speed(),
         }
     }
 }
@@ -140,6 +198,16 @@ impl GameplayTuning {
         tweaks.speed_randomness_min = self.speed_randomness_min;
         tweaks.speed_randomness_max = self.speed_randomness_max;
         tweaks.shot_distance_variance = self.shot_distance_variance;
+        // Pass mechanics fields
+        tweaks.pass_base_arc = self.pass_base_arc;
+        tweaks.pass_max_distance_arc = self.pass_max_distance_arc;
+        tweaks.pass_distance_arc_scale = self.pass_distance_arc_scale;
+        tweaks.pass_max_height_arc = self.pass_max_height_arc;
+        tweaks.pass_height_arc_scale = self.pass_height_arc_scale;
+        tweaks.pass_min_arc = self.pass_min_arc;
+        tweaks.pass_max_arc = self.pass_max_arc;
+        tweaks.pass_min_speed = self.pass_min_speed;
+        tweaks.pass_max_speed = self.pass_max_speed;
     }
 }
 
@@ -171,6 +239,16 @@ pub struct PhysicsTweaks {
     pub speed_randomness_min: f32,
     pub speed_randomness_max: f32,
     pub shot_distance_variance: f32,
+    // Pass mechanics fields
+    pub pass_base_arc: f32,
+    pub pass_max_distance_arc: f32,
+    pub pass_distance_arc_scale: f32,
+    pub pass_max_height_arc: f32,
+    pub pass_height_arc_scale: f32,
+    pub pass_min_arc: f32,
+    pub pass_max_arc: f32,
+    pub pass_min_speed: f32,
+    pub pass_max_speed: f32,
 }
 
 impl Default for PhysicsTweaks {
@@ -202,12 +280,22 @@ impl Default for PhysicsTweaks {
             speed_randomness_min: defaults.speed_randomness_min,
             speed_randomness_max: defaults.speed_randomness_max,
             shot_distance_variance: defaults.shot_distance_variance,
+            // Pass mechanics fields
+            pass_base_arc: defaults.pass_base_arc,
+            pass_max_distance_arc: defaults.pass_max_distance_arc,
+            pass_distance_arc_scale: defaults.pass_distance_arc_scale,
+            pass_max_height_arc: defaults.pass_max_height_arc,
+            pass_height_arc_scale: defaults.pass_height_arc_scale,
+            pass_min_arc: defaults.pass_min_arc,
+            pass_max_arc: defaults.pass_max_arc,
+            pass_min_speed: defaults.pass_min_speed,
+            pass_max_speed: defaults.pass_max_speed,
         }
     }
 }
 
 impl PhysicsTweaks {
-    pub const LABELS: [&'static str; 24] = [
+    pub const LABELS: [&'static str; 33] = [
         "Gravity Rise",
         "Gravity Fall",
         "Jump Velocity",
@@ -233,6 +321,16 @@ impl PhysicsTweaks {
         "Speed Random Min",
         "Speed Random Max",
         "Shot Dist Variance",
+        // Pass mechanics labels
+        "Pass Base Arc",
+        "Pass Max Dist Arc",
+        "Pass Dist Arc Scale",
+        "Pass Max Height Arc",
+        "Pass Height Scale",
+        "Pass Min Arc",
+        "Pass Max Arc",
+        "Pass Min Speed",
+        "Pass Max Speed",
     ];
 
     pub fn get_value(&self, index: usize) -> f32 {
@@ -261,6 +359,15 @@ impl PhysicsTweaks {
             21 => self.speed_randomness_min,
             22 => self.speed_randomness_max,
             23 => self.shot_distance_variance,
+            24 => self.pass_base_arc,
+            25 => self.pass_max_distance_arc,
+            26 => self.pass_distance_arc_scale,
+            27 => self.pass_max_height_arc,
+            28 => self.pass_height_arc_scale,
+            29 => self.pass_min_arc,
+            30 => self.pass_max_arc,
+            31 => self.pass_min_speed,
+            32 => self.pass_max_speed,
             _ => 0.0,
         }
     }
@@ -286,11 +393,20 @@ impl PhysicsTweaks {
             16 => SHOT_AIR_VARIANCE_PENALTY,
             17 => SHOT_MOVE_VARIANCE_PENALTY,
             18 => SHOT_QUICK_THRESHOLD,
-            19 => 0.7,     // quick_power_multiplier default
-            20 => 0.25,    // quick_power_threshold default
-            21 => 0.9,     // speed_randomness_min default
-            22 => 1.1,     // speed_randomness_max default
-            23 => 0.00025, // shot_distance_variance default
+            19 => 0.7,      // quick_power_multiplier default
+            20 => 0.25,     // quick_power_threshold default
+            21 => 0.9,      // speed_randomness_min default
+            22 => 1.1,      // speed_randomness_max default
+            23 => 0.00025,  // shot_distance_variance default
+            24 => 10.0,     // pass_base_arc default
+            25 => 25.0,     // pass_max_distance_arc default
+            26 => 500.0,    // pass_distance_arc_scale default
+            27 => 15.0,     // pass_max_height_arc default
+            28 => 200.0,    // pass_height_arc_scale default
+            29 => 5.0,      // pass_min_arc default
+            30 => 45.0,     // pass_max_arc default
+            31 => 400.0,    // pass_min_speed default
+            32 => 1000.0,   // pass_max_speed default
             _ => 0.0,
         }
     }
@@ -321,6 +437,15 @@ impl PhysicsTweaks {
             21 => self.speed_randomness_min = value,
             22 => self.speed_randomness_max = value,
             23 => self.shot_distance_variance = value,
+            24 => self.pass_base_arc = value,
+            25 => self.pass_max_distance_arc = value,
+            26 => self.pass_distance_arc_scale = value,
+            27 => self.pass_max_height_arc = value,
+            28 => self.pass_height_arc_scale = value,
+            29 => self.pass_min_arc = value,
+            30 => self.pass_max_arc = value,
+            31 => self.pass_min_speed = value,
+            32 => self.pass_max_speed = value,
             _ => {}
         }
     }
