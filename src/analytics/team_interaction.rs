@@ -529,47 +529,71 @@ pub fn run_team_interaction_analysis(db_path: &Path) -> AnyResult<TeamInteractio
     })
 }
 
-/// Parse pass data from event format: "T:XXXXX|PA|from|to" -> data is "from|to"
+/// Parse pass data from event format: "T:XXXXX|TYPE|from|to" or "from|to"
 fn parse_pass_data(data: &str) -> Option<(String, String)> {
-    // Data format after event parsing: "from|to" or just the data portion
     let parts: Vec<&str> = data.split('|').collect();
 
-    // Handle format: "L0|L1" (from|to)
-    if parts.len() >= 2 {
-        return Some((parts[0].to_string(), parts[1].to_string()));
+    // Handle format with timestamp prefix: "T:00100|PA|L0|L1" or "T:00100|PC|L0|L1"
+    // Check this FIRST before the 2-part format, otherwise we return wrong values
+    if parts.len() >= 4 && ["PA", "PC", "PI", "PM"].contains(&parts[1]) {
+        return Some((parts[2].to_string(), parts[3].to_string()));
     }
 
-    // Handle format with timestamp prefix: "T:00100|PA|L0|L1"
-    if parts.len() >= 4 && parts[1] == "PA" {
-        return Some((parts[2].to_string(), parts[3].to_string()));
+    // Handle simple format: "L0|L1" (from|to)
+    if parts.len() >= 2 {
+        return Some((parts[0].to_string(), parts[1].to_string()));
     }
 
     None
 }
 
-/// Parse single character from event data
+/// Parse single character from event data: "T:XXXXX|TYPE|character" or "character"
 fn parse_single_character(data: &str) -> Option<String> {
     let parts: Vec<&str> = data.split('|').collect();
+
+    // Handle format with timestamp prefix: "T:00100|BA|L0"
+    if parts.len() >= 3 && ["BA", "BD"].contains(&parts[1]) {
+        let char_str = parts[2].trim();
+        if ["L0", "L1", "R0", "R1"].contains(&char_str) {
+            return Some(char_str.to_string());
+        }
+    }
+
+    // Handle simple format: "L0"
     if !parts.is_empty() {
         let char_str = parts[0].trim();
         if ["L0", "L1", "R0", "R1"].contains(&char_str) {
             return Some(char_str.to_string());
         }
     }
+
     None
 }
 
-/// Parse block intercept data: "character|ball_state"
+/// Parse block intercept data: "T:XXXXX|BI|character|ball_state" or "character|ball_state"
 fn parse_block_intercept(data: &str) -> Option<(String, char)> {
     let parts: Vec<&str> = data.split('|').collect();
-    if parts.len() >= 2 {
-        let char_str = parts[0].trim();
-        if ["L0", "L1", "R0", "R1"].contains(&char_str)
-            && let Some(ball_state) = parts[1].chars().next()
-        {
-            return Some((char_str.to_string(), ball_state));
+
+    // Handle format with timestamp prefix: "T:00100|BI|L0|F"
+    if parts.len() >= 4 && parts[1] == "BI" {
+        let char_str = parts[2].trim();
+        if ["L0", "L1", "R0", "R1"].contains(&char_str) {
+            if let Some(ball_state) = parts[3].chars().next() {
+                return Some((char_str.to_string(), ball_state));
+            }
         }
     }
+
+    // Handle simple format: "L0|F"
+    if parts.len() >= 2 {
+        let char_str = parts[0].trim();
+        if ["L0", "L1", "R0", "R1"].contains(&char_str) {
+            if let Some(ball_state) = parts[1].chars().next() {
+                return Some((char_str.to_string(), ball_state));
+            }
+        }
+    }
+
     None
 }
 
@@ -622,6 +646,7 @@ mod tests {
 
     #[test]
     fn test_parse_pass_data() {
+        // Simple format
         assert_eq!(
             parse_pass_data("L0|L1"),
             Some(("L0".to_string(), "L1".to_string()))
@@ -630,17 +655,45 @@ mod tests {
             parse_pass_data("R1|R0"),
             Some(("R1".to_string(), "R0".to_string()))
         );
+        // Timestamp-prefixed format (actual DB format)
+        assert_eq!(
+            parse_pass_data("T:04702|PA|L1|L0"),
+            Some(("L1".to_string(), "L0".to_string()))
+        );
+        assert_eq!(
+            parse_pass_data("T:13902|PC|L0|L1"),
+            Some(("L0".to_string(), "L1".to_string()))
+        );
+        assert_eq!(
+            parse_pass_data("T:00100|PI|R0|L1"),
+            Some(("R0".to_string(), "L1".to_string()))
+        );
+        assert_eq!(
+            parse_pass_data("T:00200|PM|L0|L1"),
+            Some(("L0".to_string(), "L1".to_string()))
+        );
     }
 
     #[test]
     fn test_parse_single_character() {
+        // Simple format
         assert_eq!(parse_single_character("L0"), Some("L0".to_string()));
         assert_eq!(parse_single_character("R1|extra"), Some("R1".to_string()));
         assert_eq!(parse_single_character("invalid"), None);
+        // Timestamp-prefixed format (actual DB format)
+        assert_eq!(
+            parse_single_character("T:00100|BA|L0"),
+            Some("L0".to_string())
+        );
+        assert_eq!(
+            parse_single_character("T:00200|BD|R1"),
+            Some("R1".to_string())
+        );
     }
 
     #[test]
     fn test_parse_block_intercept() {
+        // Simple format
         assert_eq!(
             parse_block_intercept("L0|P"),
             Some(("L0".to_string(), 'P'))
@@ -648,6 +701,15 @@ mod tests {
         assert_eq!(
             parse_block_intercept("R1|S"),
             Some(("R1".to_string(), 'S'))
+        );
+        // Timestamp-prefixed format (actual DB format)
+        assert_eq!(
+            parse_block_intercept("T:00100|BI|L0|F"),
+            Some(("L0".to_string(), 'F'))
+        );
+        assert_eq!(
+            parse_block_intercept("T:00200|BI|R1|H"),
+            Some(("R1".to_string(), 'H'))
         );
     }
 

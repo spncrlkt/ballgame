@@ -378,6 +378,7 @@ USAGE:
 
 PROTOCOLS:
     advanced-platform (default) - Full 1v1 games on random levels
+    team-interaction            - Cooperative pass practice (aliases: team, catch)
     pursuit                     - Flat level chase test (verifies AI pursues player)
     pursuit2                    - Platform chase test (pursuit with center obstacle)
     reachability                - Solo level exploration for coverage mapping (LB to advance)

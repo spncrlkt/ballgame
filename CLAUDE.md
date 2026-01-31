@@ -495,6 +495,13 @@ velocity.x *= 0.98;           // Faster decay at higher FPS
 - One-time events (bounce, jump impulse, collision response)
 - State changes (pickup, throw)
 
+### 8. No timeout/gtimeout Commands
+
+Never use `timeout` or `gtimeout` commands - they are not available on this macOS system. For testing commands that might hang:
+- Use `--help` flag to verify argument parsing
+- Check the code directly to verify behavior
+- If needed, run briefly and Ctrl+C manually
+
 ---
 
 ## Maintenance Checklist

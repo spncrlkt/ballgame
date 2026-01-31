@@ -212,6 +212,45 @@ The CatchPartner is a debug AI profile designed for pass practice:
 
 The protocol uses "Team Interaction" - a flat level with a center platform, designed for pass practice.
 
+### Post-Session Analysis
+
+After a team interaction session, run the dedicated analysis:
+
+```bash
+# Analyze the most recent training database
+cargo run --bin analyze -- --team-interaction $(ls -t db/training_*.db | head -1)
+
+# Output goes to notes/analysis_runs/team_interaction_YYYYMMDD_HHMMSS.md
+```
+
+The analysis generates a markdown report with:
+- **Team Summary** - Pass completion rates, turnovers, blocks
+- **Character Breakdown** - Per-player stats (L0, L1, R0, R1)
+- **Pass Timing Analysis** - Interval statistics, quick pass counts
+- **Recent Pass Events** - Chronological log with outcomes
+
+The session completion message also suggests the analysis command.
+
+### Event Types
+
+Team interaction logs these events to SQLite:
+
+| Code | Event | Data Format |
+|------|-------|-------------|
+| PA | Pass Attempted | `T:ms\|PA\|passer\|target` |
+| PC | Pass Completed | `T:ms\|PC\|passer\|receiver` |
+| PI | Pass Intercepted | `T:ms\|PI\|passer\|interceptor` |
+| PM | Pass Missed | `T:ms\|PM\|passer\|target` |
+| BA | Block Activated | `T:ms\|BA\|character` |
+| BD | Block Deactivated | `T:ms\|BD\|character` |
+| BI | Block Intercepted | `T:ms\|BI\|character\|ball_state` |
+
+Query events directly:
+```bash
+sqlite3 $(ls -t db/training_*.db | head -1) \
+  "SELECT event_type, COUNT(*) FROM events WHERE event_type IN ('PA','PC','PI','PM','BA','BD','BI') GROUP BY event_type;"
+```
+
 ## SQL Analysis
 
 Open the database (use most recent or specify path):

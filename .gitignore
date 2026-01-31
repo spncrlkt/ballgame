@@ -23,6 +23,9 @@ training.db
 *_logs/
 /db/
 
+# Analysis run outputs (generated, ephemeral)
+/notes/analysis_runs/
+
 # Local settings (use templates for defaults)
 config/training_settings.json
 config/simulation_settings.json
