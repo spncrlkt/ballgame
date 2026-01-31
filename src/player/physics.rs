@@ -378,7 +378,7 @@ pub fn check_settings_reset(
 /// Handle player respawn and level changes
 #[allow(clippy::too_many_arguments)]
 pub fn respawn_player(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    _keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut commands: Commands,
     level_db: Res<LevelDatabase>,
@@ -404,17 +404,14 @@ pub fn respawn_player(
     corner_ramps: Query<Entity, With<CornerRamp>>,
     mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>)>,
 ) {
-    // Reset current level (R / Start) - resets positions and score only
-    let reset_pressed = keyboard.just_pressed(KeyCode::KeyR)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::Start));
+    // Reset current level (Start button) - resets positions and score only
+    let reset_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::Start));
 
-    // Cycle to next level (] key only - controller uses unified cycle system)
-    let next_level_pressed = keyboard.just_pressed(KeyCode::BracketRight);
-
-    // Cycle to previous level ([ key only - controller uses unified cycle system)
-    let prev_level_pressed = keyboard.just_pressed(KeyCode::BracketLeft);
+    // Level cycling handled by unified cycle system (controller only)
+    let next_level_pressed = false;
+    let prev_level_pressed = false;
 
     // Detect if level was changed externally (by unified cycle system)
     let level_changed_externally = current_level.is_changed() && !reset_pressed;

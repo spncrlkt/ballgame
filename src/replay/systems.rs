@@ -309,45 +309,66 @@ pub fn replay_playback(
     }
 }
 
-/// Input handler for replay controls
+/// Input handler for replay controls (controller-only)
 pub fn replay_input_handler(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    _keyboard: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
     replay_data: Res<ReplayData>,
     mut state: ResMut<ReplayState>,
 ) {
-    // Space: Toggle pause
-    if keyboard.just_pressed(KeyCode::Space) {
+    // South button: Toggle pause
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::South))
+    {
         state.toggle_pause();
     }
 
-    // Left/Right arrows: Adjust speed
-    if keyboard.just_pressed(KeyCode::ArrowRight) {
+    // D-pad Right/Left: Adjust speed
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadRight))
+    {
         state.speed_up();
     }
-    if keyboard.just_pressed(KeyCode::ArrowLeft) {
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadLeft))
+    {
         state.speed_down();
     }
 
-    // Period (.): Step forward one tick (when paused)
-    if keyboard.just_pressed(KeyCode::Period) {
+    // RB: Step forward one tick (when paused)
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::RightTrigger))
+    {
         state.step_forward();
     }
 
-    // Comma (,): Step backward one tick (when paused)
-    if keyboard.just_pressed(KeyCode::Comma) {
+    // LB: Step backward one tick (when paused)
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::LeftTrigger))
+    {
         state.step_backward();
     }
 
-    // Home: Jump to start
-    if keyboard.just_pressed(KeyCode::Home) {
+    // D-pad Up: Jump to start
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadUp))
+    {
         state.jump_to_start();
     }
 
-    // End: Jump to end
-    if keyboard.just_pressed(KeyCode::End) {
+    // D-pad Down: Jump to end
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadDown))
+    {
         state.jump_to_end(replay_data.duration_ms);
     }
 
-    // Escape: Could be used to exit replay mode
-    // (handled elsewhere if needed)
+    // Escape: handled elsewhere if needed
 }

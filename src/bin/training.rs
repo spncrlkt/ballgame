@@ -24,14 +24,15 @@ use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
     AI_SOURCE_ID_START, AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball,
     BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
-    BallTextures, Character, CharacterId, ChargingShot, ControlledBy, CoyoteTimer, CurrentLevel,
-    CurrentPalette, DebugSettings, EventBuffer, EventBus, Facing, GameConfig, GameEvent, Grounded,
-    HoldingBall, HumanControlled, InputState, JumpState, KEYBOARD_SOURCE_ID, LastShotInfo,
-    LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE, PaletteDatabase,
-    PhysicsTweaks, Player, PlayerInput, Score, SnapshotConfig, StealContest, StealCooldown,
-    StealTracker, StyleTextures, TargetBasket, Team, TweakPanelState, Velocity, ai, ball,
-    constants::*, countdown, emit_level_change_events, helpers::*, input, levels, player, scoring,
-    shooting, spawn_charge_gauge, spawn_countdown_text, steal, tuning, update_event_bus_time, world,
+    BallTextures, BlockState, Character, CharacterId, ChargingShot, ControlledBy, CoyoteTimer,
+    CurrentLevel, CurrentPalette, DebugSettings, EventBuffer, EventBus, Facing, GameConfig,
+    GameEvent, Grounded, HoldingBall, HumanControlled, InputState, JumpState, KEYBOARD_SOURCE_ID,
+    LastShotInfo, LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE,
+    PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, SnapshotConfig, StealContest,
+    StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, TurboGauge, TweakPanelState,
+    Velocity, ai, ball, constants::*, countdown, emit_level_change_events, helpers::*, input,
+    levels, player, scoring, shooting, spawn_charge_gauge, spawn_countdown_text, steal, tuning,
+    update_event_bus_time, world,
 };
 use bevy::{app::ScheduleRunnerPlugin, camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
@@ -208,6 +209,55 @@ fn level_allowed(
 #[derive(Resource, Clone)]
 struct TrainingDbPath(String);
 
+/// Print epilogue with database path and next steps (always called on exit)
+fn print_training_epilogue(db_path: &str, protocol: TrainingProtocol) {
+    use std::io::Write;
+
+    println!();
+    println!("════════════════════════════════════════════════════════════════════════════════");
+    println!("                              SESSION COMPLETE");
+    println!("════════════════════════════════════════════════════════════════════════════════");
+    println!();
+    println!("Database: {}", db_path);
+    println!();
+    println!("NEXT STEPS");
+    println!("──────────");
+    println!();
+    println!("► Analyze this session:");
+    println!("  cargo run --bin analyze -- --training-db {}", db_path);
+    println!();
+    println!("► Query events directly:");
+    println!(
+        "  sqlite3 {} \"SELECT event_type, COUNT(*) FROM events GROUP BY event_type;\"",
+        db_path
+    );
+    println!();
+
+    // Protocol-specific suggestions
+    match protocol {
+        TrainingProtocol::Reachability | TrainingProtocol::AutoReachability => {
+            println!("► Run offline analysis:");
+            println!("  ./offline_training/analyze_offline.sh");
+            println!();
+        }
+        TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => {
+            println!("► View pursuit metrics:");
+            println!(
+                "  sqlite3 {} \"SELECT * FROM events WHERE event_type = 'ai_goal_change';\"",
+                db_path
+            );
+            println!();
+        }
+        _ => {}
+    }
+
+    println!("════════════════════════════════════════════════════════════════════════════════");
+    println!();
+
+    // Ensure output is flushed before app exits
+    let _ = std::io::stdout().flush();
+}
+
 /// Create the SQLite event logger for training
 fn create_sqlite_logger() -> (SqliteEventLogger, String) {
     // Ensure db directory exists
@@ -335,14 +385,27 @@ fn main() {
     println!("  Controls:");
     println!("    A/D or Left Stick: Move");
     println!("    Space/W or South: Jump");
-    println!("    E or West: Pickup/Steal");
-    println!("    F or RB: Throw (hold to charge)");
-    println!("    P or Start: Pause/Resume");
-    println!("    Escape: Quit training session");
+    if settings.protocol.is_coop_mode() {
+        println!("    Q or LB: Pass to teammate");
+        println!("    F or RB: Throw (hold to charge)");
+    } else {
+        println!("    Q or LB: Pass/Steal/Pickup");
+        println!("    F or RB: Throw (hold to charge)");
+    }
+    println!("    E or West: Turbo");
+    println!("    ] or D-pad Right: Cycle character");
+    println!("    Down Arrow or D-pad Down: Restart level");
+    println!("    Left Arrow or D-pad Left: Next level");
+    println!("    Escape or Select: Quit (shows analysis)");
     println!();
-    match settings.mode {
-        TrainingMode::Goal => println!("  Score a goal to complete each iteration."),
-        TrainingMode::Game => println!("  First to {} points wins each game.", settings.win_score),
+    if settings.protocol.is_coop_mode() {
+        println!("  Practice passing with your AI teammate.");
+        println!("  Press Q/LB to pass - teammate will catch and pass back.");
+    } else {
+        match settings.mode {
+            TrainingMode::Goal => println!("  Score a goal to complete each iteration."),
+            TrainingMode::Game => println!("  First to {} points wins each game.", settings.win_score),
+        }
     }
     println!("========================================");
     println!();
@@ -361,7 +424,10 @@ fn main() {
 
     // Create training state with settings
     // If profile list is provided, use first profile and set iterations to list length
-    let (initial_profile, iterations) = if let Some(ref profiles) = profile_list {
+    // For coop mode (TeamInteraction), always use CatchPartner profile
+    let (initial_profile, iterations) = if settings.protocol.is_coop_mode() {
+        ("CatchPartner".to_string(), settings.iterations)
+    } else if let Some(ref profiles) = profile_list {
         (profiles[0].clone(), profiles.len() as u32)
     } else {
         (settings.ai_profile.clone(), settings.iterations)
@@ -420,6 +486,27 @@ fn main() {
                         level_data.name.clone(),
                     ));
             }
+        }
+    } else if let Some(fixed_level_name) = settings.protocol.fixed_level() {
+        // Protocol specifies a fixed level (e.g., TeamInteraction, Pursuit)
+        if let Some((idx, level_data)) = level_db
+            .all()
+            .iter()
+            .enumerate()
+            .find(|(_, l)| l.name.to_lowercase() == fixed_level_name.to_lowercase())
+        {
+            training_state.current_level = (idx + 1) as u32;
+            training_state.current_level_name = level_data.name.clone();
+        } else {
+            eprintln!(
+                "Warning: Fixed level '{}' not found, using level 1",
+                fixed_level_name
+            );
+            training_state.current_level = 1;
+            training_state.current_level_name = level_db
+                .get(0)
+                .map(|l| l.name.clone())
+                .unwrap_or_else(|| "Level 1".to_string());
         }
     } else if let Some(ref level_selector) = settings.level {
         // Resolve level selector to number
@@ -584,6 +671,7 @@ fn main() {
         .insert_resource(SnapshotConfig::default())
         .init_resource::<TrainingEventBuffer>()
         .init_resource::<MatchCountdown>()
+        .init_resource::<SwapIndicatorState>()
         // Event bus resources
         .insert_resource(EventBus::new())
         .init_resource::<LevelChangeTracker>()
@@ -639,7 +727,13 @@ fn main() {
         .add_systems(
             Update,
             (
+                ai::swap_control,
+                update_ai_after_swap.after(ai::swap_control),
+                auto_swap_to_ball_carrier.after(update_ai_after_swap),
+                update_swap_indicators,
                 check_advance_level,
+                check_restart_level,
+                check_next_level,
                 emit_training_events,
                 update_training_hud,
                 flush_training_events_to_sqlite,
@@ -1106,6 +1200,24 @@ impl Default for TrainingEventBuffer {
 #[derive(Component)]
 pub struct TrainingHudText;
 
+/// Marker for swap indicator (red triangle shown when character is swapped to)
+#[derive(Component)]
+pub struct SwapIndicator;
+
+/// Resource tracking swap indicator state
+#[derive(Resource, Default)]
+pub struct SwapIndicatorState {
+    /// Entity that was just swapped to (shows indicator)
+    pub active_entity: Option<Entity>,
+    /// Timer for fade effect (starts at 3.0, counts down)
+    pub fade_timer: f32,
+    /// Previous human-controlled entity (to detect swaps)
+    pub previous_human: Option<Entity>,
+}
+
+const SWAP_INDICATOR_DURATION: f32 = 3.0;
+const SWAP_INDICATOR_COLOR: Color = Color::srgba(0.9, 0.2, 0.2, 1.0); // Red
+
 /// Setup the training game world
 fn training_setup(
     mut commands: Commands,
@@ -1118,6 +1230,8 @@ fn training_setup(
     mut current_level: ResMut<CurrentLevel>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
     sqlite_logger: Res<SqliteEventLogger>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     // Set current level from training state (convert level number to level ID)
     let level_id = level_db
@@ -1161,11 +1275,21 @@ fn training_setup(
                 .unwrap_or_default()
         });
 
-    // Find AI profile ID
-    let ai_profile_id = profile_db
-        .get_by_name(&training_state.ai_profile)
-        .map(|p| p.id.clone())
-        .unwrap_or_else(|| profile_db.default_profile().id.clone());
+    // Find AI profile ID - use CatchPartner for TeamInteraction, otherwise configured profile
+    let ai_profile_id = if training_settings.protocol.is_coop_mode() {
+        profile_db
+            .get_by_name("CatchPartner")
+            .map(|p| p.id.clone())
+            .unwrap_or_else(|| profile_db.default_profile().id.clone())
+    } else {
+        profile_db
+            .get_by_name(&training_state.ai_profile)
+            .map(|p| p.id.clone())
+            .unwrap_or_else(|| profile_db.default_profile().id.clone())
+    };
+
+    // For coop mode (TeamInteraction), both players are on the same team
+    let is_coop = training_settings.protocol.is_coop_mode();
 
     // Left player - HUMAN controlled
     let left_player = commands
@@ -1194,42 +1318,68 @@ fn training_setup(
             },
             AiNavState::default(),
             StealCooldown::default(),
+            TurboGauge::default(),
+            BlockState::default(),
             HumanControlled, // Mark as human controlled
         ))
         .id();
 
-    // Right player - AI controlled (or Idle for solo mode)
+    // Second player - AI controlled
+    // In coop mode: teammate on same team (L1), uses CatchPartner AI
+    // In solo mode: off-screen placeholder
+    // Otherwise: opponent on right team (R0)
     let ai_initial_goal = if training_settings.protocol.is_solo_mode() {
         AiGoal::Idle
+    } else if is_coop {
+        AiGoal::MoveToOpenSpot // CatchPartner starting goal
     } else {
         AiGoal::ChaseBall
     };
 
-    // Position AI off-screen in solo mode (still exists for entity queries)
-    let right_spawn = if training_settings.protocol.is_solo_mode() {
-        Vec3::new(ARENA_WIDTH + 500.0, 0.0, 0.0) // Off-screen right
+    let second_player_spawn = if training_settings.protocol.is_solo_mode() {
+        Vec3::new(ARENA_WIDTH + 500.0, 0.0, 0.0) // Off-screen
+    } else if is_coop {
+        PLAYER_SPAWN_RIGHT // Teammate spawns on right side of arena but same team
     } else {
         PLAYER_SPAWN_RIGHT
     };
 
+    let second_player_color = if is_coop {
+        initial_palette.left // Same team color
+    } else {
+        initial_palette.right
+    };
+
+    let second_player_team = if is_coop { Team::Left } else { Team::Right };
+    let second_player_char = if is_coop {
+        CharacterId::L1
+    } else {
+        CharacterId::R0
+    };
+    let second_player_target = if is_coop {
+        Basket::Right // Same target as human
+    } else {
+        Basket::Left
+    };
+
     let right_player = commands
         .spawn((
-            Sprite::from_color(initial_palette.right, PLAYER_SIZE),
-            Transform::from_translation(right_spawn),
+            Sprite::from_color(second_player_color, PLAYER_SIZE),
+            Transform::from_translation(second_player_spawn),
             Player,
             Velocity::default(),
             Grounded(false),
             CoyoteTimer::default(),
             JumpState::default(),
             Facing(-1.0),
-            Character(CharacterId::R0),
+            Character(second_player_char),
             ControlledBy(AI_SOURCE_ID_START),
         ))
         .insert((
             ChargingShot::default(),
-            TargetBasket(Basket::Left),
+            TargetBasket(second_player_target),
             Collider,
-            Team::Right,
+            second_player_team,
             InputState::default(),
             AiState {
                 current_goal: ai_initial_goal,
@@ -1238,6 +1388,8 @@ fn training_setup(
             },
             AiNavState::default(),
             StealCooldown::default(),
+            TurboGauge::default(),
+            BlockState::default(),
         ))
         .id();
 
@@ -1246,6 +1398,10 @@ fn training_setup(
     spawn_charge_gauge(&mut commands, right_player, -1.0); // Right player faces left
     spawn_steal_indicators(&mut commands, left_player, 1.0);
     spawn_steal_indicators(&mut commands, right_player, -1.0);
+
+    // Swap indicators (red triangle when character is swapped to)
+    spawn_swap_indicator(&mut commands, &mut meshes, &mut materials, left_player);
+    spawn_swap_indicator(&mut commands, &mut meshes, &mut materials, right_player);
 
     // Load ball textures
     let style_names = load_ball_style_names();
@@ -1344,29 +1500,30 @@ fn training_setup(
         initial_palette.platforms,
     );
 
-    // Baskets
+    // Baskets - skip if basket_height is 0 (e.g., Team Interaction level)
     let initial_level = level_db.get_by_id(&level_id);
-    let basket_y = initial_level
-        .map(|l| ARENA_FLOOR_Y + l.basket_height)
-        .unwrap_or(ARENA_FLOOR_Y + 400.0);
-    let basket_push_in = initial_level
-        .map(|l| l.basket_push_in)
-        .unwrap_or(BASKET_PUSH_IN);
-    let (left_basket_x, right_basket_x) = basket_x_from_offset(basket_push_in);
+    let basket_height = initial_level.map(|l| l.basket_height).unwrap_or(400.0);
 
-    let rim_outer_height = BASKET_SIZE.y * 0.5;
-    let rim_inner_height = BASKET_SIZE.y * 0.1;
-    let rim_outer_y = -BASKET_SIZE.y / 2.0 + rim_outer_height / 2.0;
-    let rim_inner_y = -BASKET_SIZE.y / 2.0 + rim_inner_height / 2.0;
-    let rim_bottom_width = BASKET_SIZE.x + RIM_THICKNESS;
+    if basket_height > 0.0 {
+        let basket_y = ARENA_FLOOR_Y + basket_height;
+        let basket_push_in = initial_level
+            .map(|l| l.basket_push_in)
+            .unwrap_or(BASKET_PUSH_IN);
+        let (left_basket_x, right_basket_x) = basket_x_from_offset(basket_push_in);
 
-    // Left basket
-    commands
-        .spawn((
-            Sprite::from_color(initial_palette.left, BASKET_SIZE),
-            Transform::from_xyz(left_basket_x, basket_y, -0.1),
-            Basket::Left,
-        ))
+        let rim_outer_height = BASKET_SIZE.y * 0.5;
+        let rim_inner_height = BASKET_SIZE.y * 0.1;
+        let rim_outer_y = -BASKET_SIZE.y / 2.0 + rim_outer_height / 2.0;
+        let rim_inner_y = -BASKET_SIZE.y / 2.0 + rim_inner_height / 2.0;
+        let rim_bottom_width = BASKET_SIZE.x + RIM_THICKNESS;
+
+        // Left basket
+        commands
+            .spawn((
+                Sprite::from_color(initial_palette.left, BASKET_SIZE),
+                Transform::from_xyz(left_basket_x, basket_y, -0.1),
+                Basket::Left,
+            ))
         .with_children(|parent| {
             parent.spawn((
                 Sprite::from_color(
@@ -1433,6 +1590,7 @@ fn training_setup(
                 BasketRim,
             ));
         });
+    }
 
     // Corner ramps
     let initial_step_count = initial_level
@@ -1948,6 +2106,7 @@ fn training_state_machine(
                 }
             }
 
+            print_training_epilogue(&db_path.0, training_state.protocol);
             app_exit.write(AppExit::Success);
         }
     }
@@ -2570,9 +2729,134 @@ fn check_advance_level(
     }
 }
 
+/// Check for D-pad Down to restart current level
+fn check_restart_level(
+    mut input: ResMut<PlayerInput>,
+    mut training_state: ResMut<TrainingState>,
+    mut score: ResMut<Score>,
+    mut players: Query<(&mut Transform, &Team), With<Player>>,
+    mut balls: Query<(&mut Transform, &mut BallState, &mut Velocity), (With<Ball>, Without<Player>)>,
+) {
+    if !input.restart_level_pressed {
+        return;
+    }
+    input.restart_level_pressed = false;
+
+    // Only restart during playing phase
+    if training_state.phase != TrainingPhase::Playing
+        && training_state.phase != TrainingPhase::WaitingToStart
+    {
+        return;
+    }
+
+    println!("\n[RESTART] Resetting level...");
+
+    // Reset score
+    score.left = 0;
+    score.right = 0;
+
+    // Reset game timer
+    training_state.game_elapsed = 0.0;
+    training_state.phase = TrainingPhase::WaitingToStart;
+
+    // Reset player positions
+    for (mut transform, team) in &mut players {
+        match team {
+            Team::Left => transform.translation = PLAYER_SPAWN_LEFT,
+            Team::Right => transform.translation = PLAYER_SPAWN_RIGHT,
+        }
+    }
+
+    // Reset ball
+    for (mut transform, mut ball_state, mut velocity) in &mut balls {
+        transform.translation = BALL_SPAWN;
+        *ball_state = BallState::Free;
+        velocity.0 = Vec2::ZERO;
+    }
+}
+
+/// Check for D-pad Left to advance to next level
+fn check_next_level(
+    mut input: ResMut<PlayerInput>,
+    mut training_state: ResMut<TrainingState>,
+    mut score: ResMut<Score>,
+    level_db: Res<LevelDatabase>,
+    mut current_level: ResMut<CurrentLevel>,
+    settings: Res<TrainingSettings>,
+    allowed_levels: Res<AllowedTrainingLevels>,
+    mut players: Query<(&mut Transform, &Team), With<Player>>,
+    mut balls: Query<(&mut Transform, &mut BallState, &mut Velocity), (With<Ball>, Without<Player>)>,
+) {
+    if !input.next_level_pressed {
+        return;
+    }
+    input.next_level_pressed = false;
+
+    // Only advance during playing phase
+    if training_state.phase != TrainingPhase::Playing
+        && training_state.phase != TrainingPhase::WaitingToStart
+    {
+        return;
+    }
+
+    // Skip for protocols that iterate all levels (they use check_advance_level instead)
+    if training_state.protocol.iterates_all_levels() {
+        return;
+    }
+
+    // Find current level index and advance to next
+    let current_idx = (training_state.current_level as usize).saturating_sub(1);
+    let levels: Vec<_> = level_db
+        .all()
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| {
+            !l.debug
+                && !l.regression
+                && level_allowed(&l.name, &settings, allowed_levels.0.as_deref())
+        })
+        .collect();
+
+    // Find next level in the filtered list
+    let next_idx = levels
+        .iter()
+        .position(|(idx, _)| *idx > current_idx)
+        .unwrap_or(0); // Wrap around to first level
+
+    if let Some((new_idx, level_data)) = levels.get(next_idx) {
+        training_state.current_level = (*new_idx + 1) as u32;
+        training_state.current_level_name = level_data.name.clone();
+        current_level.0 = level_data.id.clone();
+
+        println!("\n[NEXT LEVEL] {}", level_data.name);
+
+        // Reset score and timer
+        score.left = 0;
+        score.right = 0;
+        training_state.game_elapsed = 0.0;
+        training_state.phase = TrainingPhase::WaitingToStart;
+
+        // Reset player positions
+        for (mut transform, team) in &mut players {
+            match team {
+                Team::Left => transform.translation = PLAYER_SPAWN_LEFT,
+                Team::Right => transform.translation = PLAYER_SPAWN_RIGHT,
+            }
+        }
+
+        // Reset ball
+        for (mut transform, mut ball_state, mut velocity) in &mut balls {
+            transform.translation = BALL_SPAWN;
+            *ball_state = BallState::Free;
+            velocity.0 = Vec2::ZERO;
+        }
+    }
+}
+
 /// Check for escape key to quit
 fn check_escape_quit(
     keyboard: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
     mut app_exit: MessageWriter<AppExit>,
     mut training_state: ResMut<TrainingState>,
     score: Res<Score>,
@@ -2580,8 +2864,14 @@ fn check_escape_quit(
     sqlite_logger: Res<SqliteEventLogger>,
     db_path: Res<TrainingDbPath>,
 ) {
-    if keyboard.just_pressed(KeyCode::Escape) {
-        println!("\nTraining session cancelled by user.");
+    // Escape key or Select/Back button on controller
+    let quit_pressed = keyboard.just_pressed(KeyCode::Escape)
+        || gamepads
+            .iter()
+            .any(|gp| gp.just_pressed(GamepadButton::Select));
+
+    if quit_pressed {
+        println!("\nTraining session ended.");
 
         // Export reachability heatmap if sufficient exploration time (for Reachability protocol)
         if let Some(collector) = training_state.reachability_collector.take() {
@@ -2626,6 +2916,7 @@ fn check_escape_quit(
             print_session_summary(&training_state, &db_path.0);
         }
 
+        print_training_epilogue(&db_path.0, training_state.protocol);
         app_exit.write(AppExit::Success);
     }
 }
@@ -2633,7 +2924,7 @@ fn check_escape_quit(
 /// Check for Start button to pause/unpause or restart
 fn check_pause_restart(
     mut commands: Commands,
-    keyboard: Res<ButtonInput<KeyCode>>,
+    _keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut training_state: ResMut<TrainingState>,
     mut score: ResMut<Score>,
@@ -2651,11 +2942,10 @@ fn check_pause_restart(
     >,
     sqlite_logger: Res<SqliteEventLogger>,
 ) {
-    // Check for Start button (keyboard P or gamepad Start)
-    let start_pressed = keyboard.just_pressed(KeyCode::KeyP)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::Start));
+    // Check for Start button (gamepad Start)
+    let start_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::Start));
 
     if !start_pressed {
         return;
@@ -2797,3 +3087,181 @@ fn check_pause_restart(
         training_state.game_number, training_state.games_total, training_state.current_level_name
     );
 }
+
+// =============================================================================
+// SWAP INDICATOR
+// =============================================================================
+
+/// Spawn swap indicator as child of player entity
+fn spawn_swap_indicator(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+    player_entity: Entity,
+) {
+    // Red inverted triangle using a 3-sided polygon, rotated 180 degrees (pointing down)
+    let triangle_mesh = meshes.add(RegularPolygon::new(10.0, 3));
+    let triangle_material = materials.add(ColorMaterial::from_color(SWAP_INDICATOR_COLOR));
+
+    let indicator = commands
+        .spawn((
+            Mesh2d(triangle_mesh),
+            MeshMaterial2d(triangle_material),
+            // Rotate 180 degrees to point downward (inverted triangle)
+            Transform::from_xyz(0.0, PLAYER_SIZE.y / 2.0 + 20.0, 0.5)
+                .with_rotation(Quat::from_rotation_z(std::f32::consts::PI)),
+            Visibility::Hidden,
+            SwapIndicator,
+        ))
+        .id();
+    commands.entity(player_entity).add_child(indicator);
+}
+
+/// Update swap indicators - detect character swaps and manage fade
+fn update_swap_indicators(
+    time: Res<Time>,
+    mut swap_state: ResMut<SwapIndicatorState>,
+    human_query: Query<Entity, (With<Player>, With<HumanControlled>)>,
+    player_query: Query<&Children, With<Player>>,
+    mut indicator_query: Query<(&mut Visibility, &MeshMaterial2d<ColorMaterial>), With<SwapIndicator>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    // Detect current human-controlled entity
+    let current_human = human_query.iter().next();
+
+    // Check if human control changed (swap occurred)
+    if current_human != swap_state.previous_human {
+        if let Some(entity) = current_human {
+            // New swap - activate indicator on this entity
+            swap_state.active_entity = Some(entity);
+            swap_state.fade_timer = SWAP_INDICATOR_DURATION;
+        }
+        swap_state.previous_human = current_human;
+    }
+
+    // Update fade timer
+    if swap_state.fade_timer > 0.0 {
+        swap_state.fade_timer -= time.delta_secs();
+    }
+
+    // Update indicator visibility and opacity for all players
+    for children in &player_query {
+        for child in children.iter() {
+            if let Ok((mut visibility, material_handle)) = indicator_query.get_mut(child) {
+                // Check if this indicator's parent is the active entity
+                let is_active = swap_state.active_entity.map_or(false, |active| {
+                    player_query.get(active).map_or(false, |active_children| {
+                        active_children.iter().any(|c| c == child)
+                    })
+                });
+
+                if is_active && swap_state.fade_timer > 0.0 {
+                    *visibility = Visibility::Inherited;
+                    // Fade alpha from 1.0 to 0.0 over duration
+                    let alpha = (swap_state.fade_timer / SWAP_INDICATOR_DURATION).clamp(0.0, 1.0);
+                    if let Some(material) = materials.get_mut(&material_handle.0) {
+                        material.color = Color::srgba(0.9, 0.2, 0.2, alpha);
+                    }
+                } else {
+                    *visibility = Visibility::Hidden;
+                }
+            }
+        }
+    }
+}
+
+/// Update AI goals after swap - ensure CatchPartner behavior for non-human players in coop mode
+fn update_ai_after_swap(
+    training_settings: Res<TrainingSettings>,
+    mut players: Query<(Entity, &mut AiState, Option<&HumanControlled>), With<Player>>,
+    profile_db: Res<AiProfileDatabase>,
+) {
+    // Only applies to coop mode (TeamInteraction)
+    if !training_settings.protocol.is_coop_mode() {
+        return;
+    }
+
+    // Get CatchPartner profile ID
+    let catch_partner_id = profile_db
+        .get_by_name("CatchPartner")
+        .map(|p| p.id.clone())
+        .unwrap_or_else(|| profile_db.default_profile().id.clone());
+
+    for (_entity, mut ai_state, human_opt) in &mut players {
+        if human_opt.is_some() {
+            // Human-controlled: set to Idle so AI doesn't interfere
+            if ai_state.current_goal != AiGoal::Idle {
+                ai_state.current_goal = AiGoal::Idle;
+            }
+        } else {
+            // AI-controlled: ensure CatchPartner behavior
+            if ai_state.profile_id != catch_partner_id {
+                ai_state.profile_id = catch_partner_id.clone();
+            }
+            // Set appropriate goal based on ball state
+            // The AI decision system will handle goal transitions, but we ensure
+            // catch_partner_mode is enabled via profile
+            if ai_state.current_goal == AiGoal::Idle {
+                ai_state.current_goal = AiGoal::MoveToOpenSpot;
+            }
+        }
+    }
+}
+
+/// Auto-swap control to pass receiver in coop mode
+/// When a teammate catches a pass, control automatically transfers to them
+/// so the human always controls the ball carrier after passing
+fn auto_swap_to_ball_carrier(
+    mut commands: Commands,
+    training_settings: Res<TrainingSettings>,
+    mut swap_indicator_state: ResMut<SwapIndicatorState>,
+    pass_receivers: Query<Entity, With<ball::JustReceivedPass>>,
+    mut all_players: Query<(Entity, Option<&HumanControlled>), With<Player>>,
+) {
+    // Only applies to coop mode (TeamInteraction)
+    if !training_settings.protocol.is_coop_mode() {
+        return;
+    }
+
+    // Check if any player has the JustReceivedPass marker
+    for receiver in &pass_receivers {
+        // Remove the marker so it doesn't trigger again
+        commands.entity(receiver).remove::<ball::JustReceivedPass>();
+
+        info!("PASS RECEIVED: Entity {:?} caught pass", receiver);
+
+        // Check if this receiver is already human-controlled
+        let already_human = all_players
+            .get(receiver)
+            .map(|(_, h)| h.is_some())
+            .unwrap_or(false);
+
+        if already_human {
+            // Already controlling the pass receiver, no swap needed
+            info!("  -> Already human-controlled, no swap needed");
+            continue;
+        }
+
+        // Swap control: remove HumanControlled from current holder, add to receiver
+        for (entity, human_opt) in &mut all_players {
+            if human_opt.is_some() && entity != receiver {
+                commands.entity(entity).remove::<HumanControlled>();
+                info!("  -> Removing HumanControlled from {:?}", entity);
+            }
+        }
+
+        // Add HumanControlled to the pass receiver
+        commands.entity(receiver).insert(HumanControlled);
+
+        // Update swap indicator state
+        swap_indicator_state.active_entity = Some(receiver);
+        swap_indicator_state.fade_timer = SWAP_INDICATOR_DURATION;
+        swap_indicator_state.previous_human = Some(receiver);
+
+        info!("AUTO-SWAP: Control transferred to pass receiver {:?}", receiver);
+
+        // Only handle one swap per frame
+        break;
+    }
+}
+

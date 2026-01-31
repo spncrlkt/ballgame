@@ -19,62 +19,14 @@ pub struct TweakPanel;
 #[derive(Component)]
 pub struct TweakRow(pub usize);
 
-/// Toggle tweak panel visibility and handle input
+/// Toggle tweak panel visibility and handle input (dev tool - no keyboard shortcuts)
 pub fn toggle_tweak_panel(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut tweaks: ResMut<PhysicsTweaks>,
-    mut panel_state: ResMut<TweakPanelState>,
-    mut panel_query: Query<&mut Visibility, With<TweakPanel>>,
+    _keyboard: Res<ButtonInput<KeyCode>>,
+    _tweaks: ResMut<PhysicsTweaks>,
+    _panel_state: ResMut<TweakPanelState>,
+    _panel_query: Query<&mut Visibility, With<TweakPanel>>,
 ) {
-    // F1 toggles panel visibility
-    if keyboard.just_pressed(KeyCode::F1) {
-        panel_state.panel_visible = !panel_state.panel_visible;
-        if let Ok(mut visibility) = panel_query.single_mut() {
-            *visibility = if panel_state.panel_visible {
-                Visibility::Inherited
-            } else {
-                Visibility::Hidden
-            };
-        }
-    }
-
-    // Only process input when panel is visible
-    if !panel_state.panel_visible {
-        return;
-    }
-
-    let num_params = PhysicsTweaks::LABELS.len();
-
-    // Up/Down to select parameter
-    if keyboard.just_pressed(KeyCode::ArrowUp) {
-        panel_state.selected_index = (panel_state.selected_index + num_params - 1) % num_params;
-    }
-    if keyboard.just_pressed(KeyCode::ArrowDown) {
-        panel_state.selected_index = (panel_state.selected_index + 1) % num_params;
-    }
-
-    // Left/Right to adjust value (10% increments)
-    let idx = panel_state.selected_index;
-    let step = tweaks.get_step(idx);
-    if keyboard.just_pressed(KeyCode::ArrowLeft) {
-        let current = tweaks.get_value(idx);
-        tweaks.set_value(idx, (current - step).max(0.01));
-    }
-    if keyboard.just_pressed(KeyCode::ArrowRight) {
-        let current = tweaks.get_value(idx);
-        tweaks.set_value(idx, current + step);
-    }
-
-    // R to reset selected parameter to default
-    if keyboard.just_pressed(KeyCode::KeyR) {
-        if keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight) {
-            // Shift+R resets ALL parameters
-            tweaks.reset_all();
-        } else {
-            // R resets just the selected parameter
-            tweaks.reset_value(idx);
-        }
-    }
+    // Keyboard shortcuts removed - tweak panel disabled for controller-only gameplay
 }
 
 /// Update tweak panel display

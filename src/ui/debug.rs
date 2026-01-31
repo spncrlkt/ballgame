@@ -199,23 +199,13 @@ impl ViewportScale {
 #[derive(Component)]
 pub struct DebugText;
 
-/// Toggle debug UI visibility (Tab only) - CycleIndicator is always visible
+/// Toggle debug UI visibility (no keyboard shortcut - controlled via settings)
 pub fn toggle_debug(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut settings: ResMut<DebugSettings>,
-    mut text_query: Query<&mut Visibility, With<DebugText>>,
+    _keyboard: Res<ButtonInput<KeyCode>>,
+    _settings: ResMut<DebugSettings>,
+    _text_query: Query<&mut Visibility, With<DebugText>>,
 ) {
-    if keyboard.just_pressed(KeyCode::Tab) {
-        settings.visible = !settings.visible;
-        let new_visibility = if settings.visible {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
-        if let Ok(mut visibility) = text_query.single_mut() {
-            *visibility = new_visibility;
-        }
-    }
+    // Keyboard shortcuts removed - debug visibility controlled via settings
 }
 
 /// Update debug text display
@@ -264,16 +254,13 @@ pub fn update_debug_text(
     }
 }
 
-/// Cycle through viewport scale presets (V key only - controller uses unified cycle)
+/// Cycle through viewport scale presets (controller uses unified cycle system)
 pub fn cycle_viewport(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut viewport_scale: ResMut<ViewportScale>,
-    mut window_query: Query<&mut Window>,
+    _keyboard: Res<ButtonInput<KeyCode>>,
+    _viewport_scale: ResMut<ViewportScale>,
+    _window_query: Query<&mut Window>,
 ) {
-    if keyboard.just_pressed(KeyCode::KeyV) {
-        viewport_scale.cycle_next();
-        apply_viewport(&viewport_scale, &mut window_query);
-    }
+    // Keyboard shortcuts removed - viewport cycling via controller unified cycle system only
 }
 
 /// Apply current viewport scale to window (camera uses FixedVertical scaling mode)

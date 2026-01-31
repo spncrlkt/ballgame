@@ -9,11 +9,11 @@ use crate::ball::{Ball, BallState, Velocity};
 use crate::events::{CharacterId, EventBus, GameEvent};
 use crate::player::{Character, HoldingBall, Player, Team};
 
-/// Pass power (lower than shot for shorter, quicker passes)
-pub const PASS_POWER: f32 = 400.0;
+/// Pass power - needs to travel full court distance quickly
+pub const PASS_POWER: f32 = 850.0;
 
-/// Pass arc angle (degrees) - slightly upward for lob
-pub const PASS_ARC_ANGLE: f32 = 25.0;
+/// Pass arc angle (degrees) - flatter for faster delivery
+pub const PASS_ARC_ANGLE: f32 = 15.0;
 
 /// Handle pass input - pass ball to teammate
 /// Runs in FixedUpdate, checks for pass_pressed input

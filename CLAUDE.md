@@ -290,8 +290,8 @@ See `docs/guides/BINARIES.md` for complete reference with all flags and examples
 Keyboard + Gamepad supported with **modal input** (controls change based on ball possession):
 
 **Modal Input Mapping:**
-| Context | LB / Q | RB / F | X / E | A / Space |
-|---------|--------|--------|-------|-----------|
+| Context | LB / Q | RB / F / E | X / Shift | A / Space |
+|---------|--------|------------|-----------|-----------|
 | Holding ball | Pass | Shoot | Turbo | Jump |
 | Teammate has ball | Steal | Block | Turbo | Jump |
 | Opponent has ball | Steal | Block | Turbo | Jump |
@@ -300,9 +300,9 @@ Keyboard + Gamepad supported with **modal input** (controls change based on ball
 **Core Controls:**
 - A/D or Left Stick: Horizontal movement
 - Space/W or South button: Jump
-- E or West button: Turbo (speed boost, drains gauge)
+- Shift or West button: Turbo (speed boost, drains gauge)
 - Q or Left Bumper: Pass (with ball) / Steal (without) / Pickup (free ball)
-- F or Right Bumper: Throw (with ball) / Block (without)
+- E or F or Right Bumper: Throw (with ball) / Block (without) / Pickup (free ball)
 - R or Start: Reset current level
 - ] key or D-pad Right: Cycle character / Next level
 - [ key: Previous level (keyboard only)

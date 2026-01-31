@@ -6,9 +6,15 @@ use rand::Rng;
 use crate::ai::{InputState, decision::defender_in_shot_path};
 use crate::ball::components::*;
 use crate::constants::*;
-use crate::player::{BlockState, Facing, HoldingBall, Player, Team, Velocity};
+use crate::events::{EventBus, GameEvent};
+use crate::player::{BlockState, Character, Facing, HoldingBall, Player, Team, Velocity};
 use crate::shooting::ChargingShot;
 use crate::steal::{StealContest, StealCooldown, StealTracker};
+
+/// Marker component for player who just received a pass (for auto-swap detection)
+/// Removed after one frame by consuming systems
+#[derive(Component)]
+pub struct JustReceivedPass;
 
 /// Handle ball-player collision physics
 pub fn ball_player_collision(
@@ -423,16 +429,17 @@ pub struct BlockInterceptTracker {
 /// Runs in FixedUpdate after block_intercept.
 pub fn pass_completion(
     mut commands: Commands,
+    mut event_bus: ResMut<EventBus>,
     mut ball_query: Query<(Entity, &Transform, &mut BallState, &Sprite), With<Ball>>,
     player_query: Query<
-        (Entity, &Transform, &Sprite, Option<&HoldingBall>),
+        (Entity, &Transform, &Sprite, Option<&HoldingBall>, Option<&Character>),
         With<Player>,
     >,
 ) {
     for (ball_entity, ball_transform, mut ball_state, ball_sprite) in &mut ball_query {
         // Only check balls that are in PassInFlight state
-        let target_entity = match *ball_state {
-            BallState::PassInFlight { target, .. } => target,
+        let (passer_entity, target_entity) = match *ball_state {
+            BallState::PassInFlight { passer, target } => (passer, target),
             _ => continue,
         };
 
@@ -440,7 +447,7 @@ pub fn pass_completion(
         let ball_size = ball_sprite.custom_size.unwrap_or(BALL_SIZE);
         let ball_half = ball_size / 2.0;
 
-        for (player_entity, player_transform, player_sprite, holding) in &player_query {
+        for (player_entity, player_transform, player_sprite, holding, character) in &player_query {
             // Skip if already holding a ball
             if holding.is_some() {
                 continue;
@@ -465,7 +472,18 @@ pub fn pass_completion(
                 *ball_state = BallState::Held(player_entity);
                 commands
                     .entity(player_entity)
-                    .insert(HoldingBall(ball_entity));
+                    .insert((HoldingBall(ball_entity), JustReceivedPass));
+
+                // Emit PassCompleted event
+                let receiver_char = character.map(|c| c.0);
+                let passer_char = player_query
+                    .get(passer_entity)
+                    .ok()
+                    .and_then(|(_, _, _, _, c)| c.map(|ch| ch.0));
+
+                if let (Some(passer), Some(receiver)) = (passer_char, receiver_char) {
+                    event_bus.emit(GameEvent::PassCompleted { passer, receiver });
+                }
 
                 info!("PASS COMPLETED: Player {:?} received pass", player_entity);
 

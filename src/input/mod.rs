@@ -76,12 +76,14 @@ pub struct PlayerInput {
     pub pass_pressed: bool,          // L shoulder - pass to teammate (context: holding ball)
     pub block_pressed: bool,         // R shoulder - block (context: not holding ball)
     pub turbo_held: bool,            // West button held - turbo speed boost
+    pub restart_level_pressed: bool, // D-pad Down - restart current level (training)
+    pub next_level_pressed: bool,    // D-pad Left - advance to next level (training)
 }
 
 /// Runs in Update to capture input state before it's cleared.
 /// Also emits ControllerInput events to the EventBus for auditability.
 pub fn capture_input(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    _keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut input: ResMut<PlayerInput>,
     panel_state: Res<TweakPanelState>,
@@ -96,13 +98,6 @@ pub fn capture_input(
     // Horizontal movement (continuous - overwrite each frame)
     let mut move_x = 0.0;
 
-    if keyboard.pressed(KeyCode::KeyA) || keyboard.pressed(KeyCode::ArrowLeft) {
-        move_x -= 1.0;
-    }
-    if keyboard.pressed(KeyCode::KeyD) || keyboard.pressed(KeyCode::ArrowRight) {
-        move_x += 1.0;
-    }
-
     for gamepad in &gamepads {
         if let Some(stick_x) = gamepad.get(GamepadAxis::LeftStickX) {
             if stick_x.abs() > STICK_DEADZONE {
@@ -114,17 +109,11 @@ pub fn capture_input(
     input.move_x = move_x.clamp(-1.0, 1.0);
 
     // Jump button state
-    let jump_pressed = keyboard.just_pressed(KeyCode::Space)
-        || keyboard.just_pressed(KeyCode::KeyW)
-        || keyboard.just_pressed(KeyCode::ArrowUp)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::South));
+    let jump_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::South));
 
-    input.jump_held = keyboard.pressed(KeyCode::Space)
-        || keyboard.pressed(KeyCode::KeyW)
-        || keyboard.pressed(KeyCode::ArrowUp)
-        || gamepads.iter().any(|gp| gp.pressed(GamepadButton::South));
+    input.jump_held = gamepads.iter().any(|gp| gp.pressed(GamepadButton::South));
 
     // Jump buffering - reset timer on press, count down otherwise
     if jump_pressed {
@@ -133,20 +122,14 @@ pub fn capture_input(
         input.jump_buffer_timer = (input.jump_buffer_timer - time.delta_secs()).max(0.0);
     }
 
-    // Pickup (West button / E key) - accumulate until consumed
-    let pickup_just_pressed = keyboard.just_pressed(KeyCode::KeyE)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::West));
-    if pickup_just_pressed {
-        input.pickup_pressed = true;
-    }
+    // Track pickup presses this frame for event emission
+    // (pickup_pressed is accumulated from LB and RB)
+    let mut pickup_just_pressed = false;
 
-    // Throw (R shoulder / F key)
-    let throw_held_now = keyboard.pressed(KeyCode::KeyF)
-        || gamepads
-            .iter()
-            .any(|gp| gp.pressed(GamepadButton::RightTrigger));
+    // Throw (R shoulder)
+    let throw_held_now = gamepads
+        .iter()
+        .any(|gp| gp.pressed(GamepadButton::RightTrigger));
 
     // Accumulate throw_released until consumed (like jump buffering)
     let throw_just_released = input.throw_held && !throw_held_now;
@@ -155,42 +138,61 @@ pub fn capture_input(
     }
     input.throw_held = throw_held_now;
 
-    // Swap control (L shoulder / Q key) - accumulate until consumed
+    // Pass/Pickup/Steal (L shoulder) - modal based on context
+    // - Holding ball: triggers pass
+    // - Near free ball: triggers pickup
+    // - Otherwise: triggers steal attempt
     // Also triggers advance_level for Reachability protocol
-    if keyboard.just_pressed(KeyCode::KeyQ)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::LeftTrigger))
-    {
-        input.swap_pressed = true;
-        input.advance_level_pressed = true;
-    }
-
-    // Pass (East button / G key) - pass to teammate in 2v2 mode
-    // Accumulate until consumed
-    if keyboard.just_pressed(KeyCode::KeyG)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::East))
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::LeftTrigger))
     {
         input.pass_pressed = true;
+        input.pickup_pressed = true; // Both LB and RB can pickup
+        input.advance_level_pressed = true;
+        pickup_just_pressed = true;
     }
 
-    // Turbo (Shift key / West button held) - speed boost
+    // Turbo (West button held) - speed boost
     // Continuous state, not buffered
-    input.turbo_held = keyboard.pressed(KeyCode::ShiftLeft)
-        || keyboard.pressed(KeyCode::ShiftRight)
-        || gamepads.iter().any(|gp| gp.pressed(GamepadButton::West));
+    input.turbo_held = gamepads.iter().any(|gp| gp.pressed(GamepadButton::West));
 
-    // Block (B key / RB when not throwing) - defensive interception
-    // This is a press, not hold - accumulate until consumed
+    // Block/Pickup (RB when not throwing) - modal
+    // - Not holding ball + near free ball: pickup
+    // - Not holding ball + defending: block
     // Note: RB is shared with throw, modal logic determines which action to take
-    let block_just_pressed = keyboard.just_pressed(KeyCode::KeyB)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::RightTrigger));
+    let block_just_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::RightTrigger));
     if block_just_pressed {
         input.block_pressed = true;
+        input.pickup_pressed = true; // RB also triggers pickup
+        pickup_just_pressed = true;
+    }
+
+    // D-pad controls for training mode
+    // D-pad Down: Restart level
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadDown))
+    {
+        input.restart_level_pressed = true;
+    }
+
+    // D-pad Left: Next level
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadLeft))
+    {
+        input.next_level_pressed = true;
+    }
+
+    // D-pad Right: Cycle character (training mode)
+    if gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadRight))
+    {
+        input.swap_pressed = true;
     }
 
     // Emit ControllerInput event to EventBus for auditability

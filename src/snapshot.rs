@@ -343,55 +343,35 @@ pub fn snapshot_trigger_system(
     }
 }
 
-/// Toggle snapshot system on/off with F2 key
+/// Toggle snapshot system on/off (dev tool - no keyboard shortcut)
 pub fn toggle_snapshot_system(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut config: ResMut<SnapshotConfig>,
+    _keyboard: Res<ButtonInput<KeyCode>>,
+    _config: ResMut<SnapshotConfig>,
 ) {
-    if keyboard.just_pressed(KeyCode::F2) {
-        config.enabled = !config.enabled;
-        info!(
-            "Snapshot system: {}",
-            if config.enabled {
-                "ENABLED"
-            } else {
-                "DISABLED"
-            }
-        );
-    }
+    // Keyboard shortcuts removed - snapshot system controlled via config only
 }
 
-/// Toggle screenshot capture (keep JSON, disable images)
+/// Toggle screenshot capture (dev tool - no keyboard shortcut)
 pub fn toggle_screenshot_capture(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut config: ResMut<SnapshotConfig>,
+    _keyboard: Res<ButtonInput<KeyCode>>,
+    _config: ResMut<SnapshotConfig>,
 ) {
-    if keyboard.just_pressed(KeyCode::F3) {
-        config.save_screenshots = !config.save_screenshots;
-        info!(
-            "Screenshot capture: {}",
-            if config.save_screenshots {
-                "ENABLED"
-            } else {
-                "DISABLED (JSON only)"
-            }
-        );
-    }
+    // Keyboard shortcuts removed - screenshot capture controlled via config only
 }
 
-/// Manual snapshot trigger (F4 key)
+/// Manual snapshot trigger (dev tool - no keyboard shortcut)
 #[allow(clippy::too_many_arguments)]
 pub fn manual_snapshot(
-    mut commands: Commands,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    config: Res<SnapshotConfig>,
-    trigger_state: Res<SnapshotTriggerState>,
-    score: Res<Score>,
-    current_level: Res<CurrentLevel>,
-    current_palette: Res<CurrentPalette>,
-    last_shot: Res<LastShotInfo>,
-    ball_query: Query<(&Transform, &Velocity, &BallState), With<Ball>>,
-    player_query: Query<
+    _commands: Commands,
+    _keyboard: Res<ButtonInput<KeyCode>>,
+    _config: Res<SnapshotConfig>,
+    _trigger_state: Res<SnapshotTriggerState>,
+    _score: Res<Score>,
+    _current_level: Res<CurrentLevel>,
+    _current_palette: Res<CurrentPalette>,
+    _last_shot: Res<LastShotInfo>,
+    _ball_query: Query<(&Transform, &Velocity, &BallState), With<Ball>>,
+    _player_query: Query<
         (
             &Transform,
             &Velocity,
@@ -404,106 +384,6 @@ pub fn manual_snapshot(
         With<Player>,
     >,
 ) {
-    if !keyboard.just_pressed(KeyCode::F4) {
-        return;
-    }
-
-    let timestamp = Local::now().format("%Y%m%d_%H%M%S_%3f").to_string();
-    let frame = trigger_state.frame_count;
-    let trigger_name = "manual";
-
-    // Ensure snapshot directory exists
-    if let Err(e) = fs::create_dir_all(SNAPSHOT_DIR) {
-        error!("Failed to create snapshot directory: {}", e);
-        return;
-    }
-
-    // Build snapshot data (same as trigger system)
-    let ball_snapshot = ball_query
-        .iter()
-        .next()
-        .map(|(transform, velocity, state)| BallSnapshot {
-            position: (transform.translation.x, transform.translation.y),
-            velocity: (velocity.0.x, velocity.0.y),
-            state: format!("{:?}", state),
-            holder_team: None,
-        });
-
-    let players: Vec<PlayerSnapshot> = player_query
-        .iter()
-        .map(
-            |(transform, velocity, team, human, holding, ai_state, character)| PlayerSnapshot {
-                character_id: character.map(|c| format!("{:?}", c.0)),
-                team: format!("{:?}", team),
-                position: (transform.translation.x, transform.translation.y),
-                velocity: (velocity.0.x, velocity.0.y),
-                is_human: human.is_some(),
-                holding_ball: holding.is_some(),
-                ai_goal: if human.is_none() {
-                    Some(format!("{:?}", ai_state.current_goal))
-                } else {
-                    None
-                },
-            },
-        )
-        .collect();
-
-    let shot_snapshot = if last_shot.target.is_some() {
-        Some(ShotSnapshot {
-            angle_degrees: last_shot.angle_degrees,
-            speed: last_shot.speed,
-            total_variance: last_shot.total_variance,
-            target: last_shot.target.map(|b| match b {
-                Basket::Left => "Left".to_string(),
-                Basket::Right => "Right".to_string(),
-            }),
-        })
-    } else {
-        None
-    };
-
-    let screenshot_filename = format!("{}_{}.png", timestamp, trigger_name);
-    let screenshot_path = if config.save_screenshots {
-        Some(format!("{}/{}", SNAPSHOT_DIR, screenshot_filename))
-    } else {
-        None
-    };
-
-    let snapshot = GameSnapshot {
-        timestamp: timestamp.clone(),
-        frame,
-        trigger: trigger_name.to_string(),
-        score: ScoreSnapshot {
-            left: score.left,
-            right: score.right,
-        },
-        level_id: current_level.0.clone(),
-        palette: current_palette.0,
-        ball: ball_snapshot,
-        players,
-        last_shot: shot_snapshot,
-        screenshot_path: screenshot_path.clone(),
-    };
-
-    // Save JSON
-    let json_path = format!("{}/{}_{}.json", SNAPSHOT_DIR, timestamp, trigger_name);
-    match serde_json::to_string_pretty(&snapshot) {
-        Ok(json) => {
-            if let Err(e) = fs::write(&json_path, json) {
-                error!("Failed to write snapshot JSON: {}", e);
-            } else {
-                info!("Manual snapshot saved: {}", json_path);
-            }
-        }
-        Err(e) => error!("Failed to serialize snapshot: {}", e),
-    }
-
-    // Trigger screenshot capture (if enabled)
-    if config.save_screenshots {
-        let path = PathBuf::from(format!("{}/{}", SNAPSHOT_DIR, screenshot_filename));
-        commands
-            .spawn(Screenshot::primary_window())
-            .observe(save_to_disk(path));
-        info!("Screenshot queued: {}", screenshot_filename);
-    }
+    // Keyboard shortcuts removed - manual snapshots disabled
+    // Use automatic event-based snapshots instead
 }

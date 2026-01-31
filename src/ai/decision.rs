@@ -1506,8 +1506,8 @@ pub fn ai_decision_update(
                     // Hold the ball, count up timer, then pass back to teammate
                     ai_state.hold_and_pass_timer += dt;
 
-                    // After 3 seconds, pass to teammate
-                    if ai_state.hold_and_pass_timer >= 3.0 {
+                    // After 0.5 seconds, pass to teammate (quick responsive passes)
+                    if ai_state.hold_and_pass_timer >= 0.5 {
                         input.pass_pressed = true;
                         ai_state.hold_and_pass_timer = 0.0;
                     }
