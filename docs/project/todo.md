@@ -3,6 +3,8 @@
 *See `milestones.md` for full plan | `ideas.md` for notes*
 
 ---
+## immediate todos:
+- [ ] reachability heatmap code / training analysis -- are we finished?
 
 ## P0: Bug Fixes
 
