@@ -8,6 +8,7 @@ use rusqlite::{Connection, OptionalExtension, Result, params};
 use std::path::Path;
 
 use super::metrics::{MatchResult, PlayerStats};
+use crate::db_schema;
 use crate::events::{GameEvent, parse_event, serialize_event};
 use crate::replay::{MatchInfo, ReplayData, TickFrame, TimedEvent};
 
@@ -79,206 +80,14 @@ impl SimDatabase {
 
     /// Initialize the database schema
     fn init_schema(&self) -> Result<()> {
-        self.conn.execute_batch(
-            r#"
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                created_at TEXT NOT NULL,
-                session_type TEXT NOT NULL,
-                config_json TEXT,
-                display_name TEXT,
-                run_started_at TEXT,
-                run_finished_at TEXT,
-                run_elapsed_secs REAL,
-                matches_planned INTEGER,
-                matches_played INTEGER,
-                duration_limit_secs REAL,
-                stalemate_timeout_secs REAL,
-                parallel_threads INTEGER,
-                run_timeout_secs REAL,
-                mode TEXT,
-                profiles_count INTEGER,
-                levels_count INTEGER,
-                matches_per_pair INTEGER,
-                matches_per_level INTEGER
-            );
+        // Use shared schema definitions
+        db_schema::init_simulation_schema(&self.conn)?;
 
-            CREATE TABLE IF NOT EXISTS matches (
-                id INTEGER PRIMARY KEY,
-                session_id TEXT REFERENCES sessions(id),
-                display_name TEXT,
-                seed INTEGER NOT NULL,
-                level INTEGER NOT NULL,
-                level_name TEXT NOT NULL,
-                left_profile TEXT NOT NULL,
-                right_profile TEXT NOT NULL,
-                score_left INTEGER NOT NULL,
-                score_right INTEGER NOT NULL,
-                duration_secs REAL NOT NULL,
-                winner TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS points (
-                id INTEGER PRIMARY KEY,
-                match_id INTEGER REFERENCES matches(id),
-                point_index INTEGER NOT NULL,
-                start_time_ms INTEGER NOT NULL,
-                end_time_ms INTEGER,
-                winner TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS player_stats (
-                id INTEGER PRIMARY KEY,
-                match_id INTEGER REFERENCES matches(id),
-                side TEXT NOT NULL,
-                goals INTEGER NOT NULL,
-                shots_attempted INTEGER NOT NULL,
-                shots_made INTEGER NOT NULL,
-                steals_attempted INTEGER NOT NULL,
-                steals_successful INTEGER NOT NULL,
-                possession_time REAL NOT NULL,
-                distance_traveled REAL NOT NULL,
-                jumps INTEGER NOT NULL,
-                nav_paths_completed INTEGER NOT NULL,
-                nav_paths_failed INTEGER NOT NULL,
-                avg_shot_x REAL NOT NULL DEFAULT 0.0,
-                avg_shot_y REAL NOT NULL DEFAULT 0.0,
-                avg_shot_quality REAL NOT NULL DEFAULT 0.0
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_matches_session ON matches(session_id);
-            CREATE INDEX IF NOT EXISTS idx_matches_profiles ON matches(left_profile, right_profile);
-            CREATE INDEX IF NOT EXISTS idx_matches_level ON matches(level);
-            CREATE INDEX IF NOT EXISTS idx_player_stats_match ON player_stats(match_id);
-
-            -- Event bus events table for full auditability
-            CREATE TABLE IF NOT EXISTS events (
-                id INTEGER PRIMARY KEY,
-                match_id INTEGER REFERENCES matches(id),
-                point_id INTEGER REFERENCES points(id),
-                time_ms INTEGER NOT NULL,
-                event_type TEXT NOT NULL,
-                data TEXT NOT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_events_match ON events(match_id);
-            CREATE INDEX IF NOT EXISTS idx_events_point ON events(point_id);
-            CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
-            CREATE INDEX IF NOT EXISTS idx_events_time ON events(match_id, time_ms);
-            CREATE INDEX IF NOT EXISTS idx_points_match ON points(match_id);
-
-            -- Bracket tournament tables
-            CREATE TABLE IF NOT EXISTS bracket_tournaments (
-                id INTEGER PRIMARY KEY,
-                session_id TEXT REFERENCES sessions(id),
-                format_best_of INTEGER NOT NULL,
-                format_score_limit INTEGER NOT NULL,
-                format_duration_limit REAL NOT NULL,
-                seeding_method TEXT NOT NULL,
-                entrant_count INTEGER NOT NULL,
-                champion_profile TEXT,
-                is_complete INTEGER NOT NULL DEFAULT 0
-            );
-
-            CREATE TABLE IF NOT EXISTS bracket_entries (
-                id INTEGER PRIMARY KEY,
-                tournament_id INTEGER REFERENCES bracket_tournaments(id),
-                entry_index INTEGER NOT NULL,
-                profile_name TEXT NOT NULL,
-                seed INTEGER NOT NULL,
-                final_placement INTEGER,
-                match_wins INTEGER DEFAULT 0,
-                match_losses INTEGER DEFAULT 0,
-                game_wins INTEGER DEFAULT 0,
-                game_losses INTEGER DEFAULT 0
-            );
-
-            CREATE TABLE IF NOT EXISTS bracket_matches (
-                id INTEGER PRIMARY KEY,
-                tournament_id INTEGER REFERENCES bracket_tournaments(id),
-                bracket_match_id INTEGER NOT NULL,
-                side TEXT NOT NULL,
-                round INTEGER NOT NULL,
-                match_in_round INTEGER NOT NULL,
-                player1_entry_idx INTEGER,
-                player2_entry_idx INTEGER,
-                player1_wins INTEGER,
-                player2_wins INTEGER,
-                winner_idx INTEGER
-            );
-
-            CREATE TABLE IF NOT EXISTS bracket_games (
-                id INTEGER PRIMARY KEY,
-                bracket_match_id INTEGER REFERENCES bracket_matches(id),
-                game_index INTEGER NOT NULL,
-                match_id INTEGER REFERENCES matches(id),
-                level INTEGER NOT NULL,
-                level_name TEXT NOT NULL,
-                player1_score INTEGER NOT NULL,
-                player2_score INTEGER NOT NULL,
-                winner INTEGER NOT NULL,
-                duration_secs REAL NOT NULL,
-                seed INTEGER NOT NULL
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_bracket_tournaments_session ON bracket_tournaments(session_id);
-            CREATE INDEX IF NOT EXISTS idx_bracket_entries_tournament ON bracket_entries(tournament_id);
-            CREATE INDEX IF NOT EXISTS idx_bracket_matches_tournament ON bracket_matches(tournament_id);
-            CREATE INDEX IF NOT EXISTS idx_bracket_games_match ON bracket_games(bracket_match_id);
-            "#,
-        )?;
+        // Migration: add columns to existing tables if they don't exist
+        // These handle upgrading databases created before schema consolidation
         let _ = self
             .conn
             .execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN run_started_at TEXT", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN run_finished_at TEXT", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN run_elapsed_secs REAL", []);
-        let _ = self.conn.execute(
-            "ALTER TABLE sessions ADD COLUMN matches_planned INTEGER",
-            [],
-        );
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN matches_played INTEGER", []);
-        let _ = self.conn.execute(
-            "ALTER TABLE sessions ADD COLUMN duration_limit_secs REAL",
-            [],
-        );
-        let _ = self.conn.execute(
-            "ALTER TABLE sessions ADD COLUMN stalemate_timeout_secs REAL",
-            [],
-        );
-        let _ = self.conn.execute(
-            "ALTER TABLE sessions ADD COLUMN parallel_threads INTEGER",
-            [],
-        );
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN run_timeout_secs REAL", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN mode TEXT", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN profiles_count INTEGER", []);
-        let _ = self
-            .conn
-            .execute("ALTER TABLE sessions ADD COLUMN levels_count INTEGER", []);
-        let _ = self.conn.execute(
-            "ALTER TABLE sessions ADD COLUMN matches_per_pair INTEGER",
-            [],
-        );
-        let _ = self.conn.execute(
-            "ALTER TABLE sessions ADD COLUMN matches_per_level INTEGER",
-            [],
-        );
         let _ = self
             .conn
             .execute("ALTER TABLE matches ADD COLUMN display_name TEXT", []);

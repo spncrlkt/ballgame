@@ -7,6 +7,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use super::state::{TrainingState, Winner};
+use crate::generated_assets;
 use crate::run_summary::{FileCategory, FileEntry, NextStep, RunSummary};
 
 /// Session summary for JSON output
@@ -92,7 +93,10 @@ impl SessionSummary {
 
 /// Ensure session directory exists
 pub fn ensure_session_dir(state: &TrainingState) -> std::io::Result<()> {
-    fs::create_dir_all(&state.session_dir)
+    fs::create_dir_all(&state.session_dir)?;
+    // Record in generated assets tracker
+    generated_assets::record_training_session(&state.session_dir.display().to_string());
+    Ok(())
 }
 
 /// Write session summary to file

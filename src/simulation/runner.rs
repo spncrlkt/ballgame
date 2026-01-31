@@ -33,6 +33,7 @@ use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge
 use crate::steal::{StealContest, StealCooldown, StealTracker, steal_cooldown_update};
 use crate::tuning::{self, PhysicsTweaks};
 use crate::world::Basket;
+use crate::{db_paths, generated_assets};
 
 use super::config::SimConfig;
 use super::control::{SimControl, SimEventBuffer};
@@ -702,19 +703,21 @@ pub fn run_simulation(config: SimConfig) {
             config
                 .db_path
                 .clone()
-                .unwrap_or_else(|| "db/sim.db".to_string()),
+                .unwrap_or_else(|| db_paths::default_path(db_paths::DbType::Training)),
         )
     } else {
         match &config.mode {
             super::config::SimMode::Tournament { .. } => {
-                std::fs::create_dir_all("db").ok();
-                let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-                Some(format!("db/tournament_{}.db", timestamp))
+                db_paths::ensure_dir().ok();
+                let path = db_paths::timestamped(db_paths::DbType::Tournament);
+                generated_assets::record_database("tournament", &path);
+                Some(path)
             }
             super::config::SimMode::Bracket { .. } => {
-                std::fs::create_dir_all("db").ok();
-                let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-                Some(format!("db/bracket_{}.db", timestamp))
+                db_paths::ensure_dir().ok();
+                let path = db_paths::timestamped(db_paths::DbType::Bracket);
+                generated_assets::record_database("bracket", &path);
+                Some(path)
             }
             _ => config.db_path.clone(),
         }
@@ -1106,13 +1109,16 @@ pub fn run_simulation(config: SimConfig) {
             }
 
             // Export rankings file
-            let rankings_path = std::path::Path::new("config/tournament_rankings.txt");
+            let rankings_path = std::path::Path::new("sim_profiles/tournament_rankings.txt");
             if let Err(e) =
                 export_tournament_rankings(&tournament, rankings_path, *matches_per_pair)
             {
                 eprintln!("Warning: Failed to export rankings: {}", e);
-            } else if !config.quiet {
-                println!("Rankings exported to {}", rankings_path.display());
+            } else {
+                if !config.quiet {
+                    println!("Rankings exported to {}", rankings_path.display());
+                }
+                generated_assets::record_rankings("tournament");
             }
 
             // Print summary
@@ -1892,8 +1898,11 @@ fn run_bracket_tournament(
         if let Err(e) = export_bracket_rankings(&bracket, rankings_path, best_of, game_score_limit)
         {
             eprintln!("Warning: Failed to export rankings: {}", e);
-        } else if !config.quiet {
-            println!("Rankings exported to {}", rankings_path.display());
+        } else {
+            if !config.quiet {
+                println!("Rankings exported to {}", rankings_path.display());
+            }
+            generated_assets::record_rankings("bracket");
         }
 
         // Print summary

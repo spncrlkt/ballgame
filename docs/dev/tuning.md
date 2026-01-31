@@ -111,4 +111,4 @@ Outputs
 - Use `notes/analysis_runs/` to store summary and audit reports.
 - If the top 3 variants are close, run pairwise audits between them.
 - The automation script generates heatmaps once at the start of the full tournament sweep; pass `--skip-heatmaps` when you explicitly want to reuse existing heatmaps.
-- Training debug analysis: `cargo run --bin analyze -- --training-db db/training.db` writes reports + derived grids to `training_logs/session_<timestamp>/analysis` (uses the symlink target for `training.db`).
+- Training debug analysis: `cargo run --bin analyze -- --training-db $(ls -t db/training_*.db | head -1)` writes reports + derived grids to `training_logs/session_<timestamp>/analysis`.

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Generate a heatmap from training database position data."""
+"""Generate a heatmap from training database position data.
+
+Usage:
+    python3 scripts/heatmap_from_db.py db/training_YYYYMMDD_HHMMSS.db
+    python3 scripts/heatmap_from_db.py $(ls -t db/training_*.db | head -1)
+"""
 
 import sqlite3
 import sys
@@ -150,7 +155,11 @@ def render_png_heatmap(grid, positions, output_path):
     return True
 
 def main():
-    db_path = sys.argv[1] if len(sys.argv) > 1 else "db/training.db"
+    if len(sys.argv) < 2:
+        print("Usage: python3 scripts/heatmap_from_db.py <db_path> [match_id]")
+        print("  Example: python3 scripts/heatmap_from_db.py $(ls -t db/training_*.db | head -1)")
+        sys.exit(1)
+    db_path = sys.argv[1]
     match_id = int(sys.argv[2]) if len(sys.argv) > 2 else None
 
     print(f"Loading positions from {db_path}...")

@@ -31,8 +31,8 @@ python tools/offline/check_offline_training.py
 # Merge multiple training databases
 python tools/offline/merge_training_dbs.py db1.db db2.db --output merged.db
 
-# Calculate training time
-python tools/offline/calc_training_minutes.py db/training.db
+# Calculate training time (use most recent or specify path)
+python tools/offline/calc_training_minutes.py $(ls -t db/training_*.db | head -1)
 ```
 
 ## Variant Tournaments

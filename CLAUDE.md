@@ -360,7 +360,7 @@ cargo run --bin training -- -p Aggressive   # Specific AI profile
 
 **Output:**
 ```
-db/training.db                           # SQLite database with all events
+db/training_YYYYMMDD_HHMMSS.db           # SQLite database with all events (timestamped)
 training_logs/
 └── session_20260123_143022/
     ├── summary.json
@@ -368,9 +368,9 @@ training_logs/
     └── analysis_request_YYYYMMDD_HHMM.md  # AI review prompt
 ```
 
-**SQLite Analysis:** All events are stored in `db/training.db`. Query directly with:
+**SQLite Analysis:** All events are stored in timestamped databases (`db/training_*.db`). Query the most recent:
 ```bash
-sqlite3 db/training.db "SELECT event_type, COUNT(*) FROM events GROUP BY event_type;"
+sqlite3 db/training_*.db "SELECT event_type, COUNT(*) FROM events GROUP BY event_type;"
 ```
 
 See `docs/guides/TRAINING.md` for full SQL examples and analysis workflow.

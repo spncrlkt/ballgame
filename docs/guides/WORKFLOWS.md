@@ -40,21 +40,22 @@ cargo run --bin training -- -l 3                # Force level 3
 ```
 
 **Output:**
-- `db/training.db` - SQLite database with all events
+- `db/training_YYYYMMDD_HHMMSS.db` - SQLite database with all events (timestamped)
 - `training_logs/session_YYYYMMDD_HHMMSS/summary.json` - Session summary
 
 **Next step shown by binary:**
 ```
 NEXT STEPS
 ──────────
-→ cargo run --bin analyze -- --training-db db/training.db
+→ cargo run --bin analyze -- --training-db db/training_*.db
   Generate detailed analysis report
 ```
 
 ### Step 2: Analyze Session
 
 ```bash
-cargo run --bin analyze -- --training-db db/training.db
+# Use the most recent training database
+cargo run --bin analyze -- --training-db $(ls -t db/training_*.db | head -1)
 ```
 
 **Output:**
@@ -69,10 +70,10 @@ Based on analysis, either:
 
 ### SQL Analysis (Optional)
 
-Query the database directly:
+Query the database directly (use the most recent or specify path):
 
 ```bash
-sqlite3 db/training.db
+sqlite3 $(ls -t db/training_*.db | head -1)
 
 # Session summary
 SELECT s.id, s.session_type, s.created_at, COUNT(m.id) as matches
@@ -131,7 +132,7 @@ See `tools/offline/manual_todo.md` for:
 ### Step 3: Analyze Session
 
 ```bash
-cargo run --bin analyze -- --training-db db/training.db
+cargo run --bin analyze -- --training-db $(ls -t db/training_*.db | head -1)
 ```
 
 ### Step 4: Merge Multiple Sessions (Optional)
@@ -198,8 +199,9 @@ NEXT STEPS
 Extract drives from database instead of session directories:
 
 ```bash
-cargo run --bin extract-drives -- --db db/training.db
-cargo run --bin extract-drives -- --db db/training.db --session <session_id>
+# Use most recent training database
+cargo run --bin extract-drives -- --db $(ls -t db/training_*.db | head -1)
+cargo run --bin extract-drives -- --db db/training_YYYYMMDD_HHMMSS.db --session <session_id>
 ```
 
 **Status:** Binary exists but limited testing. May require specific database schema.
@@ -376,13 +378,14 @@ cargo run --bin training -- --protocol reachability -l "Open Floor"  # Start at 
 - Press LB/Q to advance to next level
 - Escape to quit
 
-**Output:** Position data in `db/training.db` (`debug_events` table)
+**Output:** Position data in timestamped `db/training_*.db` (`debug_events` table)
 
 ### Step 2: Export Reachability Data
 
 ```bash
-python3 scripts/export_reachability.py db/training.db
-python3 scripts/export_reachability.py db/training.db --min-samples 50  # Lower threshold
+# Use most recent training database
+python3 scripts/export_reachability.py $(ls -t db/training_*.db | head -1)
+python3 scripts/export_reachability.py db/training_YYYYMMDD_HHMMSS.db --min-samples 50
 ```
 
 **Output:** `showcase/heatmaps/heatmap_reachability_{level}_{id}.txt`
@@ -633,8 +636,9 @@ scripts/heatmap_svg.py            # SVG heatmap generation
 
 **Intended use:**
 ```bash
-cargo run --bin extract-drives -- --db db/training.db
-cargo run --bin extract-drives -- --db db/training.db --session <id>
+# Use most recent training database
+cargo run --bin extract-drives -- --db $(ls -t db/training_*.db | head -1)
+cargo run --bin extract-drives -- --db db/training_YYYYMMDD_HHMMSS.db --session <id>
 ```
 
 **To verify:** Test with actual training database.
@@ -645,7 +649,7 @@ cargo run --bin extract-drives -- --db db/training.db --session <id>
 
 | Workflow | Primary Output | Location |
 |----------|----------------|----------|
-| Training | SQLite events | `db/training.db` |
+| Training | SQLite events | `db/training_*.db` (timestamped) |
 | Training | Session summary | `training_logs/session_*/summary.json` |
 | Ghost | Trial results | Console output |
 | Tournament | Match results | `db/tournament_*.db` |
@@ -661,6 +665,6 @@ cargo run --bin extract-drives -- --db db/training.db --session <id>
 
 | Database | Created By | Purpose |
 |----------|------------|---------|
-| `db/training.db` | training binary | All training events |
+| `db/training_*.db` | training binary | All training events (timestamped) |
 | `db/tournament_*.db` | simulate --tournament | Tournament match results |
 | `db/bracket_*.db` | simulate --bracket | Bracket tournament results |

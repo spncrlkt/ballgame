@@ -38,6 +38,7 @@
 //! trained heatmaps (e.g., reachability from training sessions) are preserved.
 //! Use --clear-manual-trainings to also clear these.
 
+use ballgame::generated_assets;
 use ballgame::run_summary::{FileCategory, FileEntry, NextStep, RunSummary};
 use ballgame::tuning::{GAMEPLAY_TUNING_FILE, GameplayTuning, load_gameplay_tuning_from_file};
 use ballgame::{
@@ -503,6 +504,16 @@ fn main() {
         "cargo run --bin heatmap -- --full --level <name>",
         "Generate full bundle for a specific level",
     ));
+
+    // Record in generated assets tracker
+    let heatmap_type = match config.mode {
+        HeatmapMode::Single(HeatmapKind::Speed) => "speed",
+        HeatmapMode::Single(HeatmapKind::Score) => "score",
+        HeatmapMode::Single(HeatmapKind::Reachability) => "reachability",
+        HeatmapMode::Single(_) => "other",
+        HeatmapMode::Full => "speed", // Full generates all types
+    };
+    generated_assets::record_heatmaps(heatmap_type, eligible_levels.len() as u32);
 
     summary.print();
 }

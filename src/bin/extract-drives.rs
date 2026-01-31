@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use rusqlite::params;
 
 use ballgame::events::{CharacterId, GameEvent, parse_event};
+use ballgame::generated_assets;
 use ballgame::run_summary::{FileCategory, FileEntry, NextStep, RunSummary};
 use ballgame::simulation::SimDatabase;
 
@@ -491,6 +492,19 @@ fn main() {
         );
 
     if total_drives > 0 {
+        // Record in generated assets tracker
+        if let Some(last_ghost) = fs::read_dir(&output_dir)
+            .ok()
+            .and_then(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "ghost"))
+                    .max_by_key(|e| e.metadata().ok().and_then(|m| m.modified().ok()))
+            })
+        {
+            generated_assets::record_ghost_trial(&last_ghost.path().display().to_string());
+        }
+
         summary = summary
             .next_step(NextStep::primary(
                 format!("cargo run --bin run-ghost -- {}", output_dir.display()),

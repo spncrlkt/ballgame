@@ -6,6 +6,8 @@ use std::path::Path;
 use rusqlite::{Connection, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::db_paths;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisRequestFile {
     pub requests: Vec<AnalysisRequest>,
@@ -93,7 +95,11 @@ pub fn run_request(
     let db_path = db_override
         .and_then(|p| p.to_str().map(|s| s.to_string()))
         .or_else(|| request.db_path.clone())
-        .unwrap_or_else(|| "db/training.db".to_string());
+        .unwrap_or_else(|| {
+            // Try to find the most recent training database
+            db_paths::find_latest(db_paths::DbType::Training)
+                .unwrap_or_else(|| db_paths::default_path(db_paths::DbType::Training))
+        });
 
     let conn = Connection::open(Path::new(&db_path))?;
 

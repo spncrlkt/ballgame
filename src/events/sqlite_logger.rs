@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use super::debug::{DEBUG_TICK_MS, DebugSample, DebugSampleBuffer};
 use super::format::serialize_event;
 use super::types::GameEvent;
+use crate::db_schema;
 use crate::debug_logging::DebugLogConfig;
 
 /// Resource for logging events to SQLite
@@ -489,139 +490,11 @@ impl SqliteEventLogger {
 
 /// Initialize the database schema
 fn init_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
-    conn.execute_batch(
-        r#"
-        CREATE TABLE IF NOT EXISTS sessions (
-            id TEXT PRIMARY KEY,
-            created_at TEXT NOT NULL,
-            session_type TEXT NOT NULL,
-            config_json TEXT,
-            display_name TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS matches (
-            id INTEGER PRIMARY KEY,
-            session_id TEXT REFERENCES sessions(id),
-            display_name TEXT,
-            seed INTEGER NOT NULL,
-            level INTEGER NOT NULL,
-            level_name TEXT NOT NULL,
-            left_profile TEXT NOT NULL,
-            right_profile TEXT NOT NULL,
-            score_left INTEGER NOT NULL,
-            score_right INTEGER NOT NULL,
-            duration_secs REAL NOT NULL,
-            winner TEXT NOT NULL,
-            game_mode TEXT DEFAULT '1v1'
-        );
-
-        CREATE TABLE IF NOT EXISTS points (
-            id INTEGER PRIMARY KEY,
-            match_id INTEGER REFERENCES matches(id),
-            point_index INTEGER NOT NULL,
-            start_time_ms INTEGER NOT NULL,
-            end_time_ms INTEGER,
-            winner TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS player_stats (
-            id INTEGER PRIMARY KEY,
-            match_id INTEGER REFERENCES matches(id),
-            side TEXT NOT NULL,
-            goals INTEGER NOT NULL,
-            shots_attempted INTEGER NOT NULL,
-            shots_made INTEGER NOT NULL,
-            steals_attempted INTEGER NOT NULL,
-            steals_successful INTEGER NOT NULL,
-            possession_time REAL NOT NULL,
-            distance_traveled REAL NOT NULL,
-            jumps INTEGER NOT NULL,
-            nav_paths_completed INTEGER NOT NULL,
-            nav_paths_failed INTEGER NOT NULL,
-            avg_shot_x REAL NOT NULL DEFAULT 0.0,
-            avg_shot_y REAL NOT NULL DEFAULT 0.0,
-            avg_shot_quality REAL NOT NULL DEFAULT 0.0
-        );
-
-        -- Input sources for a match (keyboard, gamepads, AI)
-        CREATE TABLE IF NOT EXISTS input_sources (
-            id INTEGER PRIMARY KEY,
-            match_id INTEGER REFERENCES matches(id),
-            source_id INTEGER NOT NULL,
-            source_type TEXT NOT NULL,
-            source_detail TEXT,
-            UNIQUE(match_id, source_id)
-        );
-
-        -- Character assignments for a match (which characters exist and their initial controllers)
-        CREATE TABLE IF NOT EXISTS match_characters (
-            id INTEGER PRIMARY KEY,
-            match_id INTEGER REFERENCES matches(id),
-            character_id TEXT NOT NULL,
-            initial_source_id INTEGER,
-            ai_profile TEXT,
-            UNIQUE(match_id, character_id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_matches_session ON matches(session_id);
-        CREATE INDEX IF NOT EXISTS idx_matches_profiles ON matches(left_profile, right_profile);
-        CREATE INDEX IF NOT EXISTS idx_matches_level ON matches(level);
-        CREATE INDEX IF NOT EXISTS idx_matches_game_mode ON matches(game_mode);
-        CREATE INDEX IF NOT EXISTS idx_player_stats_match ON player_stats(match_id);
-        CREATE INDEX IF NOT EXISTS idx_input_sources_match ON input_sources(match_id);
-        CREATE INDEX IF NOT EXISTS idx_match_characters_match ON match_characters(match_id);
-
-        -- Event bus events table for full auditability
-        CREATE TABLE IF NOT EXISTS events (
-            id INTEGER PRIMARY KEY,
-            match_id INTEGER REFERENCES matches(id),
-            point_id INTEGER REFERENCES points(id),
-            time_ms INTEGER NOT NULL,
-            tick_frame INTEGER NOT NULL DEFAULT 0,
-            event_type TEXT NOT NULL,
-            data TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-
-        -- Debug sample table for manual reachability capture
-        CREATE TABLE IF NOT EXISTS debug_events (
-            id INTEGER PRIMARY KEY,
-            match_id INTEGER REFERENCES matches(id),
-            time_ms INTEGER NOT NULL,
-            tick_frame INTEGER NOT NULL,
-            player TEXT NOT NULL,
-            pos_x REAL NOT NULL,
-            pos_y REAL NOT NULL,
-            vel_x REAL NOT NULL,
-            vel_y REAL NOT NULL,
-            input_move_x REAL NOT NULL,
-            input_jump INTEGER NOT NULL,
-            grounded INTEGER NOT NULL,
-            is_jumping INTEGER NOT NULL,
-            coyote_timer REAL NOT NULL,
-            jump_buffer_timer REAL NOT NULL,
-            facing REAL NOT NULL,
-            nav_active INTEGER NOT NULL,
-            nav_path_index INTEGER NOT NULL,
-            nav_action TEXT,
-            level_id TEXT NOT NULL,
-            human_controlled INTEGER NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_events_match ON events(match_id);
-        CREATE INDEX IF NOT EXISTS idx_events_point ON events(point_id);
-        CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
-        CREATE INDEX IF NOT EXISTS idx_events_time ON events(match_id, time_ms);
-        CREATE INDEX IF NOT EXISTS idx_events_tick ON events(match_id, tick_frame);
-        CREATE INDEX IF NOT EXISTS idx_points_match ON points(match_id);
-        CREATE INDEX IF NOT EXISTS idx_debug_match ON debug_events(match_id);
-        CREATE INDEX IF NOT EXISTS idx_debug_time ON debug_events(match_id, time_ms);
-        CREATE INDEX IF NOT EXISTS idx_debug_tick ON debug_events(match_id, tick_frame);
-        "#,
-    )?;
+    // Use shared schema definitions
+    db_schema::init_training_schema(conn)?;
 
     // Migration: add columns to existing tables if they don't exist
+    // These handle upgrading databases created before schema consolidation
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);
     let _ = conn.execute("ALTER TABLE matches ADD COLUMN display_name TEXT", []);
     let _ = conn.execute("ALTER TABLE matches ADD COLUMN game_mode TEXT DEFAULT '1v1'", []);

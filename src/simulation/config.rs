@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::bracket::BracketSeedingConfig;
+use crate::db_paths;
 
 /// Simulation mode
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -315,10 +316,11 @@ impl SimConfig {
                 "--reachability-test" => {
                     // Default samples and db_path, can be overridden with --samples and --db
                     let samples = 50; // Default, will be overridden if --samples specified
-                    let db_path = config
-                        .db_path
-                        .clone()
-                        .unwrap_or_else(|| "db/training.db".to_string());
+                    let db_path = config.db_path.clone().unwrap_or_else(|| {
+                        // Try to find the most recent training database
+                        db_paths::find_latest(db_paths::DbType::Training)
+                            .unwrap_or_else(|| db_paths::default_path(db_paths::DbType::Training))
+                    });
                     config.mode = SimMode::ReachabilityTest { samples, db_path };
                 }
                 "--bracket" => {

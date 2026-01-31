@@ -323,14 +323,14 @@ Examples:
   # Standard usage (16 protected seeds, 48 variants = 64 total):
   python3 scripts/generate_bracket_profiles.py \\
     --db db/bracket_20260129_040643.db \\
-    --profiles config/ai_profiles_v12.txt \\
-    --output config/ai_profiles_v13.txt
+    --profiles sim_profiles/v12.txt \\
+    --output sim_profiles/v13.txt
 
   # More protected seeds, fewer variants:
   python3 scripts/generate_bracket_profiles.py \\
     --db db/bracket_20260129_040643.db \\
-    --profiles config/ai_profiles_v12.txt \\
-    --output config/ai_profiles_v13.txt \\
+    --profiles sim_profiles/v12.txt \\
+    --output sim_profiles/v13.txt \\
     --top-seeds 24 \\
     --variant-bases 4
 

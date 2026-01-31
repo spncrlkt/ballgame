@@ -7,8 +7,11 @@ pub mod analytics;
 pub mod config_watcher;
 pub mod constants;
 pub mod countdown;
+pub mod db_paths;
+pub mod db_schema;
 pub mod debug_logging;
 pub mod generate;
+pub mod generated_assets;
 pub use debug_logging::DebugLogConfig;
 pub mod events;
 pub mod helpers;
@@ -101,6 +104,9 @@ pub use ui::{
     TweakRow, ViewportScale, VulnerableIndicator,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
+
+// Re-export database path utilities
+pub use db_paths::{DbType, ensure_dir as ensure_db_dir, timestamped as timestamped_db_path};
 
 // =============================================================================
 // TRAJECTORY CALCULATION (shared with tools like heatmap generator)

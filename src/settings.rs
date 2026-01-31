@@ -33,6 +33,9 @@ pub struct InitSettings {
     pub down_option: String,
     /// Right menu sub-option
     pub right_option: String,
+    /// Enable debug logging
+    #[serde(default)]
+    pub debug_log_enabled: bool,
 }
 
 impl Default for InitSettings {
@@ -47,6 +50,7 @@ impl Default for InitSettings {
             active_direction: "Down".to_string(),
             down_option: "Composite".to_string(),
             right_option: "Level".to_string(),
+            debug_log_enabled: false,
         }
     }
 }

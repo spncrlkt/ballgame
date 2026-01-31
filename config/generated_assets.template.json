@@ -1,0 +1,34 @@
+{
+  "_comment": "Template for tracking generated assets. Copy to generated_assets.json (gitignored)",
+  "databases": {
+    "latest_training": null,
+    "latest_tournament": null,
+    "latest_bracket": null
+  },
+  "heatmaps": {
+    "speed": { "updated_at": null, "count": 0 },
+    "score": { "updated_at": null, "count": 0 },
+    "reachability": { "updated_at": null, "count": 0 }
+  },
+  "ball_textures": {
+    "updated_at": null,
+    "count": 0
+  },
+  "snapshots": {
+    "updated_at": null,
+    "latest": null,
+    "count": 0
+  },
+  "ghost_trials": {
+    "updated_at": null,
+    "latest": null,
+    "count": 0
+  },
+  "training_logs": {
+    "latest_session": null
+  },
+  "rankings": {
+    "tournament": null,
+    "bracket": null
+  }
+}

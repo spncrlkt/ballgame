@@ -46,7 +46,7 @@ This document describes all intended behaviors in the game, organized for intera
 | M2.3 | `-p, --profile X` flag | AI uses specified profile |
 | M2.4 | `-m, --mode` flag | `goal` (default) or `game` mode |
 | M2.5 | Iteration ends | Reset for next iteration (goal mode) or score update (game mode) |
-| M2.6 | Session ends | Events in SQLite (`db/training.db`), summary in `training_logs/session_*/` |
+| M2.6 | Session ends | Events in SQLite (`db/training_*.db`), summary in `training_logs/session_*/` |
 | M2.7 | Escape key | Quits training session early, still writes summary |
 
 ### 1.3 Replay Mode
@@ -578,7 +578,7 @@ Test AI defense against recorded human play.
 
 | ID | Behavior | Expected Outcome |
 |----|----------|------------------|
-| GH1.1 | Training records inputs | Each iteration stored in SQLite (`db/training.db`) |
+| GH1.1 | Training records inputs | Each iteration stored in SQLite (`db/training_*.db`) |
 | GH1.2 | Drives segmented by goals | Ball pickup to score = one drive |
 | GH1.3 | Level/profile captured | Match metadata stored with events |
 
@@ -613,7 +613,7 @@ All game events are stored in SQLite databases.
 
 | Database | Purpose |
 |----------|---------|
-| `db/training.db` | Training mode sessions and events |
+| `db/training_*.db` | Training mode sessions and events |
 | `db/simulation.db` | Headless simulation results |
 
 ### 14.2 Event Types

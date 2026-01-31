@@ -102,7 +102,7 @@ Cycle champions in order, wrapping after profile 10:
 
 Quit the session cleanly. Run debug analysis on the latest session:
 ```bash
-cargo run --bin analyze -- --training-db db/training.db
+cargo run --bin analyze -- --training-db $(ls -t db/training_*.db | head -1)
 ```
 
 ## End-of-hour wrap
@@ -170,7 +170,7 @@ Options:
 
 Example:
 ```bash
-cargo run --bin analyze -- --training-db db/training.db
+cargo run --bin analyze -- --training-db $(ls -t db/training_*.db | head -1)
 ```
 Options:
 - `--training-db <DB>`

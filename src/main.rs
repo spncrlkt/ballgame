@@ -25,8 +25,12 @@ use std::path::Path;
 
 /// Path to ball options file
 const BALL_OPTIONS_FILE: &str = "config/ball_options.txt";
-const DEFAULT_REPLAY_DB: &str = "db/training.db";
 const DEFAULT_REPLAY_TIMEOUT_SECS: f32 = 5.0;
+
+/// Get the default replay database path (finds the most recent training database)
+fn default_replay_db() -> Option<String> {
+    ballgame::db_paths::find_latest(ballgame::db_paths::DbType::Training)
+}
 
 /// Parse ball_options.txt to get list of style names
 fn load_ball_style_names() -> Vec<String> {
@@ -768,8 +772,11 @@ fn setup(
 /// Setup system for replay mode - loads replay data
 fn replay_load_file(mut commands: Commands, replay_mode: Res<replay::ReplayMode>) {
     let replay_result = if let Some(match_id) = replay_mode.match_id {
-        replay::load_replay_from_db(Path::new(DEFAULT_REPLAY_DB), match_id)
-            .map_err(|e| format!("Failed to load replay from DB match {}: {}", match_id, e))
+        // Find the most recent training database, or fall back to legacy path
+        let db_path = default_replay_db()
+            .unwrap_or_else(|| ballgame::db_paths::default_path(ballgame::db_paths::DbType::Training));
+        replay::load_replay_from_db(Path::new(&db_path), match_id)
+            .map_err(|e| format!("Failed to load replay from DB match {} ({}): {}", match_id, db_path, e))
     } else {
         Err("Replay mode active but no match ID specified".to_string())
     };

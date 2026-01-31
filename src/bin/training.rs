@@ -211,13 +211,14 @@ struct TrainingDbPath(String);
 /// Create the SQLite event logger for training
 fn create_sqlite_logger() -> (SqliteEventLogger, String) {
     // Ensure db directory exists
-    std::fs::create_dir_all("db").ok();
-    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let db_path_buf = format!("db/training_{}.db", timestamp);
+    ballgame::db_paths::ensure_dir().ok();
+    let db_path_buf = ballgame::db_paths::timestamped(ballgame::db_paths::DbType::Training);
     let db_path = std::path::Path::new(&db_path_buf);
     match SqliteEventLogger::new(db_path, "training") {
         Ok(logger) => {
             info!("SQLite event logger initialized: {:?}", db_path);
+            // Record in generated assets tracker
+            ballgame::generated_assets::record_database("training", &db_path_buf);
             (logger, db_path_buf)
         }
         Err(e) => {

@@ -26,3 +26,9 @@ training.db
 # Local settings (use templates for defaults)
 config/training_settings.json
 config/simulation_settings.json
+config/init_settings.json
+config/ai_profiles.txt
+config/generated_assets.json
+
+# Simulation/evolution working files
+sim_profiles/

@@ -6,6 +6,13 @@ Run this checklist after changes to:
 - `src/ai/`
 - `src/events/`
 
+**Note:** Training databases are now timestamped (`db/training_YYYYMMDD_HHMMSS.db`).
+In the examples below, replace `db/training.db` with your actual database path, or use:
+```bash
+DB=$(ls -t db/training_*.db 2>/dev/null | head -1)  # Most recent
+sqlite3 "$DB" "<query>"
+```
+
 ---
 
 ## Functional Tests

@@ -12,6 +12,7 @@ mkdir -p logs training_logs sim_logs db ghost_trials
 mkdir -p showcase/heatmaps showcase/heatmaps/overlays
 mkdir -p showcase/snapshots
 mkdir -p showcase/regression/baselines showcase/regression/current showcase/regression/diffs
+mkdir -p sim_profiles
 
 # 2. Copy config templates
 if [[ ! -f config/training_settings.json && -f config/training_settings.template.json ]]; then
@@ -22,6 +23,16 @@ fi
 if [[ ! -f config/simulation_settings.json && -f config/simulation_settings.template.json ]]; then
   cp config/simulation_settings.template.json config/simulation_settings.json
   echo "Created config/simulation_settings.json from template"
+fi
+
+if [[ ! -f config/ai_profiles.txt && -f config/ai_profiles.template.txt ]]; then
+  cp config/ai_profiles.template.txt config/ai_profiles.txt
+  echo "Created config/ai_profiles.txt from template"
+fi
+
+if [[ ! -f config/generated_assets.json && -f config/generated_assets.template.json ]]; then
+  cp config/generated_assets.template.json config/generated_assets.json
+  echo "Created config/generated_assets.json from template"
 fi
 
 # 3. Verify required config files exist

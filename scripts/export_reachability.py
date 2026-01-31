@@ -5,8 +5,9 @@ Reads position data from debug_events table in SQLite and generates
 heatmap CSV files for each level.
 
 Usage:
-    python3 scripts/export_reachability.py db/training.db
-    python3 scripts/export_reachability.py db/training.db --levels-file config/levels.txt
+    python3 scripts/export_reachability.py db/training_YYYYMMDD_HHMMSS.db
+    python3 scripts/export_reachability.py $(ls -t db/training_*.db | head -1)
+    python3 scripts/export_reachability.py db/training_*.db --levels-file config/levels.txt
 """
 
 from __future__ import annotations

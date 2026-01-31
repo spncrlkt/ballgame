@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 use crate::ai::AiState;
 use crate::ball::{Ball, BallState, CurrentPalette};
+use crate::generated_assets;
 use crate::player::{Character, HoldingBall, HumanControlled, Player, Team, Velocity};
 use crate::scoring::{CurrentLevel, Score};
 use crate::shooting::LastShotInfo;
@@ -309,6 +310,8 @@ pub fn snapshot_trigger_system(
                     error!("Failed to write snapshot JSON: {}", e);
                 } else {
                     info!("Snapshot saved: {}", json_path);
+                    // Record in generated assets tracker
+                    generated_assets::record_snapshot(&json_path);
                 }
             }
             Err(e) => error!("Failed to serialize snapshot: {}", e),

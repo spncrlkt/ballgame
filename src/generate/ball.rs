@@ -3,6 +3,7 @@
 //! Generates ball textures for all styles × all color palettes.
 //! Styles and palettes are read from config files (single source of truth).
 
+use crate::generated_assets;
 use image::{Rgba, RgbaImage};
 use std::collections::HashMap;
 use std::f32::consts::PI;
@@ -124,10 +125,11 @@ pub fn run() {
         }
     }
 
-    println!(
-        "\nGenerated {} ball textures.",
-        config.styles.len() * config.palettes.len()
-    );
+    let count = (config.styles.len() * config.palettes.len()) as u32;
+    println!("\nGenerated {} ball textures.", count);
+
+    // Record in generated assets tracker
+    generated_assets::record_ball_textures(count);
 }
 
 fn load_config(palettes: Vec<Palette>) -> BallConfig {

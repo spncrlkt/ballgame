@@ -71,7 +71,7 @@ CLI arguments override file settings.
 
 ## Output
 
-All events are stored in SQLite: `db/training.db`
+All events are stored in timestamped SQLite databases: `db/training_YYYYMMDD_HHMMSS.db`
 
 Session files saved to `training_logs/session_YYYYMMDD_HHMMSS/`:
 ```
@@ -124,11 +124,12 @@ Training Session → debug_events table → export script → heatmap .txt files
 1. **Collect data**: Run reachability training sessions
 2. **Check samples**: Query `debug_events` for coverage
    ```bash
-   sqlite3 db/training.db "SELECT level_id, COUNT(*) FROM debug_events WHERE human_controlled=1 GROUP BY level_id;"
+   # Use most recent training database
+   sqlite3 $(ls -t db/training_*.db | head -1) "SELECT level_id, COUNT(*) FROM debug_events WHERE human_controlled=1 GROUP BY level_id;"
    ```
 3. **Export heatmaps**: Generate `.txt` files for AI use
    ```bash
-   python3 scripts/export_reachability.py db/training.db
+   python3 scripts/export_reachability.py $(ls -t db/training_*.db | head -1)
    ```
 4. **Output**: `showcase/heatmaps/heatmap_reachability_{level}_{id}.txt`
 
@@ -149,15 +150,15 @@ ls db/training_*.db
 The export script requires 100+ samples per level by default:
 
 ```bash
-# Export with lower threshold
-python3 scripts/export_reachability.py db/training.db --min-samples 50
+# Export with lower threshold (use most recent or specify path)
+python3 scripts/export_reachability.py $(ls -t db/training_*.db | head -1) --min-samples 50
 ```
 
 ## SQL Analysis
 
-Open the database:
+Open the database (use most recent or specify path):
 ```bash
-sqlite3 db/training.db
+sqlite3 $(ls -t db/training_*.db | head -1)
 ```
 
 ### Session Summary
@@ -269,11 +270,11 @@ List all: check `config/ai_profiles.txt`
 
 ### Database locked
 ```bash
-# Check for processes using the database
-lsof db/training.db
+# Check for processes using a database (replace with actual path)
+lsof db/training_YYYYMMDD_HHMMSS.db
 
 # Force close connections (if needed)
-sqlite3 db/training.db "PRAGMA wal_checkpoint(TRUNCATE);"
+sqlite3 db/training_YYYYMMDD_HHMMSS.db "PRAGMA wal_checkpoint(TRUNCATE);"
 ```
 
 ### Missing events
@@ -281,7 +282,7 @@ Ensure `flush_events_to_sqlite` system is running in the training binary's Updat
 
 ### Schema mismatch
 If tables are missing columns, the database was created with an older schema. Either:
-1. Delete `db/training.db` and re-run training
+1. Delete the old database and re-run training (new timestamped DB will be created)
 2. Manually add columns with `ALTER TABLE`
 
 ## Post-Session Analysis
@@ -289,8 +290,8 @@ If tables are missing columns, the database was created with an older schema. Ei
 Each training iteration is a complete drive (you start with the ball). No extraction needed.
 
 ```bash
-# Training debug analysis
-cargo run --bin analyze -- --training-db db/training.db
+# Training debug analysis (use most recent database)
+cargo run --bin analyze -- --training-db $(ls -t db/training_*.db | head -1)
 ```
 
 Ask Claude Code to analyze the training session:

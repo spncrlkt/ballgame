@@ -2,10 +2,8 @@
 
 use bevy::prelude::Resource;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::Path;
 
-pub const DEBUG_LOG_SETTINGS_FILE: &str = "config/debug_logging.json";
+use crate::settings::InitSettings;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Resource)]
 pub struct DebugLogConfig {
@@ -20,13 +18,9 @@ impl Default for DebugLogConfig {
 
 impl DebugLogConfig {
     pub fn load() -> Self {
-        let path = Path::new(DEBUG_LOG_SETTINGS_FILE);
-        if !path.exists() {
-            return Self::default();
-        }
-        match fs::read_to_string(path) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
-            Err(_) => Self::default(),
+        let settings = InitSettings::load();
+        Self {
+            enabled: settings.debug_log_enabled,
         }
     }
 

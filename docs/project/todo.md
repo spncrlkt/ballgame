@@ -3,6 +3,21 @@
 *See `milestones.md` for full plan | `ideas.md` for notes*
 
 ---
+
+## Testing: DB Path & Generated Assets Consolidation
+
+Verify the new centralized db_paths and generated_assets modules work correctly:
+
+- [ ] **Training database timestamped** - Run `cargo run --bin training -- -n 1`, verify database created as `db/training_YYYYMMDD_HHMMSS.db`
+- [ ] **Tournament database timestamped** - Run `cargo run --bin simulate -- --tournament 1`, verify `db/tournament_YYYYMMDD_HHMMSS.db` created
+- [ ] **Bracket database timestamped** - Run `cargo run --bin simulate -- --bracket 4`, verify `db/bracket_YYYYMMDD_HHMMSS.db` created
+- [ ] **Generated assets tracking** - After running generators, check `config/generated_assets.json` is updated
+- [ ] **Replay mode finds latest** - Run training, then `cargo run -- --replay-db 1`, verify it finds the most recent training database
+- [ ] **Heatmap asset tracking** - Run `cargo run --bin heatmap -- --type speed --level Arena`, verify heatmaps recorded in generated_assets.json
+- [ ] **Ball texture tracking** - Run `cargo run --bin generate -- ball`, verify count recorded in generated_assets.json
+- [ ] **Snapshot tracking** - Run game, press F4, verify snapshot recorded in generated_assets.json
+
+---
 ## immediate todos:
 - [ ] reachability heatmap code / training analysis -- are we finished?
 
@@ -60,6 +75,13 @@
 
 ## Done (Last 5)
 
+- [x] **Database & Generated Assets Consolidation** - Central path management (2026-01-30)
+  - Created `src/db_paths.rs` - Central database path module (DbType enum, timestamped paths, find_latest)
+  - Created `src/db_schema.rs` - Shared schema definitions (CORE_SCHEMA, TRAINING_SCHEMA, BRACKET_SCHEMA)
+  - Created `src/generated_assets.rs` - Asset tracking module with record_* functions
+  - Updated all binaries to use timestamped database paths (training, simulate, main)
+  - Added asset recording to generators (snapshots, ball textures, heatmaps, ghost trials, rankings)
+  - Updated all documentation to reflect timestamped database pattern
 - [x] **2v2 Readiness & Test Coverage** - Full implementation (2026-01-30)
   - Added 86 new unit tests (145 total, up from 62)
   - CharacterId, format round-trip, analytics parser, assertions, SQLite logger tests

@@ -164,8 +164,8 @@ Analyze simulation results and generate reports.
 
 ```bash
 cargo run --bin analyze -- --help
-cargo run --bin analyze -- db/training.db
-cargo run --bin analyze -- --training-db db/training_*.db
+cargo run --bin analyze -- db/training_YYYYMMDD_HHMMSS.db  # Specific database
+cargo run --bin analyze -- --training-db $(ls -t db/training_*.db | head -1)  # Most recent
 cargo run --bin analyze -- --bracket --bracket-db db/bracket_*.db
 cargo run --bin analyze -- --event-audit db/baseline.db db/current.db
 ```
@@ -344,9 +344,10 @@ The shell script uses `--freeze-countdown` to keep physics frozen during capture
 Extract player input sequences as "drives" from SQLite event logs.
 
 ```bash
-cargo run --bin extract-drives -- --db db/training.db
-cargo run --bin extract-drives -- --db db/training.db --session <SESSION_ID>
-cargo run --bin extract-drives -- --db db/training.db --match <MATCH_ID> --output ghost_trials/
+# Use most recent training database
+cargo run --bin extract-drives -- --db $(ls -t db/training_*.db | head -1)
+cargo run --bin extract-drives -- --db db/training_YYYYMMDD_HHMMSS.db --session <SESSION_ID>
+cargo run --bin extract-drives -- --db db/training_YYYYMMDD_HHMMSS.db --match <MATCH_ID> --output ghost_trials/
 ```
 
 ### Flags
@@ -426,10 +427,10 @@ CLI arguments always override file settings.
 | `db/tournament_*.db` | `simulate --tournament` | Tournament match results |
 | `db/bracket_*.db` | `simulate --bracket` | Bracket tournament results |
 
-Query databases directly with SQLite:
+Query databases directly with SQLite (use most recent or specify path):
 
 ```bash
-sqlite3 db/training.db "SELECT event_type, COUNT(*) FROM events GROUP BY event_type;"
+sqlite3 $(ls -t db/training_*.db | head -1) "SELECT event_type, COUNT(*) FROM events GROUP BY event_type;"
 ```
 
 See [TRAINING.md](TRAINING.md) for SQL query examples.
