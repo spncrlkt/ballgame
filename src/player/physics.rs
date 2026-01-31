@@ -402,12 +402,17 @@ pub fn respawn_player(
             commands.entity(ball_entity).despawn();
         }
 
-        let is_debug = level_db
-            .get_by_id(&current_level.0)
-            .map(|l| l.debug)
-            .unwrap_or(false);
+        let level_data = level_db.get_by_id(&current_level.0);
+        let is_debug = level_data.map(|l| l.debug).unwrap_or(false);
+        let ball_start = level_data.and_then(|l| l.ball_start);
 
-        spawn_balls(&mut commands, &ball_textures, current_palette.0, is_debug);
+        spawn_balls(
+            &mut commands,
+            &ball_textures,
+            current_palette.0,
+            is_debug,
+            ball_start,
+        );
 
         // Randomize AI profile on reset
         let profiles: Vec<String> = profile_db.profiles().iter().map(|p| p.id.clone()).collect();
@@ -446,12 +451,17 @@ pub fn respawn_player(
             commands.entity(ball_entity).despawn();
         }
 
-        let is_debug = level_db
-            .get_by_id(&current_level.0)
-            .map(|l| l.debug)
-            .unwrap_or(false);
+        let new_level_data = level_db.get_by_id(&current_level.0);
+        let is_debug = new_level_data.map(|l| l.debug).unwrap_or(false);
+        let ball_start = new_level_data.and_then(|l| l.ball_start);
 
-        spawn_balls(&mut commands, &ball_textures, current_palette.0, is_debug);
+        spawn_balls(
+            &mut commands,
+            &ball_textures,
+            current_palette.0,
+            is_debug,
+            ball_start,
+        );
 
         // Reload level geometry (platforms + corner ramps)
         if let Some((left_x, right_x, basket_y)) = reload_level_geometry(
@@ -497,6 +507,7 @@ fn spawn_balls(
     ball_textures: &BallTextures,
     palette_index: usize,
     is_debug: bool,
+    ball_start: Option<Vec2>,
 ) {
     // Pick ball style: random for debug level, default for normal levels
     let style_name = if is_debug {
@@ -508,6 +519,11 @@ fn spawn_balls(
     }
     .unwrap_or_else(|| "wedges".to_string());
 
+    // Calculate spawn position from level config (if set) or use default
+    let spawn_pos = ball_start
+        .map(|pos| Vec3::new(pos.x, ARENA_FLOOR_Y + pos.y, BALL_SPAWN.z))
+        .unwrap_or(BALL_SPAWN);
+
     if let Some(textures) = ball_textures.get(&style_name) {
         if let Some(texture) = textures.textures.get(palette_index) {
             commands.spawn((
@@ -516,7 +532,7 @@ fn spawn_balls(
                     custom_size: Some(BALL_SIZE),
                     ..default()
                 },
-                Transform::from_translation(BALL_SPAWN),
+                Transform::from_translation(spawn_pos),
                 Ball,
                 BallState::default(),
                 Velocity::default(),

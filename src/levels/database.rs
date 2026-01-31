@@ -40,6 +40,8 @@ pub struct LevelData {
     pub heatmap_score_weight: f32, // Per-level multiplier for score heatmap influence
     pub heatmap_los_threshold: f32, // Line-of-sight threshold for shooting decisions
     pub heatmap_los_margin: f32, // Line-of-sight margin for shooting decisions
+    pub ball_start: Option<Vec2>,    // Custom ball spawn position (x, y relative to floor)
+    pub ball_velocity: Option<Vec2>, // Initial ball velocity when countdown ends
 }
 
 /// Database of all loaded levels
@@ -100,6 +102,8 @@ impl LevelDatabase {
                     heatmap_score_weight: 1.0,
                     heatmap_los_threshold: HEATMAP_LOS_THRESHOLD_DEFAULT,
                     heatmap_los_margin: HEATMAP_LOS_MARGIN_DEFAULT,
+                    ball_start: None,    // default: use BALL_SPAWN constant
+                    ball_velocity: None, // default: no initial velocity
                 });
             } else if let Some(id_str) = line.strip_prefix("id:") {
                 if let Some(level) = &mut current_level {
@@ -189,6 +193,26 @@ impl LevelDatabase {
                         level.heatmap_los_margin = value;
                     }
                 }
+            } else if let Some(params) = line.strip_prefix("ball_start:") {
+                if let Some(level) = &mut current_level {
+                    let parts: Vec<&str> = params.trim().split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let (Ok(x), Ok(y)) = (parts[0].parse::<f32>(), parts[1].parse::<f32>())
+                        {
+                            level.ball_start = Some(Vec2::new(x, y));
+                        }
+                    }
+                }
+            } else if let Some(params) = line.strip_prefix("ball_velocity:") {
+                if let Some(level) = &mut current_level {
+                    let parts: Vec<&str> = params.trim().split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let (Ok(vx), Ok(vy)) = (parts[0].parse::<f32>(), parts[1].parse::<f32>())
+                        {
+                            level.ball_velocity = Some(Vec2::new(vx, vy));
+                        }
+                    }
+                }
             }
         }
 
@@ -229,6 +253,8 @@ impl LevelDatabase {
                     heatmap_score_weight: 1.0,
                     heatmap_los_threshold: HEATMAP_LOS_THRESHOLD_DEFAULT,
                     heatmap_los_margin: HEATMAP_LOS_MARGIN_DEFAULT,
+                    ball_start: None,
+                    ball_velocity: None,
                 },
                 LevelData {
                     id: generate_uuid_from_name("Default"),
@@ -255,6 +281,8 @@ impl LevelDatabase {
                     heatmap_score_weight: 1.0,
                     heatmap_los_threshold: HEATMAP_LOS_THRESHOLD_DEFAULT,
                     heatmap_los_margin: HEATMAP_LOS_MARGIN_DEFAULT,
+                    ball_start: None,
+                    ball_velocity: None,
                 },
             ],
         }

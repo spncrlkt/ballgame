@@ -49,8 +49,8 @@ pub use ball::{
 pub use config_watcher::ConfigWatcher;
 pub use constants::*;
 pub use countdown::{
-    CountdownText, MatchCountdown, in_countdown, not_in_countdown, spawn_countdown_text,
-    trigger_countdown_on_level_change, update_countdown,
+    CountdownEndTracker, CountdownText, MatchCountdown, apply_jump_ball_velocity, in_countdown,
+    not_in_countdown, spawn_countdown_text, trigger_countdown_on_level_change, update_countdown,
 };
 pub use events::{
     BusEvent, CharacterId, CharacterTickData, ControllerSource, EventBuffer, EventBus, GameConfig,

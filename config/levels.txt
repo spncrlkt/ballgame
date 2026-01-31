@@ -16,6 +16,8 @@
 #   heatmap_score_weight: <m>   Multiplier for score heatmap influence (default = 1.0)
 #   heatmap_los_threshold: <t>  LOS threshold to allow shooting (default = 0.9)
 #   heatmap_los_margin: <m>     LOS margin to allow shooting (default = 0.05)
+#   ball_start: <x> <y>     Ball spawn position (y relative to floor; default = 0, 50)
+#   ball_velocity: <vx> <vy>  Ball velocity when countdown ends (default = 0, 0)
 #
 # Heights are relative to ARENA_FLOOR_Y
 # Player max jump = 215 units above platform

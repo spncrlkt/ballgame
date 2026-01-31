@@ -99,7 +99,7 @@ pub fn spawn_basket_with_rims(
     };
 
     // Stripe configuration
-    let num_stripes = 4;
+    let num_stripes = 8;
     let stripe_height = BASKET_SIZE.y / num_stripes as f32;
 
     commands

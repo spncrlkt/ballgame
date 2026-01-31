@@ -4,7 +4,9 @@
 
 use bevy::prelude::*;
 
+use crate::ball::Ball;
 use crate::levels::LevelDatabase;
+use crate::player::Velocity;
 use crate::scoring::CurrentLevel;
 
 /// Resource tracking the countdown state
@@ -161,4 +163,34 @@ pub fn spawn_countdown_text(commands: &mut Commands) {
         Visibility::Visible,
         CountdownText,
     ));
+}
+
+/// Tracks whether countdown was active last frame (for edge detection)
+#[derive(Resource, Default)]
+pub struct CountdownEndTracker {
+    pub was_active: bool,
+}
+
+/// System to apply jump ball velocity when countdown ends
+/// Detects the frame when countdown transitions from active to inactive
+pub fn apply_jump_ball_velocity(
+    countdown: Res<MatchCountdown>,
+    mut tracker: ResMut<CountdownEndTracker>,
+    level_db: Res<LevelDatabase>,
+    current_level: Res<CurrentLevel>,
+    mut ball_query: Query<&mut Velocity, With<Ball>>,
+) {
+    let countdown_just_ended = tracker.was_active && !countdown.active;
+    tracker.was_active = countdown.active;
+
+    if countdown_just_ended {
+        if let Some(ball_velocity) = level_db
+            .get_by_id(&current_level.0)
+            .and_then(|l| l.ball_velocity)
+        {
+            for mut velocity in &mut ball_query {
+                velocity.0 = ball_velocity;
+            }
+        }
+    }
 }

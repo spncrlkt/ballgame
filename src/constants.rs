@@ -169,10 +169,11 @@ pub const PLAYER_SPAWN_RIGHT: Vec3 = Vec3::new(300.0, ARENA_FLOOR_Y + 100.0, 0.0
 pub const BALL_SPAWN: Vec3 = Vec3::new(0.0, ARENA_FLOOR_Y + 50.0, 2.0); // Center, z=2 to render in front
 
 // 2v2 spawn positions - teammates 200px apart, 400px from ball (at x=0)
-pub const SPAWN_L0: Vec3 = Vec3::new(-300.0, ARENA_FLOOR_Y + 100.0, 0.0); // Left team, slot 0 (inner)
-pub const SPAWN_L1: Vec3 = Vec3::new(-500.0, ARENA_FLOOR_Y + 100.0, 0.0); // Left team, slot 1 (outer)
-pub const SPAWN_R0: Vec3 = Vec3::new(300.0, ARENA_FLOOR_Y + 100.0, 0.0);  // Right team, slot 0 (inner)
-pub const SPAWN_R1: Vec3 = Vec3::new(500.0, ARENA_FLOOR_Y + 100.0, 0.0);  // Right team, slot 1 (outer)
+// Players spawn 100px higher and drop down at start
+pub const SPAWN_L0: Vec3 = Vec3::new(-300.0, ARENA_FLOOR_Y + 200.0, 0.0); // Left team, slot 0 (inner)
+pub const SPAWN_L1: Vec3 = Vec3::new(-500.0, ARENA_FLOOR_Y + 200.0, 0.0); // Left team, slot 1 (outer)
+pub const SPAWN_R0: Vec3 = Vec3::new(300.0, ARENA_FLOOR_Y + 200.0, 0.0);  // Right team, slot 0 (inner)
+pub const SPAWN_R1: Vec3 = Vec3::new(500.0, ARENA_FLOOR_Y + 200.0, 0.0);  // Right team, slot 1 (outer)
 
 // =============================================================================
 // LEVEL FILE

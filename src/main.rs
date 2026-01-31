@@ -6,16 +6,17 @@ use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
     AiCapabilities, AiProfileDatabase, Ball, BallPlayerContact,
     BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
-    CharacterId, ConfigWatcher, CurrentLevel, CurrentPalette, CurrentPresets, CurrentSettings,
-    CycleIndicator, CycleSelection, DebugLogConfig, DebugSettings, DebugText, DisplayBallWave,
-    EventBus, GameMode, LastShotInfo, LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph,
-    PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks, PlayerInput, PresetDatabase, Score,
-    ScoreLevelText, SnapshotConfig, SnapshotTriggerState, StealContest, StealTracker, StyleTextures,
-    TweakPanel, TweakPanelState, TweakRow, Velocity, ViewportScale, ai, apply_preset_to_tweaks,
-    ball, config_watcher, constants::*, countdown, display_ball_wave, emit_level_change_events,
-    color_for_character, initial_facing, input, levels, player, replay, save_settings_system, scoring, shooting,
-    snapshot, spawn_charge_gauge, spawn_characters_for_mode, spawn_countdown_text, steal, tuning,
-    ui, update_event_bus_time, world,
+    CharacterId, ConfigWatcher, CountdownEndTracker, CurrentLevel, CurrentPalette, CurrentPresets,
+    CurrentSettings, CycleIndicator, CycleSelection, DebugLogConfig, DebugSettings, DebugText,
+    DisplayBallWave, EventBus, GameMode, LastShotInfo, LevelChangeTracker, LevelDatabase,
+    MatchCountdown, NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks,
+    PlayerInput, PresetDatabase, Score, ScoreLevelText, SnapshotConfig, SnapshotTriggerState,
+    StealContest, StealTracker, StyleTextures, TweakPanel, TweakPanelState, TweakRow, Velocity,
+    ViewportScale, ai, apply_preset_to_tweaks, ball, config_watcher, constants::*, countdown,
+    display_ball_wave, emit_level_change_events, color_for_character, initial_facing, input,
+    levels, player, replay, save_settings_system, scoring, shooting, snapshot, spawn_charge_gauge,
+    spawn_characters_for_mode, spawn_countdown_text, steal, tuning, ui, update_event_bus_time,
+    world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
@@ -250,6 +251,8 @@ fn main() {
         } else {
             MatchCountdown::default()
         })
+        // Countdown end tracker for jump ball velocity
+        .init_resource::<CountdownEndTracker>()
         // Replay mode resources
         .insert_resource(if let Some(match_id) = replay_db_match_id {
             replay::ReplayMode::new_db(match_id)
@@ -268,7 +271,12 @@ fn main() {
         // Countdown system - always runs to update timer and text
         .add_systems(
             Update,
-            countdown::update_countdown.run_if(replay::not_replay_active),
+            (
+                countdown::update_countdown,
+                countdown::apply_jump_ball_velocity,
+            )
+                .chain()
+                .run_if(replay::not_replay_active),
         )
         // Event bus time update (runs every frame for timestamping)
         .add_systems(
@@ -525,6 +533,12 @@ fn setup(
     // Check if this is a debug level (spawns all ball styles, AI idle)
     let is_debug_level = level_data.map(|l| l.debug).unwrap_or(false);
 
+    // Calculate ball spawn position from level config (if set) or use default
+    let ball_spawn_pos = level_data
+        .and_then(|l| l.ball_start)
+        .map(|pos| Vec3::new(pos.x, ARENA_FLOOR_Y + pos.y, BALL_SPAWN.z))
+        .unwrap_or(BALL_SPAWN);
+
     if is_debug_level {
         // Debug level: spawn ALL ball styles on shelf platforms with labels
         player::spawn_debug_display(&mut commands, &ball_textures, palette_index);
@@ -539,7 +553,7 @@ fn setup(
                     custom_size: Some(BALL_SIZE),
                     ..default()
                 },
-                Transform::from_translation(BALL_SPAWN),
+                Transform::from_translation(ball_spawn_pos),
                 Ball,
                 BallState::default(),
                 Velocity::default(),
@@ -569,7 +583,7 @@ fn setup(
                     custom_size: Some(BALL_SIZE),
                     ..default()
                 },
-                Transform::from_translation(BALL_SPAWN),
+                Transform::from_translation(ball_spawn_pos),
                 Ball,
                 BallState::default(),
                 Velocity::default(),
