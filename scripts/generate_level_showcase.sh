@@ -49,7 +49,8 @@ for level_info in "${LEVELS[@]}"; do
     rm -rf showcase/snapshots/
 
     # Run game with level override, capture screenshot, quit immediately
-    cargo run --quiet -- --level "$idx" --screenshot-and-quit 2>/dev/null || true
+    # --freeze-countdown keeps physics frozen so players stay visible at spawn positions
+    cargo run --quiet -- --level "$idx" --screenshot-and-quit --freeze-countdown 2>/dev/null || true
 
     # Find the screenshot and copy with nice name
     SCREENSHOT=$(ls -t showcase/snapshots/*startup*.png 2>/dev/null | head -1)

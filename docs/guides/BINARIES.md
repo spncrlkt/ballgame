@@ -322,9 +322,20 @@ cargo run --bin generate --help             # Show help
 |------------|-------------|--------|
 | `ball` | Generate ball textures (all styles x palettes) | `assets/textures/balls/` |
 | `showcase` | Generate ball styles showcase image | `showcase/ball_styles_showcase.png` |
-| `levels` | Generate level showcase grid | `showcase/level_showcase.png` |
+| `levels` | Generate level showcase grid (requires screenshots) | `showcase/level_showcase.png` |
 | `gif wedge` | Generate wedge rotation GIF | `showcase/wedge_rotation.gif` |
 | `gif baseball` | Generate baseball rotation GIF | `showcase/baseball_rotation.gif` |
+
+### Level Showcase
+
+The `levels` command combines pre-captured screenshots into a grid. Run the shell script first:
+
+```bash
+./scripts/generate_level_showcase.sh   # Capture screenshots (includes player characters)
+cargo run --bin generate levels        # Combine into grid
+```
+
+The shell script uses `--freeze-countdown` to keep physics frozen during capture, ensuring player characters remain visible at their spawn positions.
 
 ---
 

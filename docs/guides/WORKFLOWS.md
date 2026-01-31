@@ -543,10 +543,13 @@ cargo run --bin generate showcase
 ### Step 3: Generate Level Showcase (Optional)
 
 ```bash
-cargo run --bin generate levels
+./scripts/generate_level_showcase.sh   # Capture screenshots for all levels
+cargo run --bin generate levels        # Combine into grid
 ```
 
 **Output:** `showcase/level_showcase.png`
+
+**Note:** The level showcase includes player characters at their spawn positions. The script uses `--freeze-countdown` to keep physics frozen during capture.
 
 ### Other Generate Commands
 
