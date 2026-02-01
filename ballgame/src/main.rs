@@ -239,6 +239,9 @@ fn main() {
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
     app.init_resource::<Score>();
+    app.init_resource::<scoring::GamePaused>();
+    app.init_resource::<scoring::RestartRequested>();
+    app.init_resource::<ui::PauseMenuState>();
     app.insert_resource(CurrentLevel(loaded_level_id));
     app.insert_resource(CurrentPalette(loaded_palette_index));
     app.insert_resource(debug_config);
@@ -304,6 +307,7 @@ fn main() {
     // Startup systems - use normal setup only when NOT in replay mode
     app.add_systems(Startup, tuning::load_global_tuning_system);
     app.add_systems(Startup, setup.run_if(replay::not_replay_active));
+    app.add_systems(Startup, ui::spawn_pause_overlay);
 
     // =========== NORMAL GAME SYSTEMS (disabled in replay mode) ===========
     // Countdown system - always runs to update timer and text
@@ -338,14 +342,21 @@ fn main() {
             ai::ai_decision_update,
         )
             .chain()
-            .run_if(replay::not_replay_active.and(countdown::not_in_countdown)),
+            .run_if(
+                replay::not_replay_active
+                    .and(countdown::not_in_countdown)
+                    .and(scoring::not_paused),
+            ),
     );
 
-    // Settings reset (double-click Start) - must run before respawn
+    // Pause toggle (Start button)
     app.add_systems(
         Update,
-        player::check_settings_reset.run_if(replay::not_replay_active),
+        player::check_pause_toggle.run_if(replay::not_replay_active),
     );
+
+    // Quit game (Escape or Select button)
+    app.add_systems(Update, player::check_quit);
 
     // Core Update systems - split to avoid tuple issues with respawn_player
     app.add_systems(
@@ -390,6 +401,9 @@ fn main() {
             ui::animate_score_flash,
             ui::update_charge_gauge,
             ui::update_steal_indicators,
+            ui::update_pause_overlay,
+            ui::pause_menu_navigation,
+            ui::pause_menu_confirm,
             display_ball_wave,
             player::manage_debug_display,
         )
@@ -474,7 +488,11 @@ fn main() {
                 .chain(),
         )
             .chain()
-            .run_if(replay::not_replay_active.and(countdown::not_in_countdown)),
+            .run_if(
+                replay::not_replay_active
+                    .and(countdown::not_in_countdown)
+                    .and(scoring::not_paused),
+            ),
     );
 
     // =========== REPLAY MODE SYSTEMS ===========

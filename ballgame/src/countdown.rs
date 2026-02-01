@@ -73,6 +73,7 @@ pub struct CountdownText;
 pub fn update_countdown(
     time: Res<Time>,
     mut countdown: ResMut<MatchCountdown>,
+    game_paused: Res<crate::scoring::GamePaused>,
     mut text_query: Query<(&mut Text2d, &mut Visibility, &mut TextColor), With<CountdownText>>,
 ) {
     if !countdown.active {
@@ -83,8 +84,8 @@ pub fn update_countdown(
         return;
     }
 
-    // Update timer (skip if frozen)
-    if !countdown.frozen {
+    // Update timer (skip if frozen or paused)
+    if !countdown.frozen && !game_paused.0 {
         countdown.timer -= time.delta_secs();
     }
 

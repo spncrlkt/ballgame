@@ -70,6 +70,19 @@ impl Default for CurrentLevel {
     }
 }
 
+/// Game pause state - toggled by Start button single press
+#[derive(Resource, Default)]
+pub struct GamePaused(pub bool);
+
+/// Flag to request level restart - set by double-click Start, consumed by respawn_player
+#[derive(Resource, Default)]
+pub struct RestartRequested(pub bool);
+
+/// Run condition: returns true when game is not paused
+pub fn not_paused(game_paused: Res<GamePaused>) -> bool {
+    !game_paused.0
+}
+
 /// Check if ball entered a basket and award points.
 /// Emits Goal events to EventBus for auditability.
 pub fn check_scoring(

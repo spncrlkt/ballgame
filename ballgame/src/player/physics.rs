@@ -327,59 +327,41 @@ pub fn player_player_collision(
     }
 }
 
-/// Handle double-click Start to reset settings to defaults
-/// Runs before respawn_player to detect double-click
-pub fn check_settings_reset(
+/// Handle Start button: opens pause menu (menu handles closing)
+pub fn check_pause_toggle(
     gamepads: Query<&Gamepad>,
-    mut current_settings: ResMut<crate::settings::CurrentSettings>,
-    mut current_level: ResMut<CurrentLevel>,
-    mut current_palette: ResMut<CurrentPalette>,
-    mut viewport_scale: ResMut<crate::ui::ViewportScale>,
-    mut cycle_selection: ResMut<crate::ui::CycleSelection>,
-    time: Res<Time>,
-    mut window_query: Query<&mut Window>,
+    mut game_paused: ResMut<crate::scoring::GamePaused>,
 ) {
-    // Check for Start button press for double-click detection
+    // Only open pause menu, not close it (menu handles that)
+    if game_paused.0 {
+        return;
+    }
+
+    // Check for Start button press
     let start_pressed = gamepads
         .iter()
         .any(|gp| gp.just_pressed(GamepadButton::Start));
 
-    if !start_pressed {
-        return;
+    if start_pressed {
+        game_paused.0 = true;
+        info!("Game PAUSED");
     }
+}
 
-    // Check for double-click Start to reset settings
-    let current_time = time.elapsed_secs_f64();
-    if current_settings.check_double_click(current_time) {
-        // Double-click detected - reset settings to defaults
-        current_settings.reset_to_defaults();
-
-        // Apply reset settings to resources
-        current_level.0 = current_settings.settings.level.clone();
-        current_palette.0 = current_settings.settings.palette_index;
-        viewport_scale.preset_index = current_settings.settings.viewport_index;
-        cycle_selection.active_direction =
-            crate::ui::CycleDirection::from_str(&current_settings.settings.active_direction);
-        cycle_selection.down_option =
-            crate::ui::DownOption::from_str(&current_settings.settings.down_option);
-        cycle_selection.right_option =
-            crate::ui::RightOption::from_str(&current_settings.settings.right_option);
-
-        // Apply viewport change
-        let (width, height, _) = crate::constants::VIEWPORT_PRESETS[viewport_scale.preset_index];
-        if let Ok(mut window) = window_query.single_mut() {
-            window.resolution.set(width, height);
-        }
-
-        info!("Settings reset to defaults via double-click Start");
+/// Handle Escape key to quit the game
+pub fn check_quit(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut app_exit: MessageWriter<AppExit>,
+) {
+    if keyboard.just_pressed(KeyCode::Escape) {
+        info!("Quit requested via Escape");
+        app_exit.write(AppExit::Success);
     }
 }
 
 /// Handle player respawn and level changes
 #[allow(clippy::too_many_arguments)]
 pub fn respawn_player(
-    _keyboard: Res<ButtonInput<KeyCode>>,
-    gamepads: Query<&Gamepad>,
     mut commands: Commands,
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
@@ -388,6 +370,8 @@ pub fn respawn_player(
     current_palette: Res<CurrentPalette>,
     mut score: ResMut<crate::scoring::Score>,
     ball_textures: Res<BallTextures>,
+    mut restart_requested: ResMut<crate::scoring::RestartRequested>,
+    mut countdown: Option<ResMut<crate::countdown::MatchCountdown>>,
     mut players: Query<
         (
             Entity,
@@ -404,10 +388,15 @@ pub fn respawn_player(
     corner_ramps: Query<Entity, With<CornerRamp>>,
     mut baskets: Query<&mut Transform, (With<Basket>, Without<Player>, Without<Ball>)>,
 ) {
-    // Reset current level (Start button) - resets positions and score only
-    let reset_pressed = gamepads
-        .iter()
-        .any(|gp| gp.just_pressed(GamepadButton::Start));
+    // Reset current level (triggered by Restart Level from pause menu)
+    let reset_pressed = restart_requested.0;
+    if reset_pressed {
+        restart_requested.0 = false; // Consume the flag
+        // Restart countdown if it exists
+        if let Some(ref mut cd) = countdown {
+            cd.start();
+        }
+    }
 
     // Level cycling handled by unified cycle system (controller only)
     let next_level_pressed = false;
