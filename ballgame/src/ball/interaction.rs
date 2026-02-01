@@ -7,7 +7,7 @@ use crate::ai::{InputState, decision::defender_in_shot_path};
 use crate::ball::components::*;
 use crate::constants::*;
 use crate::events::{EventBus, GameEvent};
-use crate::player::{BlockState, Character, Facing, HoldingBall, Player, Team, Velocity};
+use crate::player::{BlockState, Character, Facing, HoldingBall, Player, Buff, Team, Velocity};
 use crate::shooting::ChargingShot;
 use crate::steal::{StealContest, StealCooldown, StealTracker};
 
@@ -157,6 +157,7 @@ pub fn pickup_ball(
             &mut ChargingShot,
             &mut InputState,
             &mut StealCooldown,
+            &Buff,
         ),
         (With<Player>, Without<HoldingBall>),
     >,
@@ -169,13 +170,14 @@ pub fn pickup_ball(
             &mut Velocity,
             &mut StealCooldown,
             &Team, // Added: need team to check for opponent-only stealing
+            &Buff,
         ),
         With<Player>,
     >,
     mut ball_query: Query<(Entity, &Transform, &mut BallState), With<Ball>>,
 ) {
     // Check each non-holding player for pickup/steal attempts
-    for (player_entity, player_transform, team, mut charging, mut input, mut cooldown) in
+    for (player_entity, player_transform, team, mut charging, mut input, mut cooldown, attacker_ability) in
         &mut non_holding_players
     {
         if !input.pickup_pressed {
@@ -245,6 +247,7 @@ pub fn pickup_ball(
             mut defender_velocity,
             mut defender_cooldown,
             defender_team,
+            defender_ability,
         ) in &mut holding_players
         {
             // 2v2 rule: Can only steal from opponents (different team)
@@ -266,6 +269,16 @@ pub fn pickup_ball(
                 // Bonus if defender is charging a shot
                 if defender_charging.charge_time > 0.0 {
                     success_chance += STEAL_CHARGING_BONUS;
+                }
+
+                // Apply Steal ability bonus (+15% steal success)
+                if *attacker_ability == Buff::Steal {
+                    success_chance += BUFF_STEAL_BONUS;
+                }
+
+                // Apply Defense ability penalty (-20% steal success for defender)
+                if *defender_ability == Buff::Defense {
+                    success_chance -= BUFF_DEFENSE_BONUS;
                 }
 
                 // Apply graduated difficulty modifier (rubber-banding)
@@ -310,10 +323,22 @@ pub fn pickup_ball(
                         defender_velocity.0.y += STEAL_PUSHBACK_STRENGTH * 0.3; // Small upward nudge
 
                         // Apply no-stealback cooldown to victim
-                        defender_cooldown.0 = STEAL_VICTIM_COOLDOWN;
+                        // Recovery ability reduces cooldowns by 30%
+                        let victim_cooldown = if *defender_ability == Buff::Recovery {
+                            STEAL_VICTIM_COOLDOWN * BUFF_RECOVERY_BONUS
+                        } else {
+                            STEAL_VICTIM_COOLDOWN
+                        };
+                        defender_cooldown.0 = victim_cooldown;
 
                         // Short cooldown after successful steal
-                        cooldown.0 = STEAL_COOLDOWN;
+                        // Recovery ability reduces cooldowns by 30%
+                        let attacker_cooldown = if *attacker_ability == Buff::Recovery {
+                            STEAL_COOLDOWN * BUFF_RECOVERY_BONUS
+                        } else {
+                            STEAL_COOLDOWN
+                        };
+                        cooldown.0 = attacker_cooldown;
 
                         // Clear pass/throw inputs to prevent immediate action from same button press
                         input.pass_pressed = false;
@@ -328,7 +353,13 @@ pub fn pickup_ball(
                     steal_tracker.log_state("FAIL");
 
                     // Longer cooldown after failed steal (penalty for spam)
-                    cooldown.0 = STEAL_FAIL_COOLDOWN;
+                    // Recovery ability reduces cooldowns by 30%
+                    let fail_cooldown = if *attacker_ability == Buff::Recovery {
+                        STEAL_FAIL_COOLDOWN * BUFF_RECOVERY_BONUS
+                    } else {
+                        STEAL_FAIL_COOLDOWN
+                    };
+                    cooldown.0 = fail_cooldown;
                 }
 
                 return;

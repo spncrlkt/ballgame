@@ -32,6 +32,7 @@ pub fn apply_input(
             &mut InputState,
             &TurboGauge,
             &BlockState,
+            &Buff,
         ),
         With<Player>,
     >,
@@ -41,7 +42,7 @@ pub fn apply_input(
     // In windowed mode, this will use the actual delta. In headless, it enforces 60Hz behavior.
     let dt = time.delta_secs().max(1.0 / 60.0);
 
-    for (mut velocity, mut coyote, mut jump_state, mut facing, grounded, mut input, turbo, block) in
+    for (mut velocity, mut coyote, mut jump_state, mut facing, grounded, mut input, turbo, block, ability) in
         &mut players
     {
         let move_x = input.move_x;
@@ -63,8 +64,15 @@ pub fn apply_input(
             1.0
         };
 
-        // Acceleration-based horizontal movement with turbo and block multipliers
-        let target_speed = move_x * tweaks.move_speed * speed_mult * block_mult;
+        // Apply Speed ability bonus (+15% movement speed)
+        let ability_speed_mult = if *ability == Buff::Speed {
+            BUFF_SPEED_BONUS
+        } else {
+            1.0
+        };
+
+        // Acceleration-based horizontal movement with turbo, block, and ability multipliers
+        let target_speed = move_x * tweaks.move_speed * speed_mult * block_mult * ability_speed_mult;
         let current_speed = velocity.0.x;
 
         // Determine if accelerating (toward input) or decelerating (stopping/reversing)
@@ -110,7 +118,13 @@ pub fn apply_input(
 
         // Jump if we have buffered input and can jump
         if jump_buffer_timer > 0.0 && can_jump {
-            velocity.0.y = tweaks.jump_velocity;
+            // Apply Jump ability bonus (+10% jump velocity)
+            let jump_mult = if *ability == Buff::Jump {
+                BUFF_JUMP_BONUS
+            } else {
+                1.0
+            };
+            velocity.0.y = tweaks.jump_velocity * jump_mult;
             // Consume the buffered jump
             input.jump_buffer_timer = 0.0;
             coyote.0 = 0.0; // Consume coyote time so we can't double jump
@@ -168,12 +182,12 @@ pub fn turbo_update(
 /// Update block state: handle activation, timer countdown, and cooldown
 /// Runs in FixedUpdate for consistent behavior
 pub fn block_update(
-    mut players: Query<(&mut BlockState, &mut InputState, Option<&HoldingBall>), With<Player>>,
+    mut players: Query<(&mut BlockState, &mut InputState, Option<&HoldingBall>, &Buff), With<Player>>,
     time: Res<Time>,
 ) {
     let dt = time.delta_secs().max(1.0 / 60.0);
 
-    for (mut block, mut input, holding_ball) in &mut players {
+    for (mut block, mut input, holding_ball, ability) in &mut players {
         // Can only initiate block if:
         // - Block button pressed
         // - Not holding a ball (modal: RB is shoot when holding, block when not)
@@ -187,8 +201,15 @@ pub fn block_update(
             }
         }
 
+        // Apply Recovery ability bonus (-30% cooldown)
+        let cooldown = if *ability == Buff::Recovery {
+            BLOCK_COOLDOWN * BUFF_RECOVERY_BONUS
+        } else {
+            BLOCK_COOLDOWN
+        };
+
         // Update block timers
-        block.update(dt, BLOCK_COOLDOWN);
+        block.update(dt, cooldown);
     }
 }
 

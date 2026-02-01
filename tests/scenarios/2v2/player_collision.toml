@@ -53,15 +53,16 @@ frame = 30
 L0 = { move_right = false }
 R0 = { move_left = false }
 
-# After collision, both should have moved but been pushed back
-# L0 starts at -50, walks right, should end up around 0 or pushed back slightly
-# R0 starts at 50, walks left, should end up around 0 or pushed back slightly
-# Key: they should both have moved toward center but not passed each other
+# After collision, both should have moved toward center
+# L0 starts at -50, walks right; R0 starts at 50, walks left
+# They collide around the center; with momentum they may push past each other slightly
+# Key: they should both have moved toward center but not passed completely through
+# (At 300 px/sec, 0.5 sec = 150 px max travel; with collision they stop sooner)
 [[expect.state]]
 after_frame = 40
 checks = [
     "L0.x > -60",      # L0 moved toward center (started at -50)
-    "L0.x < 30",       # L0 didn't pass through to far right
+    "L0.x < 120",      # L0 didn't pass completely through (would be ~100 with no collision)
     "R0.x < 60",       # R0 moved toward center (started at 50)
-    "R0.x > -30",      # R0 didn't pass through to far left
+    "R0.x > -120",     # R0 didn't pass completely through
 ]

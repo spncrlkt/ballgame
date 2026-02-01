@@ -81,10 +81,21 @@ V0 (today) → V1 (future)
 - [ ] Settings UI
 - [ ] Animated gif for readme
 
+**Buff System Tests:**
+- [ ] Speed buff test: player with Speed moves faster than baseline
+- [ ] Turbo buff test: player with Turbo has larger gauge, faster refill
+- [ ] Accuracy buff test: shots have less variance with Accuracy
+- [ ] Steal buff test: steal success rate higher with Steal buff
+- [ ] Jump buff test: player with Jump reaches higher
+- [ ] Defense buff test: steal resistance higher with Defense
+- [ ] Recovery buff test: steal/block cooldowns shorter with Recovery
+
 **Technical Debt:**
 - [ ] System wiring consolidation across binaries
 - [ ] EventBus memory cleanup (unbounded growth)
 - [ ] Input capture bug (tweak panel stale PlayerInput)
+- [ ] Simulation setup missing Buff component (affects tournament metrics)
+- [ ] Training binary should use spawn_characters_for_mode() for buff support
 
 **Ideas (unprioritized):**
 - More ball styles

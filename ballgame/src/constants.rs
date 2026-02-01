@@ -300,3 +300,24 @@ pub const PASS_SPEED_MULTIPLIER: f32 = 1.2;
 pub const OPEN_SPOT_INTERFERENCE_DISTANCE: f32 = 80.0;
 /// Minimum distance to consider pass target "open"
 pub const PASS_MIN_DISTANCE: f32 = 100.0;
+
+// =============================================================================
+// BUFF BONUSES
+// =============================================================================
+
+/// Speed buff: movement speed multiplier (1.15 = +15%)
+pub const BUFF_SPEED_BONUS: f32 = 1.15;
+/// Turbo buff: gauge capacity multiplier (1.5 = +50%)
+pub const BUFF_TURBO_GAUGE: f32 = 1.5;
+/// Turbo buff: refill rate multiplier (1.25 = +25%)
+pub const BUFF_TURBO_REFILL: f32 = 1.25;
+/// Accuracy buff: variance multiplier (0.70 = -30%)
+pub const BUFF_ACCURACY_BONUS: f32 = 0.70;
+/// Steal buff: added success chance (+15%)
+pub const BUFF_STEAL_BONUS: f32 = 0.15;
+/// Jump buff: jump velocity multiplier (1.10 = +10%)
+pub const BUFF_JUMP_BONUS: f32 = 1.10;
+/// Defense buff: steal resistance bonus (+20%)
+pub const BUFF_DEFENSE_BONUS: f32 = 0.20;
+/// Recovery buff: cooldown multiplier (0.70 = -30%)
+pub const BUFF_RECOVERY_BONUS: f32 = 0.70;

@@ -250,6 +250,7 @@ See `docs/guides/BINARIES.md` for complete reference with all flags and examples
 - `InputState` - Per-player input buffer (human input copied here, AI writes directly)
 - `AiState` - AI goal state machine + profile_index for AI personality
 - `StealCooldown` - Per-player cooldown timer between steal attempts
+- `Buff` - Character ability (Speed/Turbo/Accuracy/Steal/Jump/Defense/Recovery)
 
 **Ball Components:**
 - `Ball` - Marker for ball entity

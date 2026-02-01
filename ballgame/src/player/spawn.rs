@@ -4,14 +4,14 @@
 
 use bevy::prelude::*;
 
-use crate::ai::{AiGoal, AiNavState, AiState, InputState};
+use crate::ai::{AiGoal, AiNavState, AiProfileDatabase, AiState, InputState};
 use crate::constants::*;
 use crate::events::CharacterId;
 use crate::input::{GameMode, InputSourceId, AI_SOURCE_ID_START, KEYBOARD_SOURCE_ID};
 use crate::palettes::Palette;
 use crate::player::{
     BlockState, Character, ControlledBy, CoyoteTimer, Facing, Grounded, HumanControlled,
-    JumpState, Player, TargetBasket, Team, TurboGauge, Velocity,
+    JumpState, Player, Buff, TargetBasket, Team, TurboGauge, Velocity,
 };
 use crate::shooting::ChargingShot;
 use crate::steal::StealCooldown;
@@ -86,6 +86,8 @@ pub struct CharacterSpawnConfig {
     pub start_idle: bool,
     /// Whether this is the human-controlled character (for HumanControlled marker)
     pub is_human_controlled: bool,
+    /// Super-ability for this character (defaults to Speed)
+    pub ability: Buff,
 }
 
 /// Spawn a single character entity
@@ -151,8 +153,21 @@ pub fn spawn_character(
         StealCooldown::default(),
     ));
 
-    // Turbo and block components for new mechanics
-    entity_commands.insert((TurboGauge::default(), BlockState::default()));
+    // Create turbo gauge, applying Turbo ability bonus if applicable
+    let turbo_gauge = if config.ability == Buff::Turbo {
+        use crate::constants::*;
+        TurboGauge {
+            current: TURBO_MAX_GAUGE * BUFF_TURBO_GAUGE,
+            max: TURBO_MAX_GAUGE * BUFF_TURBO_GAUGE,
+            drain_rate: TURBO_DRAIN_RATE,
+            refill_rate: TURBO_REFILL_RATE * BUFF_TURBO_REFILL,
+        }
+    } else {
+        TurboGauge::default()
+    };
+
+    // Turbo, block, and ability components for new mechanics
+    entity_commands.insert((turbo_gauge, BlockState::default(), config.ability));
 
     // Add HumanControlled marker if this is the human-controlled character
     if config.is_human_controlled {
@@ -172,15 +187,22 @@ pub fn spawn_characters_for_mode(
     right_profile: &str,
     human_controlled: Option<CharacterId>,
     start_idle: bool,
+    profile_db: &AiProfileDatabase,
 ) -> Vec<(CharacterId, Entity)> {
     let characters = mode.characters();
     let mut results = Vec::with_capacity(characters.len());
 
     for &character in characters {
-        let profile = match character.team() {
+        let profile_id = match character.team() {
             crate::events::TeamId::Left => left_profile.to_string(),
             crate::events::TeamId::Right => right_profile.to_string(),
         };
+
+        // Look up the AI profile to get preferred_buff
+        let ability = profile_db
+            .get_by_id(&profile_id)
+            .map(|p| p.preferred_buff)
+            .unwrap_or(Buff::Speed);
 
         let is_human = human_controlled == Some(character);
         let controller = if is_human {
@@ -192,9 +214,10 @@ pub fn spawn_characters_for_mode(
         let config = CharacterSpawnConfig {
             character,
             controller,
-            ai_profile_id: profile,
+            ai_profile_id: profile_id,
             start_idle,
             is_human_controlled: is_human,
+            ability,
         };
 
         let entity = spawn_character(commands, config, palette);

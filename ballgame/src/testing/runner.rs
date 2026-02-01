@@ -17,8 +17,9 @@ use crate::events::EventBus;
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
 use crate::player::{
-    BlockState, CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, TargetBasket, Team,
-    TurboGauge, apply_gravity, apply_input, check_collisions, player_player_collision,
+    BlockState, CoyoteTimer, Facing, Grounded, HoldingBall, JumpState, Player, Buff,
+    TargetBasket, Team, TurboGauge, apply_gravity, apply_input, check_collisions,
+    player_player_collision,
 };
 use crate::scoring::{CurrentLevel, Score, check_scoring};
 use crate::shooting::{ChargingShot, LastShotInfo, throw_ball, update_shot_charge};
@@ -403,11 +404,14 @@ fn test_setup(
                     ))
                     .id();
                 // Insert additional components separately to avoid Bevy tuple size limit
+                // Use Accuracy buff for tests - it only affects shot variance,
+                // not movement/jump/steal mechanics that tests typically verify
                 commands.entity(entity).insert((
                     InputState::default(),
                     StealCooldown::default(),
                     TurboGauge::default(),
                     BlockState::default(),
+                    Buff::Accuracy,
                     TestEntityId(id.clone()),
                 ));
 

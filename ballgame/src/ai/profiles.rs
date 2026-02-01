@@ -8,6 +8,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
 
+use crate::player::Buff;
+
 /// Path to AI profiles file
 pub const AI_PROFILES_FILE: &str = "config/ai_profiles.txt";
 
@@ -65,12 +67,9 @@ pub struct AiProfile {
     /// Whether this is a CatchPartner debug profile
     /// CatchPartner AI only catches/passes, never scores or defends
     pub catch_partner: bool,
-    /// Turbo speed multiplier modifier (0.8-1.5, scales TURBO_SPEED_MULTIPLIER)
-    /// Lower = weaker turbo, Higher = stronger turbo
-    pub turbo_modifier: f32,
-    /// Block horizontal slowdown modifier (0.3-0.7, overrides BLOCK_HORIZONTAL_SLOW)
-    /// Lower = more slowdown during block, Higher = less slowdown
-    pub block_slow_modifier: f32,
+    /// Preferred buff for this AI profile
+    /// Applied when spawning AI-controlled characters
+    pub preferred_buff: Buff,
     /// How aggressively AI uses turbo (0.0-1.0)
     /// 0.0 = never uses turbo, 1.0 = uses turbo whenever chasing or creating space
     pub turbo_usage: f32,
@@ -105,8 +104,7 @@ impl Default for AiProfile {
             position_patience: 1.0,   // Moderate willingness to seek better positions
             seek_threshold: 0.10,     // Moderate threshold for seeking
             catch_partner: false,     // Normal competitive AI by default
-            turbo_modifier: 1.0,      // No modification to turbo speed
-            block_slow_modifier: 0.5, // Default slowdown during block
+            preferred_buff: Buff::Speed, // Default buff
             turbo_usage: 0.5,         // Moderate turbo usage
             block_reaction: 0.5,      // Moderate block reaction
             pass_willingness: 0.5,    // Moderate pass willingness
@@ -311,15 +309,15 @@ fn parse_profiles(content: &str) -> Vec<AiProfile> {
                 "catch_partner" => {
                     profile.catch_partner = value == "true" || value == "1";
                 }
-                "turbo_modifier" => {
-                    if let Ok(v) = value.parse() {
-                        profile.turbo_modifier = v;
+                "preferred_buff" => {
+                    if let Some(ability) = Buff::from_str(value) {
+                        profile.preferred_buff = ability;
                     }
                 }
-                "block_slow_modifier" => {
-                    if let Ok(v) = value.parse() {
-                        profile.block_slow_modifier = v;
-                    }
+                // Deprecated: turbo_modifier and block_slow_modifier are no longer used
+                // (replaced by Buff system)
+                "turbo_modifier" | "block_slow_modifier" => {
+                    // Silently ignore for backwards compatibility
                 }
                 "turbo_usage" => {
                     if let Ok(v) = value.parse() {

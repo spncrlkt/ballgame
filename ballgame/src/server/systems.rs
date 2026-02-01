@@ -11,7 +11,7 @@ use super::slots::Slot;
 use super::snapshot::create_game_snapshot;
 
 use crate::{
-    AiState, Ball, BallState, BallStyle, Character, CharacterId, ChargingShot, Grounded,
+    AiState, Ball, BallState, BallStyle, Buff, Character, CharacterId, ChargingShot, Grounded,
     HoldingBall, InputState, Player, Score, TargetBasket, Team, TurboGauge, Velocity,
     countdown::MatchCountdown,
     player::{BlockState, Facing},
@@ -86,6 +86,7 @@ pub fn broadcast_state_system(
             Option<&ChargingShot>,
             Option<&AiState>,
             Option<&BlockState>,
+            &Buff,
         ),
         With<Player>,
     >,

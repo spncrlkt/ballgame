@@ -9,7 +9,7 @@ use crate::ball::{Ball, BallStyle, BallTextures, CurrentPalette};
 use crate::events::CharacterId;
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
-use crate::player::{Character, HumanControlled, Player};
+use crate::player::{Character, HumanControlled, Player, Buff};
 use crate::presets::{apply_composite_preset, CurrentPresets, PresetDatabase};
 use crate::scoring::{CurrentLevel, GamePaused};
 use crate::settings::CurrentSettings;
@@ -59,6 +59,10 @@ pub enum DebugMenuOption {
     AiL1,
     AiR0,
     AiR1,
+    AbilityL0,
+    AbilityL1,
+    AbilityR0,
+    AbilityR1,
     CompositePreset,
     MovementPreset,
     BallPreset,
@@ -66,7 +70,7 @@ pub enum DebugMenuOption {
 }
 
 impl DebugMenuOption {
-    pub const ALL: [DebugMenuOption; 13] = [
+    pub const ALL: [DebugMenuOption; 17] = [
         DebugMenuOption::Viewport,
         DebugMenuOption::Character,
         DebugMenuOption::Level,
@@ -76,6 +80,10 @@ impl DebugMenuOption {
         DebugMenuOption::AiL1,
         DebugMenuOption::AiR0,
         DebugMenuOption::AiR1,
+        DebugMenuOption::AbilityL0,
+        DebugMenuOption::AbilityL1,
+        DebugMenuOption::AbilityR0,
+        DebugMenuOption::AbilityR1,
         DebugMenuOption::CompositePreset,
         DebugMenuOption::MovementPreset,
         DebugMenuOption::BallPreset,
@@ -93,6 +101,10 @@ impl DebugMenuOption {
             DebugMenuOption::AiL1 => "AI L1",
             DebugMenuOption::AiR0 => "AI R0",
             DebugMenuOption::AiR1 => "AI R1",
+            DebugMenuOption::AbilityL0 => "Ability L0",
+            DebugMenuOption::AbilityL1 => "Ability L1",
+            DebugMenuOption::AbilityR0 => "Ability R0",
+            DebugMenuOption::AbilityR1 => "Ability R1",
             DebugMenuOption::CompositePreset => "Composite",
             DebugMenuOption::MovementPreset => "Movement",
             DebugMenuOption::BallPreset => "Ball",
@@ -114,6 +126,8 @@ pub struct DebugMenuState {
     pub pending_cycle: Option<bool>,
     /// Pending character cycle: Some(true) = forward, Some(false) = backward
     pub pending_character_cycle: Option<bool>,
+    /// Pending ability cycle: Some((CharacterId, forward))
+    pub pending_ability_cycle: Option<(CharacterId, bool)>,
     /// Set when opened from pause menu, cleared after one frame (prevents immediate re-toggle)
     pub skip_next_select: bool,
 }
@@ -454,6 +468,18 @@ pub fn debug_menu_apply_cycle(
                 &mut ai_query,
             );
         }
+        DebugMenuOption::AbilityL0 => {
+            menu_state.pending_ability_cycle = Some((CharacterId::L0, forward));
+        }
+        DebugMenuOption::AbilityL1 => {
+            menu_state.pending_ability_cycle = Some((CharacterId::L1, forward));
+        }
+        DebugMenuOption::AbilityR0 => {
+            menu_state.pending_ability_cycle = Some((CharacterId::R0, forward));
+        }
+        DebugMenuOption::AbilityR1 => {
+            menu_state.pending_ability_cycle = Some((CharacterId::R1, forward));
+        }
         DebugMenuOption::Character => {
             // Cycle through: L0 → L1 → R0 → R1 → Observer → L0
             // Handled by separate system to reduce parameter count
@@ -534,6 +560,25 @@ pub fn debug_menu_character_cycle(
     cycle_character_selection(forward, &mut commands, &player_query, &human_query);
 }
 
+/// Apply pending ability cycle
+pub fn debug_menu_ability_cycle(
+    mut menu_state: ResMut<DebugMenuState>,
+    mut ability_query: Query<(&mut Buff, Option<&Character>), With<Player>>,
+) {
+    let Some((target_character, forward)) = menu_state.pending_ability_cycle.take() else {
+        return;
+    };
+
+    for (mut ability, character) in ability_query.iter_mut() {
+        let char_id = character.map(|c| c.0).unwrap_or(CharacterId::L0);
+        if char_id == target_character {
+            *ability = if forward { ability.next() } else { ability.prev() };
+            info!("Ability {:?}: {}", target_character, ability.name());
+            return;
+        }
+    }
+}
+
 // =============================================================================
 // DISPLAY UPDATE SYSTEM
 // =============================================================================
@@ -553,7 +598,7 @@ pub fn update_debug_menu_display(
     preset_db: Res<PresetDatabase>,
     _ball_textures: Res<BallTextures>,
     ball_query: Query<&BallStyle, With<Ball>>,
-    ai_query: Query<(&AiState, Option<&Character>, Option<&HumanControlled>), With<Player>>,
+    ai_query: Query<(&AiState, Option<&Character>, Option<&HumanControlled>, &Buff), With<Player>>,
     mut border_query: Query<
         &mut Visibility,
         (With<DebugMenuBorder>, Without<DebugMenuBackground>, Without<DebugMenuRow>, Without<DebugMenuValue>),
@@ -657,15 +702,29 @@ pub fn update_debug_menu_display(
 fn get_ai_profile_for_character(
     target_character: CharacterId,
     profile_db: &AiProfileDatabase,
-    ai_query: &Query<(&AiState, Option<&Character>, Option<&HumanControlled>), With<Player>>,
+    ai_query: &Query<(&AiState, Option<&Character>, Option<&HumanControlled>, &Buff), With<Player>>,
 ) -> String {
-    for (ai_state, character, _) in ai_query.iter() {
+    for (ai_state, character, _, _) in ai_query.iter() {
         let char_id = character.map(|c| c.0).unwrap_or(CharacterId::L0);
         if char_id == target_character {
             return profile_db
                 .get_by_id(&ai_state.profile_id)
                 .map(|p| p.name.clone())
                 .unwrap_or_else(|| "?".to_string());
+        }
+    }
+    "?".to_string()
+}
+
+/// Get ability name for a specific character
+fn get_ability_for_character(
+    target_character: CharacterId,
+    ai_query: &Query<(&AiState, Option<&Character>, Option<&HumanControlled>, &Buff), With<Player>>,
+) -> String {
+    for (_, character, _, ability) in ai_query.iter() {
+        let char_id = character.map(|c| c.0).unwrap_or(CharacterId::L0);
+        if char_id == target_character {
+            return ability.name().to_string();
         }
     }
     "?".to_string()
@@ -682,7 +741,7 @@ fn get_current_value_str(
     profile_db: &AiProfileDatabase,
     preset_db: &PresetDatabase,
     ball_query: &Query<&BallStyle, With<Ball>>,
-    ai_query: &Query<(&AiState, Option<&Character>, Option<&HumanControlled>), With<Player>>,
+    ai_query: &Query<(&AiState, Option<&Character>, Option<&HumanControlled>, &Buff), With<Player>>,
 ) -> String {
     match option {
         DebugMenuOption::Viewport => viewport_scale.current().2.to_string(),
@@ -706,8 +765,12 @@ fn get_current_value_str(
         DebugMenuOption::AiL1 => get_ai_profile_for_character(CharacterId::L1, profile_db, ai_query),
         DebugMenuOption::AiR0 => get_ai_profile_for_character(CharacterId::R0, profile_db, ai_query),
         DebugMenuOption::AiR1 => get_ai_profile_for_character(CharacterId::R1, profile_db, ai_query),
+        DebugMenuOption::AbilityL0 => get_ability_for_character(CharacterId::L0, ai_query),
+        DebugMenuOption::AbilityL1 => get_ability_for_character(CharacterId::L1, ai_query),
+        DebugMenuOption::AbilityR0 => get_ability_for_character(CharacterId::R0, ai_query),
+        DebugMenuOption::AbilityR1 => get_ability_for_character(CharacterId::R1, ai_query),
         DebugMenuOption::Character => {
-            for (_, character, human) in ai_query.iter() {
+            for (_, character, human, _) in ai_query.iter() {
                 if human.is_some() {
                     if let Some(c) = character {
                         return format!("{:?}", c.0);

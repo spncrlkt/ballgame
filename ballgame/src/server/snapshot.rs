@@ -5,11 +5,11 @@ use bevy::prelude::*;
 use ballgame_protocol::{
     AgentSnapshot, AiStateView, BallSnapshot, BallStateKind, GameStateSnapshot,
     Score as ProtocolScore, Vec2 as ProtocolVec2,
-    game_state::{Basket as ProtocolBasket, CharacterId as ProtocolCharacterId, Team as ProtocolTeam},
+    game_state::{Basket as ProtocolBasket, Buff as ProtocolBuff, CharacterId as ProtocolCharacterId, Team as ProtocolTeam},
 };
 
 use crate::{
-    AiState, Ball, BallState, BallStyle, Character, ChargingShot, Grounded, HoldingBall,
+    AiState, Ball, BallState, BallStyle, Buff, Character, ChargingShot, Grounded, HoldingBall,
     Player, Score, TargetBasket, Team, TurboGauge, Velocity,
     player::{Facing, BlockState},
     countdown::MatchCountdown,
@@ -44,6 +44,19 @@ fn to_protocol_basket(basket: &crate::world::Basket) -> ProtocolBasket {
     match basket {
         crate::world::Basket::Left => ProtocolBasket::Left,
         crate::world::Basket::Right => ProtocolBasket::Right,
+    }
+}
+
+/// Convert Buff to protocol Buff
+fn to_protocol_buff(buff: &Buff) -> ProtocolBuff {
+    match buff {
+        Buff::Speed => ProtocolBuff::Speed,
+        Buff::Turbo => ProtocolBuff::Turbo,
+        Buff::Accuracy => ProtocolBuff::Accuracy,
+        Buff::Steal => ProtocolBuff::Steal,
+        Buff::Jump => ProtocolBuff::Jump,
+        Buff::Defense => ProtocolBuff::Defense,
+        Buff::Recovery => ProtocolBuff::Recovery,
     }
 }
 
@@ -111,6 +124,7 @@ pub fn create_game_snapshot(
             Option<&ChargingShot>,
             Option<&AiState>,
             Option<&BlockState>,
+            &Buff,
         ),
         With<Player>,
     >,
@@ -138,6 +152,7 @@ pub fn create_game_snapshot(
                 charging,
                 ai_state,
                 block_state,
+                buff,
             )| {
                 let charge_progress = charging.map(|c| c.charge_time / 1.0).unwrap_or(0.0); // Normalize to 0-1
 
@@ -154,6 +169,7 @@ pub fn create_game_snapshot(
                     target_basket: to_protocol_basket(&target_basket.0),
                     turbo_gauge: turbo.current / turbo.max,
                     block_active: block_state.map(|b| b.active).unwrap_or(false),
+                    buff: to_protocol_buff(buff),
                     ai_state: ai_state.map(|ai| AiStateView {
                         current_goal: format!("{:?}", ai.current_goal),
                         ball_hold_time: ai.ball_hold_time,

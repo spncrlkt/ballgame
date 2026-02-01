@@ -7,7 +7,7 @@ use rand::Rng;
 use crate::ai::{InputState, evaluate_shot_quality};
 use crate::ball::{Ball, BallRolling, BallShotGrace, BallState, Velocity};
 use crate::constants::*;
-use crate::player::{Grounded, HoldingBall, Player, TargetBasket};
+use crate::player::{Grounded, HoldingBall, Player, Buff, TargetBasket};
 use crate::shooting::{ChargingShot, LastShotInfo};
 use crate::tuning::PhysicsTweaks;
 use crate::world::Basket;
@@ -28,6 +28,7 @@ pub fn throw_ball(
             &mut ChargingShot,
             &mut InputState,
             Option<&HoldingBall>,
+            &Buff,
         ),
         With<Player>,
     >,
@@ -51,6 +52,7 @@ pub fn throw_ball(
         mut charging,
         mut input,
         holding,
+        ability,
     ) in &mut player_query
     {
         if !input.throw_released {
@@ -144,6 +146,11 @@ pub fn throw_ball(
 
         // Add distance variance to total
         variance += distance_variance;
+
+        // Apply Accuracy ability bonus (-30% total variance)
+        if *ability == Buff::Accuracy {
+            variance *= BUFF_ACCURACY_BONUS;
+        }
 
         // Apply variance to angle (max ±30° at full variance), no bias
         let max_angle_variance = 30.0_f32.to_radians();

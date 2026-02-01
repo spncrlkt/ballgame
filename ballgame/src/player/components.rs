@@ -6,6 +6,79 @@ use crate::events::CharacterId;
 use crate::input::InputSourceId;
 use crate::world::Basket;
 
+/// Buff for a character - each character picks ONE buff
+/// that provides a specific gameplay advantage.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Buff {
+    /// +15% movement speed (default)
+    #[default]
+    Speed,
+    /// +50% turbo gauge capacity, +25% refill rate
+    Turbo,
+    /// -30% shot variance
+    Accuracy,
+    /// +15% steal success chance
+    Steal,
+    /// +10% jump velocity
+    Jump,
+    /// +20% steal resistance
+    Defense,
+    /// -30% cooldowns (steal, block)
+    Recovery,
+}
+
+impl Buff {
+    /// All buff variants in display order
+    pub const ALL: [Buff; 7] = [
+        Buff::Speed,
+        Buff::Turbo,
+        Buff::Accuracy,
+        Buff::Steal,
+        Buff::Jump,
+        Buff::Defense,
+        Buff::Recovery,
+    ];
+
+    /// Get the next buff in the cycle
+    pub fn next(&self) -> Buff {
+        let idx = Self::ALL.iter().position(|a| a == self).unwrap_or(0);
+        Self::ALL[(idx + 1) % Self::ALL.len()]
+    }
+
+    /// Get the previous buff in the cycle
+    pub fn prev(&self) -> Buff {
+        let idx = Self::ALL.iter().position(|a| a == self).unwrap_or(0);
+        Self::ALL[(idx + Self::ALL.len() - 1) % Self::ALL.len()]
+    }
+
+    /// Get display name for this buff
+    pub fn name(&self) -> &'static str {
+        match self {
+            Buff::Speed => "Speed",
+            Buff::Turbo => "Turbo",
+            Buff::Accuracy => "Accuracy",
+            Buff::Steal => "Steal",
+            Buff::Jump => "Jump",
+            Buff::Defense => "Defense",
+            Buff::Recovery => "Recovery",
+        }
+    }
+
+    /// Parse buff from string (case-insensitive)
+    pub fn from_str(s: &str) -> Option<Buff> {
+        match s.to_lowercase().as_str() {
+            "speed" => Some(Buff::Speed),
+            "turbo" => Some(Buff::Turbo),
+            "accuracy" => Some(Buff::Accuracy),
+            "steal" => Some(Buff::Steal),
+            "jump" => Some(Buff::Jump),
+            "defense" => Some(Buff::Defense),
+            "recovery" => Some(Buff::Recovery),
+            _ => None,
+        }
+    }
+}
+
 /// Marker for player entities
 #[derive(Component)]
 pub struct Player;

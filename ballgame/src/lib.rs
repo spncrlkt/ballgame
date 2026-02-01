@@ -72,9 +72,9 @@ pub use input::{
 pub use levels::{LevelData, LevelDatabase, PlatformDef};
 pub use palettes::{PALETTES_FILE, Palette, PaletteDatabase};
 pub use player::{
-    BlockState, Character, CharacterSpawnConfig, ControlledBy, CoyoteTimer, Facing, Grounded,
-    HoldingBall, HumanControlled, JumpState, Player, TargetBasket, Team, TurboGauge, Velocity,
-    color_for_character, initial_facing, spawn_character, spawn_charge_gauge,
+    BlockState, Buff, Character, CharacterSpawnConfig, ControlledBy, CoyoteTimer, Facing, Grounded,
+    HoldingBall, HumanControlled, JumpState, Player, TargetBasket, Team, TurboGauge,
+    Velocity, color_for_character, initial_facing, spawn_character, spawn_charge_gauge,
     spawn_characters_for_mode, spawn_position, target_basket_for_character, team_for_character,
 };
 pub use presets::{

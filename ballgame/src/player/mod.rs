@@ -5,7 +5,7 @@ mod physics;
 pub mod spawn;
 
 pub use components::{
-    BlockState, Character, ControlledBy, CoyoteTimer, Facing, Grounded, HoldingBall,
+    BlockState, Buff, Character, ControlledBy, CoyoteTimer, Facing, Grounded, HoldingBall,
     HumanControlled, JumpState, Player, TargetBasket, Team, TurboGauge, Velocity,
 };
 pub use physics::*;

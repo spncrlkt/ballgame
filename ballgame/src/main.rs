@@ -415,6 +415,7 @@ fn main() {
     app.add_systems(Update, ui::debug_menu_navigation);
     app.add_systems(Update, ui::debug_menu_apply_cycle);
     app.add_systems(Update, ui::debug_menu_character_cycle);
+    app.add_systems(Update, ui::debug_menu_ability_cycle);
     app.add_systems(Update, ui::update_debug_menu_display);
 
     // Palette application and preset application
@@ -615,6 +616,7 @@ fn setup(
         &right_ai_profile_id,
         human_controlled,
         is_special_level,
+        &profile_db,
     );
 
     // Spawn charge gauges and steal indicators for all spawned characters

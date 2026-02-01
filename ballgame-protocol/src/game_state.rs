@@ -195,6 +195,41 @@ pub enum Basket {
     Right,
 }
 
+/// Buff for a character - provides a specific gameplay advantage
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum Buff {
+    /// +15% movement speed (default)
+    #[default]
+    Speed,
+    /// +50% turbo gauge capacity, +25% refill rate
+    Turbo,
+    /// -30% shot variance
+    Accuracy,
+    /// +15% steal success chance
+    Steal,
+    /// +10% jump velocity
+    Jump,
+    /// +20% steal resistance
+    Defense,
+    /// -30% cooldowns (steal, block)
+    Recovery,
+}
+
+impl Buff {
+    /// Get display name for this buff
+    pub fn name(&self) -> &'static str {
+        match self {
+            Buff::Speed => "Speed",
+            Buff::Turbo => "Turbo",
+            Buff::Accuracy => "Accuracy",
+            Buff::Steal => "Steal",
+            Buff::Jump => "Jump",
+            Buff::Defense => "Defense",
+            Buff::Recovery => "Recovery",
+        }
+    }
+}
+
 /// Game score
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Score {
@@ -290,6 +325,8 @@ pub struct AgentSnapshot {
     pub turbo_gauge: f32,
     /// Block active
     pub block_active: bool,
+    /// Character's buff
+    pub buff: Buff,
     /// AI state (if AI-controlled)
     pub ai_state: Option<AiStateView>,
 }
@@ -309,6 +346,7 @@ impl Default for AgentSnapshot {
             target_basket: Basket::Right,
             turbo_gauge: 1.0,
             block_active: false,
+            buff: Buff::Speed,
             ai_state: None,
         }
     }

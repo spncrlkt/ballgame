@@ -4,6 +4,61 @@ Record of changes and audit findings for the ballgame project.
 
 ---
 
+## Session: 2026-02-01 - Buff System Implementation
+
+**Branch:** main (uncommitted)
+
+### Summary
+
+Completed the Buff (character ability) system. Each character can have one buff that provides a specific gameplay advantage. AI profiles specify their preferred buff via `preferred_buff` field.
+
+### Changes Made
+
+**New Feature: Buff System**
+
+| File | Change |
+|------|--------|
+| `player/components.rs` | `Buff` enum with 7 variants (Speed, Turbo, Accuracy, Steal, Jump, Defense, Recovery) |
+| `constants.rs` | Buff bonus constants (BUFF_SPEED_BONUS, BUFF_TURBO_GAUGE, etc.) |
+| `ai/profiles.rs` | `preferred_buff` field replaces `turbo_modifier`/`block_slow_modifier` |
+| `player/spawn.rs` | Spawn reads `preferred_buff` from AI profile database |
+| `player/physics.rs` | Speed (+15% move), Jump (+10% velocity), Recovery (-30% block cooldown) |
+| `shooting/throw.rs` | Accuracy (-30% shot variance) |
+| `ball/interaction.rs` | Steal (+15% success), Defense (+20% resistance), Recovery (-30% steal cooldowns) |
+| `ui/debug_menu.rs` | Ability cycling UI for all 4 characters |
+
+**Test Fixes**
+
+| File | Change |
+|------|--------|
+| `testing/runner.rs` | Test entities use `Buff::Accuracy` (neutral) instead of `Buff::Speed` |
+| `tests/scenarios/2v2/player_collision.toml` | Updated thresholds for current physics |
+
+### Verification
+
+| Check | Status |
+|-------|--------|
+| `cargo check` | ✅ PASS |
+| `cargo clippy` | ⚠️ Warnings (pre-existing, no new errors) |
+| `cargo test` | ✅ PASS (14 passed) |
+| `cargo run --bin test-scenarios` | ✅ PASS (42 passed) |
+
+### Data Flow Gaps Identified
+
+| Gap | Severity | Location | Notes |
+|-----|----------|----------|-------|
+| Simulation missing Buff component | HIGH | `simulation/setup.rs` | Players spawned without Buff, affects metrics |
+| Training binary hardcodes spawning | MEDIUM | `bin/training.rs` | Doesn't use `spawn_characters_for_mode()` |
+| Network protocol missing Buff | LOW | `ballgame-protocol/` | Not blocking (single-player only) |
+
+### Next Steps
+
+- Add Buff component to simulation setup
+- Refactor training.rs to use spawn_characters_for_mode
+- Create scenario tests for each buff effect (added to milestones.md)
+
+---
+
 ## Session: 2026-01-31 - Full Audit Workflow
 
 **Commit:** `297e915`
