@@ -29,11 +29,11 @@ const MENU_FONT_SIZE: f32 = 24.0;
 
 /// Spacing
 const MENU_ROW_SPACING: f32 = 32.0;
-const MENU_START_Y: f32 = 180.0;
+const MENU_START_Y: f32 = 280.0;
 
 /// Menu dimensions
 const MENU_WIDTH: f32 = 810.0;
-const MENU_HEIGHT: f32 = 480.0;
+const MENU_HEIGHT: f32 = 680.0;
 const BORDER_THICKNESS: f32 = 4.0;
 const MENU_PADDING: f32 = 20.0; // Padding from edge to text
 
