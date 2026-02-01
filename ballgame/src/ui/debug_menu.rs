@@ -13,13 +13,14 @@ use crate::player::{Character, HumanControlled, Player};
 use crate::presets::{apply_composite_preset, CurrentPresets, PresetDatabase};
 use crate::scoring::{CurrentLevel, GamePaused};
 use crate::settings::CurrentSettings;
-use crate::ui::{PauseMenuState, ViewportScale};
+use crate::ui::ViewportScale;
 
 // =============================================================================
 // CONSTANTS
 // =============================================================================
 
-/// Z-layers for debug menu
+/// Z-layers for debug menu (above countdown z=100, above pause z=900)
+const DEBUG_MENU_BORDER_Z: f32 = 949.0;
 const DEBUG_MENU_BG_Z: f32 = 950.0;
 const DEBUG_MENU_TEXT_Z: f32 = 951.0;
 
@@ -28,11 +29,17 @@ const MENU_FONT_SIZE: f32 = 24.0;
 
 /// Spacing
 const MENU_ROW_SPACING: f32 = 32.0;
-const MENU_START_Y: f32 = 150.0;
-const MENU_X: f32 = -300.0;
+const MENU_START_Y: f32 = 180.0;
+
+/// Menu dimensions
+const MENU_WIDTH: f32 = 810.0;
+const MENU_HEIGHT: f32 = 480.0;
+const BORDER_THICKNESS: f32 = 4.0;
+const MENU_PADDING: f32 = 20.0; // Padding from edge to text
 
 /// Colors
-const MENU_BG_COLOR: Color = Color::srgba(0.0, 0.0, 0.0, 0.85);
+const MENU_BG_COLOR: Color = Color::srgb(0.0, 0.0, 0.0);
+const MENU_BORDER_COLOR: Color = Color::srgb(1.0, 1.0, 1.0);
 const SELECTED_COLOR: Color = Color::srgb(1.0, 0.9, 0.2);
 const UNSELECTED_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
 
@@ -109,13 +116,23 @@ pub struct DebugMenuState {
     pub pending_character_cycle: Option<bool>,
 }
 
+/// Marker for debug menu border
+#[derive(Component)]
+pub struct DebugMenuBorder;
+
 /// Marker for debug menu background
 #[derive(Component)]
 pub struct DebugMenuBackground;
 
-/// Marker for debug menu row
+/// Marker for debug menu row label (left-aligned)
 #[derive(Component)]
 pub struct DebugMenuRow {
+    pub index: usize,
+}
+
+/// Marker for debug menu row value (right-aligned)
+#[derive(Component)]
+pub struct DebugMenuValue {
     pub index: usize,
 }
 
@@ -135,33 +152,66 @@ pub struct ValuePickerItem {
 
 /// Spawn the debug menu UI (hidden initially)
 pub fn spawn_debug_menu(mut commands: Commands) {
-    // Semi-transparent dark background
+    // White border (slightly larger than background)
+    commands.spawn((
+        Sprite {
+            color: MENU_BORDER_COLOR,
+            custom_size: Some(Vec2::new(
+                MENU_WIDTH + BORDER_THICKNESS * 2.0,
+                MENU_HEIGHT + BORDER_THICKNESS * 2.0,
+            )),
+            ..default()
+        },
+        Transform::from_xyz(0.0, 0.0, DEBUG_MENU_BORDER_Z),
+        Visibility::Hidden,
+        DebugMenuBorder,
+    ));
+
+    // Opaque black background (centered)
     commands.spawn((
         Sprite {
             color: MENU_BG_COLOR,
-            custom_size: Some(Vec2::new(400.0, 500.0)),
+            custom_size: Some(Vec2::new(MENU_WIDTH, MENU_HEIGHT)),
             ..default()
         },
-        Transform::from_xyz(MENU_X + 150.0, 0.0, DEBUG_MENU_BG_Z),
+        Transform::from_xyz(0.0, 0.0, DEBUG_MENU_BG_Z),
         Visibility::Hidden,
         DebugMenuBackground,
     ));
 
-    // Menu rows (one per option)
+    // Menu rows - label (left-aligned) and value (right-aligned) per option
+    let left_x = -MENU_WIDTH / 2.0 + MENU_PADDING + 200.0;
+    let right_x = MENU_WIDTH / 2.0 - MENU_PADDING - 200.0;
+
     for (i, option) in DebugMenuOption::ALL.iter().enumerate() {
         let y = MENU_START_Y - (i as f32 * MENU_ROW_SPACING);
 
+        // Label (left-aligned)
         commands.spawn((
-            Text2d::new(format!("  {}: ---", option.label())),
+            Text2d::new(format!("  {}", option.label())),
             TextFont {
                 font_size: MENU_FONT_SIZE,
                 ..default()
             },
             TextLayout::new_with_justify(Justify::Left),
             TextColor(UNSELECTED_COLOR),
-            Transform::from_xyz(MENU_X, y, DEBUG_MENU_TEXT_Z),
+            Transform::from_xyz(left_x, y, DEBUG_MENU_TEXT_Z),
             Visibility::Hidden,
             DebugMenuRow { index: i },
+        ));
+
+        // Value (right-aligned)
+        commands.spawn((
+            Text2d::new("---"),
+            TextFont {
+                font_size: MENU_FONT_SIZE,
+                ..default()
+            },
+            TextLayout::new_with_justify(Justify::Right),
+            TextColor(UNSELECTED_COLOR),
+            Transform::from_xyz(right_x, y, DEBUG_MENU_TEXT_Z),
+            Visibility::Hidden,
+            DebugMenuValue { index: i },
         ));
     }
 }
@@ -176,10 +226,28 @@ pub fn toggle_debug_menu(
     gamepads: Query<&Gamepad>,
     mut menu_state: ResMut<DebugMenuState>,
     mut game_paused: ResMut<GamePaused>,
-    pause_menu: Res<PauseMenuState>,
 ) {
-    // Don't toggle if pause menu is open (they're mutually exclusive)
+    // When debug menu is open, Start switches to pause menu
+    if menu_state.open {
+        let start_pressed = gamepads
+            .iter()
+            .any(|gp| gp.just_pressed(GamepadButton::Start));
+
+        if start_pressed {
+            menu_state.open = false;
+            // Keep game paused - pause menu will show
+            info!("Debug menu closed, pause menu opened");
+            return;
+        }
+    }
+
+    // Don't toggle if pause menu is open (Select in pause menu handled by pause_menu_confirm)
+    // Also skip if debug menu was just opened by pause_menu_confirm this frame
     if game_paused.0 && !menu_state.open {
+        return;
+    }
+    if menu_state.is_changed() && menu_state.open {
+        // Debug menu was just opened by another system, don't toggle back off
         return;
     }
 
@@ -192,10 +260,7 @@ pub fn toggle_debug_menu(
         menu_state.open = !menu_state.open;
 
         // Pause game when menu opens, unpause when it closes
-        // But only if pause menu isn't active
-        if !pause_menu.selected.label().is_empty() || menu_state.open {
-            game_paused.0 = menu_state.open;
-        }
+        game_paused.0 = menu_state.open;
 
         if menu_state.open {
             info!("Debug menu opened");
@@ -486,16 +551,33 @@ pub fn update_debug_menu_display(
     _ball_textures: Res<BallTextures>,
     ball_query: Query<&BallStyle, With<Ball>>,
     ai_query: Query<(&AiState, Option<&Character>, Option<&HumanControlled>), With<Player>>,
+    mut border_query: Query<
+        &mut Visibility,
+        (With<DebugMenuBorder>, Without<DebugMenuBackground>, Without<DebugMenuRow>, Without<DebugMenuValue>),
+    >,
     mut bg_query: Query<
         &mut Visibility,
-        (With<DebugMenuBackground>, Without<DebugMenuRow>),
+        (With<DebugMenuBackground>, Without<DebugMenuBorder>, Without<DebugMenuRow>, Without<DebugMenuValue>),
     >,
     mut row_query: Query<
         (&mut Visibility, &mut Text2d, &mut TextColor, &DebugMenuRow),
-        Without<DebugMenuBackground>,
+        (Without<DebugMenuBackground>, Without<DebugMenuBorder>, Without<DebugMenuValue>),
+    >,
+    mut value_query: Query<
+        (&mut Visibility, &mut Text2d, &mut TextColor, &DebugMenuValue),
+        (Without<DebugMenuBackground>, Without<DebugMenuBorder>, Without<DebugMenuRow>),
     >,
 ) {
     let is_open = menu_state.open;
+
+    // Update border visibility
+    for mut vis in &mut border_query {
+        *vis = if is_open {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
 
     // Update background visibility
     for mut vis in &mut bg_query {
@@ -506,7 +588,7 @@ pub fn update_debug_menu_display(
         };
     }
 
-    // Update menu rows
+    // Update menu row labels (left-aligned)
     for (mut vis, mut text, mut color, row) in &mut row_query {
         *vis = if is_open {
             Visibility::Visible
@@ -517,6 +599,28 @@ pub fn update_debug_menu_display(
         if is_open {
             let is_selected = row.index == menu_state.selected_row;
             let option = DebugMenuOption::ALL[row.index];
+
+            let marker = if is_selected { ">" } else { " " };
+            **text = format!("{} {}", marker, option.label());
+            color.0 = if is_selected {
+                SELECTED_COLOR
+            } else {
+                UNSELECTED_COLOR
+            };
+        }
+    }
+
+    // Update menu row values (right-aligned)
+    for (mut vis, mut text, mut color, value) in &mut value_query {
+        *vis = if is_open {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+
+        if is_open {
+            let is_selected = value.index == menu_state.selected_row;
+            let option = DebugMenuOption::ALL[value.index];
 
             // Get current value for this option
             let value_str = get_current_value_str(
@@ -532,8 +636,7 @@ pub fn update_debug_menu_display(
                 &ai_query,
             );
 
-            let marker = if is_selected { ">" } else { " " };
-            **text = format!("{} {}: {}", marker, option.label(), value_str);
+            **text = value_str;
             color.0 = if is_selected {
                 SELECTED_COLOR
             } else {

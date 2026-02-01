@@ -265,7 +265,7 @@ pub fn pause_menu_navigation(
 /// Handle pause menu confirmation (Start or face buttons)
 pub fn pause_menu_confirm(
     mut game_paused: ResMut<GamePaused>,
-    debug_menu: Res<DebugMenuState>,
+    mut debug_menu: ResMut<DebugMenuState>,
     mut restart_requested: ResMut<RestartRequested>,
     mut menu_state: ResMut<PauseMenuState>,
     gamepads: Query<&Gamepad>,
@@ -279,6 +279,18 @@ pub fn pause_menu_confirm(
     // Skip confirmation on the frame pause was just enabled
     // (prevents Start press from immediately closing the menu)
     if game_paused.is_changed() {
+        return;
+    }
+
+    // Select button switches to debug menu
+    let select_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::Select));
+
+    if select_pressed {
+        debug_menu.open = true;
+        // Keep game paused - debug menu will show
+        info!("Pause menu closed, debug menu opened");
         return;
     }
 
