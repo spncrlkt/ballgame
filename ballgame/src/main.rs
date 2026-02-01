@@ -14,9 +14,9 @@ use ballgame::{
     StealContest, StealTracker, StyleTextures, TweakPanel, TweakPanelState, TweakRow, Velocity,
     ViewportScale, ai, apply_preset_to_tweaks, ball, config_watcher, constants::*, countdown,
     display_ball_wave, emit_level_change_events, color_for_character, initial_facing, input,
-    levels, player, replay, save_settings_system, scoring, shooting, snapshot, spawn_charge_gauge,
-    spawn_characters_for_mode, spawn_countdown_text, steal, tuning, ui, update_event_bus_time,
-    world,
+    levels, player, replay, save_settings_system, scoring, server, shooting, snapshot,
+    spawn_charge_gauge, spawn_characters_for_mode, spawn_countdown_text, steal, tuning, ui,
+    update_event_bus_time, world,
 };
 use bevy::{camera::ScalingMode, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use std::collections::HashMap;
@@ -96,6 +96,29 @@ fn main() {
             .and_then(|s| s.parse::<f32>().ok())
             .unwrap_or(DEFAULT_REPLAY_TIMEOUT_SECS)
     });
+
+    // Server mode flags
+    let server_mode = args.iter().any(|a| a == "--server");
+    let server_port = args
+        .iter()
+        .position(|a| a == "--port")
+        .and_then(|i| args.get(i + 1).and_then(|s| s.parse::<u16>().ok()))
+        .unwrap_or(9000);
+    let local_slot = args
+        .iter()
+        .position(|a| a == "--local-slot")
+        .and_then(|i| args.get(i + 1).and_then(|s| s.parse::<u8>().ok()));
+
+    // Tournament mode flags
+    let tournament_mode = args.iter().any(|a| a == "--tournament");
+    let score_limit = args
+        .iter()
+        .position(|a| a == "--score-limit")
+        .and_then(|i| args.get(i + 1).and_then(|s| s.parse::<u32>().ok()));
+    let time_limit_secs = args
+        .iter()
+        .position(|a| a == "--time-limit")
+        .and_then(|i| args.get(i + 1).and_then(|s| s.parse::<f32>().ok()));
 
     // Load persistent settings (uses defaults if file doesn't exist)
     let current_settings = CurrentSettings::default();
@@ -184,270 +207,338 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let debug_config = DebugLogConfig::load_with_args(&args);
 
-    App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    // Use loaded viewport preset for initial size
-                    // Set scale_factor_override to 1.0 for consistent behavior on HiDPI displays
-                    resolution: bevy::window::WindowResolution::new(
-                        viewport_width as u32,
-                        viewport_height as u32,
-                    )
-                    .with_scale_factor_override(1.0),
-                    title: "Ballgame".into(),
-                    resizable: false,
-                    ..default()
-                }),
+    let mut app = App::new();
+
+    app.add_plugins((
+        DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                // Use loaded viewport preset for initial size
+                // Set scale_factor_override to 1.0 for consistent behavior on HiDPI displays
+                resolution: bevy::window::WindowResolution::new(
+                    viewport_width as u32,
+                    viewport_height as u32,
+                )
+                .with_scale_factor_override(1.0),
+                title: "Ballgame".into(),
+                resizable: false,
                 ..default()
             }),
-            FrameTimeDiagnosticsPlugin::default(),
-        ))
-        .insert_resource(ClearColor(initial_bg))
-        .insert_resource(palette_db)
-        .insert_resource(preset_db)
-        .insert_resource(level_db)
-        .insert_resource(current_settings)
-        .init_resource::<PlayerInput>()
-        .init_resource::<DebugSettings>()
-        .init_resource::<StealContest>()
-        .init_resource::<StealTracker>()
-        .init_resource::<Score>()
-        .insert_resource(CurrentLevel(loaded_level_id))
-        .insert_resource(CurrentPalette(loaded_palette_index))
-        .insert_resource(debug_config)
-        .init_resource::<PhysicsTweaks>()
-        .init_resource::<TweakPanelState>()
-        .init_resource::<LastShotInfo>()
-        .insert_resource(ViewportScale {
-            preset_index: loaded_viewport_index,
-        })
-        .insert_resource(CycleSelection {
-            active_direction: ui::CycleDirection::from_str(&loaded_active_direction),
-            down_option: ui::DownOption::from_str(&loaded_down_option),
-            right_option: ui::RightOption::from_str(&loaded_right_option),
-            ai_player_index: 0,
-            menu_enabled: false,
-        })
-        .init_resource::<ConfigWatcher>()
-        .init_resource::<AiProfileDatabase>()
-        .init_resource::<CurrentPresets>()
-        .init_resource::<NavGraph>()
-        .init_resource::<AiCapabilities>()
-        .init_resource::<ai::HeatmapBundle>()
-        // Event bus for cross-module communication
-        .insert_resource(EventBus::new())
-        // Level change tracker for event emission
-        .init_resource::<LevelChangeTracker>()
-        .insert_resource(SnapshotConfig {
-            // Only enable screenshots when running via screenshot script
-            enabled: screenshot_and_quit,
-            exit_after_startup: screenshot_and_quit,
             ..default()
-        })
-        .init_resource::<SnapshotTriggerState>()
-        .init_resource::<DisplayBallWave>()
-        // Initialize countdown (frozen if regression level or --freeze-countdown flag)
-        .insert_resource(if should_freeze_countdown {
-            let mut countdown = MatchCountdown::default();
-            countdown.start_frozen();
-            countdown
+        }),
+        FrameTimeDiagnosticsPlugin::default(),
+    ));
+
+    // Resources
+    app.insert_resource(ClearColor(initial_bg));
+    app.insert_resource(palette_db);
+    app.insert_resource(preset_db);
+    app.insert_resource(level_db);
+    app.insert_resource(current_settings);
+    app.init_resource::<PlayerInput>();
+    app.init_resource::<DebugSettings>();
+    app.init_resource::<StealContest>();
+    app.init_resource::<StealTracker>();
+    app.init_resource::<Score>();
+    app.insert_resource(CurrentLevel(loaded_level_id));
+    app.insert_resource(CurrentPalette(loaded_palette_index));
+    app.insert_resource(debug_config);
+    app.init_resource::<PhysicsTweaks>();
+    app.init_resource::<TweakPanelState>();
+    app.init_resource::<LastShotInfo>();
+    app.insert_resource(ViewportScale {
+        preset_index: loaded_viewport_index,
+    });
+    app.insert_resource(CycleSelection {
+        active_direction: ui::CycleDirection::from_str(&loaded_active_direction),
+        down_option: ui::DownOption::from_str(&loaded_down_option),
+        right_option: ui::RightOption::from_str(&loaded_right_option),
+        ai_player_index: 0,
+        menu_enabled: false,
+    });
+    app.init_resource::<ConfigWatcher>();
+    app.init_resource::<AiProfileDatabase>();
+    app.init_resource::<CurrentPresets>();
+    app.init_resource::<NavGraph>();
+    app.init_resource::<AiCapabilities>();
+    app.init_resource::<ai::HeatmapBundle>();
+
+    // Event bus for cross-module communication
+    app.insert_resource(EventBus::new());
+
+    // Level change tracker for event emission
+    app.init_resource::<LevelChangeTracker>();
+
+    app.insert_resource(SnapshotConfig {
+        // Only enable screenshots when running via screenshot script
+        enabled: screenshot_and_quit,
+        exit_after_startup: screenshot_and_quit,
+        ..default()
+    });
+    app.init_resource::<SnapshotTriggerState>();
+    app.init_resource::<DisplayBallWave>();
+
+    // Initialize countdown (frozen if regression level or --freeze-countdown flag)
+    app.insert_resource(if should_freeze_countdown {
+        let mut countdown = MatchCountdown::default();
+        countdown.start_frozen();
+        countdown
+    } else {
+        MatchCountdown::default()
+    });
+
+    // Countdown end tracker for jump ball velocity
+    app.init_resource::<CountdownEndTracker>();
+
+    // Replay mode resources
+    app.insert_resource(if let Some(match_id) = replay_db_match_id {
+        replay::ReplayMode::new_db(match_id)
+    } else {
+        replay::ReplayMode::default()
+    });
+    app.insert_resource(ReplayTimeout {
+        remaining_secs: replay_timeout_secs.unwrap_or(0.0),
+        active: replay_timeout_secs.is_some(),
+    });
+    app.init_resource::<replay::ReplayState>();
+
+    // Startup systems - use normal setup only when NOT in replay mode
+    app.add_systems(Startup, tuning::load_global_tuning_system);
+    app.add_systems(Startup, setup.run_if(replay::not_replay_active));
+
+    // =========== NORMAL GAME SYSTEMS (disabled in replay mode) ===========
+    // Countdown system - always runs to update timer and text
+    app.add_systems(
+        Update,
+        (
+            countdown::update_countdown,
+            countdown::apply_jump_ball_velocity,
+        )
+            .chain()
+            .run_if(replay::not_replay_active),
+    );
+
+    // Event bus time update (runs every frame for timestamping)
+    app.add_systems(
+        Update,
+        update_event_bus_time.run_if(replay::not_replay_active),
+    );
+
+    // Input systems must run in order: capture -> copy -> swap -> nav graph -> nav -> AI
+    // Only runs when NOT in countdown and NOT in replay mode
+    app.add_systems(
+        Update,
+        (
+            input::capture_input,
+            ai::copy_human_input,
+            ai::swap_control,
+            ai::mark_nav_dirty_on_level_change,
+            ai::load_heatmaps_on_level_change,
+            ai::rebuild_nav_graph,
+            ai::ai_navigation_update,
+            ai::ai_decision_update,
+        )
+            .chain()
+            .run_if(replay::not_replay_active.and(countdown::not_in_countdown)),
+    );
+
+    // Settings reset (double-click Start) - must run before respawn
+    app.add_systems(
+        Update,
+        player::check_settings_reset.run_if(replay::not_replay_active),
+    );
+
+    // Core Update systems - split to avoid tuple issues with respawn_player
+    app.add_systems(
+        Update,
+        player::respawn_player.run_if(replay::not_replay_active),
+    );
+
+    // Emit level change events for auditability (runs after systems that change level)
+    app.add_systems(
+        Update,
+        emit_level_change_events.run_if(replay::not_replay_active),
+    );
+
+    // Countdown trigger on level change (only in manual game mode)
+    app.add_systems(
+        Update,
+        countdown::trigger_countdown_on_level_change.run_if(replay::not_replay_active),
+    );
+
+    app.add_systems(
+        Update,
+        (ui::toggle_debug, config_watcher::check_config_changes)
+            .run_if(replay::not_replay_active),
+    );
+
+    app.add_systems(
+        Update,
+        (
+            ui::update_debug_text,
+            ui::update_score_level_text,
+            ui::spawn_character_indicators,
+            ui::update_character_indicators,
+            ui::update_indicator_colors,
+        )
+            .run_if(replay::not_replay_active),
+    );
+
+    app.add_systems(
+        Update,
+        (
+            ui::animate_pickable_ball,
+            ui::animate_score_flash,
+            ui::update_charge_gauge,
+            ui::update_steal_indicators,
+            display_ball_wave,
+            player::manage_debug_display,
+        )
+            .run_if(replay::not_replay_active),
+    );
+
+    // UI panel and cycle systems
+    app.add_systems(
+        Update,
+        (
+            ui::toggle_tweak_panel,
+            ui::update_tweak_panel,
+            ui::cycle_viewport,
+            ui::unified_cycle_system,
+        )
+            .run_if(replay::not_replay_active),
+    );
+
+    // Cycle indicator, palette application, and preset application
+    app.add_systems(
+        Update,
+        (
+            ui::update_cycle_indicator,
+            ui::apply_palette_colors,
+            apply_preset_to_tweaks,
+        )
+            .run_if(replay::not_replay_active),
+    );
+
+    // Snapshot system - captures game state on events
+    app.add_systems(
+        Update,
+        (
+            snapshot::snapshot_trigger_system,
+            snapshot::toggle_snapshot_system,
+            snapshot::toggle_screenshot_capture,
+            snapshot::manual_snapshot,
+        )
+            .run_if(replay::not_replay_active),
+    );
+
+    // Settings persistence - save when dirty
+    app.add_systems(
+        Update,
+        save_settings_system.run_if(replay::not_replay_active),
+    );
+
+    app.add_systems(Update, replay_timeout.run_if(replay::replay_active));
+
+    // Physics systems in FixedUpdate
+    app.add_systems(
+        FixedUpdate,
+        // Split into nested chains to avoid Bevy's tuple size limit
+        (
+            (
+                player::apply_input,
+                player::apply_gravity,
+                player::turbo_update,
+                player::block_update,
+                ball::ball_gravity,
+                ball::ball_spin,
+                ball::apply_velocity,
+                player::check_collisions,
+                player::player_player_collision,
+                ball::ball_collisions,
+            )
+                .chain(),
+            (
+                ball::ball_state_update,
+                ball::pass_state_update,
+                ball::ball_player_collision,
+                ball::block_intercept,
+                ball::pass_completion,
+                ball::ball_follow_holder,
+                ball::pickup_ball,
+                steal::steal_cooldown_update,
+                shooting::update_shot_charge,
+                shooting::throw_ball,
+                ball::handle_pass,
+                scoring::check_scoring,
+            )
+                .chain(),
+        )
+            .chain()
+            .run_if(replay::not_replay_active.and(countdown::not_in_countdown)),
+    );
+
+    // =========== REPLAY MODE SYSTEMS ===========
+    // Replay startup - load file, setup camera
+    app.add_systems(Startup, replay_load_file.run_if(replay::replay_active));
+
+    // Replay setup - spawn game world (runs after load, needs ReplayData)
+    app.add_systems(
+        Startup,
+        (replay::replay_setup, replay::setup_replay_ui)
+            .run_if(replay::replay_active)
+            .after(replay_load_file),
+    );
+
+    // Replay update systems
+    app.add_systems(
+        Update,
+        (
+            replay::replay_playback,
+            replay::replay_input_handler,
+            replay::update_replay_ui,
+        )
+            .chain()
+            .run_if(replay::replay_active),
+    );
+
+    // =========== SERVER MODE (optional) ===========
+    if server_mode {
+        info!("Starting in server mode on port {}", server_port);
+
+        // Add server bridge resource (starts the WebSocket server)
+        app.insert_resource(server::ServerBridge::new(server_port, local_slot));
+
+        // Add tournament config if tournament mode is enabled
+        let tournament_config = if tournament_mode || score_limit.is_some() || time_limit_secs.is_some() {
+            server::TournamentConfig::new(score_limit, time_limit_secs)
         } else {
-            MatchCountdown::default()
-        })
-        // Countdown end tracker for jump ball velocity
-        .init_resource::<CountdownEndTracker>()
-        // Replay mode resources
-        .insert_resource(if let Some(match_id) = replay_db_match_id {
-            replay::ReplayMode::new_db(match_id)
-        } else {
-            replay::ReplayMode::default()
-        })
-        .insert_resource(ReplayTimeout {
-            remaining_secs: replay_timeout_secs.unwrap_or(0.0),
-            active: replay_timeout_secs.is_some(),
-        })
-        .init_resource::<replay::ReplayState>()
-        // Startup system - use normal setup only when NOT in replay mode
-        .add_systems(Startup, tuning::load_global_tuning_system)
-        .add_systems(Startup, setup.run_if(replay::not_replay_active))
-        // =========== NORMAL GAME SYSTEMS (disabled in replay mode) ===========
-        // Countdown system - always runs to update timer and text
-        .add_systems(
+            server::TournamentConfig::default()
+        };
+        app.insert_resource(tournament_config);
+
+        // Add server systems
+        app.add_systems(
             Update,
-            (
-                countdown::update_countdown,
-                countdown::apply_jump_ball_velocity,
-            )
-                .chain()
-                .run_if(replay::not_replay_active),
-        )
-        // Event bus time update (runs every frame for timestamping)
-        .add_systems(
-            Update,
-            update_event_bus_time.run_if(replay::not_replay_active),
-        )
-        // Input systems must run in order: capture -> copy -> swap -> nav graph -> nav -> AI
-        // Only runs when NOT in countdown and NOT in replay mode
-        .add_systems(
-            Update,
-            (
-                input::capture_input,
-                ai::copy_human_input,
-                ai::swap_control,
-                ai::mark_nav_dirty_on_level_change,
-                ai::load_heatmaps_on_level_change,
-                ai::rebuild_nav_graph,
-                ai::ai_navigation_update,
-                ai::ai_decision_update,
-            )
-                .chain()
-                .run_if(replay::not_replay_active.and(countdown::not_in_countdown)),
-        )
-        // Settings reset (double-click Start) - must run before respawn
-        .add_systems(
-            Update,
-            player::check_settings_reset.run_if(replay::not_replay_active),
-        )
-        // Core Update systems - split to avoid tuple issues with respawn_player
-        .add_systems(
-            Update,
-            player::respawn_player.run_if(replay::not_replay_active),
-        )
-        // Emit level change events for auditability (runs after systems that change level)
-        .add_systems(
-            Update,
-            emit_level_change_events.run_if(replay::not_replay_active),
-        )
-        // Countdown trigger on level change (only in manual game mode)
-        .add_systems(
-            Update,
-            countdown::trigger_countdown_on_level_change.run_if(replay::not_replay_active),
-        )
-        .add_systems(
-            Update,
-            (ui::toggle_debug, config_watcher::check_config_changes)
-                .run_if(replay::not_replay_active),
-        )
-        .add_systems(
-            Update,
-            (
-                ui::update_debug_text,
-                ui::update_score_level_text,
-                ui::spawn_character_indicators,
-                ui::update_character_indicators,
-                ui::update_indicator_colors,
-            )
-                .run_if(replay::not_replay_active),
-        )
-        .add_systems(
-            Update,
-            (
-                ui::animate_pickable_ball,
-                ui::animate_score_flash,
-                ui::update_charge_gauge,
-                ui::update_steal_indicators,
-                display_ball_wave,
-                player::manage_debug_display,
-            )
-                .run_if(replay::not_replay_active),
-        )
-        // UI panel and cycle systems
-        .add_systems(
-            Update,
-            (
-                ui::toggle_tweak_panel,
-                ui::update_tweak_panel,
-                ui::cycle_viewport,
-                ui::unified_cycle_system,
-            )
-                .run_if(replay::not_replay_active),
-        )
-        // Cycle indicator, palette application, and preset application
-        .add_systems(
-            Update,
-            (
-                ui::update_cycle_indicator,
-                ui::apply_palette_colors,
-                apply_preset_to_tweaks,
-            )
-                .run_if(replay::not_replay_active),
-        )
-        // Snapshot system - captures game state on events
-        .add_systems(
-            Update,
-            (
-                snapshot::snapshot_trigger_system,
-                snapshot::toggle_snapshot_system,
-                snapshot::toggle_screenshot_capture,
-                snapshot::manual_snapshot,
-            )
-                .run_if(replay::not_replay_active),
-        )
-        // Settings persistence - save when dirty
-        .add_systems(
-            Update,
-            save_settings_system.run_if(replay::not_replay_active),
-        )
-        .add_systems(Update, replay_timeout.run_if(replay::replay_active))
-        .add_systems(
+            server::read_remote_inputs
+                .before(ai::ai_decision_update)
+                .run_if(replay::not_replay_active.and(server::server_mode_active)),
+        );
+
+        app.add_systems(
             FixedUpdate,
-            // Split into nested chains to avoid Bevy's tuple size limit
-            (
-                (
-                    player::apply_input,
-                    player::apply_gravity,
-                    player::turbo_update,
-                    player::block_update,
-                    ball::ball_gravity,
-                    ball::ball_spin,
-                    ball::apply_velocity,
-                    player::check_collisions,
-                    player::player_player_collision,
-                    ball::ball_collisions,
-                )
-                    .chain(),
-                (
-                    ball::ball_state_update,
-                    ball::pass_state_update,
-                    ball::ball_player_collision,
-                    ball::block_intercept,
-                    ball::pass_completion,
-                    ball::ball_follow_holder,
-                    ball::pickup_ball,
-                    steal::steal_cooldown_update,
-                    shooting::update_shot_charge,
-                    shooting::throw_ball,
-                    ball::handle_pass,
-                    scoring::check_scoring,
-                )
-                    .chain(),
-            )
-                .chain()
-                .run_if(replay::not_replay_active.and(countdown::not_in_countdown)),
-        )
-        // =========== REPLAY MODE SYSTEMS ===========
-        // Replay startup - load file, setup camera
-        .add_systems(Startup, replay_load_file.run_if(replay::replay_active))
-        // Replay setup - spawn game world (runs after load, needs ReplayData)
-        .add_systems(
-            Startup,
-            (replay::replay_setup, replay::setup_replay_ui)
-                .run_if(replay::replay_active)
-                .after(replay_load_file),
-        )
-        // Replay update systems
-        .add_systems(
+            server::broadcast_state_system
+                .after(scoring::check_scoring)
+                .run_if(replay::not_replay_active.and(server::server_mode_active)),
+        );
+
+        app.add_systems(
             Update,
-            (
-                replay::replay_playback,
-                replay::replay_input_handler,
-                replay::update_replay_ui,
-            )
-                .chain()
-                .run_if(replay::replay_active),
-        )
-        .run();
+            server::check_tournament_end
+                .run_if(replay::not_replay_active.and(server::server_mode_active)),
+        );
+    }
+
+    app.run();
 }
 
 /// Setup the game world

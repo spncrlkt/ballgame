@@ -23,6 +23,9 @@ pub mod snapshot;
 pub mod testing;
 pub mod training;
 
+// Network/server modules
+pub mod server;
+
 // Game logic modules
 pub mod ai;
 pub mod ball;

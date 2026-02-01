@@ -1,0 +1,9 @@
+[package]
+name = "ballgame-protocol"
+version = "0.1.0"
+edition = "2024"
+description = "Shared protocol types for ballgame client-server communication"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

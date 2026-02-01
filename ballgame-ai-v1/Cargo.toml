@@ -1,0 +1,18 @@
+[package]
+name = "ballgame-ai-v1"
+version.workspace = true
+edition.workspace = true
+description = "AI client v1 for ballgame - extracts current AI logic as standalone client"
+
+[[bin]]
+name = "ballgame-ai-v1"
+path = "src/main.rs"
+
+[dependencies]
+ballgame-protocol = { path = "../ballgame-protocol" }
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }

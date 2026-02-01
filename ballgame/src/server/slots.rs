@@ -1,0 +1,293 @@
+//! Player slot management
+//!
+//! Manages the assignment of players to game slots (0-3).
+
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+use ballgame_protocol::{AgentInput, CharacterId, handshake::ClientType};
+
+/// Slot identifier (0-3)
+pub type SlotId = u8;
+
+/// Maximum number of player slots
+pub const MAX_SLOTS: usize = 4;
+
+/// State of a single player slot
+#[derive(Debug, Clone)]
+pub enum Slot {
+    /// Slot is empty (no player assigned)
+    Empty,
+
+    /// Local player (keyboard/gamepad input handled by server)
+    Local {
+        /// Last input from local player
+        input: AgentInput,
+    },
+
+    /// Remote client connected via WebSocket
+    Remote {
+        /// Unique client ID
+        client_id: u64,
+        /// Type of client (human, AI version, etc.)
+        client_type: ClientType,
+        /// Client display name
+        client_name: String,
+        /// Last received input from this client
+        last_input: AgentInput,
+        /// Last tick this client acknowledged
+        last_ack_tick: u64,
+    },
+
+    /// Server-side AI (fallback when no client connected)
+    ServerAi {
+        /// AI profile ID
+        profile_id: String,
+    },
+}
+
+impl Slot {
+    /// Check if slot is empty
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Slot::Empty)
+    }
+
+    /// Check if slot has a remote client
+    pub fn is_remote(&self) -> bool {
+        matches!(self, Slot::Remote { .. })
+    }
+
+    /// Check if slot is local
+    pub fn is_local(&self) -> bool {
+        matches!(self, Slot::Local { .. })
+    }
+
+    /// Get the current input for this slot
+    pub fn get_input(&self) -> AgentInput {
+        match self {
+            Slot::Empty => AgentInput::default(),
+            Slot::Local { input } => input.clone(),
+            Slot::Remote { last_input, .. } => last_input.clone(),
+            Slot::ServerAi { .. } => AgentInput::default(), // AI decides separately
+        }
+    }
+
+    /// Get the client type if this is a remote slot
+    pub fn client_type(&self) -> Option<&ClientType> {
+        match self {
+            Slot::Remote { client_type, .. } => Some(client_type),
+            _ => None,
+        }
+    }
+}
+
+/// Manages all player slots
+pub struct SlotManager {
+    slots: Arc<RwLock<[Slot; MAX_SLOTS]>>,
+    next_client_id: Arc<RwLock<u64>>,
+}
+
+impl SlotManager {
+    /// Create a new slot manager with all slots empty
+    pub fn new() -> Self {
+        Self {
+            slots: Arc::new(RwLock::new([
+                Slot::Empty,
+                Slot::Empty,
+                Slot::Empty,
+                Slot::Empty,
+            ])),
+            next_client_id: Arc::new(RwLock::new(1)),
+        }
+    }
+
+    /// Create a slot manager with a local player in the specified slot
+    pub fn with_local_slot(local_slot: SlotId) -> Self {
+        // Build slots array synchronously for initialization
+        let mut slots = [
+            Slot::Empty,
+            Slot::Empty,
+            Slot::Empty,
+            Slot::Empty,
+        ];
+        if (local_slot as usize) < MAX_SLOTS {
+            slots[local_slot as usize] = Slot::Local {
+                input: AgentInput::default(),
+            };
+        }
+        Self {
+            slots: Arc::new(RwLock::new(slots)),
+            next_client_id: Arc::new(RwLock::new(1)),
+        }
+    }
+
+    /// Find an empty slot and assign a remote client to it
+    /// Returns the assigned slot ID and client ID, or None if no slots available
+    pub async fn assign_remote(
+        &self,
+        client_type: ClientType,
+        client_name: String,
+    ) -> Option<(SlotId, u64)> {
+        let mut slots = self.slots.write().await;
+        let mut next_id = self.next_client_id.write().await;
+
+        // Find first empty slot
+        for (i, slot) in slots.iter_mut().enumerate() {
+            if slot.is_empty() {
+                let client_id = *next_id;
+                *next_id += 1;
+
+                *slot = Slot::Remote {
+                    client_id,
+                    client_type,
+                    client_name,
+                    last_input: AgentInput::default(),
+                    last_ack_tick: 0,
+                };
+
+                return Some((i as SlotId, client_id));
+            }
+        }
+
+        None
+    }
+
+    /// Release a slot (client disconnected)
+    pub async fn release(&self, slot_id: SlotId) {
+        if (slot_id as usize) < MAX_SLOTS {
+            let mut slots = self.slots.write().await;
+            slots[slot_id as usize] = Slot::Empty;
+        }
+    }
+
+    /// Update input for a slot
+    pub async fn set_input(&self, slot_id: SlotId, input: AgentInput, ack_tick: u64) {
+        if (slot_id as usize) < MAX_SLOTS {
+            let mut slots = self.slots.write().await;
+            match &mut slots[slot_id as usize] {
+                Slot::Local { input: i } => {
+                    *i = input;
+                }
+                Slot::Remote {
+                    last_input,
+                    last_ack_tick,
+                    ..
+                } => {
+                    *last_input = input;
+                    *last_ack_tick = ack_tick;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Update local input (for keyboard/gamepad)
+    pub async fn set_local_input(&self, slot_id: SlotId, input: AgentInput) {
+        if (slot_id as usize) < MAX_SLOTS {
+            let mut slots = self.slots.write().await;
+            if let Slot::Local { input: ref mut i } = slots[slot_id as usize] {
+                *i = input;
+            }
+        }
+    }
+
+    /// Get all current inputs (for game tick)
+    pub async fn collect_inputs(&self) -> [AgentInput; MAX_SLOTS] {
+        let slots = self.slots.read().await;
+        [
+            slots[0].get_input(),
+            slots[1].get_input(),
+            slots[2].get_input(),
+            slots[3].get_input(),
+        ]
+    }
+
+    /// Get a snapshot of all slots
+    pub async fn snapshot(&self) -> [Slot; MAX_SLOTS] {
+        self.slots.read().await.clone()
+    }
+
+    /// Get character ID for a slot
+    pub fn slot_to_character(slot_id: SlotId) -> Option<CharacterId> {
+        CharacterId::from_slot_index(slot_id)
+    }
+
+    /// Get slot ID for a character
+    pub fn character_to_slot(character: CharacterId) -> SlotId {
+        character.to_slot_index()
+    }
+
+    /// Check if a specific slot is occupied
+    pub async fn is_slot_occupied(&self, slot_id: SlotId) -> bool {
+        if (slot_id as usize) >= MAX_SLOTS {
+            return false;
+        }
+        let slots = self.slots.read().await;
+        !slots[slot_id as usize].is_empty()
+    }
+
+    /// Count occupied slots
+    pub async fn occupied_count(&self) -> usize {
+        let slots = self.slots.read().await;
+        slots.iter().filter(|s| !s.is_empty()).count()
+    }
+}
+
+impl Default for SlotManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_slot_assignment() {
+        let manager = SlotManager::new();
+
+        // Assign first client
+        let result = manager
+            .assign_remote(ClientType::ai("v1"), "Bot1".to_string())
+            .await;
+        assert!(result.is_some());
+        let (slot1, client1) = result.unwrap();
+        assert_eq!(slot1, 0);
+        assert_eq!(client1, 1);
+
+        // Assign second client
+        let result = manager
+            .assign_remote(ClientType::Human, "Player".to_string())
+            .await;
+        assert!(result.is_some());
+        let (slot2, client2) = result.unwrap();
+        assert_eq!(slot2, 1);
+        assert_eq!(client2, 2);
+
+        // Release first slot
+        manager.release(slot1).await;
+
+        // New client should get slot 0 back
+        let result = manager
+            .assign_remote(ClientType::ai("v2"), "Bot2".to_string())
+            .await;
+        assert!(result.is_some());
+        let (slot3, _) = result.unwrap();
+        assert_eq!(slot3, 0);
+    }
+
+    #[tokio::test]
+    async fn test_input_collection() {
+        let manager = SlotManager::with_local_slot(0);
+
+        // Set local input
+        manager
+            .set_local_input(0, AgentInput::with_movement(1.0))
+            .await;
+
+        let inputs = manager.collect_inputs().await;
+        assert_eq!(inputs[0].move_x, 1.0);
+        assert_eq!(inputs[1].move_x, 0.0); // Empty slot
+    }
+}
