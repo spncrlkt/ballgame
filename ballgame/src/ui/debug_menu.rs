@@ -114,6 +114,8 @@ pub struct DebugMenuState {
     pub pending_cycle: Option<bool>,
     /// Pending character cycle: Some(true) = forward, Some(false) = backward
     pub pending_character_cycle: Option<bool>,
+    /// Set when opened from pause menu, cleared after one frame (prevents immediate re-toggle)
+    pub skip_next_select: bool,
 }
 
 /// Marker for debug menu border
@@ -242,12 +244,13 @@ pub fn toggle_debug_menu(
     }
 
     // Don't toggle if pause menu is open (Select in pause menu handled by pause_menu_confirm)
-    // Also skip if debug menu was just opened by pause_menu_confirm this frame
     if game_paused.0 && !menu_state.open {
         return;
     }
-    if menu_state.is_changed() && menu_state.open {
-        // Debug menu was just opened by another system, don't toggle back off
+
+    // Skip one Select press after being opened from pause menu (prevents immediate re-toggle)
+    if menu_state.skip_next_select {
+        menu_state.skip_next_select = false;
         return;
     }
 

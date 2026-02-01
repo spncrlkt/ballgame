@@ -289,6 +289,7 @@ pub fn pause_menu_confirm(
 
     if select_pressed {
         debug_menu.open = true;
+        debug_menu.skip_next_select = true; // Prevent toggle_debug_menu from immediately closing
         // Keep game paused - debug menu will show
         info!("Pause menu closed, debug menu opened");
         return;
