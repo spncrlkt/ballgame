@@ -56,7 +56,8 @@ level: Team Interaction
 id: teaminteract0001
 basket_height: 0
 steps: 0
-center: 300 200
+mirror: 380 380 200
+center: 560 200
 debug: true
 
 # =============================================================================

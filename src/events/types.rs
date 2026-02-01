@@ -222,6 +222,7 @@ pub enum GameEvent {
     Pass {
         from: CharacterId,
         to: CharacterId,
+        velocity: (f32, f32),
     },
     /// Pass completed successfully
     PassCompleted {

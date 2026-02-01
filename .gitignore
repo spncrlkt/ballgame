@@ -3,6 +3,9 @@ Cargo.lock
 training.db
 .DS_Store
 
+#wip todos
+wip_todos.txt
+
 # Claude Code
 .claude/
 

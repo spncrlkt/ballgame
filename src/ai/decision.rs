@@ -360,20 +360,17 @@ pub fn ai_navigation_update(
             // === CatchPartner goals - debug teammate behavior ===
             AiGoal::MoveToOpenSpot => {
                 // Move to a position where we can receive a pass from teammate
-                // Open spot: away from walls, not too close to teammate
+                // Use distance_drill_target for spacing (defaults to 800, decreases after each pass)
                 if let Some(tm_pos) = all_players
                     .iter()
                     .filter(|(e, _, t, _, _)| *e != ai_entity && *t == ai_team)
                     .map(|(_, tr, _, _, _)| tr.translation.truncate())
                     .next()
                 {
-                    // Find a spot on the opposite side of the arena from teammate
-                    let open_x = if tm_pos.x > 0.0 {
-                        -200.0 // Left side if teammate is on right
-                    } else {
-                        200.0 // Right side if teammate is on left
-                    };
-                    Some(Vec2::new(open_x, ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0))
+                    // Position on opposite side from teammate at drill distance
+                    let direction = if ai_pos.x > tm_pos.x { 1.0 } else { -1.0 };
+                    let target_x = tm_pos.x + (direction * ai_state.distance_drill_target);
+                    Some(Vec2::new(target_x, ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0))
                 } else {
                     // No teammate found, just stand in center
                     Some(Vec2::new(0.0, ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0))
@@ -393,6 +390,23 @@ pub fn ai_navigation_update(
             AiGoal::HoldAndPass => {
                 // Stay in place while holding the ball before passing
                 None
+            }
+
+            AiGoal::RepositionToDistance => {
+                // Reposition to target distance from teammate
+                if let Some(tm_pos) = all_players
+                    .iter()
+                    .filter(|(e, _, t, _, _)| *e != ai_entity && *t == ai_team)
+                    .map(|(_, tr, _, _, _)| tr.translation.truncate())
+                    .next()
+                {
+                    // Calculate target x: maintain distance on the side we're already on
+                    let direction = if ai_pos.x > tm_pos.x { 1.0 } else { -1.0 };
+                    let target_x = tm_pos.x + (direction * ai_state.distance_drill_target);
+                    Some(Vec2::new(target_x, ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0))
+                } else {
+                    None
+                }
             }
         };
 
@@ -548,6 +562,11 @@ pub fn ai_decision_update(
         // Update CatchPartner mode from profile
         ai_state.catch_partner_mode = profile.catch_partner;
 
+        // Initialize distance drill target if not set (default is 0.0 from derive(Default))
+        if ai_state.catch_partner_mode && ai_state.distance_drill_target == 0.0 {
+            ai_state.distance_drill_target = 800.0;
+        }
+
         // Decrement button press cooldown (simulates human mashing speed limit)
         // Use a minimum dt of 1/60 to handle headless mode where delta can be tiny
         let dt = time.delta_secs().max(1.0 / 60.0);
@@ -555,6 +574,9 @@ pub fn ai_decision_update(
 
         // Decrement steal commitment timer
         ai_state.steal_commit_timer = (ai_state.steal_commit_timer - dt).max(0.0);
+
+        // Decrement post-pass wait timer (for distance drill)
+        ai_state.post_pass_wait_timer = (ai_state.post_pass_wait_timer - dt).max(0.0);
 
         let ai_pos = ai_transform.translation.truncate();
 
@@ -570,6 +592,16 @@ pub fn ai_decision_update(
 
         // Track ball hold time for desperation shots
         if ai_has_ball {
+            // Detect when AI just caught the ball (first frame of holding)
+            if ai_state.ball_hold_time == 0.0 && ai_state.catch_partner_mode {
+                // AI just caught the ball - needs to reposition before passing
+                ai_state.distance_drill_reposition = true;
+                // Decrease distance for next iteration (only when AI catches, not when human catches)
+                ai_state.distance_drill_target -= 33.0;
+                if ai_state.distance_drill_target < 100.0 {
+                    ai_state.distance_drill_target = 800.0; // Reset cycle
+                }
+            }
             ai_state.ball_hold_time += dt;
         } else {
             ai_state.ball_hold_time = 0.0;
@@ -657,24 +689,36 @@ pub fn ai_decision_update(
         // Decide current goal (using profile values)
         // CatchPartner mode uses completely different goal logic
         let new_goal = if ai_state.catch_partner_mode {
-            // CatchPartner AI: cooperative catch/pass behavior
+            // CatchPartner AI: cooperative catch/pass behavior for distance drill
+            // Sequence: catch ball → reposition while holding → wait 1s → pass → wait 1s → (chase if close)
             if ai_has_ball {
-                // Holding ball - wait 3s then pass back
-                AiGoal::HoldAndPass
+                if ai_state.distance_drill_reposition {
+                    // Step 2: Reposition to target distance while holding ball
+                    AiGoal::RepositionToDistance
+                } else {
+                    // Step 3-4: Wait 1s then pass
+                    AiGoal::HoldAndPass
+                }
             } else if matches!(ball_state, BallState::PassInFlight { target, .. } if *target == ai_entity) {
                 // Ball is being passed to us - track and receive it
                 AiGoal::ReceivePass
             } else if matches!(ball_state, BallState::Free) {
-                // Ball is loose (missed pass, etc.) - chase it
-                let distance_to_ball = ai_pos.distance(ball_pos);
-                if distance_to_ball < 300.0 {
+                // Ball is loose - only chase if post_pass_wait expired AND ball is closer to AI than to human
+                let ball_dist = ai_pos.distance(ball_pos);
+                let human_dist = teammate_pos.map(|tm| tm.distance(ball_pos)).unwrap_or(f32::MAX);
+
+                // Only chase if: wait timer expired AND ball is within 90% of distance to human
+                if ai_state.post_pass_wait_timer <= 0.0 && ball_dist < human_dist * 0.9 {
                     AiGoal::ChaseMissedBall
                 } else {
-                    // Ball is far away, move to open spot
+                    // Wait in open spot - don't chase balls closer to human
                     AiGoal::MoveToOpenSpot
                 }
+            } else if ai_state.distance_drill_reposition {
+                // Need to reposition (human just picked up ball)
+                AiGoal::RepositionToDistance
             } else {
-                // Teammate has ball or ball in flight - move to open position
+                // Teammate has ball or ball in flight to teammate - move to open position
                 AiGoal::MoveToOpenSpot
             }
         } else if ai_has_ball {
@@ -1435,7 +1479,7 @@ pub fn ai_decision_update(
                 // === CatchPartner goals - debug teammate behavior ===
                 AiGoal::MoveToOpenSpot => {
                     // Move to open position to receive a pass
-                    // Find teammate position
+                    // Use distance_drill_target for spacing
                     let tm_pos = all_players
                         .iter()
                         .filter(|(e, _, t, _, _, _)| *e != ai_entity && *t == ai_team)
@@ -1443,8 +1487,9 @@ pub fn ai_decision_update(
                         .next();
 
                     if let Some(tm) = tm_pos {
-                        // Position on opposite side from teammate
-                        let target_x = if tm.x > 0.0 { -200.0 } else { 200.0 };
+                        // Position at distance_drill_target from teammate
+                        let direction = if ai_pos.x > tm.x { 1.0 } else { -1.0 };
+                        let target_x = tm.x + (direction * ai_state.distance_drill_target);
                         let dx = target_x - ai_pos.x;
                         if dx.abs() > profile.position_tolerance {
                             input.move_x = dx.signum();
@@ -1506,10 +1551,42 @@ pub fn ai_decision_update(
                     // Hold the ball, count up timer, then pass back to teammate
                     ai_state.hold_and_pass_timer += dt;
 
-                    // After 0.5 seconds, pass to teammate (quick responsive passes)
-                    if ai_state.hold_and_pass_timer >= 0.5 {
+                    // After 1 second, pass to teammate
+                    if ai_state.hold_and_pass_timer >= 1.0 {
                         input.pass_pressed = true;
                         ai_state.hold_and_pass_timer = 0.0;
+                        // Set post-pass wait timer (1s before chasing loose balls)
+                        ai_state.post_pass_wait_timer = 1.0;
+                    }
+                    input.throw_held = false;
+                }
+
+                AiGoal::RepositionToDistance => {
+                    // Move to target distance from teammate (works with or without ball)
+                    let tm_pos = all_players
+                        .iter()
+                        .filter(|(e, _, t, _, _, _)| *e != ai_entity && *t == ai_team)
+                        .map(|(_, tr, _, _, _, _)| tr.translation.truncate())
+                        .next();
+
+                    if let Some(tm) = tm_pos {
+                        // Calculate target x: maintain distance on the side we're already on
+                        let direction = if ai_pos.x > tm.x { 1.0 } else { -1.0 };
+                        let target_x = tm.x + (direction * ai_state.distance_drill_target);
+                        let dx = target_x - ai_pos.x;
+
+                        if dx.abs() > 20.0 {
+                            // Still moving to position
+                            input.move_x = dx.signum();
+                        } else {
+                            // Arrived at target distance
+                            // Clear reposition flag - will transition to HoldAndPass if holding ball
+                            // (distance is decreased when AI catches ball, not here)
+                            ai_state.distance_drill_reposition = false;
+                        }
+                    } else {
+                        // No teammate, just clear reposition flag
+                        ai_state.distance_drill_reposition = false;
                     }
                     input.throw_held = false;
                 }

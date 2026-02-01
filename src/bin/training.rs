@@ -224,7 +224,14 @@ fn print_training_epilogue(db_path: &str, protocol: TrainingProtocol) {
     println!("──────────");
     println!();
     println!("► Analyze this session:");
-    println!("  cargo run --bin analyze -- --training-db {}", db_path);
+    if protocol == TrainingProtocol::TeamInteraction {
+        println!(
+            "  cargo run --bin analyze -- --team-interaction {}",
+            db_path
+        );
+    } else {
+        println!("  cargo run --bin analyze -- --training-db {}", db_path);
+    }
     println!();
     println!("► Query events directly:");
     println!(
@@ -736,6 +743,7 @@ fn main() {
                 check_next_level,
                 emit_training_events,
                 update_training_hud,
+                update_distance_drill_indicator,
                 flush_training_events_to_sqlite,
                 check_escape_quit,
             ),
@@ -1218,6 +1226,57 @@ pub struct SwapIndicatorState {
 const SWAP_INDICATOR_DURATION: f32 = 3.0;
 const SWAP_INDICATOR_COLOR: Color = Color::srgba(0.9, 0.2, 0.2, 1.0); // Red
 
+/// Marker for distance drill indicator text (shows current target distance above AI)
+#[derive(Component)]
+pub struct DistanceDrillIndicator;
+
+/// Spawn distance drill indicator for AI player (shows target distance in large text)
+fn spawn_distance_drill_indicator(commands: &mut Commands, player_entity: Entity) {
+    let indicator = commands
+        .spawn((
+            Text2d::new("800"),
+            TextFont {
+                font_size: 48.0,
+                ..default()
+            },
+            TextLayout::new_with_justify(Justify::Center),
+            TextColor(Color::WHITE),
+            Transform::from_xyz(0.0, PLAYER_SIZE.y / 2.0 + 40.0, 1.0),
+            DistanceDrillIndicator,
+        ))
+        .id();
+    commands.entity(player_entity).add_child(indicator);
+}
+
+/// Update distance drill indicator to show current target distance
+fn update_distance_drill_indicator(
+    ai_query: Query<(&AiState, &Children), (With<Player>, Without<HumanControlled>)>,
+    mut indicator_query: Query<(&mut Text2d, &mut Visibility), With<DistanceDrillIndicator>>,
+    training_settings: Res<TrainingSettings>,
+) {
+    // Only show in TeamInteraction mode
+    if !training_settings.protocol.is_coop_mode() {
+        for (_, mut visibility) in &mut indicator_query {
+            *visibility = Visibility::Hidden;
+        }
+        return;
+    }
+
+    for (ai_state, children) in &ai_query {
+        if !ai_state.catch_partner_mode {
+            continue;
+        }
+
+        for child in children.iter() {
+            if let Ok((mut text, mut visibility)) = indicator_query.get_mut(child) {
+                *visibility = Visibility::Inherited;
+                // Display target distance as integer
+                text.0 = format!("{:.0}", ai_state.distance_drill_target);
+            }
+        }
+    }
+}
+
 /// Setup the training game world
 fn training_setup(
     mut commands: Commands,
@@ -1398,6 +1457,9 @@ fn training_setup(
     spawn_charge_gauge(&mut commands, right_player, -1.0); // Right player faces left
     spawn_steal_indicators(&mut commands, left_player, 1.0);
     spawn_steal_indicators(&mut commands, right_player, -1.0);
+
+    // Distance drill indicator for AI player (shows target distance)
+    spawn_distance_drill_indicator(&mut commands, right_player);
 
     // Swap indicators (red triangle when character is swapped to)
     spawn_swap_indicator(&mut commands, &mut meshes, &mut materials, left_player);
@@ -3211,6 +3273,7 @@ fn update_ai_after_swap(
 /// Auto-swap control to pass receiver in coop mode
 /// When a teammate catches a pass, control automatically transfers to them
 /// so the human always controls the ball carrier after passing
+#[allow(unused, unreachable_code)]
 fn auto_swap_to_ball_carrier(
     mut commands: Commands,
     training_settings: Res<TrainingSettings>,
@@ -3218,6 +3281,13 @@ fn auto_swap_to_ball_carrier(
     pass_receivers: Query<Entity, With<ball::JustReceivedPass>>,
     mut all_players: Query<(Entity, Option<&HumanControlled>), With<Player>>,
 ) {
+    // TODO: Re-enable auto-swap later - disabled for now to test manual control
+    // Still need to remove JustReceivedPass markers to prevent buildup
+    for receiver in &pass_receivers {
+        commands.entity(receiver).remove::<ball::JustReceivedPass>();
+    }
+    return;
+
     // Only applies to coop mode (TeamInteraction)
     if !training_settings.protocol.is_coop_mode() {
         return;

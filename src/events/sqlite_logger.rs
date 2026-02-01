@@ -885,6 +885,7 @@ mod tests {
             &GameEvent::Pass {
                 from: CharacterId::L0,
                 to: CharacterId::L1,
+                velocity: (350.0, 200.0),
             },
         );
         logger.log_event(
@@ -892,6 +893,7 @@ mod tests {
             &GameEvent::Pass {
                 from: CharacterId::R1,
                 to: CharacterId::R0,
+                velocity: (-300.0, 180.0),
             },
         );
 

@@ -92,8 +92,8 @@ pub fn serialize_event(time_ms: u32, event: &GameEvent) -> String {
         } => {
             format!("{}|{:.2}|{:.1}|{:.1}", character, charge, angle, power)
         }
-        GameEvent::Pass { from, to } => {
-            format!("{}|{}", from, to)
+        GameEvent::Pass { from, to, velocity } => {
+            format!("{}|{}|{:.1}|{:.1}", from, to, velocity.0, velocity.1)
         }
         GameEvent::StealAttempt { attacker } => attacker.to_string(),
         GameEvent::StealSuccess { attacker } => attacker.to_string(),
@@ -298,6 +298,10 @@ pub fn parse_event(line: &str) -> Option<(u32, GameEvent)> {
         "PA" if data.len() >= 2 => GameEvent::Pass {
             from: parse_character(data[0])?,
             to: parse_character(data[1])?,
+            velocity: (
+                data.get(2).and_then(|s| s.parse().ok()).unwrap_or(0.0),
+                data.get(3).and_then(|s| s.parse().ok()).unwrap_or(0.0),
+            ),
         },
         "SA" if !data.is_empty() => GameEvent::StealAttempt {
             attacker: parse_character(data[0])?,
@@ -594,14 +598,16 @@ mod tests {
             (CharacterId::R1, CharacterId::R0),
         ];
         for (from, to) in test_cases {
-            let event = GameEvent::Pass { from, to };
+            let event = GameEvent::Pass { from, to, velocity: (350.5, 200.0) };
             let line = serialize_event(600, &event);
             assert!(line.contains("|PA|"));
             let (ts, parsed) = parse_event(&line).unwrap();
             assert_eq!(ts, 600);
-            if let GameEvent::Pass { from: f, to: t } = parsed {
+            if let GameEvent::Pass { from: f, to: t, velocity: v } = parsed {
                 assert_eq!(f, from);
                 assert_eq!(t, to);
+                assert!((v.0 - 350.5).abs() < 0.2); // Allow rounding from format
+                assert!((v.1 - 200.0).abs() < 0.2);
             } else {
                 panic!("Wrong event type");
             }

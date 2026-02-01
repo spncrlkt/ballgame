@@ -134,7 +134,11 @@ pub fn handle_pass(
         // Emit Pass event
         let from_char = holder_char.map(|c| c.0);
         if let (Some(from), Some(to)) = (from_char, teammate_char_id) {
-            event_bus.emit(GameEvent::Pass { from, to });
+            event_bus.emit(GameEvent::Pass {
+                from,
+                to,
+                velocity: (pass_velocity.x, pass_velocity.y),
+            });
         }
 
         info!(

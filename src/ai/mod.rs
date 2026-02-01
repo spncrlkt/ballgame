@@ -89,6 +89,14 @@ pub struct AiState {
     pub hold_and_pass_timer: f32,
     /// Whether this AI is in CatchPartner mode (debug teammate behavior)
     pub catch_partner_mode: bool,
+
+    // === Distance drill state ===
+    /// Distance drill: current target distance from teammate (starts at 800)
+    pub distance_drill_target: f32,
+    /// Distance drill: whether AI needs to reposition after pass
+    pub distance_drill_reposition: bool,
+    /// Distance drill: timer to wait after passing before chasing loose balls (1s delay)
+    pub post_pass_wait_timer: f32,
 }
 
 /// Goals the AI can pursue
@@ -119,6 +127,8 @@ pub enum AiGoal {
     ChaseMissedBall,
     /// Holding ball for 3 seconds before passing back to teammate
     HoldAndPass,
+    /// Reposition to target distance from teammate (distance drill)
+    RepositionToDistance,
 }
 
 /// Copy human PlayerInput into the human-controlled player's InputState.
