@@ -460,7 +460,8 @@ pub fn check_pause_toggle(
     mut game_paused: ResMut<crate::scoring::GamePaused>,
 ) {
     // Only open pause menu, not close it (menu handles that)
-    if game_paused.0 {
+    // Also skip if game was just unpaused this frame (prevents re-pause on same Start press)
+    if game_paused.0 || game_paused.is_changed() {
         return;
     }
 

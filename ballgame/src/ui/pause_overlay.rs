@@ -2,6 +2,7 @@
 
 use bevy::prelude::*;
 
+use super::DebugMenuState;
 use crate::scoring::{GamePaused, RestartRequested};
 
 /// Font sizes
@@ -165,6 +166,7 @@ pub fn spawn_pause_overlay(mut commands: Commands) {
 /// Update pause overlay visibility and animations
 pub fn update_pause_overlay(
     game_paused: Res<GamePaused>,
+    debug_menu: Res<DebugMenuState>,
     time: Res<Time>,
     mut menu_state: ResMut<PauseMenuState>,
     mut bg_query: Query<&mut Visibility, With<PauseBackground>>,
@@ -177,7 +179,9 @@ pub fn update_pause_overlay(
         (Without<PauseTitle>, Without<PauseBackground>),
     >,
 ) {
-    let is_paused = game_paused.0;
+    // Hide pause overlay when debug menu is open (game stays paused but UI is hidden)
+    let show_pause_ui = game_paused.0 && !debug_menu.open;
+    let is_paused = show_pause_ui;
 
     // Update pulse timer
     if is_paused {
@@ -234,10 +238,12 @@ pub fn update_pause_overlay(
 /// Handle pause menu navigation (D-pad or left stick)
 pub fn pause_menu_navigation(
     game_paused: Res<GamePaused>,
+    debug_menu: Res<DebugMenuState>,
     gamepads: Query<&Gamepad>,
     mut menu_state: ResMut<PauseMenuState>,
 ) {
-    if !game_paused.0 {
+    // Skip navigation when debug menu is open (it has its own controls)
+    if !game_paused.0 || debug_menu.open {
         return;
     }
 
@@ -259,12 +265,14 @@ pub fn pause_menu_navigation(
 /// Handle pause menu confirmation (Start or face buttons)
 pub fn pause_menu_confirm(
     mut game_paused: ResMut<GamePaused>,
+    debug_menu: Res<DebugMenuState>,
     mut restart_requested: ResMut<RestartRequested>,
     mut menu_state: ResMut<PauseMenuState>,
     gamepads: Query<&Gamepad>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
-    if !game_paused.0 {
+    // Skip confirmation when debug menu is open
+    if !game_paused.0 || debug_menu.open {
         return;
     }
 

@@ -16,7 +16,8 @@ use bevy::prelude::*;
 use crate::constants::*;
 use crate::events::{CharacterId, EventBus, GameEvent};
 use crate::player::{Character, HumanControlled, Player, Team};
-use crate::ui::TweakPanelState;
+use crate::scoring::GamePaused;
+use crate::ui::DebugMenuState;
 
 /// Possession context for modal input mapping
 /// Determines which actions are available based on ball possession
@@ -86,13 +87,14 @@ pub fn capture_input(
     _keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut input: ResMut<PlayerInput>,
-    panel_state: Res<TweakPanelState>,
+    debug_menu: Res<DebugMenuState>,
+    game_paused: Res<GamePaused>,
     time: Res<Time>,
     mut event_bus: ResMut<EventBus>,
     human_query: Query<(Option<&Character>, &Team), (With<Player>, With<HumanControlled>)>,
 ) {
-    // Don't capture game input when tweak panel is open (uses arrow keys)
-    if panel_state.panel_visible {
+    // Don't capture game input when debug menu is open or game is paused
+    if debug_menu.open || game_paused.0 {
         return;
     }
     // Horizontal movement (continuous - overwrite each frame)

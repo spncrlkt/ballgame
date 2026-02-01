@@ -7,11 +7,11 @@ use ballgame::{
     AiCapabilities, AiProfileDatabase, Ball, BallPlayerContact,
     BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle, BallTextures,
     CharacterId, ConfigWatcher, CountdownEndTracker, CurrentLevel, CurrentPalette, CurrentPresets,
-    CurrentSettings, CycleIndicator, CycleSelection, DebugLogConfig, DebugSettings, DebugText,
+    CurrentSettings, CycleSelection, DebugLogConfig, DebugSettings,
     DisplayBallWave, EventBus, GameMode, LastShotInfo, LevelChangeTracker, LevelDatabase,
     MatchCountdown, NavGraph, PALETTES_FILE, PRESETS_FILE, PaletteDatabase, PhysicsTweaks,
     PlayerInput, PresetDatabase, Score, ScoreLevelText, SnapshotConfig, SnapshotTriggerState,
-    StealContest, StealTracker, StyleTextures, TweakPanel, TweakPanelState, TweakRow, Velocity,
+    StealContest, StealTracker, StyleTextures, Velocity,
     ViewportScale, ai, apply_preset_to_tweaks, ball, config_watcher, constants::*, countdown,
     display_ball_wave, emit_level_change_events, color_for_character, initial_facing, input,
     levels, player, replay, save_settings_system, scoring, server, shooting, snapshot,
@@ -246,8 +246,8 @@ fn main() {
     app.insert_resource(CurrentPalette(loaded_palette_index));
     app.insert_resource(debug_config);
     app.init_resource::<PhysicsTweaks>();
-    app.init_resource::<TweakPanelState>();
     app.init_resource::<LastShotInfo>();
+    app.init_resource::<ui::DebugMenuState>();
     app.insert_resource(ViewportScale {
         preset_index: loaded_viewport_index,
     });
@@ -308,6 +308,7 @@ fn main() {
     app.add_systems(Startup, tuning::load_global_tuning_system);
     app.add_systems(Startup, setup.run_if(replay::not_replay_active));
     app.add_systems(Startup, ui::spawn_pause_overlay);
+    app.add_systems(Startup, ui::spawn_debug_menu.run_if(replay::not_replay_active));
 
     // =========== NORMAL GAME SYSTEMS (disabled in replay mode) ===========
     // Countdown system - always runs to update timer and text
@@ -385,7 +386,6 @@ fn main() {
     app.add_systems(
         Update,
         (
-            ui::update_debug_text,
             ui::update_score_level_text,
             ui::spawn_character_indicators,
             ui::update_character_indicators,
@@ -410,27 +410,17 @@ fn main() {
             .run_if(replay::not_replay_active),
     );
 
-    // UI panel and cycle systems
-    app.add_systems(
-        Update,
-        (
-            ui::toggle_tweak_panel,
-            ui::update_tweak_panel,
-            ui::cycle_viewport,
-            ui::unified_cycle_system,
-        )
-            .run_if(replay::not_replay_active),
-    );
+    // Debug menu systems
+    app.add_systems(Update, ui::toggle_debug_menu);
+    app.add_systems(Update, ui::debug_menu_navigation);
+    app.add_systems(Update, ui::debug_menu_apply_cycle);
+    app.add_systems(Update, ui::debug_menu_character_cycle);
+    app.add_systems(Update, ui::update_debug_menu_display);
 
-    // Cycle indicator, palette application, and preset application
+    // Palette application and preset application
     app.add_systems(
         Update,
-        (
-            ui::update_cycle_indicator,
-            ui::apply_palette_colors,
-            apply_preset_to_tweaks,
-        )
-            .run_if(replay::not_replay_active),
+        (ui::apply_palette_colors, apply_preset_to_tweaks).run_if(replay::not_replay_active),
     );
 
     // Snapshot system - captures game state on events
@@ -791,100 +781,6 @@ fn setup(
         Transform::from_xyz(0.0, ARENA_HEIGHT / 2.0 - 30.0, 1.0),
         ScoreLevelText,
     ));
-
-    // Debug UI - world space, centered on floor
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size: 14.0,
-            ..default()
-        },
-        TextColor(TEXT_PRIMARY),
-        Transform::from_xyz(0.0, ARENA_FLOOR_Y + 10.0, 1.0),
-        DebugText,
-    ));
-
-    // Cycle indicator - 4 separate lines for individual styling
-    // Each line can have different font size when selected
-    // Position: well inside visible area (camera uses FixedVertical, so horizontal extent varies)
-    let cycle_base_x = -ARENA_WIDTH / 2.0 + WALL_THICKNESS + 120.0;
-    let cycle_base_y = ARENA_HEIGHT / 2.0 - 30.0;
-    let cycle_line_spacing = 22.0;
-
-    for i in 0..4 {
-        commands.spawn((
-            Text2d::new(""),
-            TextFont {
-                font_size: 14.0,
-                ..default()
-            },
-            TextLayout::new_with_justify(Justify::Left),
-            TextColor(TEXT_ACCENT),
-            Transform::from_xyz(
-                cycle_base_x,
-                cycle_base_y - (i as f32 * cycle_line_spacing),
-                1.0,
-            ),
-            CycleIndicator(i),
-        ));
-    }
-
-    // Physics Tweak Panel (hidden by default, toggle with F1)
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                right: Val::Px(10.0),
-                top: Val::Px(10.0),
-                flex_direction: FlexDirection::Column,
-                padding: UiRect::all(Val::Px(10.0)),
-                row_gap: Val::Px(4.0),
-                ..default()
-            },
-            BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.9)),
-            Visibility::Hidden,
-            TweakPanel,
-        ))
-        .with_children(|parent| {
-            // Title
-            parent.spawn((
-                Text::new("Physics Tweaks (F1 to close)"),
-                TextFont {
-                    font_size: 14.0,
-                    ..default()
-                },
-                TextColor(TEXT_PRIMARY),
-            ));
-            parent.spawn((
-                Text::new("Up/Down: select | Left/Right: +/-10%"),
-                TextFont {
-                    font_size: 12.0,
-                    ..default()
-                },
-                TextColor(TEXT_SECONDARY),
-            ));
-            parent.spawn((
-                Text::new("R: reset selected | Shift+R: reset all"),
-                TextFont {
-                    font_size: 12.0,
-                    ..default()
-                },
-                TextColor(TEXT_SECONDARY),
-            ));
-
-            // Create a row for each tweakable parameter
-            for i in 0..PhysicsTweaks::LABELS.len() {
-                parent.spawn((
-                    Text::new(format!("{}: ---", PhysicsTweaks::LABELS[i])),
-                    TextFont {
-                        font_size: 13.0,
-                        ..default()
-                    },
-                    TextColor(TEXT_PRIMARY),
-                    TweakRow(i),
-                ));
-            }
-        });
 
     // Countdown text (3-2-1 before match starts)
     spawn_countdown_text(&mut commands);

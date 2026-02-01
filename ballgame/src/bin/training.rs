@@ -29,7 +29,7 @@ use ballgame::{
     GameEvent, Grounded, HoldingBall, HumanControlled, InputState, JumpState, KEYBOARD_SOURCE_ID,
     LastShotInfo, LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE,
     PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, SnapshotConfig, StealContest,
-    StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, TurboGauge, TweakPanelState,
+    StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, TurboGauge,
     Velocity, ai, ball, constants::*, countdown, emit_level_change_events, helpers::*, input,
     levels, player, scoring, shooting, spawn_charge_gauge, spawn_countdown_text, steal, tuning,
     update_event_bus_time, world,
@@ -662,7 +662,6 @@ fn main() {
         .init_resource::<ShadowTrailState>()
         .init_resource::<AutoWalkState>()
         .init_resource::<PlayerInput>()
-        .init_resource::<TweakPanelState>()
         .init_resource::<DebugSettings>()
         .init_resource::<StealContest>()
         .init_resource::<StealTracker>()

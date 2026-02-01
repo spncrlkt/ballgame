@@ -101,10 +101,11 @@ pub use training::{
 };
 pub use tuning::{GAMEPLAY_TUNING_FILE, GameplayTuning, PhysicsTweaks};
 pub use ui::{
-    ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleIndicator, CycleSelection,
-    DebugSettings, DebugText, DownOption, RightOption, ScoreFlash, ScoreLevelText,
-    StealCooldownIndicator, StealFailFlash, StealOutOfRangeFlash, TweakPanel, TweakPanelState,
-    TweakRow, ViewportScale, VulnerableIndicator,
+    ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleSelection,
+    DebugMenuBackground, DebugMenuOption, DebugMenuRow, DebugMenuState, DebugSettings,
+    DownOption, RightOption, ScoreFlash, ScoreLevelText,
+    StealCooldownIndicator, StealFailFlash, StealOutOfRangeFlash, ValuePickerItem,
+    ValuePickerOverlay, ViewportScale, VulnerableIndicator,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 
