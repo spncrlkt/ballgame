@@ -144,6 +144,11 @@ pub enum Team {
 #[derive(Component)]
 pub struct HumanControlled;
 
+/// Marker for players controlled by a remote WebSocket client.
+/// Like HumanControlled, players with this marker are skipped by the embedded AI.
+#[derive(Component)]
+pub struct RemoteControlled;
+
 /// Which basket a player is aiming at (set once based on Team at spawn)
 #[derive(Component)]
 pub struct TargetBasket(pub Basket);

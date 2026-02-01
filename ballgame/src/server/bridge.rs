@@ -19,6 +19,8 @@ pub struct ServerBridge {
     pub broadcaster: Arc<Broadcaster>,
     /// Current game tick counter
     pub tick_count: u64,
+    /// Server port
+    server_port: u16,
 }
 
 impl ServerBridge {
@@ -47,7 +49,13 @@ impl ServerBridge {
             slots,
             broadcaster,
             tick_count: 0,
+            server_port: port,
         }
+    }
+
+    /// Get the server port
+    pub fn port(&self) -> u16 {
+        self.server_port
     }
 
     /// Increment tick counter and return new value

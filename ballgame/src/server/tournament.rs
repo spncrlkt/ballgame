@@ -7,6 +7,7 @@ use bevy::prelude::*;
 use ballgame_protocol::game_state::Team as ProtocolTeam;
 
 use super::bridge::ServerBridge;
+use super::lobby::LobbyState;
 use crate::{Score, Team};
 
 /// Tournament mode configuration
@@ -18,6 +19,8 @@ pub struct TournamentConfig {
     pub score_limit: Option<u32>,
     /// Time limit in seconds (match ends when elapsed)
     pub time_limit_secs: Option<f32>,
+    /// Time when match started (for time limit calculation)
+    pub match_start_time: Option<f32>,
 }
 
 impl TournamentConfig {
@@ -27,17 +30,23 @@ impl TournamentConfig {
             enabled: score_limit.is_some() || time_limit_secs.is_some(),
             score_limit,
             time_limit_secs,
+            match_start_time: None,
         }
+    }
+
+    /// Record match start time
+    pub fn start_match(&mut self, current_time: f32) {
+        self.match_start_time = Some(current_time);
     }
 }
 
-/// Check if tournament end conditions are met and exit if so
+/// Check if tournament end conditions are met and return to lobby if so
 pub fn check_tournament_end(
-    config: Res<TournamentConfig>,
-    score: Res<Score>,
+    mut config: ResMut<TournamentConfig>,
+    mut score: ResMut<Score>,
     time: Res<Time>,
     bridge: Option<Res<ServerBridge>>,
-    mut app_exit: MessageWriter<AppExit>,
+    lobby_state: Option<ResMut<LobbyState>>,
 ) {
     if !config.enabled {
         return;
@@ -55,9 +64,14 @@ pub fn check_tournament_end(
     }
 
     // Check time limit (only if no winner from score yet)
+    let match_elapsed = config
+        .match_start_time
+        .map(|start| time.elapsed_secs() - start)
+        .unwrap_or(0.0);
+
     if winner.is_none() {
         if let Some(limit) = config.time_limit_secs {
-            if time.elapsed_secs() >= limit {
+            if match_elapsed >= limit {
                 // Determine winner by score
                 if score.left > score.right {
                     winner = Some(Team::Left);
@@ -70,9 +84,10 @@ pub fn check_tournament_end(
     }
 
     // If we have a winner (or time expired with tie), end the match
-    if winner.is_some() || (config.time_limit_secs.is_some() && time.elapsed_secs() >= config.time_limit_secs.unwrap()) {
+    let time_expired = config.time_limit_secs.map(|limit| match_elapsed >= limit).unwrap_or(false);
+    if winner.is_some() || time_expired {
         // Broadcast match end to clients
-        if let Some(bridge) = bridge {
+        if let Some(ref bridge) = bridge {
             let protocol_winner = winner.map(|t| match t {
                 Team::Left => ProtocolTeam::Left,
                 Team::Right => ProtocolTeam::Right,
@@ -91,11 +106,24 @@ pub fn check_tournament_end(
             });
 
             info!(
-                "Tournament ended: {:?} wins (score: {}-{})",
+                "Match ended: {:?} wins (score: {}-{})",
                 winner, score.left, score.right
             );
         }
 
-        app_exit.write(AppExit::Success);
+        // Reset for next match
+        score.left = 0;
+        score.right = 0;
+        config.match_start_time = None;
+
+        // Return to lobby if it exists
+        if let Some(mut lobby) = lobby_state {
+            lobby.active = true;
+            // Clear ServerAi slots so remote clients can connect
+            if let Some(ref bridge) = bridge {
+                bridge.runtime.block_on(bridge.slots.clear_server_ai_slots());
+            }
+            info!("Returning to lobby");
+        }
     }
 }

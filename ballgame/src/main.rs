@@ -109,6 +109,9 @@ fn main() {
         .position(|a| a == "--local-slot")
         .and_then(|i| args.get(i + 1).and_then(|s| s.parse::<u8>().ok()));
 
+    // Auto-start flag (skip lobby in server mode)
+    let auto_start = args.iter().any(|a| a == "--auto-start");
+
     // Tournament mode flags
     let tournament_mode = args.iter().any(|a| a == "--tournament");
     let score_limit = args
@@ -525,25 +528,76 @@ fn main() {
         };
         app.insert_resource(tournament_config);
 
-        // Add server systems
+        // Add lobby state (active unless --auto-start or tournament mode)
+        let show_lobby = !auto_start && !tournament_mode;
+        if show_lobby {
+            app.insert_resource(server::LobbyState::new_active());
+        } else {
+            app.insert_resource(server::LobbyState::default());
+        }
+
+        // Lobby UI spawn and systems (only when lobby is active)
+        app.add_systems(
+            Startup,
+            ui::spawn_lobby_ui.run_if(server::server_mode_active),
+        );
+
+        app.add_systems(
+            Update,
+            (
+                ui::update_lobby_slots,
+                ui::update_lobby_server_info,
+                ui::update_lobby_options,
+                ui::lobby_navigation,
+                ui::lobby_adjust_value,
+                ui::lobby_start_game,
+                ui::update_lobby_highlights,
+                server::broadcast_lobby_state,
+            )
+                .run_if(server::in_lobby),
+        );
+
+        // Lobby visibility and pause sync run always in server mode
+        app.add_systems(
+            Update,
+            (
+                ui::update_lobby_visibility,
+                ui::sync_lobby_pause,
+            )
+                .run_if(server::server_mode_active),
+        );
+
+        // Add server systems (run when NOT in lobby)
         app.add_systems(
             Update,
             server::read_remote_inputs
                 .before(ai::ai_decision_update)
-                .run_if(replay::not_replay_active.and(server::server_mode_active)),
+                .run_if(
+                    replay::not_replay_active
+                        .and(server::server_mode_active)
+                        .and(server::not_in_lobby),
+                ),
         );
 
         app.add_systems(
             FixedUpdate,
             server::broadcast_state_system
                 .after(scoring::check_scoring)
-                .run_if(replay::not_replay_active.and(server::server_mode_active)),
+                .run_if(
+                    replay::not_replay_active
+                        .and(server::server_mode_active)
+                        .and(server::not_in_lobby),
+                ),
         );
 
         app.add_systems(
             Update,
             server::check_tournament_end
-                .run_if(replay::not_replay_active.and(server::server_mode_active)),
+                .run_if(
+                    replay::not_replay_active
+                        .and(server::server_mode_active)
+                        .and(server::not_in_lobby),
+                ),
         );
     }
 

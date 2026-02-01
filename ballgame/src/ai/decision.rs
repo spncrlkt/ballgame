@@ -13,7 +13,9 @@ use crate::ball::{Ball, BallState, Velocity};
 use crate::constants::*;
 use crate::events::{CharacterId, EventBus, GameEvent};
 use crate::levels::LevelDatabase;
-use crate::player::{Character, Grounded, HoldingBall, HumanControlled, Player, TargetBasket, Team};
+use crate::player::{
+    Character, Grounded, HoldingBall, HumanControlled, Player, RemoteControlled, TargetBasket, Team,
+};
 use crate::scoring::CurrentLevel;
 use crate::world::Basket;
 
@@ -102,7 +104,7 @@ pub fn ai_navigation_update(
             Option<&HoldingBall>,
             &Grounded,
         ),
-        (With<Player>, Without<HumanControlled>),
+        (With<Player>, Without<HumanControlled>, Without<RemoteControlled>),
     >,
     all_players: Query<
         (
@@ -598,7 +600,7 @@ pub fn ai_decision_update(
             Option<&HoldingBall>,
             &Grounded,
         ),
-        (With<Player>, Without<HumanControlled>),
+        (With<Player>, Without<HumanControlled>, Without<RemoteControlled>),
     >,
     all_players: Query<
         (

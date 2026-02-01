@@ -5,7 +5,54 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use ballgame_protocol::{AgentInput, CharacterId, handshake::ClientType};
+use ballgame_protocol::{AgentInput, CharacterId, SlotState, handshake::ClientType};
+
+/// Display information for a slot (used by lobby UI)
+#[derive(Debug, Clone)]
+pub enum SlotDisplay {
+    /// Slot is empty
+    Empty,
+    /// Local player (host)
+    Local,
+    /// Remote client connected
+    Remote {
+        /// Client display name
+        name: String,
+    },
+    /// Server-controlled AI
+    ServerAi {
+        /// AI profile name
+        profile: String,
+    },
+}
+
+impl SlotDisplay {
+    /// Convert to protocol SlotState
+    pub fn to_slot_state(&self) -> SlotState {
+        match self {
+            SlotDisplay::Empty => SlotState::Empty,
+            SlotDisplay::Local => SlotState::Local,
+            SlotDisplay::Remote { .. } => SlotState::Remote,
+            SlotDisplay::ServerAi { .. } => SlotState::ServerAi,
+        }
+    }
+
+    /// Get client name if this is a remote slot
+    pub fn client_name(&self) -> Option<&str> {
+        match self {
+            SlotDisplay::Remote { name } => Some(name),
+            _ => None,
+        }
+    }
+
+    /// Get AI profile if this is a ServerAi slot
+    pub fn ai_profile(&self) -> Option<&str> {
+        match self {
+            SlotDisplay::ServerAi { profile } => Some(profile),
+            _ => None,
+        }
+    }
+}
 
 /// Slot identifier (0-3)
 pub type SlotId = u8;
@@ -230,6 +277,90 @@ impl SlotManager {
     pub async fn occupied_count(&self) -> usize {
         let slots = self.slots.read().await;
         slots.iter().filter(|s| !s.is_empty()).count()
+    }
+
+    /// Get display info for a slot (for lobby UI)
+    pub async fn get_slot_display(&self, slot_id: SlotId) -> SlotDisplay {
+        if (slot_id as usize) >= MAX_SLOTS {
+            return SlotDisplay::Empty;
+        }
+        let slots = self.slots.read().await;
+        match &slots[slot_id as usize] {
+            Slot::Empty => SlotDisplay::Empty,
+            Slot::Local { .. } => SlotDisplay::Local,
+            Slot::Remote { client_name, .. } => SlotDisplay::Remote {
+                name: client_name.clone(),
+            },
+            Slot::ServerAi { profile_id } => SlotDisplay::ServerAi {
+                profile: profile_id.clone(),
+            },
+        }
+    }
+
+    /// Get display info for all slots
+    pub async fn get_all_slot_displays(&self) -> [SlotDisplay; MAX_SLOTS] {
+        let slots = self.slots.read().await;
+        [
+            Self::slot_to_display(&slots[0]),
+            Self::slot_to_display(&slots[1]),
+            Self::slot_to_display(&slots[2]),
+            Self::slot_to_display(&slots[3]),
+        ]
+    }
+
+    /// Convert a Slot to SlotDisplay
+    fn slot_to_display(slot: &Slot) -> SlotDisplay {
+        match slot {
+            Slot::Empty => SlotDisplay::Empty,
+            Slot::Local { .. } => SlotDisplay::Local,
+            Slot::Remote { client_name, .. } => SlotDisplay::Remote {
+                name: client_name.clone(),
+            },
+            Slot::ServerAi { profile_id } => SlotDisplay::ServerAi {
+                profile: profile_id.clone(),
+            },
+        }
+    }
+
+    /// Set AI profile for an empty or ServerAi slot
+    pub async fn set_ai_profile(&self, slot_id: SlotId, profile: String) {
+        if (slot_id as usize) >= MAX_SLOTS {
+            return;
+        }
+        let mut slots = self.slots.write().await;
+        match &mut slots[slot_id as usize] {
+            Slot::Empty => {
+                slots[slot_id as usize] = Slot::ServerAi { profile_id: profile };
+            }
+            Slot::ServerAi { profile_id } => {
+                *profile_id = profile;
+            }
+            _ => {
+                // Can't change AI profile for Local or Remote slots
+            }
+        }
+    }
+
+    /// Fill empty slots with ServerAi using the given default profile
+    pub async fn fill_empty_with_ai(&self, default_profile: &str) {
+        let mut slots = self.slots.write().await;
+        for slot in slots.iter_mut() {
+            if matches!(slot, Slot::Empty) {
+                *slot = Slot::ServerAi {
+                    profile_id: default_profile.to_string(),
+                };
+            }
+        }
+    }
+
+    /// Clear ServerAi slots back to Empty (for returning to lobby)
+    pub async fn clear_server_ai_slots(&self) {
+        let mut slots = self.slots.write().await;
+        for slot in slots.iter_mut() {
+            if matches!(slot, Slot::ServerAi { .. }) {
+                *slot = Slot::Empty;
+            }
+        }
     }
 }
 

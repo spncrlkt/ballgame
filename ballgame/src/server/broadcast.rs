@@ -87,6 +87,21 @@ impl Broadcaster {
     pub async fn client_count(&self) -> usize {
         self.channels.read().await.len()
     }
+
+    /// Broadcast a payload to all connected clients
+    pub async fn broadcast(&self, tick: u64, payload: ServerPayload) {
+        let channels = self.channels.read().await;
+        let mut seq = self.seq.write().await;
+        *seq += 1;
+
+        let msg = ServerMessage::new(*seq, tick, payload);
+
+        for (slot_id, tx) in channels.iter() {
+            if tx.send(msg.clone()).is_err() {
+                debug!("Failed to send payload to slot {}", slot_id);
+            }
+        }
+    }
 }
 
 impl Default for Broadcaster {

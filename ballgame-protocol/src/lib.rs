@@ -14,7 +14,7 @@ pub use events::GameEvent;
 pub use game_state::{AgentSnapshot, AiStateView, BallSnapshot, BallStateKind, GameStateSnapshot, Score};
 pub use handshake::{ClientType, GameConfig};
 pub use input::AgentInput;
-pub use messages::{ClientMessage, ClientPayload, ServerMessage, ServerPayload};
+pub use messages::{ClientMessage, ClientPayload, LobbySnapshot, ServerMessage, ServerPayload, SlotInfo, SlotState};
 pub use version::{PROTOCOL_VERSION, is_compatible};
 
 // Re-export fundamental types

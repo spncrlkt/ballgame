@@ -8,6 +8,56 @@ use crate::handshake::{ClientType, GameConfig};
 use crate::input::AgentInput;
 use crate::version::PROTOCOL_VERSION;
 
+/// State of a slot in the lobby
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SlotState {
+    /// Slot is empty (no player assigned)
+    Empty,
+    /// Local player (host keyboard/gamepad)
+    Local,
+    /// Remote client connected
+    Remote,
+    /// Server-controlled AI
+    ServerAi,
+}
+
+/// Information about a single slot in the lobby
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlotInfo {
+    /// Slot ID (0-3)
+    pub slot_id: u8,
+    /// Current state of the slot
+    pub state: SlotState,
+    /// Client display name (if Remote)
+    pub client_name: Option<String>,
+    /// AI profile name (if ServerAi or configurable empty slot)
+    pub ai_profile: Option<String>,
+}
+
+impl Default for SlotInfo {
+    fn default() -> Self {
+        Self {
+            slot_id: 0,
+            state: SlotState::Empty,
+            client_name: None,
+            ai_profile: None,
+        }
+    }
+}
+
+/// Snapshot of lobby state for broadcasting to clients
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LobbySnapshot {
+    /// State of all 4 slots
+    pub slots: [SlotInfo; 4],
+    /// Current level ID
+    pub level_id: String,
+    /// Score limit (None = unlimited)
+    pub score_limit: Option<u32>,
+    /// Time limit in seconds (None = unlimited)
+    pub time_limit_secs: Option<f32>,
+}
+
 /// Server to client message wrapper
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerMessage {
@@ -81,6 +131,17 @@ pub enum ServerPayload {
     Shutdown {
         /// Reason for shutdown
         reason: String,
+    },
+
+    /// Lobby state update (sent while in lobby)
+    LobbyUpdate(LobbySnapshot),
+
+    /// Match is starting (sent when host starts the game)
+    MatchStarting {
+        /// Level ID for the match
+        level_id: String,
+        /// Countdown duration in seconds
+        countdown_secs: f32,
     },
 }
 

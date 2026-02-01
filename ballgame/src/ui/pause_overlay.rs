@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use super::DebugMenuState;
 use crate::scoring::{GamePaused, RestartRequested};
+use crate::server::LobbyState;
 
 /// Font sizes
 const TITLE_FONT_SIZE: f32 = 120.0;
@@ -23,6 +24,7 @@ pub enum PauseMenuOption {
     #[default]
     Continue,
     RestartLevel,
+    Lobby,
     Quit,
 }
 
@@ -31,23 +33,38 @@ impl PauseMenuOption {
         match self {
             PauseMenuOption::Continue => "Continue",
             PauseMenuOption::RestartLevel => "Restart Level",
+            PauseMenuOption::Lobby => "Lobby",
             PauseMenuOption::Quit => "Quit",
         }
     }
 
-    pub fn next(&self) -> Self {
+    pub fn next(&self, has_lobby: bool) -> Self {
         match self {
             PauseMenuOption::Continue => PauseMenuOption::RestartLevel,
-            PauseMenuOption::RestartLevel => PauseMenuOption::Quit,
+            PauseMenuOption::RestartLevel => {
+                if has_lobby {
+                    PauseMenuOption::Lobby
+                } else {
+                    PauseMenuOption::Quit
+                }
+            }
+            PauseMenuOption::Lobby => PauseMenuOption::Quit,
             PauseMenuOption::Quit => PauseMenuOption::Continue,
         }
     }
 
-    pub fn prev(&self) -> Self {
+    pub fn prev(&self, has_lobby: bool) -> Self {
         match self {
             PauseMenuOption::Continue => PauseMenuOption::Quit,
             PauseMenuOption::RestartLevel => PauseMenuOption::Continue,
-            PauseMenuOption::Quit => PauseMenuOption::RestartLevel,
+            PauseMenuOption::Lobby => PauseMenuOption::RestartLevel,
+            PauseMenuOption::Quit => {
+                if has_lobby {
+                    PauseMenuOption::Lobby
+                } else {
+                    PauseMenuOption::RestartLevel
+                }
+            }
         }
     }
 }
@@ -119,10 +136,11 @@ pub fn spawn_pause_overlay(mut commands: Commands) {
         PauseTitleForeground,
     ));
 
-    // Menu items
+    // Menu items (Lobby will be hidden when not in server mode)
     let options = [
         PauseMenuOption::Continue,
         PauseMenuOption::RestartLevel,
+        PauseMenuOption::Lobby,
         PauseMenuOption::Quit,
     ];
 
@@ -167,6 +185,7 @@ pub fn spawn_pause_overlay(mut commands: Commands) {
 pub fn update_pause_overlay(
     game_paused: Res<GamePaused>,
     debug_menu: Res<DebugMenuState>,
+    lobby_state: Option<Res<LobbyState>>,
     time: Res<Time>,
     mut menu_state: ResMut<PauseMenuState>,
     mut bg_query: Query<&mut Visibility, With<PauseBackground>>,
@@ -182,6 +201,7 @@ pub fn update_pause_overlay(
     // Hide pause overlay when debug menu is open (game stays paused but UI is hidden)
     let show_pause_ui = game_paused.0 && !debug_menu.open;
     let is_paused = show_pause_ui;
+    let has_lobby = lobby_state.is_some();
 
     // Update pulse timer
     if is_paused {
@@ -214,7 +234,11 @@ pub fn update_pause_overlay(
 
     // Update menu items visibility and animation
     for (mut vis, mut transform, menu_item) in &mut menu_query {
-        *vis = if is_paused {
+        // Hide Lobby option when not in server mode
+        let should_show = is_paused
+            && (menu_item.option != PauseMenuOption::Lobby || has_lobby);
+
+        *vis = if should_show {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -239,6 +263,7 @@ pub fn update_pause_overlay(
 pub fn pause_menu_navigation(
     game_paused: Res<GamePaused>,
     debug_menu: Res<DebugMenuState>,
+    lobby_state: Option<Res<LobbyState>>,
     gamepads: Query<&Gamepad>,
     mut menu_state: ResMut<PauseMenuState>,
 ) {
@@ -246,6 +271,8 @@ pub fn pause_menu_navigation(
     if !game_paused.0 || debug_menu.open {
         return;
     }
+
+    let has_lobby = lobby_state.is_some();
 
     // D-pad navigation
     let up_pressed = gamepads
@@ -256,9 +283,9 @@ pub fn pause_menu_navigation(
         .any(|gp| gp.just_pressed(GamepadButton::DPadDown));
 
     if up_pressed {
-        menu_state.selected = menu_state.selected.prev();
+        menu_state.selected = menu_state.selected.prev(has_lobby);
     } else if down_pressed {
-        menu_state.selected = menu_state.selected.next();
+        menu_state.selected = menu_state.selected.next(has_lobby);
     }
 }
 
@@ -268,8 +295,11 @@ pub fn pause_menu_confirm(
     mut debug_menu: ResMut<DebugMenuState>,
     mut restart_requested: ResMut<RestartRequested>,
     mut menu_state: ResMut<PauseMenuState>,
+    mut lobby_state: Option<ResMut<LobbyState>>,
+    mut score: ResMut<crate::Score>,
     gamepads: Query<&Gamepad>,
     mut app_exit: MessageWriter<AppExit>,
+    server_bridge: Option<Res<crate::server::ServerBridge>>,
 ) {
     // Skip confirmation when debug menu is open
     if !game_paused.0 || debug_menu.open {
@@ -317,6 +347,19 @@ pub fn pause_menu_confirm(
             restart_requested.0 = true;
             game_paused.0 = false;
             info!("Level restart requested");
+        }
+        PauseMenuOption::Lobby => {
+            if let Some(ref mut lobby) = lobby_state {
+                lobby.active = true;
+                score.left = 0;
+                score.right = 0;
+                // Clear ServerAi slots so remote clients can connect
+                if let Some(ref bridge) = server_bridge {
+                    bridge.runtime.block_on(bridge.slots.clear_server_ai_slots());
+                }
+                // Keep game paused - lobby will control pause state
+                info!("Returning to lobby from pause menu");
+            }
         }
         PauseMenuOption::Quit => {
             info!("Quit requested from pause menu");

@@ -74,8 +74,18 @@ pub fn update_countdown(
     time: Res<Time>,
     mut countdown: ResMut<MatchCountdown>,
     game_paused: Res<crate::scoring::GamePaused>,
+    lobby_state: Option<Res<crate::server::LobbyState>>,
     mut text_query: Query<(&mut Text2d, &mut Visibility, &mut TextColor), With<CountdownText>>,
 ) {
+    // Hide text when in lobby
+    let in_lobby = lobby_state.map(|l| l.active).unwrap_or(false);
+    if in_lobby {
+        for (_, mut visibility, _) in &mut text_query {
+            *visibility = Visibility::Hidden;
+        }
+        return;
+    }
+
     if !countdown.active {
         // Hide text when not counting down
         for (_, mut visibility, _) in &mut text_query {

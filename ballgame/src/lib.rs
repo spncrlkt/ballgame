@@ -43,52 +43,53 @@ pub mod world;
 
 // Re-export commonly used types for convenience
 pub use ai::{
-    AI_PROFILES_FILE, AiCapabilities, AiGoal, AiNavState, AiProfile, AiProfileDatabase, AiState,
-    EdgeType, InputState, NavAction, NavEdge, NavGraph, NavNode, PathResult, find_path,
-    find_path_to_shoot,
+    find_path, find_path_to_shoot, AiCapabilities, AiGoal, AiNavState, AiProfile,
+    AiProfileDatabase, AiState, EdgeType, InputState, NavAction, NavEdge, NavGraph, NavNode,
+    PathResult, AI_PROFILES_FILE,
 };
 pub use ball::{
-    Ball, BallLabel, BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState,
-    BallStyle, BallTextures, CurrentPalette, DisplayBall, DisplayBallSpin, DisplayBallWave,
-    StyleTextures, display_ball_wave,
+    display_ball_wave, Ball, BallLabel, BallPlayerContact, BallPulse, BallRolling, BallShotGrace,
+    BallSpin, BallState, BallStyle, BallTextures, CurrentPalette, DisplayBall, DisplayBallSpin,
+    DisplayBallWave, StyleTextures,
 };
 pub use config_watcher::ConfigWatcher;
 pub use constants::*;
 pub use countdown::{
-    CountdownEndTracker, CountdownText, MatchCountdown, apply_jump_ball_velocity, in_countdown,
-    not_in_countdown, spawn_countdown_text, trigger_countdown_on_level_change, update_countdown,
+    apply_jump_ball_velocity, in_countdown, not_in_countdown, spawn_countdown_text,
+    trigger_countdown_on_level_change, update_countdown, CountdownEndTracker, CountdownText,
+    MatchCountdown,
 };
 pub use events::{
-    BusEvent, CharacterId, CharacterTickData, ControllerSource, EventBuffer, EventBus, GameConfig,
-    GameEvent, LevelChangeTracker, TeamId, emit_level_change_events,
-    update_event_bus_time,
+    emit_level_change_events, update_event_bus_time, BusEvent, CharacterId, CharacterTickData,
+    ControllerSource, EventBuffer, EventBus, GameConfig, GameEvent, LevelChangeTracker, TeamId,
 };
 pub use helpers::*;
 pub use input::{
     ControllerMapping, GameMode, GamepadInfo, GamepadRegistry, InputBuffers, InputSource,
-    InputSourceId, InputSourceType, PersistentMapping, PlayerInput, RawInput,
-    AI_SOURCE_ID_START, CONTROLLER_MAPPING_FILE, GAMEPAD_SOURCE_ID_START, KEYBOARD_SOURCE_ID,
+    InputSourceId, InputSourceType, PersistentMapping, PlayerInput, RawInput, AI_SOURCE_ID_START,
+    CONTROLLER_MAPPING_FILE, GAMEPAD_SOURCE_ID_START, KEYBOARD_SOURCE_ID,
 };
 pub use levels::{LevelData, LevelDatabase, PlatformDef};
-pub use palettes::{PALETTES_FILE, Palette, PaletteDatabase};
+pub use palettes::{Palette, PaletteDatabase, PALETTES_FILE};
 pub use player::{
+    color_for_character, initial_facing, spawn_character, spawn_characters_for_mode,
+    spawn_charge_gauge, spawn_position, target_basket_for_character, team_for_character,
     BlockState, Buff, Character, CharacterSpawnConfig, ControlledBy, CoyoteTimer, Facing, Grounded,
-    HoldingBall, HumanControlled, JumpState, Player, TargetBasket, Team, TurboGauge,
-    Velocity, color_for_character, initial_facing, spawn_character, spawn_charge_gauge,
-    spawn_characters_for_mode, spawn_position, target_basket_for_character, team_for_character,
+    HoldingBall, HumanControlled, JumpState, Player, RemoteControlled, TargetBasket, Team,
+    TurboGauge, Velocity,
 };
 pub use presets::{
-    BallPreset, CompositePreset, CurrentPresets, MovementPreset, PRESETS_FILE, PresetDatabase,
-    ShootingPreset, apply_composite_preset, apply_preset_to_tweaks,
+    apply_composite_preset, apply_preset_to_tweaks, BallPreset, CompositePreset, CurrentPresets,
+    MovementPreset, PresetDatabase, ShootingPreset, PRESETS_FILE,
 };
 pub use replay::{
-    MatchInfo, ReplayData, ReplayMode, ReplayState, TickFrame, TimedEvent, not_replay_active,
-    replay_active, replay_input_handler, replay_playback, replay_setup, setup_replay_ui,
-    update_replay_ui,
+    not_replay_active, replay_active, replay_input_handler, replay_playback, replay_setup,
+    setup_replay_ui, update_replay_ui, MatchInfo, ReplayData, ReplayMode, ReplayState, TickFrame,
+    TimedEvent,
 };
 pub use run_summary::{FileCategory, FileEntry, NextStep, NextStepPriority, RunSummary};
 pub use scoring::{CurrentLevel, GoalRecord, Score};
-pub use settings::{CurrentSettings, InitSettings, save_settings_system};
+pub use settings::{save_settings_system, CurrentSettings, InitSettings};
 pub use shooting::{ChargingShot, LastShotInfo};
 pub use snapshot::{
     BallSnapshot, GameSnapshot, PlayerSnapshot, ScoreSnapshot, ShotSnapshot, SnapshotConfig,
@@ -96,21 +97,20 @@ pub use snapshot::{
 };
 pub use steal::{StealContest, StealCooldown, StealTracker};
 pub use training::{
-    GameResult, GameSummary, SessionSummary, TrainingPhase, TrainingState, Winner,
-    ensure_session_dir, print_session_summary, write_session_summary,
+    ensure_session_dir, print_session_summary, write_session_summary, GameResult, GameSummary,
+    SessionSummary, TrainingPhase, TrainingState, Winner,
 };
-pub use tuning::{GAMEPLAY_TUNING_FILE, GameplayTuning, PhysicsTweaks};
+pub use tuning::{GameplayTuning, PhysicsTweaks, GAMEPLAY_TUNING_FILE};
 pub use ui::{
-    ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleSelection,
-    DebugMenuBackground, DebugMenuOption, DebugMenuRow, DebugMenuState, DebugSettings,
-    DownOption, RightOption, ScoreFlash, ScoreLevelText,
-    StealCooldownIndicator, StealFailFlash, StealOutOfRangeFlash, ValuePickerItem,
-    ValuePickerOverlay, ViewportScale, VulnerableIndicator,
+    ChargeGaugeBackground, ChargeGaugeFill, CycleDirection, CycleSelection, DebugMenuBackground,
+    DebugMenuOption, DebugMenuRow, DebugMenuState, DebugSettings, DownOption, RightOption,
+    ScoreFlash, ScoreLevelText, StealCooldownIndicator, StealFailFlash, StealOutOfRangeFlash,
+    ValuePickerItem, ValuePickerOverlay, ViewportScale, VulnerableIndicator,
 };
 pub use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
 
 // Re-export database path utilities
-pub use db_paths::{DbType, ensure_dir as ensure_db_dir, timestamped as timestamped_db_path};
+pub use db_paths::{ensure_dir as ensure_db_dir, timestamped as timestamped_db_path, DbType};
 
 // =============================================================================
 // TRAJECTORY CALCULATION (shared with tools like heatmap generator)
