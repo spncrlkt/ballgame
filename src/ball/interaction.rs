@@ -57,9 +57,10 @@ pub fn ball_player_collision(
 
         let mut is_overlapping = false;
 
-        // Get shooter entity if ball is in flight
+        // Get shooter/passer entity if ball is in flight
         let shooter_entity = match ball_state {
             BallState::InFlight { shooter, .. } => Some(*shooter),
+            BallState::PassInFlight { passer, .. } => Some(*passer),
             _ => None,
         };
 

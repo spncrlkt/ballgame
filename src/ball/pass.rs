@@ -6,7 +6,8 @@
 use bevy::prelude::*;
 
 use crate::ai::InputState;
-use crate::ball::{Ball, BallState, Velocity};
+use crate::ball::{Ball, BallRolling, BallShotGrace, BallState, Velocity};
+use crate::constants::SHOT_GRACE_PERIOD;
 use crate::events::{CharacterId, EventBus, GameEvent};
 use crate::player::{Character, HoldingBall, Player, Team};
 use crate::tuning::PhysicsTweaks;
@@ -33,7 +34,7 @@ pub fn handle_pass(
         With<Player>,
     >,
     teammate_query: Query<(Entity, &Transform, &Team, Option<&Character>), (With<Player>, Without<HoldingBall>)>,
-    mut ball_query: Query<(&mut BallState, &mut Velocity), With<Ball>>,
+    mut ball_query: Query<(&mut BallState, &mut Velocity, &mut BallRolling, &mut BallShotGrace), With<Ball>>,
 ) {
     // Find the player holding the ball who wants to pass
     for (holder_entity, holder_transform, holder_team, holder_char, holding, mut input) in
@@ -82,7 +83,9 @@ pub fn handle_pass(
         };
 
         // Get the ball
-        let Ok((mut ball_state, mut ball_velocity)) = ball_query.get_mut(holding.0) else {
+        let Ok((mut ball_state, mut ball_velocity, mut rolling, mut grace)) =
+            ball_query.get_mut(holding.0)
+        else {
             continue;
         };
 
@@ -127,6 +130,11 @@ pub fn handle_pass(
             target: best_teammate.map(|(e, _, _)| e).unwrap(),
         };
         ball_velocity.0 = pass_velocity;
+
+        // Ball is being passed - no longer rolling, start grace period
+        // This prevents passer collision from immediately slowing the ball
+        rolling.0 = false;
+        grace.0 = SHOT_GRACE_PERIOD;
 
         // Remove ball from holder
         commands.entity(holder_entity).remove::<HoldingBall>();

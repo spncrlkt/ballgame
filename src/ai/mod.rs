@@ -91,12 +91,14 @@ pub struct AiState {
     pub catch_partner_mode: bool,
 
     // === Distance drill state ===
-    /// Distance drill: current target distance from teammate (starts at 800)
+    /// Distance drill: current target distance from teammate (starts at 1200)
     pub distance_drill_target: f32,
     /// Distance drill: whether AI needs to reposition after pass
     pub distance_drill_reposition: bool,
     /// Distance drill: timer to wait after passing before chasing loose balls (1s delay)
     pub post_pass_wait_timer: f32,
+    /// Distance drill: true = shrinking toward 100, false = growing toward 1200
+    pub distance_drill_shrinking: bool,
 }
 
 /// Goals the AI can pursue
@@ -111,6 +113,8 @@ pub enum AiGoal {
     AttackWithBall,
     /// Charging a shot at the basket
     ChargeShot,
+    /// Pass the ball to teammate in better position
+    PassToTeammate,
     /// Attempting to steal from opponent
     AttemptSteal,
     /// Chase ball carrier, position on shot line (uses navigation for platforms)

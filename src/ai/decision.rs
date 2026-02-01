@@ -9,7 +9,7 @@ use crate::ai::{
     NavAction, NavGraph, find_path, find_path_to_shoot,
     shot_quality::{evaluate_shot_quality, scale_min_quality_for_level},
 };
-use crate::ball::{Ball, BallState};
+use crate::ball::{Ball, BallState, Velocity};
 use crate::constants::*;
 use crate::events::{CharacterId, EventBus, GameEvent};
 use crate::levels::LevelDatabase;
@@ -296,6 +296,11 @@ pub fn ai_navigation_update(
                 None
             }
 
+            AiGoal::PassToTeammate => {
+                // Don't navigate while passing - stay put
+                None
+            }
+
             AiGoal::AttemptSteal => {
                 // Use navigation when opponent is on elevated platform we can't jump to directly
                 if let Some(opp_pos) = opponent_pos {
@@ -360,7 +365,7 @@ pub fn ai_navigation_update(
             // === CatchPartner goals - debug teammate behavior ===
             AiGoal::MoveToOpenSpot => {
                 // Move to a position where we can receive a pass from teammate
-                // Use distance_drill_target for spacing (defaults to 800, decreases after each pass)
+                // Use distance_drill_target for spacing (starts at 1200, decreases 100px after each pass)
                 if let Some(tm_pos) = all_players
                     .iter()
                     .filter(|(e, _, t, _, _)| *e != ai_entity && *t == ai_team)
@@ -515,7 +520,7 @@ pub fn ai_decision_update(
         ),
         With<Player>,
     >,
-    ball_query: Query<(&Transform, &BallState), With<Ball>>,
+    ball_query: Query<(&Transform, &BallState, &Velocity), With<Ball>>,
     basket_query: Query<(&Transform, &Basket)>,
 ) {
     let level_settings = level_db
@@ -564,7 +569,8 @@ pub fn ai_decision_update(
 
         // Initialize distance drill target if not set (default is 0.0 from derive(Default))
         if ai_state.catch_partner_mode && ai_state.distance_drill_target == 0.0 {
-            ai_state.distance_drill_target = 800.0;
+            ai_state.distance_drill_target = 1200.0;
+            ai_state.distance_drill_shrinking = true; // Start by shrinking toward 100
         }
 
         // Decrement button press cooldown (simulates human mashing speed limit)
@@ -581,7 +587,7 @@ pub fn ai_decision_update(
         let ai_pos = ai_transform.translation.truncate();
 
         // Get ball info
-        let (ball_transform, ball_state) = match ball_query.iter().next() {
+        let (ball_transform, ball_state, ball_velocity) = match ball_query.iter().next() {
             Some(b) => b,
             None => continue,
         };
@@ -596,10 +602,19 @@ pub fn ai_decision_update(
             if ai_state.ball_hold_time == 0.0 && ai_state.catch_partner_mode {
                 // AI just caught the ball - needs to reposition before passing
                 ai_state.distance_drill_reposition = true;
-                // Decrease distance for next iteration (only when AI catches, not when human catches)
-                ai_state.distance_drill_target -= 33.0;
-                if ai_state.distance_drill_target < 100.0 {
-                    ai_state.distance_drill_target = 800.0; // Reset cycle
+                // Adjust distance for next iteration (oscillates 1200 → 100 → 1200)
+                if ai_state.distance_drill_shrinking {
+                    ai_state.distance_drill_target -= 100.0;
+                    if ai_state.distance_drill_target <= 100.0 {
+                        ai_state.distance_drill_target = 100.0;
+                        ai_state.distance_drill_shrinking = false; // Start growing
+                    }
+                } else {
+                    ai_state.distance_drill_target += 100.0;
+                    if ai_state.distance_drill_target >= 1200.0 {
+                        ai_state.distance_drill_target = 1200.0;
+                        ai_state.distance_drill_shrinking = true; // Start shrinking
+                    }
                 }
             }
             ai_state.ball_hold_time += dt;
@@ -884,10 +899,56 @@ pub fn ai_decision_update(
                     false
                 };
 
+                // Check if passing to teammate is a better option
+                let should_pass = if profile.pass_willingness > 0.0 && !already_charging {
+                    if let Some(tm_pos) = teammate_pos {
+                        // Get teammate's shot quality from their position
+                        let tm_quality = heatmaps.score_for_basket(target_basket_type, tm_pos);
+                        let tm_los = heatmaps.line_of_sight_for_basket(target_basket_type, tm_pos);
+
+                        // Teammate must have reasonable line of sight
+                        let tm_has_los = tm_los + los_margin >= los_threshold;
+
+                        // Pass conditions:
+                        // 1. Teammate has better shot quality than us
+                        // 2. We're under pressure (opponent close)
+                        // 3. Random check against pass_willingness
+                        let quality_advantage = tm_quality - shot_quality;
+                        let under_pressure = opponent_pos
+                            .map(|opp| ai_pos.distance(opp) < STEAL_RANGE * 2.0)
+                            .unwrap_or(false);
+
+                        // More likely to pass when:
+                        // - Teammate has significantly better position (quality_advantage > 0.15)
+                        // - OR we're under pressure AND teammate has any advantage
+                        let pass_utility = if quality_advantage > 0.15 {
+                            0.8 // Strong advantage - very likely to pass
+                        } else if under_pressure && quality_advantage > 0.0 && tm_has_los {
+                            0.6 // Under pressure with teammate advantage
+                        } else if under_pressure && ai_state.ball_hold_time > 1.5 {
+                            0.4 // Desperate - held too long under pressure
+                        } else {
+                            0.0 // No good reason to pass
+                        };
+
+                        // Random check: pass if pass_utility * pass_willingness exceeds threshold
+                        let pass_threshold = 0.3;
+                        let pass_roll = rand::thread_rng().gen_range(0.0..1.0_f32);
+                        pass_utility * profile.pass_willingness > pass_threshold
+                            && pass_roll < pass_utility
+                    } else {
+                        false // No teammate
+                    }
+                } else {
+                    false // pass_willingness is 0 or already charging
+                };
+
                 // Only shoot if shot quality is acceptable AND position conditions are met
                 // AND opponent isn't too close (or we're already committed to the shot)
                 // AND we're not deciding to seek a better position
-                if quality_acceptable
+                if should_pass {
+                    AiGoal::PassToTeammate
+                } else if quality_acceptable
                     && (in_shoot_range || reached_target)
                     && !opponent_too_close
                     && !should_seek
@@ -920,6 +981,9 @@ pub fn ai_decision_update(
                     AiGoal::AttackWithBall
                 }
             } // End of else block for forced shot after 12s
+        } else if matches!(ball_state, BallState::PassInFlight { target, .. } if *target == ai_entity) {
+            // Teammate is passing to us - receive the pass
+            AiGoal::ReceivePass
         } else if opponent_has_ball {
             // Update steal proximity tracking BEFORE goal decision
             // This ensures timer persists across goal switches
@@ -1227,6 +1291,16 @@ pub fn ai_decision_update(
                     }
                 }
 
+                AiGoal::PassToTeammate => {
+                    // Execute pass to teammate
+                    input.move_x = 0.0; // Stay still while passing
+                    if ai_state.button_press_cooldown <= 0.0 {
+                        input.pass_pressed = true;
+                        ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
+                    }
+                    input.throw_held = false;
+                }
+
                 AiGoal::AttemptSteal => {
                     // Chase opponent aggressively during steal attempts
                     if let Some(opp_pos) = opponent_pos {
@@ -1499,20 +1573,71 @@ pub fn ai_decision_update(
                 }
 
                 AiGoal::ReceivePass => {
-                    // Track incoming ball and move toward it
-                    let dx = ball_pos.x - ai_pos.x;
-                    if dx.abs() > profile.position_tolerance {
+                    // Predict where ball will land and only move if needed
+                    // This prevents AI from running toward passer when pass is incoming
+
+                    let catch_tolerance = BALL_PICKUP_RADIUS * 1.5; // How close is "close enough"
+
+                    // Calculate time for ball to reach AI's y-position using projectile motion
+                    // y = y0 + vy*t - 0.5*g*t^2
+                    // Solving for when ball_y = ai_y
+                    let dy_to_ai = ai_pos.y - ball_pos.y;
+                    let ball_vel = ball_velocity.0;
+                    let gravity = BALL_GRAVITY;
+
+                    // Quadratic formula: 0.5*g*t^2 - vy*t + dy = 0
+                    let a = 0.5 * gravity;
+                    let b = -ball_vel.y;
+                    let c = dy_to_ai;
+                    let discriminant = b * b - 4.0 * a * c;
+
+                    let predicted_x = if discriminant >= 0.0 && a.abs() > 0.001 {
+                        // Take positive root (future time)
+                        let t1 = (-b + discriminant.sqrt()) / (2.0 * a);
+                        let t2 = (-b - discriminant.sqrt()) / (2.0 * a);
+                        let t = if t1 > 0.0 && t2 > 0.0 {
+                            t1.min(t2)
+                        } else {
+                            t1.max(t2).max(0.0)
+                        };
+                        ball_pos.x + ball_vel.x * t
+                    } else {
+                        ball_pos.x // Fallback to current ball position
+                    };
+
+                    // Only move if predicted landing is outside catch tolerance
+                    let dx = predicted_x - ai_pos.x;
+                    if dx.abs() > catch_tolerance {
                         input.move_x = dx.signum();
                     }
+                    // Otherwise stay in place
 
-                    // Jump if ball is above and close horizontally
-                    let dy = ball_pos.y - ai_pos.y;
-                    if dy > PLAYER_SIZE.y && dx.abs() < BALL_PICKUP_RADIUS * 2.0 && grounded.0 {
-                        input.jump_buffer_timer = JUMP_BUFFER_TIME;
-                        input.jump_held = true;
+                    // Only jump if ball is DESCENDING and will remain too high to catch
+                    // Don't jump for high-arc passes that will come down on their own
+                    let ball_descending = ball_vel.y < 0.0;
+                    let ball_close_horizontally =
+                        (ball_pos.x - ai_pos.x).abs() < BALL_PICKUP_RADIUS * 3.0;
+
+                    if ball_descending && ball_close_horizontally && grounded.0 {
+                        // Predict ball height when it reaches AI's x position
+                        let time_to_ai_x = if ball_vel.x.abs() > 0.1 {
+                            ((ai_pos.x - ball_pos.x) / ball_vel.x).abs()
+                        } else {
+                            0.0
+                        };
+                        // Ball height at that time: y = y0 + vy*t - 0.5*g*t^2
+                        let predicted_ball_y = ball_pos.y + ball_vel.y * time_to_ai_x
+                            - 0.5 * BALL_GRAVITY * time_to_ai_x * time_to_ai_x;
+                        let dy_predicted = predicted_ball_y - ai_pos.y;
+
+                        // Only jump if ball will still be above catch height
+                        if dy_predicted > PLAYER_SIZE.y * 0.8 {
+                            input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                            input.jump_held = true;
+                        }
                     }
 
-                    // Try to catch the ball
+                    // Try to catch the ball when close
                     let distance_to_ball = ai_pos.distance(ball_pos);
                     if distance_to_ball < BALL_PICKUP_RADIUS
                         && ai_state.button_press_cooldown <= 0.0

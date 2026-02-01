@@ -23,7 +23,7 @@
   "speed_randomness_min": 0.95,
   "speed_randomness_max": 1.05,
   "shot_distance_variance": 0.00025,
-  "pass_base_arc": 10.0,
+  "pass_base_arc": 20.0,
   "pass_max_distance_arc": 25.0,
   "pass_distance_arc_scale": 500.0,
   "pass_max_height_arc": 15.0,

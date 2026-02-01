@@ -308,7 +308,7 @@ impl PresetDatabase {
             speed_randomness_max: 1.1,
             shot_distance_variance: 0.00025,
             // Pass mechanics defaults
-            pass_base_arc: 10.0,
+            pass_base_arc: 20.0,
             pass_max_distance_arc: 25.0,
             pass_distance_arc_scale: 500.0,
             pass_max_height_arc: 15.0,

@@ -40,7 +40,7 @@ fn default_shot_distance_variance() -> f32 {
 
 // Pass mechanics defaults
 fn default_pass_base_arc() -> f32 {
-    10.0
+    20.0 // Base arc angle for passes (degrees) - adds to distance/height adjustments
 }
 fn default_pass_max_distance_arc() -> f32 {
     25.0
@@ -398,7 +398,7 @@ impl PhysicsTweaks {
             21 => 0.9,      // speed_randomness_min default
             22 => 1.1,      // speed_randomness_max default
             23 => 0.00025,  // shot_distance_variance default
-            24 => 10.0,     // pass_base_arc default
+            24 => 20.0,     // pass_base_arc default
             25 => 25.0,     // pass_max_distance_arc default
             26 => 500.0,    // pass_distance_arc_scale default
             27 => 15.0,     // pass_max_height_arc default
