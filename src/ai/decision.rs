@@ -413,6 +413,97 @@ pub fn ai_navigation_update(
                     None
                 }
             }
+
+            // === KeepAway goals ===
+            AiGoal::EvadeAndPass => {
+                // Teammate: move to position away from adversary pressure
+                // Find the adversary (opponent team) and evade perpendicular to their approach
+                let adversary_pos = all_players
+                    .iter()
+                    .filter(|(e, _, t, _, _)| *e != ai_entity && *t != ai_team)
+                    .map(|(_, tr, _, _, _)| tr.translation.truncate())
+                    .next();
+
+                if let Some(adv_pos) = adversary_pos {
+                    // Calculate escape vector perpendicular to adversary approach
+                    let to_ai = ai_pos - adv_pos;
+                    let perpendicular = Vec2::new(-to_ai.y, to_ai.x).normalize_or_zero();
+
+                    // Escape to the side that keeps us more in bounds
+                    let escape_dist = 150.0;
+                    let escape_a = ai_pos + perpendicular * escape_dist;
+                    let escape_b = ai_pos - perpendicular * escape_dist;
+
+                    // Pick the escape that's further from walls
+                    let arena_center = 0.0;
+                    let target = if (escape_a.x - arena_center).abs()
+                        < (escape_b.x - arena_center).abs()
+                    {
+                        escape_a
+                    } else {
+                        escape_b
+                    };
+
+                    Some(Vec2::new(
+                        target.x.clamp(
+                            -ARENA_WIDTH / 2.0 + 100.0,
+                            ARENA_WIDTH / 2.0 - 100.0,
+                        ),
+                        ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0,
+                    ))
+                } else {
+                    // No adversary found, just stay in center
+                    Some(Vec2::new(0.0, ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0))
+                }
+            }
+
+            AiGoal::PressureBallCarrier => {
+                // Adversary: chase ball carrier directly
+                let ball_carrier_pos = all_players
+                    .iter()
+                    .filter(|(e, _, _, holding, _)| *e != ai_entity && holding.is_some())
+                    .map(|(_, tr, _, _, _)| tr.translation.truncate())
+                    .next();
+
+                ball_carrier_pos.or(ball_pos)
+            }
+
+            AiGoal::PredictIntercept => {
+                // Adversary: position between ball carrier and their teammate
+                let ball_carrier = all_players
+                    .iter()
+                    .filter(|(e, _, _, holding, _)| *e != ai_entity && holding.is_some())
+                    .map(|(_, tr, t, _, _)| (tr.translation.truncate(), *t))
+                    .next();
+
+                if let Some((carrier_pos, carrier_team)) = ball_carrier {
+                    // Find the carrier's teammate (pass target)
+                    let pass_target_pos = all_players
+                        .iter()
+                        .filter(|(_, _, t, holding, _)| {
+                            **t == carrier_team && holding.is_none()
+                        })
+                        .map(|(_, tr, _, _, _)| tr.translation.truncate())
+                        .next();
+
+                    if let Some(target_pos) = pass_target_pos {
+                        // Position 30% along the line from carrier to target
+                        let intercept = carrier_pos + (target_pos - carrier_pos) * 0.3;
+                        Some(Vec2::new(
+                            intercept.x.clamp(
+                                -ARENA_WIDTH / 2.0 + 50.0,
+                                ARENA_WIDTH / 2.0 - 50.0,
+                            ),
+                            intercept.y.max(ARENA_FLOOR_Y + PLAYER_SIZE.y / 2.0),
+                        ))
+                    } else {
+                        // No pass target, just chase carrier
+                        Some(carrier_pos)
+                    }
+                } else {
+                    ball_pos
+                }
+            }
         };
 
         // Check if we need to update the path
@@ -567,6 +658,9 @@ pub fn ai_decision_update(
         // Update CatchPartner mode from profile
         ai_state.catch_partner_mode = profile.catch_partner;
 
+        // Update KeepAwayAdversary mode from profile
+        ai_state.keep_away_adversary_mode = profile.keep_away_adversary;
+
         // Initialize distance drill target if not set (default is 0.0 from derive(Default))
         if ai_state.catch_partner_mode && ai_state.distance_drill_target == 0.0 {
             ai_state.distance_drill_target = 1200.0;
@@ -702,8 +796,46 @@ pub fn ai_decision_update(
         };
 
         // Decide current goal (using profile values)
-        // CatchPartner mode uses completely different goal logic
-        let new_goal = if ai_state.catch_partner_mode {
+        // KeepAwayAdversary mode: aggressive chase, intercept passes
+        // CatchPartner mode: cooperative catch/pass behavior
+        let new_goal = if ai_state.keep_away_adversary_mode {
+            // KeepAwayAdversary AI: Chase ball carrier aggressively, predict passes
+            // Find who has the ball (on the opponent team = Team::Left in keep-away)
+            let ball_carrier = opponents
+                .iter()
+                .filter(|(_, _, has_ball, _, _)| *has_ball)
+                .map(|(_, pos, _, _, _)| *pos)
+                .next();
+
+            if let Some(carrier_pos) = ball_carrier {
+                let distance_to_carrier = ai_pos.distance(carrier_pos);
+
+                // Within steal range: attempt steal
+                if distance_to_carrier < profile.steal_range {
+                    AiGoal::AttemptSteal
+                } else if distance_to_carrier < profile.pressure_distance * 3.0 {
+                    // Close enough for direct pressure
+                    AiGoal::PressureBallCarrier
+                } else {
+                    // Far away: predict pass line and intercept
+                    // Check if teammate exists (to predict pass target)
+                    if teammate_pos.is_some() {
+                        AiGoal::PredictIntercept
+                    } else {
+                        AiGoal::PressureBallCarrier
+                    }
+                }
+            } else if matches!(ball_state, BallState::Free) {
+                // Ball is loose - chase it
+                AiGoal::ChaseBall
+            } else if matches!(ball_state, BallState::PassInFlight { .. }) {
+                // Ball in flight - try to intercept
+                AiGoal::PredictIntercept
+            } else {
+                // Default: chase the ball
+                AiGoal::ChaseBall
+            }
+        } else if ai_state.catch_partner_mode {
             // CatchPartner AI: cooperative catch/pass behavior for distance drill
             // Sequence: catch ball → reposition while holding → wait 1s → pass → wait 1s → (chase if close)
             if ai_has_ball {
@@ -1713,6 +1845,140 @@ pub fn ai_decision_update(
                         // No teammate, just clear reposition flag
                         ai_state.distance_drill_reposition = false;
                     }
+                    input.throw_held = false;
+                }
+
+                // === KeepAway goals ===
+                AiGoal::EvadeAndPass => {
+                    // Teammate: evade adversary pressure, pass when safe
+                    // Find adversary position
+                    let adversary_pos = opponents
+                        .iter()
+                        .map(|(_, pos, _, _, _)| *pos)
+                        .next();
+
+                    if let Some(adv_pos) = adversary_pos {
+                        let distance_to_adversary = ai_pos.distance(adv_pos);
+
+                        // If adversary is close, move away
+                        if distance_to_adversary < 150.0 {
+                            let dx = ai_pos.x - adv_pos.x; // Move away from adversary
+                            if dx.abs() > 10.0 {
+                                input.move_x = dx.signum();
+                            }
+                            // Use turbo to escape
+                            input.turbo_held = true;
+                        } else if ai_has_ball && distance_to_adversary > 200.0 {
+                            // Safe distance with ball - pass to teammate
+                            if ai_state.button_press_cooldown <= 0.0 {
+                                input.pass_pressed = true;
+                                ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
+                            }
+                        }
+                    } else if ai_has_ball {
+                        // No adversary visible with ball - pass to teammate
+                        if ai_state.button_press_cooldown <= 0.0 {
+                            input.pass_pressed = true;
+                            ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
+                        }
+                    }
+                    input.throw_held = false;
+                }
+
+                AiGoal::PressureBallCarrier => {
+                    // Adversary: aggressive direct chase of ball carrier
+                    let ball_carrier_pos = opponents
+                        .iter()
+                        .filter(|(_, _, has_ball, _, _)| *has_ball)
+                        .map(|(_, pos, _, _, _)| *pos)
+                        .next()
+                        .unwrap_or(ball_pos);
+
+                    let dx = ball_carrier_pos.x - ai_pos.x;
+                    let dy = ball_carrier_pos.y - ai_pos.y;
+                    let distance = ai_pos.distance(ball_carrier_pos);
+
+                    // Always move toward carrier
+                    if dx.abs() > 10.0 {
+                        input.move_x = dx.signum();
+                    }
+
+                    // Jump if carrier is elevated
+                    if dy > PLAYER_SIZE.y * 0.5 && grounded.0 {
+                        input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                        input.jump_held = true;
+                    }
+
+                    // Keep holding jump while airborne
+                    if !grounded.0 && dy > PLAYER_SIZE.y {
+                        input.jump_held = true;
+                    }
+
+                    // Use turbo for aggressive chase
+                    if distance > 100.0 {
+                        input.turbo_held = true;
+                    }
+
+                    // Attempt steal when in range
+                    if distance < STEAL_RANGE
+                        && ai_state.steal_reaction_timer >= profile.steal_reaction_time
+                        && ai_state.button_press_cooldown <= 0.0
+                    {
+                        input.pickup_pressed = true;
+                        ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
+                    }
+
+                    input.throw_held = false;
+                }
+
+                AiGoal::PredictIntercept => {
+                    // Adversary: position between ball carrier and pass target
+                    let ball_carrier_pos = opponents
+                        .iter()
+                        .filter(|(_, _, has_ball, _, _)| *has_ball)
+                        .map(|(_, pos, _, _, _)| *pos)
+                        .next();
+
+                    // Find the other opponent (pass target)
+                    let pass_target_pos = opponents
+                        .iter()
+                        .filter(|(_, _, has_ball, _, _)| !*has_ball)
+                        .map(|(_, pos, _, _, _)| *pos)
+                        .next();
+
+                    let target = if let (Some(carrier), Some(pass_target)) =
+                        (ball_carrier_pos, pass_target_pos)
+                    {
+                        // Position 30% along the line from carrier to target
+                        carrier + (pass_target - carrier) * 0.3
+                    } else {
+                        // No clear pass line, just chase ball
+                        ball_pos
+                    };
+
+                    let dx = target.x - ai_pos.x;
+                    let dy = target.y - ai_pos.y;
+
+                    // Move toward intercept position
+                    if dx.abs() > profile.position_tolerance {
+                        input.move_x = dx.signum();
+                    }
+
+                    // Jump if target is elevated
+                    if dy > PLAYER_SIZE.y * 0.5 && grounded.0 {
+                        input.jump_buffer_timer = JUMP_BUFFER_TIME;
+                        input.jump_held = true;
+                    }
+
+                    // Try to pick up ball if it's in flight nearby (intercept)
+                    let distance_to_ball = ai_pos.distance(ball_pos);
+                    if distance_to_ball < BALL_PICKUP_RADIUS * 1.5
+                        && ai_state.button_press_cooldown <= 0.0
+                    {
+                        input.pickup_pressed = true;
+                        ai_state.button_press_cooldown = 1.0 / profile.button_presses_per_sec;
+                    }
+
                     input.throw_held = false;
                 }
             }

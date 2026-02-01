@@ -99,6 +99,14 @@ pub struct AiState {
     pub post_pass_wait_timer: f32,
     /// Distance drill: true = shrinking toward 100, false = growing toward 1200
     pub distance_drill_shrinking: bool,
+
+    // === KeepAway adversary mode state ===
+    /// Whether this AI is in KeepAwayAdversary mode (aggressive ball chase + intercepts)
+    pub keep_away_adversary_mode: bool,
+    /// Last known position of the teammate for pass prediction
+    pub last_teammate_pos: Option<bevy::prelude::Vec2>,
+    /// Timer for pass prediction (how long we've been tracking pass trajectory)
+    pub pass_prediction_timer: f32,
 }
 
 /// Goals the AI can pursue
@@ -133,6 +141,14 @@ pub enum AiGoal {
     HoldAndPass,
     /// Reposition to target distance from teammate (distance drill)
     RepositionToDistance,
+
+    // === KeepAway goals (adversary vs teammates) ===
+    /// Teammate: evade pressure from adversary, get open, pass when safe
+    EvadeAndPass,
+    /// Adversary: aggressive direct chase of ball carrier
+    PressureBallCarrier,
+    /// Adversary: position between ball carrier and their pass target
+    PredictIntercept,
 }
 
 /// Copy human PlayerInput into the human-controlled player's InputState.

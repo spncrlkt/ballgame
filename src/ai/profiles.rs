@@ -80,6 +80,9 @@ pub struct AiProfile {
     /// How often AI attempts passes when teammate has better position (0.0-1.0)
     /// 0.0 = never passes, 1.0 = always passes to better-positioned teammate
     pub pass_willingness: f32,
+    /// Whether this is a KeepAwayAdversary profile
+    /// KeepAwayAdversary AI aggressively chases ball carrier and predicts passes
+    pub keep_away_adversary: bool,
 }
 
 impl Default for AiProfile {
@@ -107,6 +110,7 @@ impl Default for AiProfile {
             turbo_usage: 0.5,         // Moderate turbo usage
             block_reaction: 0.5,      // Moderate block reaction
             pass_willingness: 0.5,    // Moderate pass willingness
+            keep_away_adversary: false, // Normal AI by default
         }
     }
 }
@@ -331,6 +335,9 @@ fn parse_profiles(content: &str) -> Vec<AiProfile> {
                     if let Ok(v) = value.parse() {
                         profile.pass_willingness = v;
                     }
+                }
+                "keep_away_adversary" => {
+                    profile.keep_away_adversary = value == "true" || value == "1";
                 }
                 _ => {}
             }

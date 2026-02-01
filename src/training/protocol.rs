@@ -51,6 +51,12 @@ pub enum TrainingProtocol {
     /// - No enemy AI, no scoring - purely cooperative pass practice
     /// - D-pad: Down=restart, Left=advance level
     TeamInteraction,
+
+    /// Keep-away training - ball possession practice
+    /// - Fixed flat level
+    /// - Uses KeepAway AI profile
+    /// - Cooperative mode for practicing keep-away gameplay
+    KeepAway,
 }
 
 // TODO: add a shooting training protocol for basket position calculations.
@@ -72,6 +78,7 @@ impl TrainingProtocol {
             "team-interaction" | "teaminteraction" | "team" | "catch" | "catch-partner" => {
                 Some(TrainingProtocol::TeamInteraction)
             }
+            "keep-away" | "keepaway" => Some(TrainingProtocol::KeepAway),
             _ => None,
         }
     }
@@ -85,6 +92,7 @@ impl TrainingProtocol {
             TrainingProtocol::Reachability => "Reachability Exploration",
             TrainingProtocol::AutoReachability => "Auto Reachability",
             TrainingProtocol::TeamInteraction => "Team Interaction",
+            TrainingProtocol::KeepAway => "Keep Away",
         }
     }
 
@@ -97,6 +105,7 @@ impl TrainingProtocol {
             TrainingProtocol::Reachability => "reachability",
             TrainingProtocol::AutoReachability => "auto-reachability",
             TrainingProtocol::TeamInteraction => "team-interaction",
+            TrainingProtocol::KeepAway => "keep-away",
         }
     }
 
@@ -117,6 +126,7 @@ impl TrainingProtocol {
             TrainingProtocol::TeamInteraction => {
                 "Cooperative pass practice with CatchPartner AI teammate"
             }
+            TrainingProtocol::KeepAway => "Keep-away training - ball possession practice",
         }
     }
 
@@ -129,6 +139,7 @@ impl TrainingProtocol {
             TrainingProtocol::Reachability => None, // Iterates all levels
             TrainingProtocol::AutoReachability => None, // Iterates all levels
             TrainingProtocol::TeamInteraction => Some("Team Interaction"),
+            TrainingProtocol::KeepAway => Some("Keep Away"),
         }
     }
 
@@ -141,6 +152,7 @@ impl TrainingProtocol {
             TrainingProtocol::Reachability => None,  // Player decides when done
             TrainingProtocol::AutoReachability => Some(60.0), // 60 seconds per level
             TrainingProtocol::TeamInteraction => None, // No time limit - practice mode
+            TrainingProtocol::KeepAway => None,      // No time limit - practice mode
         }
     }
 
@@ -151,7 +163,8 @@ impl TrainingProtocol {
             TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => true, // Ends on score OR time
             TrainingProtocol::Reachability
             | TrainingProtocol::AutoReachability
-            | TrainingProtocol::TeamInteraction => false, // No win condition
+            | TrainingProtocol::TeamInteraction
+            | TrainingProtocol::KeepAway => false, // No win condition
         }
     }
 
@@ -163,6 +176,7 @@ impl TrainingProtocol {
             TrainingProtocol::Reachability => true,     // Exploration mode
             TrainingProtocol::AutoReachability => false, // No ball needed for exploration
             TrainingProtocol::TeamInteraction => true,  // Player starts with ball to pass
+            TrainingProtocol::KeepAway => true,         // Player starts with ball
         }
     }
 
@@ -175,6 +189,7 @@ impl TrainingProtocol {
     }
 
     /// Whether this protocol uses CatchPartner AI for teammate
+    /// Note: KeepAway uses KeepAwayTeammate instead (similar but with evasion)
     pub fn uses_catch_partner(&self) -> bool {
         matches!(self, TrainingProtocol::TeamInteraction)
     }
@@ -193,8 +208,14 @@ impl TrainingProtocol {
     }
 
     /// Whether this is a cooperative 2-player mode (no enemy AI)
+    /// Note: KeepAway is NOT coop - it has an adversary
     pub fn is_coop_mode(&self) -> bool {
         matches!(self, TrainingProtocol::TeamInteraction)
+    }
+
+    /// Whether this is keep-away mode (3 players: human + teammate vs adversary)
+    pub fn is_keep_away_mode(&self) -> bool {
+        matches!(self, TrainingProtocol::KeepAway)
     }
 }
 
@@ -229,7 +250,8 @@ impl ProtocolConfig {
                 TrainingProtocol::Pursuit | TrainingProtocol::Pursuit2 => 1, // End on first score
                 TrainingProtocol::Reachability
                 | TrainingProtocol::AutoReachability
-                | TrainingProtocol::TeamInteraction => 0, // No score-based win
+                | TrainingProtocol::TeamInteraction
+                | TrainingProtocol::KeepAway => 0, // No score-based win
             },
         }
     }

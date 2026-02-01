@@ -431,9 +431,13 @@ fn main() {
 
     // Create training state with settings
     // If profile list is provided, use first profile and set iterations to list length
-    // For coop mode (TeamInteraction), always use CatchPartner profile
+    // For coop mode, use protocol-specific profile (CatchPartner or KeepAway)
     let (initial_profile, iterations) = if settings.protocol.is_coop_mode() {
-        ("CatchPartner".to_string(), settings.iterations)
+        let profile_name = match settings.protocol {
+            TrainingProtocol::KeepAway => "KeepAway",
+            _ => "CatchPartner",
+        };
+        (profile_name.to_string(), settings.iterations)
     } else if let Some(ref profiles) = profile_list {
         (profiles[0].clone(), profiles.len() as u32)
     } else {
@@ -1334,10 +1338,28 @@ fn training_setup(
                 .unwrap_or_default()
         });
 
-    // Find AI profile ID - use CatchPartner for TeamInteraction, otherwise configured profile
-    let ai_profile_id = if training_settings.protocol.is_coop_mode() {
+    // Determine mode flags
+    let is_coop = training_settings.protocol.is_coop_mode();
+    let is_keep_away = training_settings.protocol.is_keep_away_mode();
+
+    // Find AI profile IDs based on mode
+    let teammate_profile_id = if is_keep_away {
+        profile_db
+            .get_by_name("KeepAwayTeammate")
+            .map(|p| p.id.clone())
+            .unwrap_or_else(|| profile_db.default_profile().id.clone())
+    } else if is_coop {
         profile_db
             .get_by_name("CatchPartner")
+            .map(|p| p.id.clone())
+            .unwrap_or_else(|| profile_db.default_profile().id.clone())
+    } else {
+        profile_db.default_profile().id.clone()
+    };
+
+    let adversary_profile_id = if is_keep_away {
+        profile_db
+            .get_by_name("KeepAwayAdversary")
             .map(|p| p.id.clone())
             .unwrap_or_else(|| profile_db.default_profile().id.clone())
     } else {
@@ -1346,9 +1368,6 @@ fn training_setup(
             .map(|p| p.id.clone())
             .unwrap_or_else(|| profile_db.default_profile().id.clone())
     };
-
-    // For coop mode (TeamInteraction), both players are on the same team
-    let is_coop = training_settings.protocol.is_coop_mode();
 
     // Left player - HUMAN controlled
     let left_player = commands
@@ -1383,45 +1402,58 @@ fn training_setup(
         ))
         .id();
 
-    // Second player - AI controlled
-    // In coop mode: teammate on same team (L1), uses CatchPartner AI
+    // Second player - AI controlled teammate (for coop/keep-away) or opponent
+    // In keep-away: L1 teammate on same team, uses KeepAwayTeammate AI
+    // In coop mode: L1 teammate on same team, uses CatchPartner AI
     // In solo mode: off-screen placeholder
-    // Otherwise: opponent on right team (R0)
-    let ai_initial_goal = if training_settings.protocol.is_solo_mode() {
+    // Otherwise: R0 opponent on right team
+    let second_player_initial_goal = if training_settings.protocol.is_solo_mode() {
         AiGoal::Idle
-    } else if is_coop {
-        AiGoal::MoveToOpenSpot // CatchPartner starting goal
+    } else if is_keep_away || is_coop {
+        AiGoal::MoveToOpenSpot // CatchPartner/KeepAwayTeammate starting goal
     } else {
         AiGoal::ChaseBall
     };
 
     let second_player_spawn = if training_settings.protocol.is_solo_mode() {
         Vec3::new(ARENA_WIDTH + 500.0, 0.0, 0.0) // Off-screen
+    } else if is_keep_away {
+        Vec3::new(0.0, PLAYER_SPAWN_LEFT.y, 0.0) // Center position for teammate
     } else if is_coop {
         PLAYER_SPAWN_RIGHT // Teammate spawns on right side of arena but same team
     } else {
         PLAYER_SPAWN_RIGHT
     };
 
-    let second_player_color = if is_coop {
+    let second_player_color = if is_keep_away || is_coop {
         initial_palette.left // Same team color
     } else {
         initial_palette.right
     };
 
-    let second_player_team = if is_coop { Team::Left } else { Team::Right };
-    let second_player_char = if is_coop {
+    let second_player_team = if is_keep_away || is_coop {
+        Team::Left
+    } else {
+        Team::Right
+    };
+    let second_player_char = if is_keep_away || is_coop {
         CharacterId::L1
     } else {
         CharacterId::R0
     };
-    let second_player_target = if is_coop {
+    let second_player_target = if is_keep_away || is_coop {
         Basket::Right // Same target as human
     } else {
         Basket::Left
     };
 
-    let right_player = commands
+    let second_player_profile = if is_keep_away || is_coop {
+        teammate_profile_id.clone()
+    } else {
+        adversary_profile_id.clone()
+    };
+
+    let second_player = commands
         .spawn((
             Sprite::from_color(second_player_color, PLAYER_SIZE),
             Transform::from_translation(second_player_spawn),
@@ -1441,8 +1473,8 @@ fn training_setup(
             second_player_team,
             InputState::default(),
             AiState {
-                current_goal: ai_initial_goal,
-                profile_id: ai_profile_id.clone(),
+                current_goal: second_player_initial_goal,
+                profile_id: second_player_profile,
                 ..default()
             },
             AiNavState::default(),
@@ -1452,18 +1484,62 @@ fn training_setup(
         ))
         .id();
 
-    // Charge gauges and steal indicators for both players
+    // Third player - Adversary for keep-away mode (R0 on Team::Right)
+    let third_player = if is_keep_away {
+        let adversary = commands
+            .spawn((
+                Sprite::from_color(initial_palette.right, PLAYER_SIZE),
+                Transform::from_translation(PLAYER_SPAWN_RIGHT),
+                Player,
+                Velocity::default(),
+                Grounded(false),
+                CoyoteTimer::default(),
+                JumpState::default(),
+                Facing(-1.0),
+                Character(CharacterId::R0),
+                ControlledBy(AI_SOURCE_ID_START + 1), // Different source ID for third player
+            ))
+            .insert((
+                ChargingShot::default(),
+                TargetBasket(Basket::Left), // Adversary targets left basket
+                Collider,
+                Team::Right,
+                InputState::default(),
+                AiState {
+                    current_goal: AiGoal::ChaseBall, // Will switch to PressureBallCarrier
+                    profile_id: adversary_profile_id.clone(),
+                    ..default()
+                },
+                AiNavState::default(),
+                StealCooldown::default(),
+                TurboGauge::default(),
+                BlockState::default(),
+            ))
+            .id();
+        Some(adversary)
+    } else {
+        None
+    };
+
+    // Charge gauges and steal indicators for all players
     spawn_charge_gauge(&mut commands, left_player, 1.0); // Left player faces right
-    spawn_charge_gauge(&mut commands, right_player, -1.0); // Right player faces left
+    spawn_charge_gauge(&mut commands, second_player, -1.0); // Second player faces left
     spawn_steal_indicators(&mut commands, left_player, 1.0);
-    spawn_steal_indicators(&mut commands, right_player, -1.0);
+    spawn_steal_indicators(&mut commands, second_player, -1.0);
 
-    // Distance drill indicator for AI player (shows target distance)
-    spawn_distance_drill_indicator(&mut commands, right_player);
+    // Distance drill indicator for AI teammate
+    spawn_distance_drill_indicator(&mut commands, second_player);
 
-    // Swap indicators (red triangle when character is swapped to)
+    // Swap indicators
     spawn_swap_indicator(&mut commands, &mut meshes, &mut materials, left_player);
-    spawn_swap_indicator(&mut commands, &mut meshes, &mut materials, right_player);
+    spawn_swap_indicator(&mut commands, &mut meshes, &mut materials, second_player);
+
+    // Third player (adversary) gets UI elements too
+    if let Some(adversary) = third_player {
+        spawn_charge_gauge(&mut commands, adversary, -1.0);
+        spawn_steal_indicators(&mut commands, adversary, -1.0);
+        spawn_swap_indicator(&mut commands, &mut meshes, &mut materials, adversary);
+    }
 
     // Load ball textures
     let style_names = load_ball_style_names();
@@ -1495,7 +1571,10 @@ fn training_setup(
             .unwrap_or_else(|| "wedges".to_string())
     };
     if let Some(textures) = ball_textures.get(&ball_style_name) {
-        let (ball_spawn_pos, ball_state) = if training_settings.drive_mode {
+        // In keep-away or drive mode, human starts with ball
+        let player_starts_with_ball = training_settings.drive_mode || is_keep_away;
+
+        let (ball_spawn_pos, ball_state) = if player_starts_with_ball {
             (
                 Vec3::new(PLAYER_SPAWN_LEFT.x, PLAYER_SPAWN_LEFT.y, BALL_SPAWN.z),
                 BallState::Held(left_player),
@@ -1524,7 +1603,7 @@ fn training_setup(
             ))
             .id();
 
-        if training_settings.drive_mode {
+        if player_starts_with_ball {
             // Give the human player the ball
             commands
                 .entity(left_player)
@@ -1883,6 +1962,55 @@ fn training_state_machine(
                 return;
             }
 
+            // Keep-away mode: check for adversary steal (R0 steals = adversary wins)
+            // or time expiry (team wins)
+            if training_state.protocol.is_keep_away_mode() {
+                // Check steal tracker for Right team (adversary) success
+                let adversary_stole = steal_tracker.right_steals > 0;
+
+                let time_expired = training_state
+                    .time_limit_secs
+                    .map(|limit| training_state.game_elapsed >= limit)
+                    .unwrap_or(false);
+
+                if adversary_stole || time_expired {
+                    // Determine winner
+                    let (outcome, left_score, right_score) = if adversary_stole {
+                        ("Adversary wins! (Steal)".to_string(), 0, 1)
+                    } else {
+                        ("Team wins! (Time survived)".to_string(), 1, 0)
+                    };
+
+                    // Log match end
+                    event_buffer.buffer.log(
+                        training_state.game_elapsed,
+                        GameEvent::MatchEnd {
+                            score_left: left_score,
+                            score_right: right_score,
+                            duration: training_state.game_elapsed,
+                        },
+                    );
+
+                    let match_id = sqlite_logger.current_match_id();
+                    flush_training_events_buffer(&mut event_buffer, &sqlite_logger);
+
+                    // End match in SQLite
+                    sqlite_logger.end_match(left_score, right_score, training_state.game_elapsed);
+
+                    // Record result
+                    training_state.record_result(left_score, right_score, match_id);
+
+                    println!(
+                        "Iteration {} complete: {} ({:.1}s)",
+                        training_state.game_number, outcome, training_state.game_elapsed
+                    );
+
+                    // Reset steal tracker for next round
+                    steal_tracker.reset();
+                }
+                return;
+            }
+
             // Check win condition: score reached OR time limit expired
             let score_reached =
                 score.left >= training_state.win_score || score.right >= training_state.win_score;
@@ -2165,6 +2293,11 @@ fn training_state_machine(
                     // Team interaction practice - no specific analysis
                     println!("\n## Team Interaction Practice Complete\n");
                     println!("Practice session with CatchPartner AI teammate finished.");
+                }
+                TrainingProtocol::KeepAway => {
+                    // Keep-away practice - no specific analysis
+                    println!("\n## Keep-Away Practice Complete\n");
+                    println!("Keep-away training session finished.");
                 }
             }
 
@@ -3232,20 +3365,24 @@ fn update_swap_indicators(
     }
 }
 
-/// Update AI goals after swap - ensure CatchPartner behavior for non-human players in coop mode
+/// Update AI goals after swap - ensure coop AI behavior for non-human players in coop mode
 fn update_ai_after_swap(
     training_settings: Res<TrainingSettings>,
     mut players: Query<(Entity, &mut AiState, Option<&HumanControlled>), With<Player>>,
     profile_db: Res<AiProfileDatabase>,
 ) {
-    // Only applies to coop mode (TeamInteraction)
+    // Only applies to coop mode (TeamInteraction, KeepAway)
     if !training_settings.protocol.is_coop_mode() {
         return;
     }
 
-    // Get CatchPartner profile ID
-    let catch_partner_id = profile_db
-        .get_by_name("CatchPartner")
+    // Get protocol-specific profile ID
+    let profile_name = match training_settings.protocol {
+        TrainingProtocol::KeepAway => "KeepAway",
+        _ => "CatchPartner",
+    };
+    let coop_profile_id = profile_db
+        .get_by_name(profile_name)
         .map(|p| p.id.clone())
         .unwrap_or_else(|| profile_db.default_profile().id.clone());
 
@@ -3256,9 +3393,9 @@ fn update_ai_after_swap(
                 ai_state.current_goal = AiGoal::Idle;
             }
         } else {
-            // AI-controlled: ensure CatchPartner behavior
-            if ai_state.profile_id != catch_partner_id {
-                ai_state.profile_id = catch_partner_id.clone();
+            // AI-controlled: ensure coop AI behavior
+            if ai_state.profile_id != coop_profile_id {
+                ai_state.profile_id = coop_profile_id.clone();
             }
             // Set appropriate goal based on ball state
             // The AI decision system will handle goal transitions, but we ensure
