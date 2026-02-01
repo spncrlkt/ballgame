@@ -80,6 +80,8 @@ corner_width: 250
 center: 220 230
 mirror: 380 380 120
 mirror: 200 560 120
+ball_start: 0 250
+ball_velocity: 0 800
 
 level: Open Floor
 id: 44a6a078c08e14e9
