@@ -264,63 +264,190 @@ pub fn check_collisions(
 }
 
 /// Handle player-to-player collisions (2v2 mode)
-/// Pushes players apart when they overlap, preventing stacking
+///
+/// Collision rules:
+/// - Same team: full pass-through, no collision
+/// - Single opponent: soft collision with proportional drag, can pass through
+/// - Two overlapping opponents: hard block at their intersection, eject if inside
 pub fn player_player_collision(
-    mut players: Query<(Entity, &mut Transform, &mut Velocity, &Sprite), With<Player>>,
+    mut players: Query<(Entity, &mut Transform, &mut Velocity, &Sprite, &Team), With<Player>>,
+    time: Res<Time>,
 ) {
+    // Use minimum dt for headless mode compatibility
+    let dt = time.delta_secs().max(1.0 / 60.0);
+
     // Collect all player data first to avoid borrow issues
-    let player_data: Vec<(Entity, Vec3, Vec2, Vec2)> = players
+    let player_data: Vec<(Entity, Vec3, Vec2, Vec2, Team)> = players
         .iter()
-        .map(|(e, t, v, s)| {
+        .map(|(e, t, v, s, team)| {
             (
                 e,
                 t.translation,
                 v.0,
                 s.custom_size.unwrap_or(PLAYER_SIZE),
+                *team,
             )
         })
         .collect();
 
-    // Check all pairs for collision
+    // For each player, find overlapping opponents and apply collision rules
     for i in 0..player_data.len() {
-        for j in (i + 1)..player_data.len() {
-            let (entity_a, pos_a, vel_a, size_a) = &player_data[i];
-            let (entity_b, pos_b, vel_b, size_b) = &player_data[j];
+        let (entity_i, pos_i, _vel_i, size_i, team_i) = &player_data[i];
+        let half_i = *size_i / 2.0;
+
+        // Find all opponents overlapping with this player
+        let mut overlapping_opponents: Vec<(usize, f32, f32)> = Vec::new(); // (index, overlap_x, overlap_y)
+
+        for (j, (_, pos_j, _, size_j, team_j)) in player_data.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+
+            // Skip same team - full pass-through
+            if team_i == team_j {
+                continue;
+            }
+
+            let half_j = *size_j / 2.0;
+            let diff = pos_i.truncate() - pos_j.truncate();
+            let overlap_x = half_i.x + half_j.x - diff.x.abs();
+            let overlap_y = half_i.y + half_j.y - diff.y.abs();
+
+            // Check for collision (only horizontal matters for our rules)
+            if overlap_x > 0.0 && overlap_y > 0.0 {
+                overlapping_opponents.push((j, overlap_x, overlap_y));
+            }
+        }
+
+        // No opponents overlapping - nothing to do
+        if overlapping_opponents.is_empty() {
+            continue;
+        }
+
+        // Check if two opponents overlap each other (creating a hard block zone)
+        let mut hard_block = false;
+        let mut hard_block_push_dir = 0.0f32;
+
+        if overlapping_opponents.len() >= 2 {
+            // Check if the two opponents overlap each other
+            let (idx_a, _, _) = overlapping_opponents[0];
+            let (idx_b, _, _) = overlapping_opponents[1];
+
+            let (_, pos_a, _, size_a, _) = &player_data[idx_a];
+            let (_, pos_b, _, size_b, _) = &player_data[idx_b];
 
             let half_a = *size_a / 2.0;
             let half_b = *size_b / 2.0;
 
-            let diff = pos_a.truncate() - pos_b.truncate();
-            let overlap_x = half_a.x + half_b.x - diff.x.abs();
-            let overlap_y = half_a.y + half_b.y - diff.y.abs();
+            let diff_ab = pos_a.truncate() - pos_b.truncate();
+            let overlap_ab_x = half_a.x + half_b.x - diff_ab.x.abs();
+            let overlap_ab_y = half_a.y + half_b.y - diff_ab.y.abs();
 
-            // No collision
-            if overlap_x <= 0.0 || overlap_y <= 0.0 {
-                continue;
+            if overlap_ab_x > 0.0 && overlap_ab_y > 0.0 {
+                // Two opponents overlap - compute their intersection rectangle
+                let left_a = pos_a.x - half_a.x;
+                let right_a = pos_a.x + half_a.x;
+                let left_b = pos_b.x - half_b.x;
+                let right_b = pos_b.x + half_b.x;
+
+                let intersection_left = left_a.max(left_b);
+                let intersection_right = right_a.min(right_b);
+
+                // Check if player_i overlaps with this intersection
+                let left_i = pos_i.x - half_i.x;
+                let right_i = pos_i.x + half_i.x;
+
+                let player_in_intersection =
+                    right_i > intersection_left && left_i < intersection_right;
+
+                if player_in_intersection {
+                    hard_block = true;
+                    // Determine push direction: push player out of intersection
+                    let player_center = pos_i.x;
+                    let intersection_center = (intersection_left + intersection_right) / 2.0;
+                    hard_block_push_dir = if player_center > intersection_center {
+                        1.0
+                    } else {
+                        -1.0
+                    };
+                }
             }
+        }
 
-            // Resolve collision - push apart equally
-            let push_dir = if diff.x.abs() > 0.01 {
-                diff.x.signum()
+        if hard_block {
+            // Hard block: eject player from the intersection
+            // Find the nearest edge of the intersection and push player there
+            let (idx_a, _, _) = overlapping_opponents[0];
+            let (idx_b, _, _) = overlapping_opponents[1];
+
+            let (_, pos_a, _, size_a, _) = &player_data[idx_a];
+            let (_, pos_b, _, size_b, _) = &player_data[idx_b];
+
+            let half_a = *size_a / 2.0;
+            let half_b = *size_b / 2.0;
+
+            let left_a = pos_a.x - half_a.x;
+            let right_a = pos_a.x + half_a.x;
+            let left_b = pos_b.x - half_b.x;
+            let right_b = pos_b.x + half_b.x;
+
+            let intersection_left = left_a.max(left_b);
+            let intersection_right = right_a.min(right_b);
+
+            // Calculate how far to push
+            let target_x = if hard_block_push_dir > 0.0 {
+                intersection_right + half_i.x + COLLISION_EPSILON
             } else {
-                1.0 // Default push direction if exactly overlapping
+                intersection_left - half_i.x - COLLISION_EPSILON
             };
 
-            // Only resolve horizontal overlap (players can pass over/under each other vertically)
-            if overlap_x < overlap_y {
-                let push_amount = overlap_x / 2.0 + COLLISION_EPSILON;
+            if let Ok((_, mut trans_i, mut vel_i, _, _)) = players.get_mut(*entity_i) {
+                trans_i.translation.x = target_x;
+                // Stop horizontal velocity when hitting hard block
+                vel_i.0.x = 0.0;
+            }
+        } else {
+            // Soft collision: apply drag proportional to overlap depth
+            // Calculate total drag based on deepest overlap with any single opponent
+            let mut max_overlap_ratio = 0.0f32;
 
-                // Apply position correction to both players
-                if let Ok([(_, mut trans_a, mut vel_a_mut, _), (_, mut trans_b, mut vel_b_mut, _)]) =
-                    players.get_many_mut([*entity_a, *entity_b])
-                {
-                    trans_a.translation.x += push_dir * push_amount;
-                    trans_b.translation.x -= push_dir * push_amount;
+            for (idx_j, overlap_x, overlap_y) in &overlapping_opponents {
+                // Only apply horizontal collision (vertical pass-through allowed)
+                if *overlap_x >= *overlap_y {
+                    continue;
+                }
 
-                    // Reduce relative velocity to prevent jitter
-                    let avg_vel_x = (vel_a.x + vel_b.x) / 2.0;
-                    vel_a_mut.0.x = avg_vel_x * 0.5 + vel_a.x * 0.5;
-                    vel_b_mut.0.x = avg_vel_x * 0.5 + vel_b.x * 0.5;
+                let (_, _, _, size_j, _) = &player_data[*idx_j];
+                let half_j = *size_j / 2.0;
+
+                // Overlap ratio: how deep into opponent (0 = edge, 1 = center)
+                let max_possible_overlap = half_i.x + half_j.x;
+                let overlap_ratio = (*overlap_x / max_possible_overlap).min(1.0);
+                max_overlap_ratio = max_overlap_ratio.max(overlap_ratio);
+            }
+
+            if max_overlap_ratio > 0.0 {
+                // Apply drag: 1.0 at edge, PLAYER_SOFT_COLLISION_DRAG at full overlap
+                // drag_factor = 1.0 - (1.0 - base_drag) * overlap_ratio
+                // For frame-rate independence, use powf(dt)
+                let base_drag = PLAYER_SOFT_COLLISION_DRAG;
+                let drag_per_second = 1.0 - (1.0 - base_drag) * max_overlap_ratio;
+                let drag_factor = drag_per_second.powf(dt);
+
+                // Apply drag to this player
+                if let Ok((_, _, mut vel_i, _, _)) = players.get_mut(*entity_i) {
+                    vel_i.0.x *= drag_factor;
+                }
+
+                // Apply drag to overlapping opponents too
+                for (idx_j, overlap_x, overlap_y) in &overlapping_opponents {
+                    if *overlap_x >= *overlap_y {
+                        continue;
+                    }
+                    let (entity_j, _, _, _, _) = &player_data[*idx_j];
+                    if let Ok((_, _, mut vel_j, _, _)) = players.get_mut(*entity_j) {
+                        vel_j.0.x *= drag_factor;
+                    }
                 }
             }
         }

@@ -283,6 +283,14 @@ pub const BLOCK_HITBOX_HEIGHT_FACTOR: f32 = 1.4;
 pub const BLOCK_HORIZONTAL_SLOW_FACTOR: f32 = 0.3;
 
 // =============================================================================
+// PLAYER-PLAYER COLLISION
+// =============================================================================
+
+/// Base drag factor for soft collision with opponents (0.5 = 50% velocity at full overlap)
+/// Drag is proportional to overlap depth: no overlap = no drag, full overlap = this value
+pub const PLAYER_SOFT_COLLISION_DRAG: f32 = 0.5;
+
+// =============================================================================
 // PASS SYSTEM (ENHANCED)
 // =============================================================================
 
