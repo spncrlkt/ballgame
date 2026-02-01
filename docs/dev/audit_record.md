@@ -49,7 +49,7 @@ Completed the Buff (character ability) system. Each character can have one buff 
 |-----|----------|----------|-------|
 | Simulation missing Buff component | HIGH | `simulation/setup.rs` | Players spawned without Buff, affects metrics |
 | Training binary hardcodes spawning | MEDIUM | `bin/training.rs` | Doesn't use `spawn_characters_for_mode()` |
-| Network protocol missing Buff | LOW | `ballgame-protocol/` | Not blocking (single-player only) |
+| ~~Network protocol missing Buff~~ | ~~LOW~~ | ~~`ballgame-protocol/`~~ | **CORRECTED:** Protocol already includes Buff - see `ballgame-protocol/src/game_state.rs:198-231` (Buff enum with serde) and `ballgame/src/server/snapshot.rs:50-61` (`to_protocol_buff()` conversion). AgentSnapshot includes buff field. |
 
 ### Next Steps
 
