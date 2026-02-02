@@ -3,13 +3,14 @@
 //! Replaces: tweak panel, cycle indicator, shot debug text
 
 use bevy::prelude::*;
+use bevy::sprite::Anchor;
 
 use crate::ai::{AiProfileDatabase, AiState};
 use crate::ball::{Ball, BallStyle, BallTextures, CurrentPalette};
 use crate::events::CharacterId;
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
-use crate::player::{Character, HumanControlled, Player, Buff};
+use crate::player::{Buff, Character, HumanControlled, Player};
 use crate::presets::{apply_composite_preset, CurrentPresets, PresetDatabase};
 use crate::scoring::{CurrentLevel, GamePaused};
 use crate::settings::CurrentSettings;
@@ -35,7 +36,9 @@ const MENU_START_Y: f32 = 280.0;
 const MENU_WIDTH: f32 = 810.0;
 const MENU_HEIGHT: f32 = 680.0;
 const BORDER_THICKNESS: f32 = 4.0;
-const MENU_PADDING: f32 = 20.0; // Padding from edge to text
+const LABEL_VALUE_GAP: f32 = 15.0; // Gap between labels and values
+/// Max characters for value text to stay 20px from border
+const MAX_VALUE_CHARS: usize = 22;
 
 /// Colors
 const MENU_BG_COLOR: Color = Color::srgb(0.0, 0.0, 0.0);
@@ -195,37 +198,36 @@ pub fn spawn_debug_menu(mut commands: Commands) {
         DebugMenuBackground,
     ));
 
-    // Menu rows - label (left-aligned) and value (right-aligned) per option
-    let left_x = -MENU_WIDTH / 2.0 + MENU_PADDING + 200.0;
-    let right_x = MENU_WIDTH / 2.0 - MENU_PADDING - 200.0;
-
+    // Menu rows - label (right-anchored) and value (left-anchored) centered
     for (i, option) in DebugMenuOption::ALL.iter().enumerate() {
         let y = MENU_START_Y - (i as f32 * MENU_ROW_SPACING);
 
-        // Label (left-aligned)
+        // Label (right-anchored, to the left of center)
         commands.spawn((
             Text2d::new(format!("  {}", option.label())),
             TextFont {
                 font_size: MENU_FONT_SIZE,
                 ..default()
             },
-            TextLayout::new_with_justify(Justify::Left),
+            TextLayout::new_with_justify(Justify::Right),
+            Anchor::CENTER_RIGHT,
             TextColor(UNSELECTED_COLOR),
-            Transform::from_xyz(left_x, y, DEBUG_MENU_TEXT_Z),
+            Transform::from_xyz(-LABEL_VALUE_GAP, y, DEBUG_MENU_TEXT_Z),
             Visibility::Hidden,
             DebugMenuRow { index: i },
         ));
 
-        // Value (right-aligned)
+        // Value (left-anchored, to the right of center)
         commands.spawn((
             Text2d::new("---"),
             TextFont {
                 font_size: MENU_FONT_SIZE,
                 ..default()
             },
-            TextLayout::new_with_justify(Justify::Right),
+            TextLayout::new_with_justify(Justify::Left),
+            Anchor::CENTER_LEFT,
             TextColor(UNSELECTED_COLOR),
-            Transform::from_xyz(right_x, y, DEBUG_MENU_TEXT_Z),
+            Transform::from_xyz(LABEL_VALUE_GAP, y, DEBUG_MENU_TEXT_Z),
             Visibility::Hidden,
             DebugMenuValue { index: i },
         ));
@@ -236,9 +238,8 @@ pub fn spawn_debug_menu(mut commands: Commands) {
 // TOGGLE SYSTEM
 // =============================================================================
 
-/// Toggle debug menu open/close with Tab or Select button
+/// Toggle debug menu open/close with Select button
 pub fn toggle_debug_menu(
-    keyboard: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut menu_state: ResMut<DebugMenuState>,
     mut game_paused: ResMut<GamePaused>,
@@ -268,10 +269,9 @@ pub fn toggle_debug_menu(
         return;
     }
 
-    let toggle_pressed = keyboard.just_pressed(KeyCode::Tab)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::Select));
+    let toggle_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::Select));
 
     if toggle_pressed {
         menu_state.open = !menu_state.open;
@@ -292,24 +292,18 @@ pub fn toggle_debug_menu(
 // =============================================================================
 
 /// Handle menu row navigation (Up/Down) and cycle triggers (Left/Right)
-pub fn debug_menu_navigation(
-    gamepads: Query<&Gamepad>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut menu_state: ResMut<DebugMenuState>,
-) {
+pub fn debug_menu_navigation(gamepads: Query<&Gamepad>, mut menu_state: ResMut<DebugMenuState>) {
     if !menu_state.open {
         return;
     }
 
     // Up/Down navigation
-    let up_pressed = keyboard.just_pressed(KeyCode::ArrowUp)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::DPadUp));
-    let down_pressed = keyboard.just_pressed(KeyCode::ArrowDown)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::DPadDown));
+    let up_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadUp));
+    let down_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadDown));
 
     let num_options = DebugMenuOption::ALL.len();
     if up_pressed {
@@ -319,14 +313,12 @@ pub fn debug_menu_navigation(
     }
 
     // Left/Right sets pending cycle action
-    let left_pressed = keyboard.just_pressed(KeyCode::ArrowLeft)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::DPadLeft));
-    let right_pressed = keyboard.just_pressed(KeyCode::ArrowRight)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::DPadRight));
+    let left_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadLeft));
+    let right_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::DPadRight));
 
     if left_pressed {
         menu_state.pending_cycle = Some(false);
@@ -572,7 +564,11 @@ pub fn debug_menu_ability_cycle(
     for (mut ability, character) in ability_query.iter_mut() {
         let char_id = character.map(|c| c.0).unwrap_or(CharacterId::L0);
         if char_id == target_character {
-            *ability = if forward { ability.next() } else { ability.prev() };
+            *ability = if forward {
+                ability.next()
+            } else {
+                ability.prev()
+            };
             info!("Ability {:?}: {}", target_character, ability.name());
             return;
         }
@@ -598,22 +594,53 @@ pub fn update_debug_menu_display(
     preset_db: Res<PresetDatabase>,
     _ball_textures: Res<BallTextures>,
     ball_query: Query<&BallStyle, With<Ball>>,
-    ai_query: Query<(&AiState, Option<&Character>, Option<&HumanControlled>, &Buff), With<Player>>,
+    ai_query: Query<
+        (
+            &AiState,
+            Option<&Character>,
+            Option<&HumanControlled>,
+            &Buff,
+        ),
+        With<Player>,
+    >,
     mut border_query: Query<
         &mut Visibility,
-        (With<DebugMenuBorder>, Without<DebugMenuBackground>, Without<DebugMenuRow>, Without<DebugMenuValue>),
+        (
+            With<DebugMenuBorder>,
+            Without<DebugMenuBackground>,
+            Without<DebugMenuRow>,
+            Without<DebugMenuValue>,
+        ),
     >,
     mut bg_query: Query<
         &mut Visibility,
-        (With<DebugMenuBackground>, Without<DebugMenuBorder>, Without<DebugMenuRow>, Without<DebugMenuValue>),
+        (
+            With<DebugMenuBackground>,
+            Without<DebugMenuBorder>,
+            Without<DebugMenuRow>,
+            Without<DebugMenuValue>,
+        ),
     >,
     mut row_query: Query<
         (&mut Visibility, &mut Text2d, &mut TextColor, &DebugMenuRow),
-        (Without<DebugMenuBackground>, Without<DebugMenuBorder>, Without<DebugMenuValue>),
+        (
+            Without<DebugMenuBackground>,
+            Without<DebugMenuBorder>,
+            Without<DebugMenuValue>,
+        ),
     >,
     mut value_query: Query<
-        (&mut Visibility, &mut Text2d, &mut TextColor, &DebugMenuValue),
-        (Without<DebugMenuBackground>, Without<DebugMenuBorder>, Without<DebugMenuRow>),
+        (
+            &mut Visibility,
+            &mut Text2d,
+            &mut TextColor,
+            &DebugMenuValue,
+        ),
+        (
+            Without<DebugMenuBackground>,
+            Without<DebugMenuBorder>,
+            Without<DebugMenuRow>,
+        ),
     >,
 ) {
     let is_open = menu_state.open;
@@ -670,7 +697,7 @@ pub fn update_debug_menu_display(
             let is_selected = value.index == menu_state.selected_row;
             let option = DebugMenuOption::ALL[value.index];
 
-            // Get current value for this option
+            // Get current value for this option (truncated to fit)
             let value_str = get_current_value_str(
                 option,
                 &viewport_scale,
@@ -684,7 +711,7 @@ pub fn update_debug_menu_display(
                 &ai_query,
             );
 
-            **text = value_str;
+            **text = truncate_value(&value_str);
             color.0 = if is_selected {
                 SELECTED_COLOR
             } else {
@@ -698,11 +725,29 @@ pub fn update_debug_menu_display(
 // HELPER FUNCTIONS
 // =============================================================================
 
+/// Truncate a string to fit within the value column
+fn truncate_value(s: &str) -> String {
+    if s.chars().count() <= MAX_VALUE_CHARS {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(MAX_VALUE_CHARS - 2).collect();
+        format!("{}..", truncated)
+    }
+}
+
 /// Get AI profile name for a specific character
 fn get_ai_profile_for_character(
     target_character: CharacterId,
     profile_db: &AiProfileDatabase,
-    ai_query: &Query<(&AiState, Option<&Character>, Option<&HumanControlled>, &Buff), With<Player>>,
+    ai_query: &Query<
+        (
+            &AiState,
+            Option<&Character>,
+            Option<&HumanControlled>,
+            &Buff,
+        ),
+        With<Player>,
+    >,
 ) -> String {
     for (ai_state, character, _, _) in ai_query.iter() {
         let char_id = character.map(|c| c.0).unwrap_or(CharacterId::L0);
@@ -719,7 +764,15 @@ fn get_ai_profile_for_character(
 /// Get ability name for a specific character
 fn get_ability_for_character(
     target_character: CharacterId,
-    ai_query: &Query<(&AiState, Option<&Character>, Option<&HumanControlled>, &Buff), With<Player>>,
+    ai_query: &Query<
+        (
+            &AiState,
+            Option<&Character>,
+            Option<&HumanControlled>,
+            &Buff,
+        ),
+        With<Player>,
+    >,
 ) -> String {
     for (_, character, _, ability) in ai_query.iter() {
         let char_id = character.map(|c| c.0).unwrap_or(CharacterId::L0);
@@ -741,7 +794,15 @@ fn get_current_value_str(
     profile_db: &AiProfileDatabase,
     preset_db: &PresetDatabase,
     ball_query: &Query<&BallStyle, With<Ball>>,
-    ai_query: &Query<(&AiState, Option<&Character>, Option<&HumanControlled>, &Buff), With<Player>>,
+    ai_query: &Query<
+        (
+            &AiState,
+            Option<&Character>,
+            Option<&HumanControlled>,
+            &Buff,
+        ),
+        With<Player>,
+    >,
 ) -> String {
     match option {
         DebugMenuOption::Viewport => viewport_scale.current().2.to_string(),
@@ -761,10 +822,18 @@ fn get_current_value_str(
             .get_shooting(current_presets.shooting)
             .map(|p| p.name.clone())
             .unwrap_or_else(|| "?".to_string()),
-        DebugMenuOption::AiL0 => get_ai_profile_for_character(CharacterId::L0, profile_db, ai_query),
-        DebugMenuOption::AiL1 => get_ai_profile_for_character(CharacterId::L1, profile_db, ai_query),
-        DebugMenuOption::AiR0 => get_ai_profile_for_character(CharacterId::R0, profile_db, ai_query),
-        DebugMenuOption::AiR1 => get_ai_profile_for_character(CharacterId::R1, profile_db, ai_query),
+        DebugMenuOption::AiL0 => {
+            get_ai_profile_for_character(CharacterId::L0, profile_db, ai_query)
+        }
+        DebugMenuOption::AiL1 => {
+            get_ai_profile_for_character(CharacterId::L1, profile_db, ai_query)
+        }
+        DebugMenuOption::AiR0 => {
+            get_ai_profile_for_character(CharacterId::R0, profile_db, ai_query)
+        }
+        DebugMenuOption::AiR1 => {
+            get_ai_profile_for_character(CharacterId::R1, profile_db, ai_query)
+        }
         DebugMenuOption::AbilityL0 => get_ability_for_character(CharacterId::L0, ai_query),
         DebugMenuOption::AbilityL1 => get_ability_for_character(CharacterId::L1, ai_query),
         DebugMenuOption::AbilityR0 => get_ability_for_character(CharacterId::R0, ai_query),

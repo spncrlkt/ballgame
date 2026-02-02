@@ -88,6 +88,27 @@ impl CharacterId {
             _ => None,
         }
     }
+
+    /// Convert to slot index (0-3)
+    pub fn to_slot_index(&self) -> u8 {
+        match self {
+            CharacterId::L0 => 0,
+            CharacterId::L1 => 1,
+            CharacterId::R0 => 2,
+            CharacterId::R1 => 3,
+        }
+    }
+
+    /// Create from slot index (0-3)
+    pub fn from_slot_index(index: u8) -> Option<CharacterId> {
+        match index {
+            0 => Some(CharacterId::L0),
+            1 => Some(CharacterId::L1),
+            2 => Some(CharacterId::R0),
+            3 => Some(CharacterId::R1),
+            _ => None,
+        }
+    }
 }
 
 impl std::fmt::Display for CharacterId {

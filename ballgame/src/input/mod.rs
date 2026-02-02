@@ -9,6 +9,7 @@ pub use mapping::{
 pub use source::{
     GamepadInfo, GamepadRegistry, InputBuffers, InputSource, InputSourceId, InputSourceType,
     RawInput, AI_SOURCE_ID_START, GAMEPAD_SOURCE_ID_START, KEYBOARD_SOURCE_ID,
+    update_gamepad_registry, capture_per_source_input,
 };
 
 use bevy::prelude::*;

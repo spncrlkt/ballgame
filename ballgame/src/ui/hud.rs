@@ -13,6 +13,10 @@ use crate::CurrentPalette;
 #[derive(Component)]
 pub struct ScoreLevelText;
 
+/// Match timer text component
+#[derive(Component)]
+pub struct MatchTimerText;
+
 /// Character indicator label (shows ID above player)
 #[derive(Component)]
 pub struct CharacterIndicator {
@@ -33,6 +37,27 @@ pub fn update_score_level_text(
     };
 
     **text = format!("{} - {}", score.left, score.right);
+}
+
+/// Update match timer display (only in server mode with tournament config)
+pub fn update_match_timer_text(
+    tournament_config: Option<Res<crate::server::TournamentConfig>>,
+    mut text_query: Query<(&mut Text2d, &mut Visibility), With<MatchTimerText>>,
+) {
+    let Ok((mut text, mut vis)) = text_query.single_mut() else {
+        return;
+    };
+
+    if let Some(config) = tournament_config {
+        if config.match_active {
+            **text = config.format_time_display();
+            *vis = Visibility::Visible;
+        } else {
+            *vis = Visibility::Hidden;
+        }
+    } else {
+        *vis = Visibility::Hidden;
+    }
 }
 
 /// Spawn character indicators for all players

@@ -68,7 +68,7 @@ impl GameServer {
     /// Spawn a new session handler for a client connection
     async fn spawn_session(&self, stream: TcpStream) {
         let slots = self.slots.clone();
-        let _broadcaster = self.broadcaster.clone();
+        let broadcaster = self.broadcaster.clone();
         let game_config = self.game_config.clone();
 
         tokio::spawn(async move {
@@ -79,8 +79,8 @@ impl GameServer {
                     // Create channel for server -> client messages
                     let (tx, rx) = mpsc::unbounded_channel::<ServerMessage>();
 
-                    // Create session
-                    let session = Session::new(tx.clone(), slots.clone());
+                    // Create session with broadcaster for registration
+                    let session = Session::new(tx.clone(), slots.clone(), broadcaster);
 
                     // Run the session
                     run_session(session, ws_rx, ws_tx, rx, game_config).await;

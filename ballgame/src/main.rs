@@ -238,6 +238,8 @@ fn main() {
     app.insert_resource(level_db);
     app.insert_resource(current_settings);
     app.init_resource::<PlayerInput>();
+    app.init_resource::<input::GamepadRegistry>();
+    app.init_resource::<input::InputBuffers>();
     app.init_resource::<DebugSettings>();
     app.init_resource::<StealContest>();
     app.init_resource::<StealTracker>();
@@ -320,6 +322,7 @@ fn main() {
         (
             countdown::update_countdown,
             countdown::apply_jump_ball_velocity,
+            countdown::start_match_timer_on_countdown_end,
         )
             .chain()
             .run_if(replay::not_replay_active),
@@ -329,6 +332,19 @@ fn main() {
     app.add_systems(
         Update,
         update_event_bus_time.run_if(replay::not_replay_active),
+    );
+
+    // Gamepad registry must run first to track connections
+    app.add_systems(Update, input::update_gamepad_registry);
+
+    // Per-source input capture (for multi-controller support)
+    app.add_systems(
+        Update,
+        input::capture_per_source_input.run_if(
+            replay::not_replay_active
+                .and(countdown::not_in_countdown)
+                .and(scoring::not_paused),
+        ),
     );
 
     // Input systems must run in order: capture -> copy -> swap -> nav graph -> nav -> AI
@@ -390,6 +406,7 @@ fn main() {
         Update,
         (
             ui::update_score_level_text,
+            ui::update_match_timer_text,
             ui::spawn_character_indicators,
             ui::update_character_indicators,
             ui::update_indicator_colors,
@@ -536,6 +553,11 @@ fn main() {
             app.insert_resource(server::LobbyState::default());
         }
 
+        // Add character assignment and connected inputs resources
+        app.insert_resource(server::CharacterAssignments::default());
+        app.insert_resource(server::ConnectedInputs::default());
+        app.insert_resource(ui::PendingRemoteReassignment::default());
+
         // Lobby UI spawn and systems (only when lobby is active)
         app.add_systems(
             Startup,
@@ -545,13 +567,19 @@ fn main() {
         app.add_systems(
             Update,
             (
-                ui::update_lobby_slots,
+                server::update_connected_inputs,
+                server::sync_remote_clients_to_connected,
+                ui::update_connected_inputs_display,
+                ui::update_character_assignments_display,
                 ui::update_lobby_server_info,
                 ui::update_lobby_options,
                 ui::lobby_navigation,
+                (ui::lobby_open_picker, ui::lobby_picker_input).chain(),
+                ui::process_remote_reassignments,
                 ui::lobby_adjust_value,
                 ui::lobby_start_game,
                 ui::update_lobby_highlights,
+                ui::update_source_picker,
                 server::broadcast_lobby_state,
             )
                 .run_if(server::in_lobby),
@@ -565,6 +593,21 @@ fn main() {
                 ui::sync_lobby_pause,
             )
                 .run_if(server::server_mode_active),
+        );
+
+        // Copy input from assigned sources to characters (server mode)
+        app.add_systems(
+            Update,
+            ai::copy_assigned_inputs
+                .after(input::capture_per_source_input)
+                .before(ai::ai_decision_update)
+                .run_if(
+                    replay::not_replay_active
+                        .and(server::server_mode_active)
+                        .and(server::not_in_lobby)
+                        .and(countdown::not_in_countdown)
+                        .and(scoring::not_paused),
+                ),
         );
 
         // Add server systems (run when NOT in lobby)
@@ -592,7 +635,10 @@ fn main() {
 
         app.add_systems(
             Update,
-            server::check_tournament_end
+            (
+                server::update_match_timer,
+                server::check_tournament_end,
+            )
                 .run_if(
                     replay::not_replay_active
                         .and(server::server_mode_active)
@@ -836,6 +882,20 @@ fn setup(
         TextColor(TEXT_PRIMARY),
         Transform::from_xyz(0.0, ARENA_HEIGHT / 2.0 - 30.0, 1.0),
         ScoreLevelText,
+    ));
+
+    // Match timer text (to the right of score, hidden until match starts)
+    commands.spawn((
+        Text2d::new("00:00"),
+        TextFont {
+            font_size: 20.0,
+            ..default()
+        },
+        TextLayout::new_with_justify(Justify::Left),
+        TextColor(TEXT_PRIMARY),
+        Transform::from_xyz(80.0, ARENA_HEIGHT / 2.0 - 30.0, 1.0),
+        Visibility::Hidden,
+        ui::MatchTimerText,
     ));
 
     // Countdown text (3-2-1 before match starts)

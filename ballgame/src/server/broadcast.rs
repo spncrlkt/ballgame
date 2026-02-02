@@ -102,6 +102,18 @@ impl Broadcaster {
             }
         }
     }
+
+    /// Reassign a client channel from one slot to another
+    /// Returns true if the reassignment was successful
+    pub async fn reassign_channel(&self, old_slot: SlotId, new_slot: SlotId) -> bool {
+        let mut channels = self.channels.write().await;
+        if let Some(tx) = channels.remove(&old_slot) {
+            channels.insert(new_slot, tx);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Default for Broadcaster {

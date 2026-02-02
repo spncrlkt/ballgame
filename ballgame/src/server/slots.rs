@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use ballgame_protocol::{AgentInput, CharacterId, SlotState, handshake::ClientType};
+use crate::input::InputSourceId;
 
 /// Display information for a slot (used by lobby UI)
 #[derive(Debug, Clone)]
@@ -68,6 +69,10 @@ pub enum Slot {
 
     /// Local player (keyboard/gamepad input handled by server)
     Local {
+        /// Which input source controls this slot (keyboard or specific gamepad)
+        source_id: InputSourceId,
+        /// Display name for the source
+        source_name: String,
         /// Last input from local player
         input: AgentInput,
     },
@@ -113,7 +118,7 @@ impl Slot {
     pub fn get_input(&self) -> AgentInput {
         match self {
             Slot::Empty => AgentInput::default(),
-            Slot::Local { input } => input.clone(),
+            Slot::Local { input, .. } => input.clone(),
             Slot::Remote { last_input, .. } => last_input.clone(),
             Slot::ServerAi { .. } => AgentInput::default(), // AI decides separately
         }
@@ -123,6 +128,14 @@ impl Slot {
     pub fn client_type(&self) -> Option<&ClientType> {
         match self {
             Slot::Remote { client_type, .. } => Some(client_type),
+            _ => None,
+        }
+    }
+
+    /// Get the source ID if this is a local slot
+    pub fn source_id(&self) -> Option<InputSourceId> {
+        match self {
+            Slot::Local { source_id, .. } => Some(*source_id),
             _ => None,
         }
     }
@@ -150,6 +163,7 @@ impl SlotManager {
 
     /// Create a slot manager with a local player in the specified slot
     pub fn with_local_slot(local_slot: SlotId) -> Self {
+        use crate::input::KEYBOARD_SOURCE_ID;
         // Build slots array synchronously for initialization
         let mut slots = [
             Slot::Empty,
@@ -159,6 +173,29 @@ impl SlotManager {
         ];
         if (local_slot as usize) < MAX_SLOTS {
             slots[local_slot as usize] = Slot::Local {
+                source_id: KEYBOARD_SOURCE_ID,
+                source_name: "Keyboard".to_string(),
+                input: AgentInput::default(),
+            };
+        }
+        Self {
+            slots: Arc::new(RwLock::new(slots)),
+            next_client_id: Arc::new(RwLock::new(1)),
+        }
+    }
+
+    /// Create a slot manager with a specific source in the specified slot
+    pub fn with_local_source(local_slot: SlotId, source_id: InputSourceId, source_name: String) -> Self {
+        let mut slots = [
+            Slot::Empty,
+            Slot::Empty,
+            Slot::Empty,
+            Slot::Empty,
+        ];
+        if (local_slot as usize) < MAX_SLOTS {
+            slots[local_slot as usize] = Slot::Local {
+                source_id,
+                source_name,
                 input: AgentInput::default(),
             };
         }
@@ -212,7 +249,7 @@ impl SlotManager {
         if (slot_id as usize) < MAX_SLOTS {
             let mut slots = self.slots.write().await;
             match &mut slots[slot_id as usize] {
-                Slot::Local { input: i } => {
+                Slot::Local { input: i, .. } => {
                     *i = input;
                 }
                 Slot::Remote {
@@ -232,10 +269,38 @@ impl SlotManager {
     pub async fn set_local_input(&self, slot_id: SlotId, input: AgentInput) {
         if (slot_id as usize) < MAX_SLOTS {
             let mut slots = self.slots.write().await;
-            if let Slot::Local { input: ref mut i } = slots[slot_id as usize] {
+            if let Slot::Local { input: ref mut i, .. } = slots[slot_id as usize] {
                 *i = input;
             }
         }
+    }
+
+    /// Assign a local source to a slot
+    pub async fn assign_local(&self, slot_id: SlotId, source_id: InputSourceId, source_name: String) {
+        if (slot_id as usize) < MAX_SLOTS {
+            let mut slots = self.slots.write().await;
+            // Only assign if slot is empty or already local
+            if matches!(slots[slot_id as usize], Slot::Empty | Slot::Local { .. }) {
+                slots[slot_id as usize] = Slot::Local {
+                    source_id,
+                    source_name,
+                    input: AgentInput::default(),
+                };
+            }
+        }
+    }
+
+    /// Find slot by source ID
+    pub async fn find_by_source_id(&self, source_id: InputSourceId) -> Option<SlotId> {
+        let slots = self.slots.read().await;
+        for (i, slot) in slots.iter().enumerate() {
+            if let Slot::Local { source_id: sid, .. } = slot {
+                if *sid == source_id {
+                    return Some(i as SlotId);
+                }
+            }
+        }
+        None
     }
 
     /// Get all current inputs (for game tick)
@@ -360,6 +425,72 @@ impl SlotManager {
             if matches!(slot, Slot::ServerAi { .. }) {
                 *slot = Slot::Empty;
             }
+        }
+    }
+
+    /// Find slot by client ID
+    pub async fn find_by_client_id(&self, client_id: u64) -> Option<SlotId> {
+        let slots = self.slots.read().await;
+        for (i, slot) in slots.iter().enumerate() {
+            if let Slot::Remote { client_id: cid, .. } = slot {
+                if *cid == client_id {
+                    return Some(i as SlotId);
+                }
+            }
+        }
+        None
+    }
+
+    /// Reassign a remote client to a different slot
+    /// Returns the old slot ID if successful, or None if client not found or target slot not available
+    pub async fn reassign_remote(&self, client_id: u64, new_slot_id: SlotId) -> Option<SlotId> {
+        if (new_slot_id as usize) >= MAX_SLOTS {
+            return None;
+        }
+
+        let mut slots = self.slots.write().await;
+
+        // Find current slot for this client
+        let mut old_slot_id = None;
+        let mut client_data = None;
+
+        for (i, slot) in slots.iter_mut().enumerate() {
+            if let Slot::Remote { client_id: cid, .. } = slot {
+                if *cid == client_id {
+                    old_slot_id = Some(i as SlotId);
+                    // Take the client data
+                    client_data = Some(std::mem::replace(slot, Slot::Empty));
+                    break;
+                }
+            }
+        }
+
+        let old_slot = old_slot_id?;
+        let data = client_data?;
+
+        // Check if target slot is available (empty or ServerAi)
+        if !matches!(slots[new_slot_id as usize], Slot::Empty | Slot::ServerAi { .. }) {
+            // Target slot occupied by Local or another Remote - restore original
+            slots[old_slot as usize] = data;
+            return None;
+        }
+
+        // Move client to new slot
+        slots[new_slot_id as usize] = data;
+
+        Some(old_slot)
+    }
+
+    /// Get client ID for a slot (if it's a Remote slot)
+    pub async fn get_client_id(&self, slot_id: SlotId) -> Option<u64> {
+        if (slot_id as usize) >= MAX_SLOTS {
+            return None;
+        }
+        let slots = self.slots.read().await;
+        if let Slot::Remote { client_id, .. } = &slots[slot_id as usize] {
+            Some(*client_id)
+        } else {
+            None
         }
     }
 }

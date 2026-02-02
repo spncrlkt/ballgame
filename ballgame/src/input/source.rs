@@ -1,6 +1,7 @@
 //! Input source tracking for multi-controller support
 //!
-//! Tracks input sources (keyboard, gamepads, AI) and their assignments to characters.
+//! Tracks input sources (gamepads, AI) and their assignments to characters.
+//! Note: Keyboard is no longer supported as a gameplay controller input.
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,8 @@ use std::collections::HashMap;
 pub type InputSourceId = u32;
 
 /// Special ID for keyboard input source (always 0)
+/// DEPRECATED: Keyboard is no longer supported as a gameplay controller.
+/// This constant is kept for compatibility but should not be used for new code.
 pub const KEYBOARD_SOURCE_ID: InputSourceId = 0;
 
 /// Starting ID for AI sources (1000+)
@@ -21,8 +24,6 @@ pub const GAMEPAD_SOURCE_ID_START: InputSourceId = 1;
 /// Type of input source
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InputSourceType {
-    /// Keyboard input (single source for the whole keyboard)
-    Keyboard,
     /// Gamepad input with device info
     Gamepad {
         /// Bevy's gamepad entity index
@@ -38,9 +39,9 @@ pub enum InputSourceType {
 }
 
 impl InputSourceType {
-    /// Check if this is a human-controlled source (keyboard or gamepad)
+    /// Check if this is a human-controlled source (gamepad)
     pub fn is_human(&self) -> bool {
-        matches!(self, InputSourceType::Keyboard | InputSourceType::Gamepad { .. })
+        matches!(self, InputSourceType::Gamepad { .. })
     }
 
     /// Check if this is an AI source
@@ -52,7 +53,6 @@ impl InputSourceType {
 impl std::fmt::Display for InputSourceType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            InputSourceType::Keyboard => write!(f, "keyboard"),
             InputSourceType::Gamepad { name, .. } => write!(f, "gamepad:{}", name),
             InputSourceType::Ai { profile } => write!(f, "ai:{}", profile),
         }
@@ -69,14 +69,6 @@ pub struct InputSource {
 }
 
 impl InputSource {
-    /// Create a new keyboard input source
-    pub fn keyboard() -> Self {
-        Self {
-            id: KEYBOARD_SOURCE_ID,
-            source_type: InputSourceType::Keyboard,
-        }
-    }
-
     /// Create a new gamepad input source
     pub fn gamepad(id: InputSourceId, device_index: u32, name: String) -> Self {
         Self {
@@ -121,6 +113,10 @@ pub struct RawInput {
     pub throw_released: bool,
     /// Pass button pressed (new for 2v2)
     pub pass_pressed: bool,
+    /// Block button pressed (buffered)
+    pub block_pressed: bool,
+    /// Turbo button held (continuous)
+    pub turbo_held: bool,
 }
 
 impl RawInput {
@@ -129,6 +125,7 @@ impl RawInput {
         self.pickup_pressed = false;
         self.throw_released = false;
         self.pass_pressed = false;
+        self.block_pressed = false;
     }
 }
 
@@ -238,16 +235,109 @@ impl InputBuffers {
     }
 }
 
+/// System to track gamepad connections and update the registry
+pub fn update_gamepad_registry(
+    mut registry: ResMut<GamepadRegistry>,
+    mut connection_events: bevy::prelude::MessageReader<
+        bevy::input::gamepad::GamepadConnectionEvent,
+    >,
+) {
+    for event in connection_events.read() {
+        match &event.connection {
+            bevy::input::gamepad::GamepadConnection::Connected { name, .. } => {
+                let source_id = registry.register_gamepad(event.gamepad, name.clone());
+                info!(
+                    "Gamepad connected: {} (entity: {:?}, source_id: {})",
+                    name, event.gamepad, source_id
+                );
+            }
+            bevy::input::gamepad::GamepadConnection::Disconnected => {
+                if let Some(info) = registry.unregister_gamepad(event.gamepad) {
+                    info!(
+                        "Gamepad disconnected: {} (entity: {:?}, source_id: {})",
+                        info.name, event.gamepad, info.source_id
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Deadzone for analog sticks
+const STICK_DEADZONE: f32 = 0.15;
+
+/// Jump buffer time in seconds
+const JUMP_BUFFER_TIME: f32 = 0.1;
+
+/// System to capture per-source input into InputBuffers
+///
+/// This captures input from each connected gamepad independently,
+/// storing it in the InputBuffers resource indexed by source ID.
+pub fn capture_per_source_input(
+    gamepads: Query<(Entity, &Gamepad)>,
+    registry: Res<GamepadRegistry>,
+    mut buffers: ResMut<InputBuffers>,
+    time: Res<Time>,
+) {
+    // Capture each gamepad's input independently
+    for (entity, gamepad) in &gamepads {
+        if let Some(source_id) = registry.get_source_id(entity) {
+            let buffer = buffers.get_or_create(source_id);
+            capture_gamepad_input(gamepad, buffer, time.delta_secs());
+        }
+    }
+}
+
+/// Capture gamepad input into a RawInput buffer
+fn capture_gamepad_input(
+    gamepad: &Gamepad,
+    buffer: &mut RawInput,
+    delta_secs: f32,
+) {
+    // Movement
+    let mut move_x = 0.0;
+    if let Some(stick_x) = gamepad.get(GamepadAxis::LeftStickX) {
+        if stick_x.abs() > STICK_DEADZONE {
+            move_x = stick_x;
+        }
+    }
+    buffer.move_x = move_x;
+
+    // Jump (South button - A on Xbox, X on PlayStation)
+    let jump_pressed = gamepad.just_pressed(GamepadButton::South);
+    buffer.jump_held = gamepad.pressed(GamepadButton::South);
+    if jump_pressed {
+        buffer.jump_buffer_timer = JUMP_BUFFER_TIME;
+    } else {
+        buffer.jump_buffer_timer = (buffer.jump_buffer_timer - delta_secs).max(0.0);
+    }
+
+    // Throw (RB / Right Trigger)
+    let throw_held_now = gamepad.pressed(GamepadButton::RightTrigger);
+    let throw_just_released = buffer.throw_held && !throw_held_now;
+    if throw_just_released {
+        buffer.throw_released = true;
+    }
+    buffer.throw_held = throw_held_now;
+
+    // Pass/Pickup/Steal (LB / Left Trigger)
+    if gamepad.just_pressed(GamepadButton::LeftTrigger) {
+        buffer.pass_pressed = true;
+        buffer.pickup_pressed = true;
+    }
+
+    // Pickup also from RB press
+    if gamepad.just_pressed(GamepadButton::RightTrigger) {
+        buffer.pickup_pressed = true;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_input_source_types() {
-        let keyboard = InputSource::keyboard();
-        assert!(keyboard.is_human());
-        assert_eq!(keyboard.id, KEYBOARD_SOURCE_ID);
-
         let gamepad = InputSource::gamepad(1, 0, "Xbox Controller".to_string());
         assert!(gamepad.is_human());
         assert_eq!(gamepad.descriptor(), "gamepad:Xbox Controller");

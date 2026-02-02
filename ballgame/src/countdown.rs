@@ -205,3 +205,19 @@ pub fn apply_jump_ball_velocity(
         }
     }
 }
+
+/// System to start match timer when countdown ends (server mode only)
+pub fn start_match_timer_on_countdown_end(
+    countdown: Res<MatchCountdown>,
+    mut tournament_config: Option<ResMut<crate::server::TournamentConfig>>,
+) {
+    // Detect when countdown just finished (timer went below -0.3)
+    // This runs every frame, so we check if match is not yet active but countdown just ended
+    if let Some(ref mut config) = tournament_config {
+        if config.enabled && !config.match_active && !countdown.active && countdown.timer < 0.0 {
+            config.match_elapsed_secs = 0.0;
+            config.match_active = true;
+            info!("Match timer started");
+        }
+    }
+}

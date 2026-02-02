@@ -13,6 +13,7 @@ use ballgame_protocol::{
     handshake::GameConfig, PROTOCOL_VERSION, is_compatible,
 };
 
+use super::broadcast::Broadcaster;
 use super::slots::{SlotId, SlotManager};
 
 /// A connected client session
@@ -25,18 +26,25 @@ pub struct Session {
     pub tx: mpsc::UnboundedSender<ServerMessage>,
     /// Reference to slot manager
     slots: Arc<SlotManager>,
+    /// Reference to broadcaster for registration
+    broadcaster: Arc<Broadcaster>,
     /// Server sequence number
     seq: u64,
 }
 
 impl Session {
     /// Create a new session
-    pub fn new(tx: mpsc::UnboundedSender<ServerMessage>, slots: Arc<SlotManager>) -> Self {
+    pub fn new(
+        tx: mpsc::UnboundedSender<ServerMessage>,
+        slots: Arc<SlotManager>,
+        broadcaster: Arc<Broadcaster>,
+    ) -> Self {
         Self {
             slot: None,
             client_id: None,
             tx,
             slots,
+            broadcaster,
             seq: 0,
         }
     }
@@ -68,6 +76,9 @@ impl Session {
                     Some((slot_id, client_id)) => {
                         self.slot = Some(slot_id);
                         self.client_id = Some(client_id);
+
+                        // Register with broadcaster for state updates
+                        self.broadcaster.register(slot_id, self.tx.clone()).await;
 
                         // Send welcome
                         self.send(ServerPayload::Welcome {
@@ -130,6 +141,9 @@ impl Session {
     /// Clean up when session ends
     pub async fn cleanup(&mut self) {
         if let Some(slot) = self.slot {
+            // Unregister from broadcaster
+            self.broadcaster.unregister(slot).await;
+            // Release the slot
             self.slots.release(slot).await;
             info!("Session cleanup: released slot {}", slot);
         }

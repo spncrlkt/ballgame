@@ -198,8 +198,9 @@ pub fn update_pause_overlay(
         (Without<PauseTitle>, Without<PauseBackground>),
     >,
 ) {
-    // Hide pause overlay when debug menu is open (game stays paused but UI is hidden)
-    let show_pause_ui = game_paused.0 && !debug_menu.open;
+    // Hide pause overlay when debug menu is open or lobby is active (game stays paused but UI is hidden)
+    let lobby_active = lobby_state.as_ref().map(|l| l.active).unwrap_or(false);
+    let show_pause_ui = game_paused.0 && !debug_menu.open && !lobby_active;
     let is_paused = show_pause_ui;
     let has_lobby = lobby_state.is_some();
 
@@ -272,6 +273,11 @@ pub fn pause_menu_navigation(
         return;
     }
 
+    // Skip navigation when lobby is active (lobby has its own input handling)
+    if lobby_state.as_ref().map(|l| l.active).unwrap_or(false) {
+        return;
+    }
+
     let has_lobby = lobby_state.is_some();
 
     // D-pad navigation
@@ -303,6 +309,11 @@ pub fn pause_menu_confirm(
 ) {
     // Skip confirmation when debug menu is open
     if !game_paused.0 || debug_menu.open {
+        return;
+    }
+
+    // Skip confirmation when lobby is active (lobby has its own input handling)
+    if lobby_state.as_ref().map(|l| l.active).unwrap_or(false) {
         return;
     }
 

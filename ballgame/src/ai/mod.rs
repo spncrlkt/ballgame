@@ -196,6 +196,52 @@ pub fn copy_human_input(
     input_state.turbo_held = human_input.turbo_held;
 }
 
+/// Copy input from assigned sources to character InputState based on CharacterAssignments.
+///
+/// This system is used in server mode when CharacterAssignments is available.
+/// It reads input from the InputBuffers resource indexed by source_id and copies
+/// to each character's InputState based on their assignment.
+///
+/// Characters with ServerAi or Unassigned assignments are skipped - AI will write to them.
+pub fn copy_assigned_inputs(
+    assignments: Res<crate::server::CharacterAssignments>,
+    mut buffers: ResMut<crate::input::InputBuffers>,
+    mut players: Query<(&Character, &mut InputState), With<Player>>,
+) {
+    for (character, mut input_state) in &mut players {
+        let assignment = assignments.get(character.0);
+
+        // Only process local input sources
+        if let Some(source_id) = assignment.local_source_id() {
+            if let Some(raw) = buffers.buffers.get_mut(&source_id) {
+                // Continuous inputs
+                input_state.move_x = raw.move_x;
+                input_state.jump_held = raw.jump_held;
+                input_state.throw_held = raw.throw_held;
+                input_state.jump_buffer_timer = raw.jump_buffer_timer;
+
+                // Consumable flags (move, not copy)
+                if raw.pickup_pressed {
+                    input_state.pickup_pressed = true;
+                    raw.pickup_pressed = false;
+                }
+                if raw.throw_released {
+                    input_state.throw_released = true;
+                    raw.throw_released = false;
+                }
+                if raw.pass_pressed {
+                    input_state.pass_pressed = true;
+                    raw.pass_pressed = false;
+                }
+
+                // Note: RawInput doesn't have block_pressed yet, keep turbo
+                // input_state.turbo_held = raw.turbo_held;
+            }
+        }
+        // Remote and AI assignments are handled elsewhere
+    }
+}
+
 /// Swap which player the human controls (Q key / L bumper).
 /// For 1v1: Cycles through L0 → R0 → Observer → L0
 /// For 2v2: Cycles through L0 → L1 → R0 → R1 → Observer → L0
