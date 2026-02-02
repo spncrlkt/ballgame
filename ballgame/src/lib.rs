@@ -25,6 +25,7 @@ pub mod training;
 
 // Network/server modules
 pub mod server;
+pub mod server_logging;
 
 // Game logic modules
 pub mod ai;

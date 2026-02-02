@@ -635,27 +635,41 @@ pub fn process_remote_reassignments(
     if let Some((client_id, target_character, name)) = pending.pending.take() {
         let new_slot = target_character.to_slot_index();
 
-        // Perform the reassignment
+        // Perform the assignment/reassignment
         bridge.runtime.block_on(async {
-            // First, reassign in the SlotManager
-            if let Some(old_slot) = bridge.slots.reassign_remote(client_id, new_slot).await {
-                // Reassign the broadcaster channel
-                bridge.broadcaster.reassign_channel(old_slot, new_slot).await;
+            // Check if client is waiting (not yet in any slot)
+            let is_waiting = bridge.slots.check_waiting_assignment(client_id).await.is_none()
+                && bridge.slots.find_by_client_id(client_id).await.is_none();
 
-                // Send SlotAssigned message to the client
-                let tick = bridge.current_tick();
-                let protocol_char = ballgame_protocol::CharacterId::from_slot_index(new_slot);
-                if let Some(character) = protocol_char {
-                    bridge.broadcaster.send_to(
-                        new_slot,
-                        tick,
-                        ballgame_protocol::ServerPayload::SlotAssigned { character },
-                    ).await;
+            if is_waiting {
+                // Client is waiting - assign them to the slot
+                if bridge.slots.assign_waiting_to_slot(client_id, new_slot).await {
+                    info!("Assigned waiting client {} to slot {}", client_id, new_slot);
+                    // Note: The session will detect the assignment and send SlotAssigned
+                } else {
+                    warn!("Failed to assign waiting client {} to slot {}", client_id, new_slot);
                 }
-
-                info!("Reassigned client {} from slot {} to slot {}", client_id, old_slot, new_slot);
             } else {
-                warn!("Failed to reassign client {} to slot {}", client_id, new_slot);
+                // Client already has a slot - reassign them
+                if let Some(old_slot) = bridge.slots.reassign_remote(client_id, new_slot).await {
+                    // Reassign the broadcaster channel
+                    bridge.broadcaster.reassign_channel(old_slot, new_slot).await;
+
+                    // Send SlotAssigned message to the client
+                    let tick = bridge.current_tick();
+                    let protocol_char = ballgame_protocol::CharacterId::from_slot_index(new_slot);
+                    if let Some(character) = protocol_char {
+                        bridge.broadcaster.send_to(
+                            new_slot,
+                            tick,
+                            ballgame_protocol::ServerPayload::SlotAssigned { character },
+                        ).await;
+                    }
+
+                    info!("Reassigned client {} from slot {} to slot {}", client_id, old_slot, new_slot);
+                } else {
+                    warn!("Failed to reassign client {} to slot {}", client_id, new_slot);
+                }
             }
         });
 
@@ -734,7 +748,6 @@ pub fn lobby_start_game(
     mut game_paused: ResMut<GamePaused>,
     bridge: Res<ServerBridge>,
     current_level: Res<CurrentLevel>,
-    profile_db: Res<AiProfileDatabase>,
     gamepads: Query<&Gamepad>,
 ) {
     if lobby_state.selected_row != LobbyRow::StartGame || lobby_state.in_picker_mode() {
@@ -751,15 +764,15 @@ pub fn lobby_start_game(
 
     info!("Starting game from lobby");
 
-    // Fill unassigned characters with AI
-    let default_profile = profile_db.default_profile().name.clone();
-    assignments.fill_with_ai(&default_profile);
+    // Fill unassigned characters with Dummy AI (stands still)
+    let dummy_profile = "Dummy".to_string();
+    assignments.fill_with_ai(&dummy_profile);
 
     // Prepare match (timer starts when countdown ends)
     tournament_config.prepare_match();
 
     // Fill slots from assignments (sync with SlotManager)
-    bridge.runtime.block_on(bridge.slots.fill_empty_with_ai(&default_profile));
+    bridge.runtime.block_on(bridge.slots.fill_empty_with_ai(&dummy_profile));
 
     // Broadcast MatchStarting
     let level_id = current_level.0.clone();
@@ -873,9 +886,13 @@ pub fn update_source_picker(
 }
 
 /// Update lobby UI visibility
+/// Note: Excludes picker elements - those are controlled by update_source_picker
 pub fn update_lobby_visibility(
     lobby_state: Res<LobbyState>,
-    mut query: Query<&mut Visibility, With<LobbyElement>>,
+    mut query: Query<
+        &mut Visibility,
+        (With<LobbyElement>, Without<SourcePickerOverlay>, Without<SourcePickerRow>),
+    >,
 ) {
     let vis = if lobby_state.active {
         Visibility::Visible

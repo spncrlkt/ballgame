@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Ballgame AI Client v2 Template");
 
     // Outer reconnection loop
-    loop {
+    'connection: loop {
         println!("Connecting to: {}", args.server);
 
         // Try to connect
@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let mut client = match connect_result {
             Ok(c) => {
-                println!("Connected! Waiting for slot assignment...");
+                println!("Connected! Waiting for welcome...");
                 c
             }
             Err(e) => {
@@ -86,18 +86,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         println!(
-            "Assigned to slot {} (tick rate: {} Hz)",
-            welcome.assigned_slot, welcome.tick_rate_hz
+            "Welcome received (slot={}, tick rate: {} Hz)",
+            if welcome.assigned_slot == 255 { "WAITING".to_string() } else { welcome.assigned_slot.to_string() },
+            welcome.tick_rate_hz
         );
 
-        // Get our character ID
-        let character = match CharacterId::from_slot_index(welcome.assigned_slot) {
-            Some(c) => c,
-            None => {
-                eprintln!("Invalid slot assignment: {}", welcome.assigned_slot);
-                let wait = Duration::from_secs(3) + jitter();
-                tokio::time::sleep(wait).await;
-                continue;
+        // If slot is 255, we need to wait for SlotAssigned message from server
+        let character = if welcome.assigned_slot == 255 {
+            println!("Waiting for server to assign slot...");
+
+            // Keep receiving messages until we get SlotAssigned
+            loop {
+                match client.receive().await {
+                    Ok(msg) => {
+                        if let ServerPayload::SlotAssigned { character } = msg.payload {
+                            println!("Server assigned us to character: {}", character);
+                            break character;
+                        }
+                        // Ignore other messages while waiting
+                    }
+                    Err(e) => {
+                        eprintln!("Disconnected while waiting for slot: {}", e);
+                        let wait = Duration::from_secs(3) + jitter();
+                        tokio::time::sleep(wait).await;
+                        continue 'connection;
+                    }
+                }
+            }
+        } else {
+            // Legacy: got slot directly in Welcome
+            match CharacterId::from_slot_index(welcome.assigned_slot) {
+                Some(c) => c,
+                None => {
+                    eprintln!("Invalid slot assignment: {}", welcome.assigned_slot);
+                    let wait = Duration::from_secs(3) + jitter();
+                    tokio::time::sleep(wait).await;
+                    continue;
+                }
             }
         };
 

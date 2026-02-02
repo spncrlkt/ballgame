@@ -141,10 +141,22 @@ impl Slot {
     }
 }
 
+/// A client waiting to be assigned to a slot
+#[derive(Debug, Clone)]
+pub struct WaitingClient {
+    pub client_id: u64,
+    pub client_type: ClientType,
+    pub client_name: String,
+    /// Slot assigned by server operator (None = still waiting)
+    pub assigned_slot: Option<SlotId>,
+}
+
 /// Manages all player slots
 pub struct SlotManager {
     slots: Arc<RwLock<[Slot; MAX_SLOTS]>>,
     next_client_id: Arc<RwLock<u64>>,
+    /// Clients waiting to be assigned to a slot
+    waiting_clients: Arc<RwLock<Vec<WaitingClient>>>,
 }
 
 impl SlotManager {
@@ -158,6 +170,7 @@ impl SlotManager {
                 Slot::Empty,
             ])),
             next_client_id: Arc::new(RwLock::new(1)),
+            waiting_clients: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -181,6 +194,7 @@ impl SlotManager {
         Self {
             slots: Arc::new(RwLock::new(slots)),
             next_client_id: Arc::new(RwLock::new(1)),
+            waiting_clients: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -202,7 +216,83 @@ impl SlotManager {
         Self {
             slots: Arc::new(RwLock::new(slots)),
             next_client_id: Arc::new(RwLock::new(1)),
+            waiting_clients: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+
+    /// Register a remote client without assigning a slot (client waits in lobby)
+    /// Returns the client ID
+    pub async fn register_waiting(
+        &self,
+        client_type: ClientType,
+        client_name: String,
+    ) -> u64 {
+        let mut next_id = self.next_client_id.write().await;
+        let client_id = *next_id;
+        *next_id += 1;
+
+        let mut waiting = self.waiting_clients.write().await;
+        waiting.push(WaitingClient {
+            client_id,
+            client_type,
+            client_name,
+            assigned_slot: None,
+        });
+
+        client_id
+    }
+
+    /// Check if a waiting client has been assigned a slot
+    /// Returns the assigned slot if assigned, None otherwise
+    pub async fn check_waiting_assignment(&self, client_id: u64) -> Option<SlotId> {
+        let waiting = self.waiting_clients.read().await;
+        waiting
+            .iter()
+            .find(|c| c.client_id == client_id)
+            .and_then(|c| c.assigned_slot)
+    }
+
+    /// Assign a waiting client to a specific slot
+    /// Returns true if successful, false if slot not available or client not found
+    pub async fn assign_waiting_to_slot(&self, client_id: u64, slot_id: SlotId) -> bool {
+        if (slot_id as usize) >= MAX_SLOTS {
+            return false;
+        }
+
+        let mut slots = self.slots.write().await;
+        let mut waiting = self.waiting_clients.write().await;
+
+        // Check if slot is available (empty or ServerAi)
+        if !matches!(slots[slot_id as usize], Slot::Empty | Slot::ServerAi { .. }) {
+            return false;
+        }
+
+        // Find and update the waiting client
+        if let Some(client) = waiting.iter_mut().find(|c| c.client_id == client_id) {
+            // Move client from waiting to slot
+            slots[slot_id as usize] = Slot::Remote {
+                client_id,
+                client_type: client.client_type.clone(),
+                client_name: client.client_name.clone(),
+                last_input: AgentInput::default(),
+                last_ack_tick: 0,
+            };
+            client.assigned_slot = Some(slot_id);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Get list of waiting clients (for lobby display)
+    pub async fn get_waiting_clients(&self) -> Vec<WaitingClient> {
+        self.waiting_clients.read().await.clone()
+    }
+
+    /// Remove a waiting client (on disconnect)
+    pub async fn remove_waiting(&self, client_id: u64) {
+        let mut waiting = self.waiting_clients.write().await;
+        waiting.retain(|c| c.client_id != client_id);
     }
 
     /// Find an empty slot and assign a remote client to it

@@ -23,6 +23,7 @@ const SHADOW_OFFSET: Vec3 = Vec3::new(3.0, -3.0, -0.5);
 pub enum PauseMenuOption {
     #[default]
     Continue,
+    Characters,
     RestartLevel,
     Lobby,
     Quit,
@@ -32,6 +33,7 @@ impl PauseMenuOption {
     pub fn label(&self) -> &'static str {
         match self {
             PauseMenuOption::Continue => "Continue",
+            PauseMenuOption::Characters => "Characters",
             PauseMenuOption::RestartLevel => "Restart Level",
             PauseMenuOption::Lobby => "Lobby",
             PauseMenuOption::Quit => "Quit",
@@ -40,7 +42,8 @@ impl PauseMenuOption {
 
     pub fn next(&self, has_lobby: bool) -> Self {
         match self {
-            PauseMenuOption::Continue => PauseMenuOption::RestartLevel,
+            PauseMenuOption::Continue => PauseMenuOption::Characters,
+            PauseMenuOption::Characters => PauseMenuOption::RestartLevel,
             PauseMenuOption::RestartLevel => {
                 if has_lobby {
                     PauseMenuOption::Lobby
@@ -56,7 +59,8 @@ impl PauseMenuOption {
     pub fn prev(&self, has_lobby: bool) -> Self {
         match self {
             PauseMenuOption::Continue => PauseMenuOption::Quit,
-            PauseMenuOption::RestartLevel => PauseMenuOption::Continue,
+            PauseMenuOption::Characters => PauseMenuOption::Continue,
+            PauseMenuOption::RestartLevel => PauseMenuOption::Characters,
             PauseMenuOption::Lobby => PauseMenuOption::RestartLevel,
             PauseMenuOption::Quit => {
                 if has_lobby {
@@ -136,9 +140,10 @@ pub fn spawn_pause_overlay(mut commands: Commands) {
         PauseTitleForeground,
     ));
 
-    // Menu items (Lobby will be hidden when not in server mode)
+    // Menu items (Lobby and Characters will be hidden when not in server mode)
     let options = [
         PauseMenuOption::Continue,
+        PauseMenuOption::Characters,
         PauseMenuOption::RestartLevel,
         PauseMenuOption::Lobby,
         PauseMenuOption::Quit,
@@ -235,9 +240,10 @@ pub fn update_pause_overlay(
 
     // Update menu items visibility and animation
     for (mut vis, mut transform, menu_item) in &mut menu_query {
-        // Hide Lobby option when not in server mode
+        // Hide Lobby and Characters options when not in server mode
         let should_show = is_paused
-            && (menu_item.option != PauseMenuOption::Lobby || has_lobby);
+            && (menu_item.option != PauseMenuOption::Lobby || has_lobby)
+            && (menu_item.option != PauseMenuOption::Characters || has_lobby);
 
         *vis = if should_show {
             Visibility::Visible
@@ -353,6 +359,14 @@ pub fn pause_menu_confirm(
         PauseMenuOption::Continue => {
             game_paused.0 = false;
             info!("Game RESUMED");
+        }
+        PauseMenuOption::Characters => {
+            // Open lobby to reassign characters, but keep game state
+            if let Some(ref mut lobby) = lobby_state {
+                lobby.active = true;
+                // Don't reset score - just allowing reassignment mid-game
+                info!("Opening character assignment from pause menu");
+            }
         }
         PauseMenuOption::RestartLevel => {
             restart_requested.0 = true;

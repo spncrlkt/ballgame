@@ -5,12 +5,9 @@
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 
-use crate::ai::{AiProfileDatabase, AiState};
 use crate::ball::{Ball, BallStyle, BallTextures, CurrentPalette};
-use crate::events::CharacterId;
 use crate::levels::LevelDatabase;
 use crate::palettes::PaletteDatabase;
-use crate::player::{Buff, Character, HumanControlled, Player};
 use crate::presets::{apply_composite_preset, CurrentPresets, PresetDatabase};
 use crate::scoring::{CurrentLevel, GamePaused};
 use crate::settings::CurrentSettings;
@@ -30,11 +27,11 @@ const MENU_FONT_SIZE: f32 = 24.0;
 
 /// Spacing
 const MENU_ROW_SPACING: f32 = 32.0;
-const MENU_START_Y: f32 = 280.0;
+const MENU_START_Y: f32 = 140.0;
 
-/// Menu dimensions
+/// Menu dimensions (8 options × 32px spacing + padding)
 const MENU_WIDTH: f32 = 810.0;
-const MENU_HEIGHT: f32 = 680.0;
+const MENU_HEIGHT: f32 = 400.0;
 const BORDER_THICKNESS: f32 = 4.0;
 const LABEL_VALUE_GAP: f32 = 15.0; // Gap between labels and values
 /// Max characters for value text to stay 20px from border
@@ -54,18 +51,9 @@ const UNSELECTED_COLOR: Color = Color::srgb(0.9, 0.9, 0.9);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DebugMenuOption {
     Viewport,
-    Character,
     Level,
     Palette,
     BallStyle,
-    AiL0,
-    AiL1,
-    AiR0,
-    AiR1,
-    AbilityL0,
-    AbilityL1,
-    AbilityR0,
-    AbilityR1,
     CompositePreset,
     MovementPreset,
     BallPreset,
@@ -73,20 +61,11 @@ pub enum DebugMenuOption {
 }
 
 impl DebugMenuOption {
-    pub const ALL: [DebugMenuOption; 17] = [
+    pub const ALL: [DebugMenuOption; 8] = [
         DebugMenuOption::Viewport,
-        DebugMenuOption::Character,
         DebugMenuOption::Level,
         DebugMenuOption::Palette,
         DebugMenuOption::BallStyle,
-        DebugMenuOption::AiL0,
-        DebugMenuOption::AiL1,
-        DebugMenuOption::AiR0,
-        DebugMenuOption::AiR1,
-        DebugMenuOption::AbilityL0,
-        DebugMenuOption::AbilityL1,
-        DebugMenuOption::AbilityR0,
-        DebugMenuOption::AbilityR1,
         DebugMenuOption::CompositePreset,
         DebugMenuOption::MovementPreset,
         DebugMenuOption::BallPreset,
@@ -96,18 +75,9 @@ impl DebugMenuOption {
     pub fn label(&self) -> &'static str {
         match self {
             DebugMenuOption::Viewport => "Viewport",
-            DebugMenuOption::Character => "Character",
             DebugMenuOption::Level => "Level",
             DebugMenuOption::Palette => "Palette",
             DebugMenuOption::BallStyle => "Ball Style",
-            DebugMenuOption::AiL0 => "AI L0",
-            DebugMenuOption::AiL1 => "AI L1",
-            DebugMenuOption::AiR0 => "AI R0",
-            DebugMenuOption::AiR1 => "AI R1",
-            DebugMenuOption::AbilityL0 => "Ability L0",
-            DebugMenuOption::AbilityL1 => "Ability L1",
-            DebugMenuOption::AbilityR0 => "Ability R0",
-            DebugMenuOption::AbilityR1 => "Ability R1",
             DebugMenuOption::CompositePreset => "Composite",
             DebugMenuOption::MovementPreset => "Movement",
             DebugMenuOption::BallPreset => "Ball",
@@ -127,10 +97,6 @@ pub struct DebugMenuState {
     pub selected_row: usize,
     /// Pending action: Some(true) = cycle forward, Some(false) = cycle backward
     pub pending_cycle: Option<bool>,
-    /// Pending character cycle: Some(true) = forward, Some(false) = backward
-    pub pending_character_cycle: Option<bool>,
-    /// Pending ability cycle: Some((CharacterId, forward))
-    pub pending_ability_cycle: Option<(CharacterId, bool)>,
     /// Set when opened from pause menu, cleared after one frame (prevents immediate re-toggle)
     pub skip_next_select: bool,
 }
@@ -344,11 +310,9 @@ pub fn debug_menu_apply_cycle(
     mut window_query: Query<&mut Window>,
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
-    profile_db: Res<AiProfileDatabase>,
     preset_db: Res<PresetDatabase>,
     ball_textures: Res<BallTextures>,
     mut ball_query: Query<(&mut BallStyle, &mut Sprite), With<Ball>>,
-    mut ai_query: Query<(&mut AiState, Option<&Character>), With<Player>>,
 ) {
     let Some(forward) = menu_state.pending_cycle.take() else {
         return;
@@ -424,59 +388,6 @@ pub fn debug_menu_apply_cycle(
                 info!("Shooting: {}", p.name);
             }
         }
-        DebugMenuOption::AiL0 => {
-            cycle_ai_profile_for_character(
-                CharacterId::L0,
-                forward,
-                &profile_db,
-                &mut current_settings,
-                &mut ai_query,
-            );
-        }
-        DebugMenuOption::AiL1 => {
-            cycle_ai_profile_for_character(
-                CharacterId::L1,
-                forward,
-                &profile_db,
-                &mut current_settings,
-                &mut ai_query,
-            );
-        }
-        DebugMenuOption::AiR0 => {
-            cycle_ai_profile_for_character(
-                CharacterId::R0,
-                forward,
-                &profile_db,
-                &mut current_settings,
-                &mut ai_query,
-            );
-        }
-        DebugMenuOption::AiR1 => {
-            cycle_ai_profile_for_character(
-                CharacterId::R1,
-                forward,
-                &profile_db,
-                &mut current_settings,
-                &mut ai_query,
-            );
-        }
-        DebugMenuOption::AbilityL0 => {
-            menu_state.pending_ability_cycle = Some((CharacterId::L0, forward));
-        }
-        DebugMenuOption::AbilityL1 => {
-            menu_state.pending_ability_cycle = Some((CharacterId::L1, forward));
-        }
-        DebugMenuOption::AbilityR0 => {
-            menu_state.pending_ability_cycle = Some((CharacterId::R0, forward));
-        }
-        DebugMenuOption::AbilityR1 => {
-            menu_state.pending_ability_cycle = Some((CharacterId::R1, forward));
-        }
-        DebugMenuOption::Character => {
-            // Cycle through: L0 → L1 → R0 → R1 → Observer → L0
-            // Handled by separate system to reduce parameter count
-            menu_state.pending_character_cycle = Some(forward);
-        }
         DebugMenuOption::Level => {
             let level_ids: Vec<String> = level_db.all().iter().map(|l| l.id.clone()).collect();
             let num_levels = level_ids.len();
@@ -535,47 +446,6 @@ pub fn debug_menu_apply_cycle(
 }
 
 // =============================================================================
-// CHARACTER CYCLE SYSTEM (separate to stay under 16-param limit)
-// =============================================================================
-
-/// Apply pending character cycle
-pub fn debug_menu_character_cycle(
-    mut commands: Commands,
-    mut menu_state: ResMut<DebugMenuState>,
-    player_query: Query<(Entity, Option<&Character>), With<Player>>,
-    human_query: Query<(Entity, Option<&Character>), (With<Player>, With<HumanControlled>)>,
-) {
-    let Some(forward) = menu_state.pending_character_cycle.take() else {
-        return;
-    };
-
-    cycle_character_selection(forward, &mut commands, &player_query, &human_query);
-}
-
-/// Apply pending ability cycle
-pub fn debug_menu_ability_cycle(
-    mut menu_state: ResMut<DebugMenuState>,
-    mut ability_query: Query<(&mut Buff, Option<&Character>), With<Player>>,
-) {
-    let Some((target_character, forward)) = menu_state.pending_ability_cycle.take() else {
-        return;
-    };
-
-    for (mut ability, character) in ability_query.iter_mut() {
-        let char_id = character.map(|c| c.0).unwrap_or(CharacterId::L0);
-        if char_id == target_character {
-            *ability = if forward {
-                ability.next()
-            } else {
-                ability.prev()
-            };
-            info!("Ability {:?}: {}", target_character, ability.name());
-            return;
-        }
-    }
-}
-
-// =============================================================================
 // DISPLAY UPDATE SYSTEM
 // =============================================================================
 
@@ -589,20 +459,8 @@ pub fn update_debug_menu_display(
     current_level: Res<CurrentLevel>,
     current_palette: Res<CurrentPalette>,
     level_db: Res<LevelDatabase>,
-    _palette_db: Res<PaletteDatabase>,
-    profile_db: Res<AiProfileDatabase>,
     preset_db: Res<PresetDatabase>,
-    _ball_textures: Res<BallTextures>,
     ball_query: Query<&BallStyle, With<Ball>>,
-    ai_query: Query<
-        (
-            &AiState,
-            Option<&Character>,
-            Option<&HumanControlled>,
-            &Buff,
-        ),
-        With<Player>,
-    >,
     mut border_query: Query<
         &mut Visibility,
         (
@@ -705,10 +563,8 @@ pub fn update_debug_menu_display(
                 &current_level,
                 &current_palette,
                 &level_db,
-                &profile_db,
                 &preset_db,
                 &ball_query,
-                &ai_query,
             );
 
             **text = truncate_value(&value_str);
@@ -735,54 +591,6 @@ fn truncate_value(s: &str) -> String {
     }
 }
 
-/// Get AI profile name for a specific character
-fn get_ai_profile_for_character(
-    target_character: CharacterId,
-    profile_db: &AiProfileDatabase,
-    ai_query: &Query<
-        (
-            &AiState,
-            Option<&Character>,
-            Option<&HumanControlled>,
-            &Buff,
-        ),
-        With<Player>,
-    >,
-) -> String {
-    for (ai_state, character, _, _) in ai_query.iter() {
-        let char_id = character.map(|c| c.0).unwrap_or(CharacterId::L0);
-        if char_id == target_character {
-            return profile_db
-                .get_by_id(&ai_state.profile_id)
-                .map(|p| p.name.clone())
-                .unwrap_or_else(|| "?".to_string());
-        }
-    }
-    "?".to_string()
-}
-
-/// Get ability name for a specific character
-fn get_ability_for_character(
-    target_character: CharacterId,
-    ai_query: &Query<
-        (
-            &AiState,
-            Option<&Character>,
-            Option<&HumanControlled>,
-            &Buff,
-        ),
-        With<Player>,
-    >,
-) -> String {
-    for (_, character, _, ability) in ai_query.iter() {
-        let char_id = character.map(|c| c.0).unwrap_or(CharacterId::L0);
-        if char_id == target_character {
-            return ability.name().to_string();
-        }
-    }
-    "?".to_string()
-}
-
 /// Get current value string for an option
 fn get_current_value_str(
     option: DebugMenuOption,
@@ -791,18 +599,8 @@ fn get_current_value_str(
     current_level: &CurrentLevel,
     current_palette: &CurrentPalette,
     level_db: &LevelDatabase,
-    profile_db: &AiProfileDatabase,
     preset_db: &PresetDatabase,
     ball_query: &Query<&BallStyle, With<Ball>>,
-    ai_query: &Query<
-        (
-            &AiState,
-            Option<&Character>,
-            Option<&HumanControlled>,
-            &Buff,
-        ),
-        With<Player>,
-    >,
 ) -> String {
     match option {
         DebugMenuOption::Viewport => viewport_scale.current().2.to_string(),
@@ -822,32 +620,6 @@ fn get_current_value_str(
             .get_shooting(current_presets.shooting)
             .map(|p| p.name.clone())
             .unwrap_or_else(|| "?".to_string()),
-        DebugMenuOption::AiL0 => {
-            get_ai_profile_for_character(CharacterId::L0, profile_db, ai_query)
-        }
-        DebugMenuOption::AiL1 => {
-            get_ai_profile_for_character(CharacterId::L1, profile_db, ai_query)
-        }
-        DebugMenuOption::AiR0 => {
-            get_ai_profile_for_character(CharacterId::R0, profile_db, ai_query)
-        }
-        DebugMenuOption::AiR1 => {
-            get_ai_profile_for_character(CharacterId::R1, profile_db, ai_query)
-        }
-        DebugMenuOption::AbilityL0 => get_ability_for_character(CharacterId::L0, ai_query),
-        DebugMenuOption::AbilityL1 => get_ability_for_character(CharacterId::L1, ai_query),
-        DebugMenuOption::AbilityR0 => get_ability_for_character(CharacterId::R0, ai_query),
-        DebugMenuOption::AbilityR1 => get_ability_for_character(CharacterId::R1, ai_query),
-        DebugMenuOption::Character => {
-            for (_, character, human, _) in ai_query.iter() {
-                if human.is_some() {
-                    if let Some(c) = character {
-                        return format!("{:?}", c.0);
-                    }
-                }
-            }
-            "Observer".to_string()
-        }
         DebugMenuOption::Level => {
             let level_ids: Vec<&str> = level_db.all().iter().map(|l| l.id.as_str()).collect();
             let display_num = level_ids
@@ -880,89 +652,6 @@ fn apply_viewport(viewport_scale: &ViewportScale, window_query: &mut Query<&mut 
     }
 
     info!("Viewport: {}", label);
-}
-
-/// Cycle AI profile for a specific character
-fn cycle_ai_profile_for_character(
-    target_character: CharacterId,
-    forward: bool,
-    profile_db: &AiProfileDatabase,
-    current_settings: &mut CurrentSettings,
-    ai_query: &mut Query<(&mut AiState, Option<&Character>), With<Player>>,
-) {
-    let profile_ids: Vec<String> = profile_db.profiles().iter().map(|p| p.id.clone()).collect();
-    let num_profiles = profile_ids.len();
-
-    for (mut ai_state, character) in ai_query.iter_mut() {
-        let char_id = character.map(|c| c.0).unwrap_or(CharacterId::L0);
-        if char_id == target_character {
-            let current_idx = profile_ids
-                .iter()
-                .position(|id| *id == ai_state.profile_id)
-                .unwrap_or(0);
-            let next_idx = if forward {
-                (current_idx + 1) % num_profiles
-            } else {
-                (current_idx + num_profiles - 1) % num_profiles
-            };
-            ai_state.profile_id = profile_ids[next_idx].clone();
-            let profile = profile_db
-                .get_by_id(&ai_state.profile_id)
-                .unwrap_or_else(|| profile_db.default_profile());
-            current_settings.mark_dirty();
-            info!("AI {:?}: {}", target_character, profile.name);
-            return;
-        }
-    }
-}
-
-/// Cycle character selection: L0 → L1 → R0 → R1 → Observer → L0
-fn cycle_character_selection(
-    forward: bool,
-    commands: &mut Commands,
-    player_query: &Query<(Entity, Option<&Character>), With<Player>>,
-    human_query: &Query<(Entity, Option<&Character>), (With<Player>, With<HumanControlled>)>,
-) {
-    // Define the cycle order
-    const ORDER: [Option<CharacterId>; 5] = [
-        Some(CharacterId::L0),
-        Some(CharacterId::L1),
-        Some(CharacterId::R0),
-        Some(CharacterId::R1),
-        None, // Observer
-    ];
-
-    // Find current position in cycle
-    let current_char = human_query.iter().next().and_then(|(_, c)| c.map(|c| c.0));
-    let current_idx = ORDER.iter().position(|&c| c == current_char).unwrap_or(0);
-
-    // Calculate next position
-    let next_idx = if forward {
-        (current_idx + 1) % ORDER.len()
-    } else {
-        (current_idx + ORDER.len() - 1) % ORDER.len()
-    };
-    let next_char = ORDER[next_idx];
-
-    // Remove HumanControlled from current
-    for (entity, _) in human_query.iter() {
-        commands.entity(entity).remove::<HumanControlled>();
-    }
-
-    // Add HumanControlled to next (if not Observer)
-    if let Some(target_id) = next_char {
-        for (entity, character) in player_query.iter() {
-            if let Some(c) = character {
-                if c.0 == target_id {
-                    commands.entity(entity).insert(HumanControlled);
-                    info!("Character: {:?}", target_id);
-                    return;
-                }
-            }
-        }
-    }
-
-    info!("Character: Observer");
 }
 
 /// Apply additional settings from composite preset (level, palette, ball style)

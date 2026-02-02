@@ -17,6 +17,8 @@ pub enum DbType {
     Tournament,
     /// Bracket tournament database
     Bracket,
+    /// Server mode database (multiplayer sessions)
+    Server,
 }
 
 impl DbType {
@@ -26,6 +28,7 @@ impl DbType {
             DbType::Training => "training",
             DbType::Tournament => "tournament",
             DbType::Bracket => "bracket",
+            DbType::Server => "server",
         }
     }
 }
@@ -100,6 +103,7 @@ mod tests {
         assert_eq!(DbType::Training.prefix(), "training");
         assert_eq!(DbType::Tournament.prefix(), "tournament");
         assert_eq!(DbType::Bracket.prefix(), "bracket");
+        assert_eq!(DbType::Server.prefix(), "server");
     }
 
     #[test]

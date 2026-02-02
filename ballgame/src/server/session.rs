@@ -71,38 +71,48 @@ impl Session {
                     return Err("Protocol mismatch".to_string());
                 }
 
-                // Try to assign a slot
-                match self.slots.assign_remote(client_type.clone(), client_name.clone()).await {
-                    Some((slot_id, client_id)) => {
-                        self.slot = Some(slot_id);
-                        self.client_id = Some(client_id);
+                // Register client as waiting (no slot assignment yet)
+                // Server operator must assign in lobby
+                let client_id = self.slots.register_waiting(client_type.clone(), client_name.clone()).await;
+                self.client_id = Some(client_id);
+                // slot remains None until assigned by server operator
 
-                        // Register with broadcaster for state updates
-                        self.broadcaster.register(slot_id, self.tx.clone()).await;
+                // Send welcome with slot=255 meaning "waiting for assignment"
+                self.send(ServerPayload::Welcome {
+                    protocol_version: PROTOCOL_VERSION,
+                    assigned_slot: 255, // Special value: waiting for server to assign
+                    tick_rate_hz: 60,
+                    game_config: game_config.clone(),
+                }, current_tick);
 
-                        // Send welcome
-                        self.send(ServerPayload::Welcome {
-                            protocol_version: PROTOCOL_VERSION,
-                            assigned_slot: slot_id,
-                            tick_rate_hz: 60,
-                            game_config: game_config.clone(),
-                        }, current_tick);
-
-                        info!(
-                            "Client '{}' ({}) assigned to slot {}",
-                            client_name,
-                            client_type,
-                            slot_id
-                        );
-                    }
-                    None => {
-                        self.send_rejected("No slots available", current_tick);
-                        return Err("No slots available".to_string());
-                    }
-                }
+                info!(
+                    "Client '{}' ({}) registered, waiting for slot assignment (client_id={})",
+                    client_name,
+                    client_type,
+                    client_id
+                );
             }
 
             ClientPayload::Input(input) => {
+                // Check if we've been assigned a slot (by server operator)
+                if self.slot.is_none() {
+                    if let Some(client_id) = self.client_id {
+                        if let Some(slot_id) = self.slots.check_waiting_assignment(client_id).await {
+                            // We got assigned! Register with broadcaster and notify client
+                            self.slot = Some(slot_id);
+                            self.broadcaster.register(slot_id, self.tx.clone()).await;
+
+                            // Send SlotAssigned to notify client
+                            let character = ballgame_protocol::CharacterId::from_slot_index(slot_id)
+                                .unwrap_or(ballgame_protocol::CharacterId::L0);
+                            self.send(ServerPayload::SlotAssigned { character }, current_tick);
+
+                            info!("Client {} assigned to slot {} by server", client_id, slot_id);
+                        }
+                    }
+                }
+
+                // Only process input if we have a slot
                 if let Some(slot) = self.slot {
                     self.slots.set_input(slot, input, msg.ack_tick).await;
                 }
@@ -117,6 +127,10 @@ impl Session {
                 if let Some(slot) = self.slot {
                     self.slots.release(slot).await;
                     info!("Client disconnected from slot {}", slot);
+                } else if let Some(client_id) = self.client_id {
+                    // Remove from waiting list
+                    self.slots.remove_waiting(client_id).await;
+                    info!("Waiting client {} disconnected", client_id);
                 }
                 self.slot = None;
                 self.client_id = None;

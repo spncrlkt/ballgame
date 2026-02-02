@@ -2,6 +2,7 @@
 //!
 //! Main entry point: app setup and system registration.
 
+use ballgame::server_logging::init_server_logging;
 use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
     AiCapabilities, AiProfileDatabase, Ball, BallPlayerContact,
@@ -210,26 +211,45 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let debug_config = DebugLogConfig::load_with_args(&args);
 
+    // Initialize file logging in server mode (before Bevy starts)
+    let log_file = init_server_logging(server_mode);
+    if let Some(ref path) = log_file {
+        info!("Server log file: {}", path);
+    }
+
     let mut app = App::new();
 
-    app.add_plugins((
-        DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                // Use loaded viewport preset for initial size
-                // Set scale_factor_override to 1.0 for consistent behavior on HiDPI displays
-                resolution: bevy::window::WindowResolution::new(
-                    viewport_width as u32,
-                    viewport_height as u32,
-                )
-                .with_scale_factor_override(1.0),
-                title: "Ballgame".into(),
-                resizable: false,
-                ..default()
-            }),
+    // Configure window plugin
+    let window_plugin = WindowPlugin {
+        primary_window: Some(Window {
+            // Use loaded viewport preset for initial size
+            // Set scale_factor_override to 1.0 for consistent behavior on HiDPI displays
+            resolution: bevy::window::WindowResolution::new(
+                viewport_width as u32,
+                viewport_height as u32,
+            )
+            .with_scale_factor_override(1.0),
+            title: "Ballgame".into(),
+            resizable: false,
             ..default()
         }),
-        FrameTimeDiagnosticsPlugin::default(),
-    ));
+        ..default()
+    };
+
+    // In server mode, disable Bevy's LogPlugin since we set up our own logging
+    if server_mode {
+        app.add_plugins((
+            DefaultPlugins
+                .set(window_plugin)
+                .disable::<bevy::log::LogPlugin>(),
+            FrameTimeDiagnosticsPlugin::default(),
+        ));
+    } else {
+        app.add_plugins((
+            DefaultPlugins.set(window_plugin),
+            FrameTimeDiagnosticsPlugin::default(),
+        ));
+    }
 
     // Resources
     app.insert_resource(ClearColor(initial_bg));
@@ -434,8 +454,6 @@ fn main() {
     app.add_systems(Update, ui::toggle_debug_menu);
     app.add_systems(Update, ui::debug_menu_navigation);
     app.add_systems(Update, ui::debug_menu_apply_cycle);
-    app.add_systems(Update, ui::debug_menu_character_cycle);
-    app.add_systems(Update, ui::debug_menu_ability_cycle);
     app.add_systems(Update, ui::update_debug_menu_display);
 
     // Palette application and preset application
@@ -558,6 +576,13 @@ fn main() {
         app.insert_resource(server::ConnectedInputs::default());
         app.insert_resource(ui::PendingRemoteReassignment::default());
 
+        // Add server event logging (SQLite database)
+        if let Some(logger) = server::ServerEventLogger::new() {
+            info!("Server event logging enabled: {}", logger.db_path);
+            app.insert_resource(logger);
+        }
+        app.init_resource::<server::ServerLoggingState>();
+
         // Lobby UI spawn and systems (only when lobby is active)
         app.add_systems(
             Startup,
@@ -622,6 +647,19 @@ fn main() {
                 ),
         );
 
+        // Sync CharacterAssignments to player AiState.profile_id
+        // This ensures AI-controlled characters use the correct profile (e.g., Dummy for unassigned)
+        app.add_systems(
+            Update,
+            server::sync_assignments_to_ai_state
+                .before(ai::ai_navigation_update)
+                .run_if(
+                    replay::not_replay_active
+                        .and(server::server_mode_active)
+                        .and(server::not_in_lobby),
+                ),
+        );
+
         app.add_systems(
             FixedUpdate,
             server::broadcast_state_system
@@ -642,6 +680,24 @@ fn main() {
                 .run_if(
                     replay::not_replay_active
                         .and(server::server_mode_active)
+                        .and(server::not_in_lobby),
+                ),
+        );
+
+        // Server event logging systems
+        // Track match start/end based on lobby transitions
+        app.add_systems(
+            Update,
+            server::track_match_logging
+                .run_if(server::server_mode_active),
+        );
+
+        // Flush events to SQLite during gameplay
+        app.add_systems(
+            Update,
+            server::flush_server_events
+                .run_if(
+                    server::server_mode_active
                         .and(server::not_in_lobby),
                 ),
         );

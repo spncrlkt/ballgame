@@ -144,6 +144,13 @@ pub fn ai_navigation_update(
         let profile = profile_db
             .get_by_id(&ai_state.profile_id)
             .unwrap_or_else(|| profile_db.default_profile());
+
+        // Skip Dummy profile - no navigation needed for characters that do nothing
+        if profile.name == "Dummy" {
+            nav_state.clear();
+            continue;
+        }
+
         let ai_pos = ai_transform.translation.truncate();
 
         // Get ball position
@@ -642,6 +649,22 @@ pub fn ai_decision_update(
         grounded,
     ) in &mut ai_query
     {
+        // Get AI profile for this player
+        let profile = profile_db
+            .get_by_id(&ai_state.profile_id)
+            .unwrap_or_else(|| profile_db.default_profile());
+
+        // Dummy profile: do nothing - skip all AI processing
+        // This is used for unassigned characters that should stand still
+        if profile.name == "Dummy" {
+            input.move_x = 0.0;
+            input.jump_held = false;
+            input.pickup_pressed = false;
+            input.throw_held = false;
+            input.throw_released = false;
+            continue;
+        }
+
         // Idle goal: do nothing, skip all AI logic
         if ai_state.current_goal == AiGoal::Idle {
             input.move_x = 0.0;
@@ -651,11 +674,6 @@ pub fn ai_decision_update(
             input.throw_released = false;
             continue;
         }
-
-        // Get AI profile for this player
-        let profile = profile_db
-            .get_by_id(&ai_state.profile_id)
-            .unwrap_or_else(|| profile_db.default_profile());
 
         // Update CatchPartner mode from profile
         ai_state.catch_partner_mode = profile.catch_partner;

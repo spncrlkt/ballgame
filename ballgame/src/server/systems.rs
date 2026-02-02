@@ -65,6 +65,13 @@ pub fn read_remote_inputs(
         let slot_id = character_to_slot(character.0);
         if let Some(slot) = slots.get(slot_id as usize) {
             if let Slot::Remote { last_input, .. } = slot {
+                // Debug: log remote input being applied (only if there's actual input)
+                if last_input.has_input() && bridge.tick_count % 60 == 0 {
+                    info!(
+                        "Remote input for {:?} (slot {}): move_x={:.1}",
+                        character.0, slot_id, last_input.move_x
+                    );
+                }
                 // Convert protocol AgentInput to game InputState
                 *input_state = agent_input_to_input_state(last_input);
                 // Mark as remote-controlled so embedded AI skips this player

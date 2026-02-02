@@ -3,6 +3,8 @@
 //! This is a simplified version of the original AI logic from ballgame,
 //! designed to run as a standalone client without Bevy dependencies.
 
+use tracing::warn;
+
 use ballgame_protocol::{
     AgentInput, AgentSnapshot, BallStateKind, Basket, CharacterId,
     GameStateSnapshot, Team, Vec2,
@@ -76,6 +78,12 @@ impl BrainV1 {
         // Find our agent in the state
         let Some(our_agent) = game_state.agents.iter().find(|a| a.character == self.character)
         else {
+            // Debug: print available agents
+            warn!(
+                "Agent {:?} not found in state! Available: {:?}",
+                self.character,
+                game_state.agents.iter().map(|a| a.character).collect::<Vec<_>>()
+            );
             return AgentInput::default();
         };
 
@@ -197,7 +205,7 @@ impl BrainV1 {
     /// Attack toward the basket
     fn execute_attack(
         &self,
-        game_state: &GameStateSnapshot,
+        _game_state: &GameStateSnapshot,
         our_agent: &AgentSnapshot,
     ) -> AgentInput {
         let basket_pos = self.target_basket_position(our_agent);

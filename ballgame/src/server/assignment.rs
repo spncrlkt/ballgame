@@ -224,6 +224,18 @@ impl CharacterAssignments {
             }
         }
     }
+
+    /// Get the AI profile name for a character (if AI-controlled)
+    ///
+    /// Returns None if the character is human-controlled (local or remote)
+    /// Returns "Dummy" if the character is unassigned
+    pub fn get_profile_name(&self, character: CharacterId) -> Option<String> {
+        match self.get(character) {
+            CharacterAssignment::ServerAi { profile_name } => Some(profile_name.clone()),
+            CharacterAssignment::Unassigned => Some("Dummy".to_string()),
+            _ => None, // Local or Remote = human
+        }
+    }
 }
 
 /// Type of connected input
@@ -468,11 +480,12 @@ pub fn sync_remote_clients_to_connected(
         connected.remote_poll_timer = 0.0;
     }
 
-    // Get the slot snapshot
+    // Get the slot snapshot and waiting clients
     let slots = bridge.runtime.block_on(bridge.slots.snapshot());
+    let waiting_clients = bridge.runtime.block_on(bridge.slots.get_waiting_clients());
 
-    // Build set of currently connected client IDs
-    let current_client_ids: Vec<u64> = slots
+    // Build set of currently connected client IDs (from slots + waiting)
+    let mut current_client_ids: Vec<u64> = slots
         .iter()
         .filter_map(|slot| {
             if let crate::server::Slot::Remote { client_id, .. } = slot {
@@ -482,6 +495,11 @@ pub fn sync_remote_clients_to_connected(
             }
         })
         .collect();
+
+    // Add waiting clients to the list
+    for waiting in &waiting_clients {
+        current_client_ids.push(waiting.client_id);
+    }
 
     if in_lobby {
         // Graceful handling: track misses, show warning at 3, remove at 6
@@ -525,8 +543,96 @@ pub fn sync_remote_clients_to_connected(
         }
     }
 
+    // Add waiting clients (not yet assigned to any slot)
+    for waiting in &waiting_clients {
+        // Only add if not already assigned (assigned_slot is None)
+        if waiting.assigned_slot.is_none() {
+            connected.add_remote_client(waiting.client_id, waiting.client_name.clone(), None);
+        }
+    }
+
     // Sync assignment status for all inputs
     connected.sync_assignments(&assignments);
+}
+
+/// System to sync CharacterAssignments to player entities
+///
+/// Updates player entities based on their assignment:
+/// - Local: adds HumanControlled, removes RemoteControlled
+/// - Remote: adds RemoteControlled, removes HumanControlled
+/// - ServerAi/Unassigned: removes both markers, sets AI profile
+pub fn sync_assignments_to_ai_state(
+    mut commands: Commands,
+    assignments: Res<CharacterAssignments>,
+    profile_db: Res<crate::ai::AiProfileDatabase>,
+    mut player_query: Query<(
+        Entity,
+        &crate::player::Character,
+        &mut crate::ai::AiState,
+        Option<&crate::player::HumanControlled>,
+        Option<&crate::player::RemoteControlled>,
+    )>,
+) {
+    for (entity, character, mut ai_state, has_human, has_remote) in &mut player_query {
+        let assignment = assignments.get(character.0);
+
+        match assignment {
+            CharacterAssignment::Local { .. } => {
+                // Add HumanControlled if not present
+                if has_human.is_none() {
+                    commands.entity(entity).insert(crate::player::HumanControlled);
+                }
+                // Remove RemoteControlled if present
+                if has_remote.is_some() {
+                    commands.entity(entity).remove::<crate::player::RemoteControlled>();
+                }
+            }
+            CharacterAssignment::Remote { .. } => {
+                // Add RemoteControlled if not present
+                if has_remote.is_none() {
+                    commands.entity(entity).insert(crate::player::RemoteControlled);
+                }
+                // Remove HumanControlled if present
+                if has_human.is_some() {
+                    commands.entity(entity).remove::<crate::player::HumanControlled>();
+                }
+            }
+            CharacterAssignment::ServerAi { profile_name } => {
+                // Remove control markers - AI takes over
+                if has_human.is_some() {
+                    commands.entity(entity).remove::<crate::player::HumanControlled>();
+                }
+                if has_remote.is_some() {
+                    commands.entity(entity).remove::<crate::player::RemoteControlled>();
+                }
+                // Set AI profile
+                let target_profile_id = profile_db
+                    .get_by_name(profile_name)
+                    .map(|p| p.id.clone())
+                    .unwrap_or_else(|| profile_db.default_profile().id.clone());
+                if ai_state.profile_id != target_profile_id {
+                    ai_state.profile_id = target_profile_id;
+                }
+            }
+            CharacterAssignment::Unassigned => {
+                // Remove control markers - Dummy AI takes over
+                if has_human.is_some() {
+                    commands.entity(entity).remove::<crate::player::HumanControlled>();
+                }
+                if has_remote.is_some() {
+                    commands.entity(entity).remove::<crate::player::RemoteControlled>();
+                }
+                // Set Dummy profile
+                let target_profile_id = profile_db
+                    .get_by_name("Dummy")
+                    .map(|p| p.id.clone())
+                    .unwrap_or_else(|| profile_db.default_profile().id.clone());
+                if ai_state.profile_id != target_profile_id {
+                    ai_state.profile_id = target_profile_id;
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
