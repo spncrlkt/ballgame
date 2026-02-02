@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::bracket::BracketSeedingConfig;
+use super::participant::{AiParticipant, MatchParticipants};
 use crate::db_paths;
 
 /// Simulation mode
@@ -95,6 +96,39 @@ pub struct SimConfig {
     /// Path to custom AI profiles file (None = use default config/ai_profiles.txt)
     #[serde(default)]
     pub profiles_file: Option<String>,
+
+    // ============================================================
+    // AI Client Support (2v2 format)
+    // ============================================================
+
+    /// All 4 participants [L0, L1, R0, R1] - overrides profiles and teams when set
+    #[serde(default)]
+    pub participants: Option<MatchParticipants>,
+
+    /// Left team participants [L0, L1] - overrides left_profile when set
+    #[serde(default)]
+    pub left_team: Option<[AiParticipant; 2]>,
+
+    /// Right team participants [R0, R1] - overrides right_profile when set
+    #[serde(default)]
+    pub right_team: Option<[AiParticipant; 2]>,
+
+    /// Client IDs to include in tournament (for client tournaments)
+    #[serde(default)]
+    pub clients: Vec<String>,
+
+    /// Path to AI clients registry file (None = use default config/ai_clients.txt)
+    #[serde(default)]
+    pub clients_file: Option<String>,
+
+    /// Connection timeout for AI clients (seconds)
+    #[serde(default = "default_client_timeout")]
+    pub client_timeout_secs: u64,
+}
+
+/// Default client connection timeout
+fn default_client_timeout() -> u64 {
+    30
 }
 
 impl Default for SimConfig {
@@ -118,6 +152,13 @@ impl Default for SimConfig {
             levels: Vec::new(),   // Empty = all non-debug levels
             debug_log: false,
             profiles_file: None, // Use default config/ai_profiles.txt
+            // AI Client support
+            participants: None,
+            left_team: None,
+            right_team: None,
+            clients: Vec::new(),
+            clients_file: None,
+            client_timeout_secs: default_client_timeout(),
         }
     }
 }
@@ -127,7 +168,62 @@ pub const SIM_SETTINGS_TEMPLATE: &str = "config/simulation_settings.template.jso
 /// Local simulation settings (gitignored, user's custom settings)
 pub const SIM_SETTINGS_FILE: &str = "config/simulation_settings.json";
 
+/// Parse a team argument like "ai-v1,ai-v1" or "Balanced,Aggressive"
+///
+/// Participants starting with "ai-" are treated as clients, others as profiles.
+fn parse_team_arg(arg: &str) -> [AiParticipant; 2] {
+    let parts: Vec<&str> = arg.split(',').map(|s| s.trim()).collect();
+
+    let parse_participant = |s: &str| -> AiParticipant {
+        if s.starts_with("ai-") || s.contains('/') {
+            // Treat as client ID (ai-v1, ai-v2, or path-like identifiers)
+            AiParticipant::client(s)
+        } else {
+            // Treat as profile name
+            AiParticipant::profile(s)
+        }
+    };
+
+    match parts.len() {
+        0 => [
+            AiParticipant::profile("Balanced"),
+            AiParticipant::profile("Balanced"),
+        ],
+        1 => {
+            // Single value: use for both slots
+            let p = parse_participant(parts[0]);
+            [p.clone(), p]
+        }
+        _ => {
+            // Two values: use for primary and secondary
+            [parse_participant(parts[0]), parse_participant(parts[1])]
+        }
+    }
+}
+
 impl SimConfig {
+    /// Resolve participant configuration to concrete MatchParticipants
+    ///
+    /// Priority:
+    /// 1. `participants` field (explicit all-4 config)
+    /// 2. `left_team`/`right_team` fields (team-based config)
+    /// 3. `left_profile`/`right_profile` fields (backward compat, duplicated for 2v2)
+    pub fn resolve_participants(&self) -> MatchParticipants {
+        use super::orchestrator::resolve_participants;
+        resolve_participants(
+            self.participants.as_ref(),
+            self.left_team.as_ref(),
+            self.right_team.as_ref(),
+            &self.left_profile,
+            &self.right_profile,
+        )
+    }
+
+    /// Check if this configuration uses any AI clients (requires orchestrator)
+    pub fn uses_clients(&self) -> bool {
+        self.resolve_participants().has_clients()
+    }
+
     /// Load configuration from a JSON settings file
     pub fn from_file(path: &str) -> Result<Self, String> {
         let contents =
@@ -449,6 +545,43 @@ impl SimConfig {
                         i += 1;
                     }
                 }
+                // AI Client arguments
+                "--left-team" => {
+                    if i + 1 < args.len() {
+                        let team = parse_team_arg(&args[i + 1]);
+                        config.left_team = Some(team);
+                        i += 1;
+                    }
+                }
+                "--right-team" => {
+                    if i + 1 < args.len() {
+                        let team = parse_team_arg(&args[i + 1]);
+                        config.right_team = Some(team);
+                        i += 1;
+                    }
+                }
+                "--clients" => {
+                    if i + 1 < args.len() {
+                        config.clients = args[i + 1]
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                        i += 1;
+                    }
+                }
+                "--clients-file" => {
+                    if i + 1 < args.len() {
+                        config.clients_file = Some(args[i + 1].clone());
+                        i += 1;
+                    }
+                }
+                "--client-timeout" => {
+                    if i + 1 < args.len() {
+                        config.client_timeout_secs = args[i + 1].parse().unwrap_or(30);
+                        i += 1;
+                    }
+                }
                 "--help" | "-h" => {
                     print_help();
                     std::process::exit(0);
@@ -501,6 +634,15 @@ OPTIONS:
     --debug-log         Enable debug sample logging (if supported)
     --help, -h          Show this help
 
+AI CLIENT OPTIONS (2v2 format):
+    --left-team <P,P>   Two participants for left team (e.g., "ai-v1,ai-v1" or "Balanced,Balanced")
+    --right-team <P,P>  Two participants for right team (e.g., "ai-v2,ai-v2")
+    --clients <LIST>    Comma-separated client IDs for tournament (e.g., "ai-v1,ai-v2")
+    --clients-file <FILE>  Custom AI clients registry (default: config/ai_clients.txt)
+    --client-timeout <SECS>  Connection timeout for AI clients (default: 30)
+
+    Participant format: IDs starting with "ai-" are external clients, others are profiles.
+
 EXAMPLES:
     # Single match on level 3
     cargo run --bin simulate -- --level 3 --left Balanced --right Aggressive
@@ -525,6 +667,12 @@ EXAMPLES:
 
     # BO5 bracket with specific profiles
     cargo run --bin simulate -- --bracket 32 --best-of 5 --profiles "Profile1,Profile2,..."
+
+    # 2v2 match: AI v1 team vs AI v2 team
+    cargo run --bin simulate -- --left-team ai-v1,ai-v1 --right-team ai-v2,ai-v2
+
+    # Mixed team match: profiles on left, clients on right
+    cargo run --bin simulate -- --left-team Balanced,Aggressive --right-team ai-v1,ai-v2
 
 PROFILES:
     Balanced, Aggressive, Defensive, Sniper, Rusher, Turtle, Chaotic, Patient, Hunter, Goalie

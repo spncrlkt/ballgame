@@ -233,6 +233,46 @@ pub const BRACKET_SCHEMA: &str = r#"
     CREATE INDEX IF NOT EXISTS idx_bracket_games_match ON bracket_games(bracket_match_id);
 "#;
 
+/// AI Client participant tracking tables
+///
+/// These tables support tracking which AI clients (vs embedded profiles) participated
+/// in matches, enabling analysis of different AI architectures:
+/// - match_participants: Individual participant info per slot per match
+/// - team_compositions: Named team pairings for analysis
+pub const PARTICIPANT_SCHEMA: &str = r#"
+    -- Track all 4 participants in each match (for 2v2 format)
+    -- This extends the simple left_profile/right_profile in matches table
+    CREATE TABLE IF NOT EXISTS match_participants (
+        id INTEGER PRIMARY KEY,
+        match_id INTEGER REFERENCES matches(id),
+        slot_id INTEGER NOT NULL,         -- 0=L0, 1=L1, 2=R0, 3=R1
+        character_id TEXT NOT NULL,       -- "L0", "L1", "R0", "R1"
+        team TEXT NOT NULL,               -- "left" or "right"
+        participant_type TEXT NOT NULL,   -- "profile" or "client"
+        participant_id TEXT NOT NULL,     -- profile name or client ID
+        client_version TEXT,              -- from Hello message (clients only)
+        UNIQUE(match_id, slot_id)
+    );
+
+    -- Named team compositions for tournament analysis
+    -- A "team" is a pair of participants that play together
+    CREATE TABLE IF NOT EXISTS team_compositions (
+        id INTEGER PRIMARY KEY,
+        team_name TEXT NOT NULL UNIQUE,           -- e.g., "v1-duo", "v1+v2", "Balanced-duo"
+        slot_0_type TEXT NOT NULL,                -- "profile" or "client"
+        slot_0_id TEXT NOT NULL,                  -- profile name or client ID
+        slot_1_type TEXT NOT NULL,                -- "profile" or "client"
+        slot_1_id TEXT NOT NULL,                  -- profile name or client ID
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Participant-specific indexes
+    CREATE INDEX IF NOT EXISTS idx_match_participants_match ON match_participants(match_id);
+    CREATE INDEX IF NOT EXISTS idx_match_participants_type ON match_participants(participant_type);
+    CREATE INDEX IF NOT EXISTS idx_match_participants_id ON match_participants(participant_id);
+    CREATE INDEX IF NOT EXISTS idx_match_participants_team ON match_participants(team);
+"#;
+
 /// Initialize all schemas for a training database
 ///
 /// Call this when creating a new SqliteEventLogger database.
@@ -248,6 +288,7 @@ pub fn init_training_schema(conn: &rusqlite::Connection) -> Result<(), rusqlite:
 pub fn init_simulation_schema(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(CORE_SCHEMA)?;
     conn.execute_batch(BRACKET_SCHEMA)?;
+    conn.execute_batch(PARTICIPANT_SCHEMA)?;
     Ok(())
 }
 

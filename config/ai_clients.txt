@@ -1,0 +1,35 @@
+# AI Clients Registry
+#
+# Defines external AI clients that can connect via WebSocket for
+# simulation and training. Each client is an executable that connects
+# to the game server and controls one or more player slots.
+#
+# Format:
+#   client:<id>
+#     executable:<path>
+#     display_name:<name>
+#     args:<default arguments>
+#
+# The orchestrator will:
+#   1. Start an embedded WebSocket server
+#   2. Spawn each client executable as a subprocess
+#   3. Pass --port <N> to tell the client where to connect
+#   4. Wait for the client to connect and complete handshake
+#   5. Assign the client to a slot
+#
+# Example usage:
+#   cargo run --bin simulate -- --left-team ai-v1,ai-v1 --right-team ai-v2,ai-v2
+
+client:ai-v1
+  executable:./target/release/ballgame-ai-v1
+  display_name:AI v1 (Original)
+
+client:ai-v2
+  executable:./target/release/ballgame-ai-v2
+  display_name:AI v2 (Template)
+
+# Debug client with verbose output
+client:ai-v1-debug
+  executable:./target/release/ballgame-ai-v1
+  display_name:AI v1 (Debug)
+  args:--verbose

@@ -1333,6 +1333,185 @@ impl SimDatabase {
     }
 }
 
+// =============================================================================
+// Participant Tracking Methods
+// =============================================================================
+
+/// Data for inserting a match participant
+#[derive(Debug, Clone)]
+pub struct ParticipantData {
+    pub slot_id: u8,
+    pub character_id: String,
+    pub team: String,
+    pub participant_type: String,
+    pub participant_id: String,
+    pub client_version: Option<String>,
+}
+
+/// Client win rate statistics
+#[derive(Debug, Clone)]
+pub struct ClientWinRate {
+    pub client_id: String,
+    pub matches: i64,
+    pub wins: i64,
+    pub losses: i64,
+    pub draws: i64,
+    pub win_rate: f64,
+}
+
+/// Team composition statistics
+#[derive(Debug, Clone)]
+pub struct TeamCompositionStats {
+    pub team_name: String,
+    pub slot_0_id: String,
+    pub slot_1_id: String,
+    pub matches: i64,
+    pub wins: i64,
+    pub win_rate: f64,
+}
+
+impl SimDatabase {
+    /// Insert participant data for a match
+    pub fn insert_match_participants(
+        &self,
+        match_id: i64,
+        participants: &[ParticipantData],
+    ) -> Result<()> {
+        let mut stmt = self.conn.prepare(
+            r#"INSERT INTO match_participants
+               (match_id, slot_id, character_id, team, participant_type, participant_id, client_version)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
+        )?;
+
+        for p in participants {
+            stmt.execute(params![
+                match_id,
+                p.slot_id as i64,
+                p.character_id,
+                p.team,
+                p.participant_type,
+                p.participant_id,
+                p.client_version,
+            ])?;
+        }
+
+        Ok(())
+    }
+
+    /// Get or create a team composition ID
+    pub fn get_or_create_team_composition(
+        &self,
+        team_name: &str,
+        slot_0_type: &str,
+        slot_0_id: &str,
+        slot_1_type: &str,
+        slot_1_id: &str,
+    ) -> Result<i64> {
+        // Try to find existing
+        let existing: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT id FROM team_compositions WHERE team_name = ?1",
+                params![team_name],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if let Some(id) = existing {
+            return Ok(id);
+        }
+
+        // Create new
+        self.conn.execute(
+            r#"INSERT INTO team_compositions
+               (team_name, slot_0_type, slot_0_id, slot_1_type, slot_1_id)
+               VALUES (?1, ?2, ?3, ?4, ?5)"#,
+            params![team_name, slot_0_type, slot_0_id, slot_1_type, slot_1_id],
+        )?;
+
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Get win rates by participant (client or profile)
+    pub fn get_participant_win_rates(&self, participant_type: Option<&str>) -> Result<Vec<ClientWinRate>> {
+        let sql = if let Some(ptype) = participant_type {
+            format!(
+                r#"SELECT
+                    mp.participant_id,
+                    COUNT(DISTINCT mp.match_id) as matches,
+                    SUM(CASE
+                        WHEN (mp.team = 'left' AND m.winner = 'left') OR
+                             (mp.team = 'right' AND m.winner = 'right')
+                        THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE
+                        WHEN (mp.team = 'left' AND m.winner = 'right') OR
+                             (mp.team = 'right' AND m.winner = 'left')
+                        THEN 1 ELSE 0 END) as losses,
+                    SUM(CASE WHEN m.winner = 'tie' THEN 1 ELSE 0 END) as draws
+                FROM match_participants mp
+                JOIN matches m ON mp.match_id = m.id
+                WHERE mp.participant_type = '{}'
+                GROUP BY mp.participant_id
+                ORDER BY wins * 1.0 / NULLIF(matches, 0) DESC"#,
+                ptype
+            )
+        } else {
+            r#"SELECT
+                mp.participant_id,
+                COUNT(DISTINCT mp.match_id) as matches,
+                SUM(CASE
+                    WHEN (mp.team = 'left' AND m.winner = 'left') OR
+                         (mp.team = 'right' AND m.winner = 'right')
+                    THEN 1 ELSE 0 END) as wins,
+                SUM(CASE
+                    WHEN (mp.team = 'left' AND m.winner = 'right') OR
+                         (mp.team = 'right' AND m.winner = 'left')
+                    THEN 1 ELSE 0 END) as losses,
+                SUM(CASE WHEN m.winner = 'tie' THEN 1 ELSE 0 END) as draws
+            FROM match_participants mp
+            JOIN matches m ON mp.match_id = m.id
+            GROUP BY mp.participant_id
+            ORDER BY wins * 1.0 / NULLIF(matches, 0) DESC"#
+                .to_string()
+        };
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map([], |row| {
+            let matches: i64 = row.get(1)?;
+            let wins: i64 = row.get(2)?;
+            Ok(ClientWinRate {
+                client_id: row.get(0)?,
+                matches,
+                wins,
+                losses: row.get(3)?,
+                draws: row.get(4)?,
+                win_rate: if matches > 0 {
+                    wins as f64 / matches as f64
+                } else {
+                    0.0
+                },
+            })
+        })?;
+
+        rows.collect()
+    }
+
+    /// Get client-specific win rates (shortcut for participant_type = "client")
+    pub fn get_client_win_rates(&self) -> Result<Vec<ClientWinRate>> {
+        self.get_participant_win_rates(Some("client"))
+    }
+
+    /// Check if match_participants table has any data
+    pub fn has_participant_data(&self) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM match_participants",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+}
+
 /// Parse a position string "x,y" into (f32, f32)
 fn parse_pos(s: &str) -> Option<(f32, f32)> {
     let parts: Vec<&str> = s.split(',').collect();

@@ -232,6 +232,44 @@ fn main() {
         return;
     }
 
+    // AI Client win rates analysis
+    if config.client_winrates {
+        let db_path = config
+            .client_winrates_db
+            .as_ref()
+            .unwrap_or(&config.db_path);
+
+        match run_client_winrates_analysis(db_path) {
+            Ok(report) => {
+                println!("{}", report);
+            }
+            Err(e) => {
+                eprintln!("Failed to run client win rates analysis: {}", e);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+
+    // AI Client comparison
+    if let Some((client_a, client_b)) = &config.client_comparison {
+        let db_path = config
+            .client_winrates_db
+            .as_ref()
+            .unwrap_or(&config.db_path);
+
+        match run_client_comparison(db_path, client_a, client_b) {
+            Ok(report) => {
+                println!("{}", report);
+            }
+            Err(e) => {
+                eprintln!("Failed to run client comparison: {}", e);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+
     // Bracket tournament analysis
     if config.bracket_analysis {
         let db_path = &config.bracket_db.clone().unwrap_or(config.db_path.clone());
@@ -448,6 +486,10 @@ struct AnalyzeConfig {
     team_interaction_output: Option<PathBuf>,
     update_defaults: bool,
     show_help: bool,
+    // AI Client analysis
+    client_winrates: bool,
+    client_winrates_db: Option<PathBuf>,
+    client_comparison: Option<(String, String)>,
 }
 
 impl Default for AnalyzeConfig {
@@ -480,6 +522,10 @@ impl Default for AnalyzeConfig {
             team_interaction_output: None,
             update_defaults: false,
             show_help: false,
+            // AI Client analysis
+            client_winrates: false,
+            client_winrates_db: None,
+            client_comparison: None,
         }
     }
 }
@@ -631,6 +677,23 @@ impl AnalyzeConfig {
                 "--update-defaults" => {
                     config.update_defaults = true;
                 }
+                // AI Client analysis
+                "--client-winrates" => {
+                    config.client_winrates = true;
+                }
+                "--client-winrates-db" => {
+                    if i + 1 < args.len() {
+                        config.client_winrates_db = Some(PathBuf::from(&args[i + 1]));
+                        i += 1;
+                    }
+                }
+                "--client-comparison" => {
+                    if i + 2 < args.len() {
+                        config.client_comparison =
+                            Some((args[i + 1].clone(), args[i + 2].clone()));
+                        i += 2;
+                    }
+                }
                 "--help" | "-h" => {
                     config.show_help = true;
                 }
@@ -685,6 +748,11 @@ OPTIONS:
     --update-defaults   Update default profiles in src/constants.rs
     --help, -h          Show this help
 
+AI CLIENT ANALYSIS:
+    --client-winrates   Show win rates for AI clients (external + embedded)
+    --client-winrates-db <DB>  Database for client analysis (default: uses DB_PATH)
+    --client-comparison <A> <B>  Head-to-head comparison of two clients/profiles
+
 EXAMPLES:
     # Analyze logs with default targets
     cargo run --bin analyze -- training.db
@@ -718,6 +786,12 @@ EXAMPLES:
 
     # Team interaction analysis (passes, blocks, coordination)
     cargo run --bin analyze -- --team-interaction db/training_YYYYMMDD_HHMMSS.db
+
+    # AI Client win rates (requires participant tracking data)
+    cargo run --bin analyze -- --client-winrates --client-winrates-db db/simulation.db
+
+    # Head-to-head comparison between two AI clients
+    cargo run --bin analyze -- --client-comparison ai-v1 ai-v2 --client-winrates-db db/simulation.db
 
 TARGETS FILE FORMAT (TOML):
     [targets]
@@ -826,4 +900,212 @@ fn default_training_report_name(report: &TrainingDebugReport) -> String {
 
 fn default_bracket_output_dir() -> PathBuf {
     PathBuf::from("notes/analysis_runs/bracket")
+}
+
+/// Run client win rates analysis
+fn run_client_winrates_analysis(db_path: &PathBuf) -> Result<String, String> {
+    use ballgame::simulation::SimDatabase;
+
+    let db = SimDatabase::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Check if there's any participant data
+    if !db.has_participant_data().map_err(|e| e.to_string())? {
+        return Err("No participant data found in database. Run simulations with --left-team/--right-team to track AI clients.".to_string());
+    }
+
+    let client_rates = db.get_client_win_rates().map_err(|e| e.to_string())?;
+    let all_rates = db.get_participant_win_rates(None).map_err(|e| e.to_string())?;
+
+    let mut report = String::new();
+    report.push_str("# AI Client Win Rates Analysis\n\n");
+
+    // Client-specific rates
+    if client_rates.is_empty() {
+        report.push_str("## External AI Clients\n\n");
+        report.push_str("No external AI client data found.\n\n");
+    } else {
+        let total_matches: i64 = client_rates.iter().map(|r| r.matches).sum();
+        report.push_str(&format!(
+            "## External AI Clients (from {} matches)\n\n",
+            total_matches / 2
+        )); // Divide by 2 since each match has 2 participants
+
+        report.push_str("| Client | Matches | Wins | Losses | Draws | Win Rate |\n");
+        report.push_str("|--------|---------|------|--------|-------|----------|\n");
+
+        for rate in &client_rates {
+            report.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {:.1}% |\n",
+                rate.client_id,
+                rate.matches,
+                rate.wins,
+                rate.losses,
+                rate.draws,
+                rate.win_rate * 100.0
+            ));
+        }
+        report.push('\n');
+    }
+
+    // All participants (profiles and clients)
+    if !all_rates.is_empty() {
+        report.push_str("## All Participants (Profiles + Clients)\n\n");
+        report.push_str("| Participant | Matches | Wins | Losses | Draws | Win Rate |\n");
+        report.push_str("|-------------|---------|------|--------|-------|----------|\n");
+
+        for rate in &all_rates {
+            report.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {:.1}% |\n",
+                rate.client_id,
+                rate.matches,
+                rate.wins,
+                rate.losses,
+                rate.draws,
+                rate.win_rate * 100.0
+            ));
+        }
+    }
+
+    Ok(report)
+}
+
+/// Run head-to-head client comparison
+fn run_client_comparison(
+    db_path: &PathBuf,
+    client_a: &str,
+    client_b: &str,
+) -> Result<String, String> {
+    let conn =
+        Connection::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+
+    // Find matches where both clients participated on opposite teams
+    let sql = r#"
+        SELECT
+            m.id,
+            m.left_score,
+            m.right_score,
+            m.winner,
+            m.level_name,
+            mp_a.team as team_a,
+            mp_b.team as team_b
+        FROM matches m
+        JOIN match_participants mp_a ON mp_a.match_id = m.id AND mp_a.participant_id = ?1
+        JOIN match_participants mp_b ON mp_b.match_id = m.id AND mp_b.participant_id = ?2
+        WHERE mp_a.team != mp_b.team
+        ORDER BY m.id
+    "#;
+
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([client_a, client_b], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,      // match_id
+                row.get::<_, i64>(1)?,      // left_score
+                row.get::<_, i64>(2)?,      // right_score
+                row.get::<_, String>(3)?,   // winner
+                row.get::<_, String>(4)?,   // level_name
+                row.get::<_, String>(5)?,   // team_a
+                row.get::<_, String>(6)?,   // team_b
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+
+    let matches: Vec<_> = rows.filter_map(|r| r.ok()).collect();
+
+    let mut report = String::new();
+    report.push_str(&format!(
+        "# Head-to-Head: {} vs {}\n\n",
+        client_a, client_b
+    ));
+
+    if matches.is_empty() {
+        report.push_str("No head-to-head matches found between these clients.\n");
+        return Ok(report);
+    }
+
+    // Calculate stats
+    let mut a_wins = 0;
+    let mut b_wins = 0;
+    let mut ties = 0;
+    let mut a_total_score = 0i64;
+    let mut b_total_score = 0i64;
+
+    for (_, left_score, right_score, winner, _, team_a, _) in &matches {
+        let (a_score, b_score) = if team_a == "left" {
+            (*left_score, *right_score)
+        } else {
+            (*right_score, *left_score)
+        };
+
+        a_total_score += a_score;
+        b_total_score += b_score;
+
+        if winner == "tie" {
+            ties += 1;
+        } else if (winner == "left" && team_a == "left") || (winner == "right" && team_a == "right")
+        {
+            a_wins += 1;
+        } else {
+            b_wins += 1;
+        }
+    }
+
+    let total = matches.len();
+    let a_win_rate = a_wins as f64 / total as f64 * 100.0;
+    let b_win_rate = b_wins as f64 / total as f64 * 100.0;
+
+    report.push_str(&format!("## Summary ({} matches)\n\n", total));
+    report.push_str("| Client | Wins | Losses | Ties | Win Rate | Avg Score |\n");
+    report.push_str("|--------|------|--------|------|----------|----------|\n");
+    report.push_str(&format!(
+        "| {} | {} | {} | {} | {:.1}% | {:.1} |\n",
+        client_a,
+        a_wins,
+        b_wins,
+        ties,
+        a_win_rate,
+        a_total_score as f64 / total as f64
+    ));
+    report.push_str(&format!(
+        "| {} | {} | {} | {} | {:.1}% | {:.1} |\n",
+        client_b,
+        b_wins,
+        a_wins,
+        ties,
+        b_win_rate,
+        b_total_score as f64 / total as f64
+    ));
+
+    report.push_str("\n## Match History\n\n");
+    report.push_str("| Match | Level | Score | Winner |\n");
+    report.push_str("|-------|-------|-------|--------|\n");
+
+    for (match_id, left_score, right_score, winner, level_name, team_a, _) in matches.iter().take(20)
+    {
+        let (a_score, b_score) = if team_a == "left" {
+            (*left_score, *right_score)
+        } else {
+            (*right_score, *left_score)
+        };
+
+        let winner_name = if winner == "tie" {
+            "Tie".to_string()
+        } else if (winner == "left" && team_a == "left") || (winner == "right" && team_a == "right")
+        {
+            client_a.to_string()
+        } else {
+            client_b.to_string()
+        };
+
+        report.push_str(&format!(
+            "| {} | {} | {}-{} | {} |\n",
+            match_id, level_name, a_score, b_score, winner_name
+        ));
+    }
+
+    if matches.len() > 20 {
+        report.push_str(&format!("\n_(showing 20 of {} matches)_\n", matches.len()));
+    }
+
+    Ok(report)
 }

@@ -43,6 +43,17 @@ use super::metrics::{MatchResult, SimMetrics};
 use super::setup::sim_setup;
 use super::shot_test::run_shot_test;
 
+// Note: MatchParticipants and orchestrator types are used via SimConfig methods
+
+/// Check if the config requires external AI clients
+///
+/// When clients are involved, the match must be run through the orchestrator
+/// which manages WebSocket connections. Profile-only matches can use the
+/// fast embedded path.
+pub fn requires_orchestrator(config: &SimConfig) -> bool {
+    config.resolve_participants().has_clients()
+}
+
 /// Get the effective level for a match.
 /// If config.level is Some, uses that specific level.
 /// If config.levels is non-empty, picks randomly from that list.
@@ -80,12 +91,27 @@ fn get_effective_level(config: &SimConfig, level_db: &LevelDatabase, seed: u64) 
 }
 
 /// Run a single match and return the result
+///
+/// This function runs the match using embedded AI profiles. If the config
+/// specifies external AI clients (via `--left-team` or `--right-team` with
+/// client IDs), those will be ignored and the fallback profile will be used.
+///
+/// For client-based matches, use `run_match_with_clients` instead.
 pub fn run_match(
     config: &SimConfig,
     seed: u64,
     level_db: &LevelDatabase,
     profile_db: &AiProfileDatabase,
 ) -> MatchResult {
+    // Check if clients are configured but we're using embedded path
+    if requires_orchestrator(config) {
+        eprintln!(
+            "WARNING: Config specifies AI clients but run_match uses embedded AI. \
+             Client participants will be replaced with profile fallbacks. \
+             Use run_match_with_clients for client-based matches."
+        );
+    }
+
     // Determine effective level (random if not specified)
     let level = get_effective_level(config, level_db, seed);
 

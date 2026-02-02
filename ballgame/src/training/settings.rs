@@ -127,6 +127,22 @@ pub struct TrainingSettings {
     /// Headless mode (no window, for automated simulation)
     #[serde(default)]
     pub headless: bool,
+
+    // AI Client Support
+    /// AI client ID to use instead of embedded profile (e.g., "ai-v1", "ai-v2")
+    /// When set, the training will spawn an external AI client process.
+    #[serde(default)]
+    pub ai_client: Option<String>,
+    /// Path to AI clients registry file (default: config/ai_clients.txt)
+    #[serde(default)]
+    pub clients_file: Option<String>,
+    /// Connection timeout for AI clients in seconds
+    #[serde(default = "default_client_timeout")]
+    pub client_timeout_secs: u64,
+}
+
+fn default_client_timeout() -> u64 {
+    30
 }
 
 impl Default for TrainingSettings {
@@ -151,6 +167,10 @@ impl Default for TrainingSettings {
             ball_style: None,
             drive_mode: false,
             headless: false,
+            // AI Client support
+            ai_client: None,
+            clients_file: None,
+            client_timeout_secs: default_client_timeout(),
         }
     }
 }
@@ -350,6 +370,27 @@ impl TrainingSettings {
                 "--headless" => {
                     self.headless = true;
                 }
+                // AI Client arguments
+                "--ai-client" => {
+                    if let Some(val) = args.get(i + 1) {
+                        self.ai_client = Some(val.clone());
+                        i += 1;
+                    }
+                }
+                "--clients-file" => {
+                    if let Some(val) = args.get(i + 1) {
+                        self.clients_file = Some(val.clone());
+                        i += 1;
+                    }
+                }
+                "--client-timeout" => {
+                    if let Some(val) = args.get(i + 1) {
+                        if let Ok(n) = val.parse() {
+                            self.client_timeout_secs = n;
+                        }
+                        i += 1;
+                    }
+                }
                 "--help" | "-h" => {
                     print_help();
                     std::process::exit(0);
@@ -406,7 +447,17 @@ OPTIONS:
     --profile-list PATH        File with profile names (one per line) for multi-profile training
     --debug-log                Enable debug sample logging to SQLite
     --headless                 Run without window (for auto-reachability)
+    --ai-client ID             Use external AI client instead of embedded profile
+    --clients-file PATH        AI clients registry file (default: config/ai_clients.txt)
+    --client-timeout SECS      Connection timeout for AI clients (default: 30)
     -h, --help                 Show this help
+
+AI CLIENTS:
+    External AI clients connect via WebSocket. Use --ai-client to spawn an AI client
+    process instead of using the embedded AI profile. The client must be registered
+    in config/ai_clients.txt (or custom file via --clients-file).
+
+    Example: cargo run --bin training -- --ai-client ai-v1
 
 SETTINGS FILES:
     config/training_settings.json          Local settings (gitignored)
