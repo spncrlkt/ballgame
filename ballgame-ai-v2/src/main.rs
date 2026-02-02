@@ -14,8 +14,10 @@ use clap::Parser;
 use ballgame_protocol::{AgentInput, CharacterId, GameStateSnapshot, ServerPayload};
 
 mod client;
+mod event_logger;
 
 use client::GameClient;
+use event_logger::ClientEventLogger;
 
 /// AI client v2 for ballgame - template for custom AI development
 #[derive(Parser, Debug)]
@@ -51,6 +53,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     println!("Ballgame AI Client v2 Template");
+
+    // Initialize SQLite event logger
+    let event_logger = ClientEventLogger::new(&args.name);
+    if event_logger.is_some() {
+        println!("SQLite event logging enabled");
+    }
 
     // Outer reconnection loop
     'connection: loop {
@@ -129,14 +137,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Playing as character: {}", character);
         println!("Starting AI loop (template - no decision logic)...");
 
+        // Start logging this match
+        if let Some(ref logger) = event_logger {
+            logger.start_match(character, &args.server);
+            logger.log_event("connected", &format!("Playing as {}", character));
+        }
+
+        let mut tick_count: u64 = 0;
+
         // Main game loop
         let disconnect_reason = loop {
             match client.receive().await {
                 Ok(msg) => {
                     match msg.payload {
                         ServerPayload::State(state) => {
+                            tick_count += 1;
+
                             // Decide what to do based on game state
                             let input = decide(&state, character);
+
+                            // Log to SQLite (every 10 ticks to avoid bloat)
+                            if let Some(ref logger) = event_logger {
+                                if tick_count % 10 == 0 {
+                                    logger.log_state(msg.tick, &state, character);
+                                    logger.log_decision(msg.tick, &input, "template");
+                                }
+                            }
 
                             // Send input to server
                             if let Err(e) = client.send_input(msg.tick, input).await {
@@ -154,6 +180,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         ServerPayload::MatchEnd { winner } => {
                             println!("Match ended! Winner: {:?}", winner);
+                            if let Some(ref logger) = event_logger {
+                                logger.log_event("match_end", &format!("winner={:?}", winner));
+                            }
                             // Don't disconnect - wait for next match or lobby
                         }
                         ServerPayload::Shutdown { reason } => {
@@ -170,6 +199,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Connection lost - try to disconnect gracefully then reconnect
         eprintln!("{}", disconnect_reason);
+        if let Some(ref logger) = event_logger {
+            logger.end_match(&disconnect_reason);
+        }
         let _ = client.disconnect().await;
 
         let wait = Duration::from_secs(3) + jitter();

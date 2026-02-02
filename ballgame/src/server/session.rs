@@ -3,7 +3,9 @@
 //! Handles individual client connections and message processing.
 
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::time::interval;
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::tungstenite::Message;
 use bevy::prelude::*;
@@ -95,22 +97,7 @@ impl Session {
 
             ClientPayload::Input(input) => {
                 // Check if we've been assigned a slot (by server operator)
-                if self.slot.is_none() {
-                    if let Some(client_id) = self.client_id {
-                        if let Some(slot_id) = self.slots.check_waiting_assignment(client_id).await {
-                            // We got assigned! Register with broadcaster and notify client
-                            self.slot = Some(slot_id);
-                            self.broadcaster.register(slot_id, self.tx.clone()).await;
-
-                            // Send SlotAssigned to notify client
-                            let character = ballgame_protocol::CharacterId::from_slot_index(slot_id)
-                                .unwrap_or(ballgame_protocol::CharacterId::L0);
-                            self.send(ServerPayload::SlotAssigned { character }, current_tick);
-
-                            info!("Client {} assigned to slot {} by server", client_id, slot_id);
-                        }
-                    }
-                }
+                self.check_slot_assignment(current_tick).await;
 
                 // Only process input if we have a slot
                 if let Some(slot) = self.slot {
@@ -152,6 +139,35 @@ impl Session {
         self.send(ServerPayload::rejected(reason), tick);
     }
 
+    /// Check if this waiting session has been assigned a slot by the server operator.
+    /// If assigned, registers with broadcaster and notifies the client.
+    /// Returns true if a slot was just assigned.
+    pub async fn check_slot_assignment(&mut self, current_tick: u64) -> bool {
+        if self.slot.is_some() {
+            return false; // Already assigned
+        }
+
+        let Some(client_id) = self.client_id else {
+            return false; // Not registered yet
+        };
+
+        let Some(slot_id) = self.slots.check_waiting_assignment(client_id).await else {
+            return false; // Not assigned yet
+        };
+
+        // We got assigned! Register with broadcaster and notify client
+        self.slot = Some(slot_id);
+        self.broadcaster.register(slot_id, self.tx.clone()).await;
+
+        // Send SlotAssigned to notify client
+        let character = ballgame_protocol::CharacterId::from_slot_index(slot_id)
+            .unwrap_or(ballgame_protocol::CharacterId::L0);
+        self.send(ServerPayload::SlotAssigned { character }, current_tick);
+
+        info!("Client {} assigned to slot {} by server", client_id, slot_id);
+        true
+    }
+
     /// Clean up when session ends
     pub async fn cleanup(&mut self) {
         if let Some(slot) = self.slot {
@@ -180,8 +196,16 @@ pub async fn run_session<S>(
 {
     let mut current_tick: u64 = 0;
 
+    // Periodic check for slot assignment (for waiting clients)
+    let mut assignment_check_interval = interval(Duration::from_millis(100));
+
     loop {
         tokio::select! {
+            // Periodic check for slot assignment (while waiting)
+            _ = assignment_check_interval.tick(), if session.slot.is_none() && session.client_id.is_some() => {
+                session.check_slot_assignment(current_tick).await;
+            }
+
             // Receive from WebSocket
             ws_msg = ws_rx.next() => {
                 match ws_msg {

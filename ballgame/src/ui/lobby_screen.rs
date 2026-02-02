@@ -645,7 +645,7 @@ pub fn process_remote_reassignments(
                 // Client is waiting - assign them to the slot
                 if bridge.slots.assign_waiting_to_slot(client_id, new_slot).await {
                     info!("Assigned waiting client {} to slot {}", client_id, new_slot);
-                    // Note: The session will detect the assignment and send SlotAssigned
+                    // Session's periodic assignment check will detect this and send SlotAssigned
                 } else {
                     warn!("Failed to assign waiting client {} to slot {}", client_id, new_slot);
                 }

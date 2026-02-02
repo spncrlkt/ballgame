@@ -17,9 +17,11 @@ use ballgame_protocol::{CharacterId, GameStateSnapshot, ServerPayload};
 
 mod brain;
 mod client;
+mod event_logger;
 
 use brain::BrainV1;
 use client::GameClient;
+use event_logger::ClientEventLogger;
 
 /// Log directory
 const LOG_DIR: &str = "logs";
@@ -115,6 +117,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Verbose: {}", args.verbose);
     info!("===========================================");
 
+    // Initialize SQLite event logger
+    let event_logger = ClientEventLogger::new(&args.name);
+    if event_logger.is_some() {
+        info!("SQLite event logging enabled");
+    }
+
     // Outer reconnection loop
     'connection: loop {
         info!("Connecting to: {}", args.server);
@@ -196,6 +204,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Playing as character: {} (slot {})", character, character.to_slot_index());
         info!("Starting AI loop - waiting for game state...");
 
+        // Start logging this match
+        if let Some(ref logger) = event_logger {
+            logger.start_match(character, &args.server);
+            logger.log_event("connected", &format!("Playing as {}", character));
+        }
+
         let mut tick_count: u64 = 0;
         let mut last_goal = brain.state.current_goal;
 
@@ -215,7 +229,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // Log goal changes
                             if brain.state.current_goal != last_goal {
                                 info!("Goal changed: {:?} -> {:?}", last_goal, brain.state.current_goal);
+                                if let Some(ref logger) = event_logger {
+                                    logger.log_event("goal_change", &format!("{:?} -> {:?}", last_goal, brain.state.current_goal));
+                                }
                                 last_goal = brain.state.current_goal;
+                            }
+
+                            // Log to SQLite (every 10 ticks to avoid bloat)
+                            if let Some(ref logger) = event_logger {
+                                if tick_count % 10 == 0 {
+                                    logger.log_state(msg.tick, &state, character);
+                                    logger.log_decision(msg.tick, &decision, &format!("{:?}", brain.state.current_goal));
+                                }
                             }
 
                             // Periodic status (every ~1 second)
@@ -254,12 +279,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         ServerPayload::MatchStarting { level_id, countdown_secs } => {
                             info!("Match starting! Level: {}, countdown: {:.1}s", level_id, countdown_secs);
+                            if let Some(ref logger) = event_logger {
+                                logger.log_event("match_starting", &format!("level={}, countdown={:.1}s", level_id, countdown_secs));
+                            }
                         }
                         ServerPayload::Event(event) => {
                             debug!("Event: {:?}", event);
                         }
                         ServerPayload::MatchEnd { winner } => {
                             info!("Match ended! Winner: {:?}", winner);
+                            if let Some(ref logger) = event_logger {
+                                logger.log_event("match_end", &format!("winner={:?}", winner));
+                            }
                             // Don't disconnect - wait for next match or lobby
                         }
                         ServerPayload::Shutdown { reason } => {
@@ -279,6 +310,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Connection lost - try to disconnect gracefully then reconnect
         error!("Disconnected: {}", disconnect_reason);
+        if let Some(ref logger) = event_logger {
+            logger.end_match(&disconnect_reason);
+        }
         let _ = client.disconnect().await;
 
         let wait = Duration::from_secs(3) + jitter();
