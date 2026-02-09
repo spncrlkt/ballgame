@@ -49,15 +49,20 @@ if ! kill -0 $SERVER_PID 2>/dev/null; then
 fi
 
 # Start AI clients based on flags
-# Default: start both if no specific flags provided (and not human-only)
+# Default: start enough AIs for a 2v2 match
 if [[ "$*" != *"--v1"* ]] && [[ "$*" != *"--v2"* ]] && [[ "$*" != *"--human"* ]]; then
-    # No specific flags, start both AIs
-    echo "Starting AI v1..."
-    cargo run --release -p ballgame-ai-v1 -- --server $SERVER_URL &
-
-    echo "Starting AI v2..."
-    # For now, v2 doesn't exist yet, use v1 with different name
-    cargo run --release -p ballgame-ai-v1 -- --server $SERVER_URL --name "AI-v2" &
+    # No flags: 4 AIs for full 2v2
+    echo "Starting 4 AI players..."
+    cargo run --release -p ballgame-ai-v1 -- --server $SERVER_URL --name "AI-1" &
+    cargo run --release -p ballgame-ai-v1 -- --server $SERVER_URL --name "AI-2" &
+    cargo run --release -p ballgame-ai-v1 -- --server $SERVER_URL --name "AI-3" &
+    cargo run --release -p ballgame-ai-v1 -- --server $SERVER_URL --name "AI-4" &
+elif [[ "$*" == *"--human"* ]] && [[ "$*" != *"--v1"* ]] && [[ "$*" != *"--v2"* ]]; then
+    # Human flag only: 3 AIs to complete 2v2
+    echo "Starting 3 AI players..."
+    cargo run --release -p ballgame-ai-v1 -- --server $SERVER_URL --name "AI-1" &
+    cargo run --release -p ballgame-ai-v1 -- --server $SERVER_URL --name "AI-2" &
+    cargo run --release -p ballgame-ai-v1 -- --server $SERVER_URL --name "AI-3" &
 else
     # Specific flags provided
     if [[ "$*" == *"--v1"* ]]; then
@@ -67,7 +72,6 @@ else
 
     if [[ "$*" == *"--v2"* ]]; then
         echo "Starting AI v2..."
-        # For now, v2 doesn't exist yet, use v1 with different name
         cargo run --release -p ballgame-ai-v1 -- --server $SERVER_URL --name "AI-v2" &
     fi
 fi
