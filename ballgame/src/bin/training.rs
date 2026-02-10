@@ -24,15 +24,15 @@ use ballgame::ui::spawn_steal_indicators;
 use ballgame::{
     AI_SOURCE_ID_START, AiCapabilities, AiGoal, AiNavState, AiProfileDatabase, AiState, Ball,
     BallPlayerContact, BallPulse, BallRolling, BallShotGrace, BallSpin, BallState, BallStyle,
-    BallTextures, BlockState, Character, CharacterId, ChargingShot, ControlledBy, CoyoteTimer,
-    CurrentLevel, CurrentPalette, DebugSettings, EventBuffer, EventBus, Facing, GameConfig,
-    GameEvent, Grounded, HoldingBall, HumanControlled, InputState, JumpState, KEYBOARD_SOURCE_ID,
-    LastShotInfo, LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph, PALETTES_FILE,
-    PaletteDatabase, PhysicsTweaks, Player, PlayerInput, Score, SnapshotConfig, StealContest,
-    StealCooldown, StealTracker, StyleTextures, TargetBasket, Team, TurboGauge,
-    Velocity, ai, ball, constants::*, countdown, emit_level_change_events, helpers::*, input,
-    levels, player, scoring, shooting, spawn_charge_gauge, spawn_countdown_text, steal, tuning,
-    update_event_bus_time, world,
+    BallTextures, CharacterId, ChargingShot, CoyoteTimer, CurrentLevel, CurrentPalette, InitSettings,
+    CurrentPresets, CurrentSettings, DebugSettings, EventBuffer, EventBus, Facing, GameConfig,
+    GameEvent, Grounded, HoldingBall, HumanControlled, InputState, JumpState,
+    KEYBOARD_SOURCE_ID, LastShotInfo, LevelChangeTracker, LevelDatabase, MatchCountdown, NavGraph,
+    PALETTES_FILE, PaletteDatabase, PhysicsTweaks, Player, PlayerInput, PresetDatabase,
+    PRESETS_FILE, Score, SnapshotConfig, StealContest, StealCooldown, StealTracker, StyleTextures,
+    TargetBasket, Team, Velocity, ViewportScale, ai, ball, constants::*, countdown,
+    emit_level_change_events, input, levels, player, scoring, shooting,
+    spawn_charge_gauge, spawn_countdown_text, steal, tuning, update_event_bus_time, world,
 };
 use bevy::{app::ScheduleRunnerPlugin, camera::ScalingMode, prelude::*};
 use rand::seq::SliceRandom;
@@ -40,7 +40,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
-use world::{Basket, BasketRim, Collider, CornerRamp, LevelPlatform, Platform};
+use world::{Basket, CornerRamp, LevelPlatform};
 
 /// Path to ball options file
 const BALL_OPTIONS_FILE: &str = "config/ball_options.txt";
@@ -318,6 +318,11 @@ fn append_offline_db_path(db_path: &str) {
 
 fn main() {
     let settings = TrainingSettings::from_args();
+    let init_settings = InitSettings::load();
+    let viewport_index = init_settings.viewport_index.min(VIEWPORT_PRESETS.len() - 1);
+    let palette_index = settings.palette_index
+        .or(settings.protocol.default_palette())
+        .unwrap_or(init_settings.palette_index);
     let allowed_levels = load_allowed_levels(&settings);
 
     // Load profile list if specified
@@ -369,16 +374,23 @@ fn main() {
         println!("  AI Profile: {}", settings.ai_profile);
     }
 
-    if let Some(ref level) = settings.level {
-        println!("  Level: {} (fixed)", level);
+    if let Some(ref level) = settings.cli_level {
+        println!("  Level: {} (CLI override)", level);
+    } else if let Some(fixed) = settings.protocol.fixed_level() {
+        println!("  Level: {} (protocol default)", fixed);
     } else {
         println!("  Level: random");
     }
-    if let Some(ref style) = settings.ball_style {
-        println!("  Ball Style: {}", style);
+    println!("  Ball Style: {} (from init_settings)", init_settings.ball_style);
+    let palette_source = if settings.palette_index.is_some() {
+        "training_settings"
+    } else if settings.protocol.default_palette().is_some() {
+        "protocol default"
     } else {
-        println!("  Ball Style: random");
-    }
+        "init_settings"
+    };
+    println!("  Palette: {} (from {})", palette_index, palette_source);
+    println!("  Viewport: {} (from init_settings)", VIEWPORT_PRESETS[viewport_index].2);
     if let Some(seed) = settings.seed {
         println!("  Seed: {} (deterministic)", seed);
     }
@@ -403,7 +415,9 @@ fn main() {
     println!("    ] or D-pad Right: Cycle character");
     println!("    Down Arrow or D-pad Down: Restart level");
     println!("    Left Arrow or D-pad Left: Next level");
-    println!("    Escape or Select: Quit (shows analysis)");
+    println!("    Start: Pause menu");
+    println!("    Select: Debug menu");
+    println!("    Escape: Quit (shows analysis)");
     println!();
     if settings.protocol.is_coop_mode() {
         println!("  Practice passing with your AI teammate.");
@@ -425,7 +439,7 @@ fn main() {
 
     // Get initial background color from selected palette
     let initial_bg = palette_db
-        .get(settings.palette_index)
+        .get(palette_index)
         .map(|p| p.background)
         .unwrap_or(DEFAULT_BACKGROUND_COLOR);
 
@@ -460,13 +474,17 @@ fn main() {
         training_state.profile_list_index = 0;
     }
 
-    // Pick level - either fixed from settings, sequential (Reachability), or random
+    // Pick level - resolution order:
+    // 1. iterates_all_levels() → sequential (Reachability/AutoReachability), --level sets start point
+    // 2. --level CLI override (settings.cli_level)
+    // 3. protocol.fixed_level() → hardcoded default
+    // 4. Random fallback
     if settings.protocol.iterates_all_levels() {
         // Reachability protocol: iterate through all non-debug levels sequentially
         training_state.init_level_sequence(&level_db);
 
-        // If -l flag provided, find that level in the sequence and start there
-        if let Some(ref level_selector) = settings.level {
+        // If --level flag provided, find that level in the sequence and start there
+        if let Some(ref level_selector) = settings.cli_level {
             let target_idx = match level_selector {
                 LevelSelector::Number(n) => (*n as usize).saturating_sub(1),
                 LevelSelector::Name(name) => level_db
@@ -498,29 +516,8 @@ fn main() {
                     ));
             }
         }
-    } else if let Some(fixed_level_name) = settings.protocol.fixed_level() {
-        // Protocol specifies a fixed level (e.g., TeamInteraction, Pursuit)
-        if let Some((idx, level_data)) = level_db
-            .all()
-            .iter()
-            .enumerate()
-            .find(|(_, l)| l.name.to_lowercase() == fixed_level_name.to_lowercase())
-        {
-            training_state.current_level = (idx + 1) as u32;
-            training_state.current_level_name = level_data.name.clone();
-        } else {
-            eprintln!(
-                "Warning: Fixed level '{}' not found, using level 1",
-                fixed_level_name
-            );
-            training_state.current_level = 1;
-            training_state.current_level_name = level_db
-                .get(0)
-                .map(|l| l.name.clone())
-                .unwrap_or_else(|| "Level 1".to_string());
-        }
-    } else if let Some(ref level_selector) = settings.level {
-        // Resolve level selector to number
+    } else if let Some(ref level_selector) = settings.cli_level {
+        // CLI --level override takes priority over protocol defaults
         let fixed_level = match level_selector {
             LevelSelector::Number(n) => *n,
             LevelSelector::Name(name) => {
@@ -544,8 +541,29 @@ fn main() {
             .get((fixed_level - 1) as usize)
             .map(|l| l.name.clone())
             .unwrap_or_else(|| format!("Level {}", fixed_level));
+    } else if let Some(fixed_level_name) = settings.protocol.fixed_level() {
+        // Protocol specifies a default level (e.g., Skyway, Pursuit Arena)
+        if let Some((idx, level_data)) = level_db
+            .all()
+            .iter()
+            .enumerate()
+            .find(|(_, l)| l.name.to_lowercase() == fixed_level_name.to_lowercase())
+        {
+            training_state.current_level = (idx + 1) as u32;
+            training_state.current_level_name = level_data.name.clone();
+        } else {
+            eprintln!(
+                "Warning: Fixed level '{}' not found, using level 1",
+                fixed_level_name
+            );
+            training_state.current_level = 1;
+            training_state.current_level_name = level_db
+                .get(0)
+                .map(|l| l.name.clone())
+                .unwrap_or_else(|| "Level 1".to_string());
+        }
     } else {
-        // Filter out debug levels and excluded levels
+        // Random fallback - filter out debug levels and excluded levels
         let training_levels: Vec<u32> = (0..level_db.len())
             .filter(|&i| {
                 let level = level_db.get(i);
@@ -594,8 +612,7 @@ fn main() {
     }
     println!();
 
-    // Viewport setup from settings
-    let viewport_index = settings.viewport_index.min(VIEWPORT_PRESETS.len() - 1);
+    // Viewport setup from init_settings
     let (viewport_width, viewport_height, _) = VIEWPORT_PRESETS[viewport_index];
 
     let args: Vec<String> = std::env::args().collect();
@@ -666,8 +683,16 @@ fn main() {
         .init_resource::<StealContest>()
         .init_resource::<StealTracker>()
         .init_resource::<Score>()
+        .init_resource::<scoring::GamePaused>()
+        .init_resource::<ballgame::ui::DebugMenuState>()
+        .init_resource::<scoring::RestartRequested>()
+        .init_resource::<ballgame::ui::PauseMenuState>()
+        .insert_resource(ViewportScale { preset_index: viewport_index })
+        .init_resource::<CurrentPresets>()
+        .insert_resource(PresetDatabase::load_from_file(PRESETS_FILE))
+        .insert_resource(CurrentSettings::default())
         .insert_resource(CurrentLevel(String::new())) // Will be set from training state
-        .insert_resource(CurrentPalette(0))
+        .insert_resource(CurrentPalette(palette_index))
         .insert_resource({
             let mut tweaks = PhysicsTweaks::default();
             let _ = tuning::apply_global_tuning(&mut tweaks);
@@ -696,6 +721,8 @@ fn main() {
             Startup,
             (training_setup, setup_reachability_time_scale).chain(),
         )
+        .add_systems(Startup, ballgame::ui::spawn_pause_overlay)
+        .add_systems(Startup, ballgame::ui::spawn_debug_menu)
         // Event bus time update (runs every frame for timestamping)
         .add_systems(Update, update_event_bus_time)
         .add_systems(Update, flush_debug_samples_to_sqlite)
@@ -731,6 +758,15 @@ fn main() {
                 ballgame::ui::update_steal_indicators,
             ),
         )
+        // Player sprite animation (state selection + frame advance)
+        .add_systems(
+            Update,
+            (
+                player::update_player_animation_state,
+                player::animate_player_sprites,
+            )
+                .chain(),
+        )
         // Countdown system
         .add_systems(Update, countdown::update_countdown)
         // Training-specific systems
@@ -751,6 +787,22 @@ fn main() {
                 check_escape_quit,
             ),
         )
+        // Pause toggle — only during Playing phase (not GameEnded which has its own Start handler)
+        .add_systems(Update, player::check_pause_toggle
+            .run_if(|ts: Res<TrainingState>| ts.phase == TrainingPhase::Playing))
+        // Sync training phase with GamePaused
+        .add_systems(Update, sync_training_pause)
+        // Pause overlay and menu
+        .add_systems(Update, (
+            ballgame::ui::update_pause_overlay,
+            ballgame::ui::pause_menu_navigation,
+            training_pause_menu_confirm,
+        ))
+        // Debug menu
+        .add_systems(Update, ballgame::ui::toggle_debug_menu)
+        .add_systems(Update, ballgame::ui::debug_menu_navigation)
+        .add_systems(Update, ballgame::ui::debug_menu_apply_cycle)
+        .add_systems(Update, ballgame::ui::update_debug_menu_display)
         // State machine and restart have conflicting mutable queries, must run in separate add_systems calls
         .add_systems(Update, training_state_machine)
         .add_systems(Update, reset_positions_on_new_game.after(training_state_machine))
@@ -820,8 +872,137 @@ fn main() {
 }
 
 /// Run condition: game is not paused
-fn not_paused(training_state: Res<TrainingState>) -> bool {
-    training_state.phase != TrainingPhase::Paused
+fn not_paused(game_paused: Res<scoring::GamePaused>) -> bool {
+    !game_paused.0
+}
+
+/// Keep TrainingPhase in sync with the shared GamePaused resource.
+/// check_pause_toggle sets GamePaused.0 = true; the pause menu sets it back to false.
+fn sync_training_pause(
+    game_paused: Res<scoring::GamePaused>,
+    mut training_state: ResMut<TrainingState>,
+) {
+    if game_paused.0 && training_state.phase == TrainingPhase::Playing {
+        training_state.phase = TrainingPhase::Paused;
+    } else if !game_paused.0 && training_state.phase == TrainingPhase::Paused {
+        training_state.phase = TrainingPhase::Playing;
+    }
+}
+
+/// Training-specific pause menu confirm handler.
+/// Replaces the main game's `pause_menu_confirm` which depends on LobbyState/ServerBridge.
+fn training_pause_menu_confirm(
+    mut game_paused: ResMut<scoring::GamePaused>,
+    mut debug_menu: ResMut<ballgame::ui::DebugMenuState>,
+    mut menu_state: ResMut<ballgame::ui::PauseMenuState>,
+    gamepads: Query<&Gamepad>,
+    mut app_exit: MessageWriter<AppExit>,
+    mut training_state: ResMut<TrainingState>,
+    mut score: ResMut<Score>,
+    mut event_buffer: ResMut<TrainingEventBuffer>,
+    sqlite_logger: Res<SqliteEventLogger>,
+    db_path: Res<TrainingDbPath>,
+) {
+    use ballgame::ui::PauseMenuOption;
+
+    // Only process when paused and debug menu is closed
+    if !game_paused.0 || debug_menu.open {
+        return;
+    }
+
+    // Skip on the frame pause was just enabled
+    if game_paused.is_changed() {
+        return;
+    }
+
+    // Select button switches to debug menu
+    let select_pressed = gamepads
+        .iter()
+        .any(|gp| gp.just_pressed(GamepadButton::Select));
+
+    if select_pressed {
+        debug_menu.open = true;
+        debug_menu.skip_next_select = true;
+        return;
+    }
+
+    // Check for confirm input (Start or any face button)
+    let confirm_pressed = gamepads.iter().any(|gp| {
+        gp.just_pressed(GamepadButton::Start)
+            || gp.just_pressed(GamepadButton::South)
+            || gp.just_pressed(GamepadButton::East)
+            || gp.just_pressed(GamepadButton::West)
+            || gp.just_pressed(GamepadButton::North)
+    });
+
+    if !confirm_pressed {
+        return;
+    }
+
+    match menu_state.selected {
+        PauseMenuOption::Continue => {
+            game_paused.0 = false;
+            info!("Training RESUMED");
+        }
+        PauseMenuOption::RestartLevel => {
+            // Reset score
+            score.left = 0;
+            score.right = 0;
+            // Reset game timer
+            training_state.game_elapsed = 0.0;
+            training_state.phase = TrainingPhase::WaitingToStart;
+            game_paused.0 = false;
+            info!("Training level restart requested");
+        }
+        PauseMenuOption::Quit => {
+            println!("\nTraining session ended (from pause menu).");
+
+            // Export reachability heatmap if applicable
+            if let Some(collector) = training_state.reachability_collector.take() {
+                if collector.elapsed_secs() >= 10.0 {
+                    export_reachability_heatmap(&collector);
+                    println!(
+                        "  Exported reachability heatmap: {} ({:.1}s, {} samples)",
+                        collector.level_name,
+                        collector.elapsed_secs(),
+                        collector.positions.len()
+                    );
+                }
+            }
+
+            // End current match in SQLite
+            if training_state.phase == TrainingPhase::Paused {
+                event_buffer.buffer.log(
+                    training_state.game_elapsed,
+                    GameEvent::MatchEnd {
+                        score_left: score.left,
+                        score_right: score.right,
+                        duration: training_state.game_elapsed,
+                    },
+                );
+                flush_training_events_buffer(&mut event_buffer, &sqlite_logger);
+                sqlite_logger.end_match(score.left, score.right, training_state.game_elapsed);
+            }
+
+            // Write summary
+            if !training_state.game_results.is_empty() {
+                if let Err(e) = write_session_summary(&training_state) {
+                    eprintln!("Failed to write session summary: {}", e);
+                }
+                print_session_summary(&training_state, &db_path.0);
+            }
+
+            print_training_epilogue(&db_path.0, training_state.protocol);
+            app_exit.write(AppExit::Success);
+        }
+        // Characters and Lobby are hidden (no LobbyState resource), but handle gracefully
+        PauseMenuOption::Characters | PauseMenuOption::Lobby => {
+            // No-op in training mode
+        }
+    }
+
+    // Reset selection to Continue for next time
+    menu_state.selected = PauseMenuOption::Continue;
 }
 
 fn collect_training_debug_samples(
@@ -1286,12 +1467,15 @@ fn training_setup(
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
     asset_server: Res<AssetServer>,
+    mut atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     profile_db: Res<AiProfileDatabase>,
     mut training_state: ResMut<TrainingState>,
     training_settings: Res<TrainingSettings>,
+    current_settings: Res<CurrentSettings>,
     mut current_level: ResMut<CurrentLevel>,
     mut event_buffer: ResMut<TrainingEventBuffer>,
     sqlite_logger: Res<SqliteEventLogger>,
+    current_palette: Res<CurrentPalette>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
@@ -1321,8 +1505,19 @@ fn training_setup(
         }),
     ));
 
-    // Get palette
-    let initial_palette = palette_db.get(0).expect("No palettes loaded");
+    // Load player animation clips (skip in headless mode)
+    let anim_clips = if !training_settings.headless {
+        let clips = player::animation::load_player_animations(&asset_server, &mut atlas_layouts);
+        commands.insert_resource(clips.clone());
+        Some(clips)
+    } else {
+        None
+    };
+
+    // Get palette from init_settings (via CurrentPalette resource)
+    let initial_palette = palette_db
+        .get(current_palette.0)
+        .unwrap_or_else(|| palette_db.get(0).expect("No palettes loaded"));
 
     // Get level ID from training state
     let level_id = level_db
@@ -1368,48 +1563,11 @@ fn training_setup(
             .unwrap_or_else(|| profile_db.default_profile().id.clone())
     };
 
-    // Left player - HUMAN controlled
-    let left_player = commands
-        .spawn((
-            Sprite::from_color(initial_palette.left, PLAYER_SIZE),
-            Transform::from_translation(PLAYER_SPAWN_LEFT),
-            Player,
-            Velocity::default(),
-            Grounded(false),
-            CoyoteTimer::default(),
-            JumpState::default(),
-            Facing::default(),
-            Character(CharacterId::L0),
-            ControlledBy(KEYBOARD_SOURCE_ID),
-        ))
-        .insert((
-            ChargingShot::default(),
-            TargetBasket(Basket::Right),
-            Collider,
-            Team::Left,
-            InputState::default(),
-            AiState {
-                current_goal: AiGoal::Idle, // Not used, human controlled
-                profile_id: profile_db.default_profile().id.clone(),
-                ..default()
-            },
-            AiNavState::default(),
-            StealCooldown::default(),
-            TurboGauge::default(),
-            BlockState::default(),
-            HumanControlled, // Mark as human controlled
-        ))
-        .id();
-
-    // Second player - AI controlled teammate (for coop/keep-away) or opponent
-    // In keep-away: L1 teammate on same team, uses KeepAwayTeammate AI
-    // In coop mode: L1 teammate on same team, uses CatchPartner AI
-    // In solo mode: off-screen placeholder
-    // Otherwise: R0 opponent on right team
+    // Determine mode-specific player configuration
     let second_player_initial_goal = if training_settings.protocol.is_solo_mode() {
         AiGoal::Idle
     } else if is_keep_away || is_coop {
-        AiGoal::MoveToOpenSpot // CatchPartner/KeepAwayTeammate starting goal
+        AiGoal::MoveToOpenSpot
     } else {
         AiGoal::ChaseBall
     };
@@ -1419,31 +1577,15 @@ fn training_setup(
     } else if is_keep_away {
         Vec3::new(0.0, PLAYER_SPAWN_LEFT.y, 0.0) // Center position for teammate
     } else if is_coop {
-        PLAYER_SPAWN_RIGHT // Teammate spawns on right side of arena but same team
+        PLAYER_SPAWN_RIGHT
     } else {
         PLAYER_SPAWN_RIGHT
     };
 
-    let second_player_color = if is_keep_away || is_coop {
-        initial_palette.left // Same team color
-    } else {
-        initial_palette.right
-    };
-
-    let second_player_team = if is_keep_away || is_coop {
-        Team::Left
-    } else {
-        Team::Right
-    };
     let second_player_char = if is_keep_away || is_coop {
         CharacterId::L1
     } else {
         CharacterId::R0
-    };
-    let second_player_target = if is_keep_away || is_coop {
-        Basket::Right // Same target as human
-    } else {
-        Basket::Left
     };
 
     let second_player_profile = if is_keep_away || is_coop {
@@ -1452,77 +1594,68 @@ fn training_setup(
         adversary_profile_id.clone()
     };
 
-    let second_player = commands
-        .spawn((
-            Sprite::from_color(second_player_color, PLAYER_SIZE),
-            Transform::from_translation(second_player_spawn),
-            Player,
-            Velocity::default(),
-            Grounded(false),
-            CoyoteTimer::default(),
-            JumpState::default(),
-            Facing(-1.0),
-            Character(second_player_char),
-            ControlledBy(AI_SOURCE_ID_START),
-        ))
-        .insert((
-            ChargingShot::default(),
-            TargetBasket(second_player_target),
-            Collider,
-            second_player_team,
-            InputState::default(),
-            AiState {
-                current_goal: second_player_initial_goal,
-                profile_id: second_player_profile,
-                ..default()
-            },
-            AiNavState::default(),
-            StealCooldown::default(),
-            TurboGauge::default(),
-            BlockState::default(),
-        ))
-        .id();
+    // Left player - HUMAN controlled (L0)
+    let left_player = player::spawn_character(
+        &mut commands,
+        player::CharacterSpawnConfig {
+            character: CharacterId::L0,
+            controller: Some(KEYBOARD_SOURCE_ID),
+            ai_profile_id: profile_db.default_profile().id.clone(),
+            start_idle: false,
+            is_human_controlled: true,
+            ability: player::Buff::Speed,
+            position_override: Some(PLAYER_SPAWN_LEFT),
+            facing_override: None,
+            initial_goal_override: Some(AiGoal::Idle),
+        },
+        initial_palette,
+        anim_clips.as_ref(),
+    );
+
+    // Second player - AI controlled
+    let second_player = player::spawn_character(
+        &mut commands,
+        player::CharacterSpawnConfig {
+            character: second_player_char,
+            controller: Some(AI_SOURCE_ID_START),
+            ai_profile_id: second_player_profile,
+            start_idle: false,
+            is_human_controlled: false,
+            ability: player::Buff::Speed,
+            position_override: Some(second_player_spawn),
+            facing_override: Some(-1.0),
+            initial_goal_override: Some(second_player_initial_goal),
+        },
+        initial_palette,
+        anim_clips.as_ref(),
+    );
 
     // Third player - Adversary for keep-away mode (R0 on Team::Right)
     let third_player = if is_keep_away {
-        let adversary = commands
-            .spawn((
-                Sprite::from_color(initial_palette.right, PLAYER_SIZE),
-                Transform::from_translation(PLAYER_SPAWN_RIGHT),
-                Player,
-                Velocity::default(),
-                Grounded(false),
-                CoyoteTimer::default(),
-                JumpState::default(),
-                Facing(-1.0),
-                Character(CharacterId::R0),
-                ControlledBy(AI_SOURCE_ID_START + 1), // Different source ID for third player
-            ))
-            .insert((
-                ChargingShot::default(),
-                TargetBasket(Basket::Left), // Adversary targets left basket
-                Collider,
-                Team::Right,
-                InputState::default(),
-                AiState {
-                    current_goal: AiGoal::ChaseBall, // Will switch to PressureBallCarrier
-                    profile_id: adversary_profile_id.clone(),
-                    ..default()
-                },
-                AiNavState::default(),
-                StealCooldown::default(),
-                TurboGauge::default(),
-                BlockState::default(),
-            ))
-            .id();
+        let adversary = player::spawn_character(
+            &mut commands,
+            player::CharacterSpawnConfig {
+                character: CharacterId::R0,
+                controller: Some(AI_SOURCE_ID_START + 1),
+                ai_profile_id: adversary_profile_id.clone(),
+                start_idle: false,
+                is_human_controlled: false,
+                ability: player::Buff::Speed,
+                position_override: Some(PLAYER_SPAWN_RIGHT),
+                facing_override: Some(-1.0),
+                initial_goal_override: Some(AiGoal::ChaseBall),
+            },
+            initial_palette,
+            anim_clips.as_ref(),
+        );
         Some(adversary)
     } else {
         None
     };
 
     // Charge gauges and steal indicators for all players
-    spawn_charge_gauge(&mut commands, left_player, 1.0); // Left player faces right
-    spawn_charge_gauge(&mut commands, second_player, -1.0); // Second player faces left
+    spawn_charge_gauge(&mut commands, left_player, 1.0);
+    spawn_charge_gauge(&mut commands, second_player, -1.0);
     spawn_steal_indicators(&mut commands, left_player, 1.0);
     spawn_steal_indicators(&mut commands, second_player, -1.0);
 
@@ -1559,16 +1692,8 @@ fn training_setup(
     };
     commands.insert_resource(ball_textures.clone());
 
-    // Spawn ball - use settings or random
-    let ball_style_name = if let Some(ref style) = training_settings.ball_style {
-        style.clone()
-    } else {
-        // Random style from available options
-        style_names
-            .choose(&mut rand::thread_rng())
-            .cloned()
-            .unwrap_or_else(|| "wedges".to_string())
-    };
+    // Spawn ball - use ball style from init_settings
+    let ball_style_name = current_settings.settings.ball_style.clone();
     if let Some(textures) = ball_textures.get(&ball_style_name) {
         // In keep-away or drive mode, human starts with ball
         let player_starts_with_ball = training_settings.drive_mode || is_keep_away;
@@ -1610,27 +1735,9 @@ fn training_setup(
         }
     }
 
-    // Arena floor
-    commands.spawn((
-        Sprite::from_color(
-            initial_palette.platforms,
-            Vec2::new(ARENA_WIDTH - WALL_THICKNESS * 2.0, 40.0),
-        ),
-        Transform::from_xyz(0.0, ARENA_FLOOR_Y, 0.0),
-        Platform,
-    ));
-
-    // Walls
-    commands.spawn((
-        Sprite::from_color(initial_palette.platforms, Vec2::new(WALL_THICKNESS, 5000.0)),
-        Transform::from_xyz(-ARENA_WIDTH / 2.0 + WALL_THICKNESS / 2.0, 2000.0, 0.0),
-        Platform,
-    ));
-    commands.spawn((
-        Sprite::from_color(initial_palette.platforms, Vec2::new(WALL_THICKNESS, 5000.0)),
-        Transform::from_xyz(ARENA_WIDTH / 2.0 - WALL_THICKNESS / 2.0, 2000.0, 0.0),
-        Platform,
-    ));
+    // Arena floor and walls
+    world::spawn_floor(&mut commands, initial_palette.platforms);
+    world::spawn_walls(&mut commands, initial_palette.platforms);
 
     // Level platforms
     levels::spawn_level_platforms(
@@ -1649,87 +1756,20 @@ fn training_setup(
         let basket_push_in = initial_level
             .map(|l| l.basket_push_in)
             .unwrap_or(BASKET_PUSH_IN);
-        let (left_basket_x, right_basket_x) = basket_x_from_offset(basket_push_in);
 
-        let rim_outer_height = BASKET_SIZE.y * 0.5;
-        let rim_inner_height = BASKET_SIZE.y * 0.1;
-        let rim_outer_y = -BASKET_SIZE.y / 2.0 + rim_outer_height / 2.0;
-        let rim_inner_y = -BASKET_SIZE.y / 2.0 + rim_inner_height / 2.0;
-        let rim_bottom_width = BASKET_SIZE.x + RIM_THICKNESS;
-
-        // Left basket
-        commands
-            .spawn((
-                Sprite::from_color(initial_palette.left, BASKET_SIZE),
-                Transform::from_xyz(left_basket_x, basket_y, -0.1),
-                Basket::Left,
-            ))
-        .with_children(|parent| {
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.right_rim,
-                    Vec2::new(RIM_THICKNESS, rim_outer_height),
-                ),
-                Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
-                Platform,
-                BasketRim,
-            ));
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.right_rim,
-                    Vec2::new(RIM_THICKNESS, rim_inner_height),
-                ),
-                Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
-                Platform,
-                BasketRim,
-            ));
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.right_rim,
-                    Vec2::new(rim_bottom_width, RIM_THICKNESS),
-                ),
-                Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
-                Platform,
-                BasketRim,
-            ));
-        });
-
-    // Right basket
-    commands
-        .spawn((
-            Sprite::from_color(initial_palette.right, BASKET_SIZE),
-            Transform::from_xyz(right_basket_x, basket_y, -0.1),
-            Basket::Right,
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.left_rim,
-                    Vec2::new(RIM_THICKNESS, rim_inner_height),
-                ),
-                Transform::from_xyz(-BASKET_SIZE.x / 2.0, rim_inner_y, 0.1),
-                Platform,
-                BasketRim,
-            ));
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.left_rim,
-                    Vec2::new(RIM_THICKNESS, rim_outer_height),
-                ),
-                Transform::from_xyz(BASKET_SIZE.x / 2.0, rim_outer_y, 0.1),
-                Platform,
-                BasketRim,
-            ));
-            parent.spawn((
-                Sprite::from_color(
-                    initial_palette.left_rim,
-                    Vec2::new(rim_bottom_width, RIM_THICKNESS),
-                ),
-                Transform::from_xyz(0.0, -BASKET_SIZE.y / 2.0, 0.1),
-                Platform,
-                BasketRim,
-            ));
-        });
+        let left_color2 = player::color_for_character(CharacterId::L1, initial_palette);
+        let right_color2 = player::color_for_character(CharacterId::R1, initial_palette);
+        world::spawn_baskets(
+            &mut commands,
+            basket_y,
+            basket_push_in,
+            initial_palette.left,
+            left_color2,
+            initial_palette.right,
+            right_color2,
+            initial_palette.left_rim,
+            initial_palette.right_rim,
+        );
     }
 
     // Corner ramps
@@ -1919,10 +1959,12 @@ fn training_state_machine(
 ) {
     match training_state.phase {
         TrainingPhase::WaitingToStart => {
-            // Reachability: start immediately (player has ball)
+            // Reachability/Animation: start immediately (player has ball)
             // Others: wait for first ball pickup to start timer
-            if training_state.protocol.iterates_all_levels() {
-                // Start immediately for exploration mode
+            if training_state.protocol.iterates_all_levels()
+                || training_state.protocol.is_free_play()
+            {
+                // Start immediately for exploration/practice mode
                 training_state.start_game_timer();
             } else {
                 for ball_state in &balls {
@@ -1958,6 +2000,11 @@ fn training_state_machine(
             // Reachability (manual): no win condition - player decides when to advance via LB
             if training_state.protocol.iterates_all_levels() {
                 // Level transitions handled by check_advance_level system
+                return;
+            }
+
+            // Free-play mode (Animation): no win condition, just practice
+            if training_state.protocol.is_free_play() {
                 return;
             }
 
@@ -2297,6 +2344,10 @@ fn training_state_machine(
                     // Keep-away practice - no specific analysis
                     println!("\n## Keep-Away Practice Complete\n");
                     println!("Keep-away training session finished.");
+                }
+                TrainingProtocol::Animation => {
+                    println!("\n## Animation Testing Complete\n");
+                    println!("Animation testing session finished.");
                 }
             }
 
@@ -3050,7 +3101,6 @@ fn check_next_level(
 /// Check for escape key to quit
 fn check_escape_quit(
     keyboard: Res<ButtonInput<KeyCode>>,
-    gamepads: Query<&Gamepad>,
     mut app_exit: MessageWriter<AppExit>,
     mut training_state: ResMut<TrainingState>,
     score: Res<Score>,
@@ -3058,11 +3108,8 @@ fn check_escape_quit(
     sqlite_logger: Res<SqliteEventLogger>,
     db_path: Res<TrainingDbPath>,
 ) {
-    // Escape key or Select/Back button on controller
-    let quit_pressed = keyboard.just_pressed(KeyCode::Escape)
-        || gamepads
-            .iter()
-            .any(|gp| gp.just_pressed(GamepadButton::Select));
+    // Escape key only (Select now opens debug menu)
+    let quit_pressed = keyboard.just_pressed(KeyCode::Escape);
 
     if quit_pressed {
         println!("\nTraining session ended.");
@@ -3115,7 +3162,8 @@ fn check_escape_quit(
     }
 }
 
-/// Check for Start button to pause/unpause or restart
+/// Check for Start button to restart during GameEnded phase
+/// (Pause/unpause is now handled by check_pause_toggle + pause menu)
 fn check_pause_restart(
     mut commands: Commands,
     _keyboard: Res<ButtonInput<KeyCode>>,
@@ -3136,31 +3184,17 @@ fn check_pause_restart(
     >,
     sqlite_logger: Res<SqliteEventLogger>,
 ) {
+    // Only handle GameEnded restart — pause is handled by check_pause_toggle + pause menu
+    if training_state.phase != TrainingPhase::GameEnded {
+        return;
+    }
+
     // Check for Start button (gamepad Start)
     let start_pressed = gamepads
         .iter()
         .any(|gp| gp.just_pressed(GamepadButton::Start));
 
     if !start_pressed {
-        return;
-    }
-
-    // Toggle pause during Playing
-    if training_state.phase == TrainingPhase::Playing {
-        training_state.phase = TrainingPhase::Paused;
-        println!("\n[PAUSED] Press Start to resume");
-        return;
-    }
-
-    // Unpause
-    if training_state.phase == TrainingPhase::Paused {
-        training_state.phase = TrainingPhase::Playing;
-        println!("[RESUMED]");
-        return;
-    }
-
-    // Restart during GameEnded phase
-    if training_state.phase != TrainingPhase::GameEnded {
         return;
     }
 

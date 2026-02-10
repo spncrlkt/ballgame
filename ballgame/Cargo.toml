@@ -32,6 +32,10 @@ path = "src/bin/analyze.rs"
 name = "test-scenarios"
 path = "src/bin/test_scenarios.rs"
 
+[[bin]]
+name = "animation-test"
+path = "src/bin/animation_test.rs"
+
 [dependencies]
 ballgame-protocol = { path = "../ballgame-protocol" }
 toml = "0.8"

@@ -57,6 +57,13 @@ pub enum TrainingProtocol {
     /// - Uses KeepAway AI profile
     /// - Cooperative mode for practicing keep-away gameplay
     KeepAway,
+
+    /// Animation testing - solo mode to verify sprite animations
+    /// - Random level (or specify with -l)
+    /// - Solo mode (no active AI opponent)
+    /// - Player starts with ball
+    /// - No win condition - practice all animation states
+    Animation,
 }
 
 // TODO: add a shooting training protocol for basket position calculations.
@@ -79,6 +86,7 @@ impl TrainingProtocol {
                 Some(TrainingProtocol::TeamInteraction)
             }
             "keep-away" | "keepaway" => Some(TrainingProtocol::KeepAway),
+            "animation" | "anim" | "sprite" => Some(TrainingProtocol::Animation),
             _ => None,
         }
     }
@@ -93,6 +101,7 @@ impl TrainingProtocol {
             TrainingProtocol::AutoReachability => "Auto Reachability",
             TrainingProtocol::TeamInteraction => "Team Interaction",
             TrainingProtocol::KeepAway => "Keep Away",
+            TrainingProtocol::Animation => "Animation Testing",
         }
     }
 
@@ -106,6 +115,7 @@ impl TrainingProtocol {
             TrainingProtocol::AutoReachability => "auto-reachability",
             TrainingProtocol::TeamInteraction => "team-interaction",
             TrainingProtocol::KeepAway => "keep-away",
+            TrainingProtocol::Animation => "animation",
         }
     }
 
@@ -127,19 +137,31 @@ impl TrainingProtocol {
                 "Cooperative pass practice with CatchPartner AI teammate"
             }
             TrainingProtocol::KeepAway => "Keep-away training - ball possession practice",
+            TrainingProtocol::Animation => {
+                "Solo animation testing - verify all sprite animation states"
+            }
         }
     }
 
     /// Get the fixed level name for this protocol (None = random selection)
     pub fn fixed_level(&self) -> Option<&'static str> {
         match self {
-            TrainingProtocol::AdvancedPlatform => None,
+            TrainingProtocol::AdvancedPlatform => Some("Skyway"),
             TrainingProtocol::Pursuit => Some("Pursuit Arena"),
             TrainingProtocol::Pursuit2 => Some("Pursuit Arena 2"),
             TrainingProtocol::Reachability => None, // Iterates all levels
             TrainingProtocol::AutoReachability => None, // Iterates all levels
             TrainingProtocol::TeamInteraction => Some("Team Interaction"),
             TrainingProtocol::KeepAway => Some("Keep Away"),
+            TrainingProtocol::Animation => Some("Pursuit Arena 2"),
+        }
+    }
+
+    /// Get the default palette index for this protocol (None = use settings/init_settings)
+    pub fn default_palette(&self) -> Option<usize> {
+        match self {
+            TrainingProtocol::Animation => Some(1),
+            _ => None,
         }
     }
 
@@ -153,6 +175,7 @@ impl TrainingProtocol {
             TrainingProtocol::AutoReachability => Some(60.0), // 60 seconds per level
             TrainingProtocol::TeamInteraction => None, // No time limit - practice mode
             TrainingProtocol::KeepAway => None,      // No time limit - practice mode
+            TrainingProtocol::Animation => None,     // No time limit - practice mode
         }
     }
 
@@ -164,7 +187,8 @@ impl TrainingProtocol {
             TrainingProtocol::Reachability
             | TrainingProtocol::AutoReachability
             | TrainingProtocol::TeamInteraction
-            | TrainingProtocol::KeepAway => false, // No win condition
+            | TrainingProtocol::KeepAway
+            | TrainingProtocol::Animation => false, // No win condition
         }
     }
 
@@ -177,6 +201,7 @@ impl TrainingProtocol {
             TrainingProtocol::AutoReachability => false, // No ball needed for exploration
             TrainingProtocol::TeamInteraction => true,  // Player starts with ball to pass
             TrainingProtocol::KeepAway => true,         // Player starts with ball
+            TrainingProtocol::Animation => true,       // Player starts with ball
         }
     }
 
@@ -184,8 +209,16 @@ impl TrainingProtocol {
     pub fn is_solo_mode(&self) -> bool {
         matches!(
             self,
-            TrainingProtocol::Reachability | TrainingProtocol::AutoReachability
+            TrainingProtocol::Reachability
+                | TrainingProtocol::AutoReachability
+                | TrainingProtocol::Animation
         )
+    }
+
+    /// Whether this is a free-play mode with no win condition or level iteration
+    /// (player just practices until they quit)
+    pub fn is_free_play(&self) -> bool {
+        matches!(self, TrainingProtocol::Animation)
     }
 
     /// Whether this protocol uses CatchPartner AI for teammate
@@ -251,7 +284,8 @@ impl ProtocolConfig {
                 TrainingProtocol::Reachability
                 | TrainingProtocol::AutoReachability
                 | TrainingProtocol::TeamInteraction
-                | TrainingProtocol::KeepAway => 0, // No score-based win
+                | TrainingProtocol::KeepAway
+                | TrainingProtocol::Animation => 0, // No score-based win
             },
         }
     }
@@ -350,7 +384,7 @@ mod tests {
         assert_eq!(pursuit2.win_score, 1);
 
         let advanced = ProtocolConfig::new(TrainingProtocol::AdvancedPlatform);
-        assert_eq!(advanced.level_name, None);
+        assert_eq!(advanced.level_name, Some("Skyway".to_string()));
         assert_eq!(advanced.time_limit_secs, None);
         assert_eq!(advanced.win_score, 5);
 
@@ -361,6 +395,25 @@ mod tests {
         assert!(TrainingProtocol::Reachability.is_solo_mode());
         assert!(TrainingProtocol::Reachability.iterates_all_levels());
         assert!(!TrainingProtocol::Reachability.is_automated());
+
+        // Animation parsing
+        assert_eq!(
+            TrainingProtocol::from_str("animation"),
+            Some(TrainingProtocol::Animation)
+        );
+        assert_eq!(
+            TrainingProtocol::from_str("anim"),
+            Some(TrainingProtocol::Animation)
+        );
+        assert_eq!(
+            TrainingProtocol::from_str("sprite"),
+            Some(TrainingProtocol::Animation)
+        );
+        assert!(TrainingProtocol::Animation.is_solo_mode());
+        assert!(!TrainingProtocol::Animation.uses_score_win());
+        assert!(TrainingProtocol::Animation.player_starts_with_ball());
+        let animation = ProtocolConfig::new(TrainingProtocol::Animation);
+        assert_eq!(animation.level_name, Some("Pursuit Arena 2".to_string()));
 
         // AutoReachability config
         let auto_reach = ProtocolConfig::new(TrainingProtocol::AutoReachability);

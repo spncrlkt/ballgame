@@ -9,6 +9,7 @@ use crate::constants::*;
 use crate::events::CharacterId;
 use crate::input::{GameMode, InputSourceId, AI_SOURCE_ID_START, KEYBOARD_SOURCE_ID};
 use crate::palettes::Palette;
+use crate::player::animation::{PlayerAnimClips, PlayerAnimState, PlayerAnimTimer, PlayerCurrentAnim, PlayerVisual};
 use crate::player::{
     BlockState, Character, ControlledBy, CoyoteTimer, Facing, Grounded, HumanControlled,
     JumpState, Player, Buff, TargetBasket, Team, TurboGauge, Velocity,
@@ -88,22 +89,38 @@ pub struct CharacterSpawnConfig {
     pub is_human_controlled: bool,
     /// Super-ability for this character (defaults to Speed)
     pub ability: Buff,
+    /// Override spawn position (None = default for CharacterId)
+    pub position_override: Option<Vec3>,
+    /// Override facing direction (None = default for team)
+    pub facing_override: Option<f32>,
+    /// Override initial AI goal (None = Idle if start_idle, else AiGoal::default())
+    pub initial_goal_override: Option<AiGoal>,
 }
 
 /// Spawn a single character entity
 /// Returns the entity ID
+///
+/// When `anim_clips` is `Some`, the character uses animated atlas sprites.
+/// When `None`, falls back to a solid-color rectangle (headless/simulation).
 pub fn spawn_character(
     commands: &mut Commands,
     config: CharacterSpawnConfig,
     palette: &Palette,
+    anim_clips: Option<&PlayerAnimClips>,
 ) -> Entity {
-    let position = spawn_position(config.character);
+    let position = config
+        .position_override
+        .unwrap_or_else(|| spawn_position(config.character));
     let team = team_for_character(config.character);
     let target_basket = target_basket_for_character(config.character);
-    let facing = initial_facing(config.character);
+    let facing = config
+        .facing_override
+        .unwrap_or_else(|| initial_facing(config.character));
     let color = color_for_character(config.character, palette);
 
-    let initial_goal = if config.start_idle {
+    let initial_goal = if let Some(goal) = config.initial_goal_override {
+        goal
+    } else if config.start_idle {
         AiGoal::Idle
     } else {
         AiGoal::default()
@@ -121,10 +138,43 @@ pub fn spawn_character(
             }
     });
 
+    // Build visual sprite as a child entity, offset upward so the character's feet
+    // align with the parent's collision box bottom. The parent entity has no sprite —
+    // all collision uses PLAYER_SIZE directly.
+    let visual_offset_y = PLAYER_SPRITE_OFFSET_Y;
+
+    // Prepare visual sprite + optional animation components
+    let (visual_sprite, anim_timer, anim_current) = if let Some(clips) = anim_clips {
+        if let Some(idle_clip) = clips.0.get(&PlayerAnimState::Idle) {
+            let mut s = Sprite::from_atlas_image(
+                idle_clip.texture.clone(),
+                TextureAtlas {
+                    layout: idle_clip.layout.clone(),
+                    index: 0,
+                },
+            );
+            s.custom_size = Some(PLAYER_SPRITE_SIZE);
+            let timer = PlayerAnimTimer(Timer::from_seconds(
+                1.0 / idle_clip.fps,
+                TimerMode::Repeating,
+            ));
+            let current = PlayerCurrentAnim {
+                state: PlayerAnimState::Idle,
+                first_frame: idle_clip.first_frame,
+                last_frame: idle_clip.last_frame,
+            };
+            (s, Some(timer), Some(current))
+        } else {
+            (Sprite::from_color(color, PLAYER_SPRITE_SIZE), None, None)
+        }
+    } else {
+        (Sprite::from_color(color, PLAYER_SIZE), None, None)
+    };
+
     // Split into smaller bundles to avoid hitting Bevy's tuple size limit
     let mut entity_commands = commands.spawn((
-        Sprite::from_color(color, PLAYER_SIZE),
         Transform::from_translation(position),
+        Visibility::default(),
         Player,
         Character(config.character),
         ControlledBy(controller_id),
@@ -174,7 +224,21 @@ pub fn spawn_character(
         entity_commands.insert(HumanControlled);
     }
 
-    entity_commands.id()
+    // Spawn visual sprite as a child entity, offset upward
+    let player_entity = entity_commands.id();
+    let mut visual_commands = commands.spawn((
+        visual_sprite,
+        Transform::from_xyz(0.0, visual_offset_y, 0.0),
+        PlayerVisual,
+    ));
+    // Add animation components to the visual child if clips were provided
+    if let (Some(timer), Some(current)) = (anim_timer, anim_current) {
+        visual_commands.insert((timer, current));
+    }
+    let visual_entity = visual_commands.id();
+    commands.entity(player_entity).add_child(visual_entity);
+
+    player_entity
 }
 
 /// Spawn all characters for a game mode
@@ -188,6 +252,7 @@ pub fn spawn_characters_for_mode(
     human_controlled: Option<CharacterId>,
     start_idle: bool,
     profile_db: &AiProfileDatabase,
+    anim_clips: Option<&PlayerAnimClips>,
 ) -> Vec<(CharacterId, Entity)> {
     let characters = mode.characters();
     let mut results = Vec::with_capacity(characters.len());
@@ -218,9 +283,12 @@ pub fn spawn_characters_for_mode(
             start_idle,
             is_human_controlled: is_human,
             ability,
+            position_override: None,
+            facing_override: None,
+            initial_goal_override: None,
         };
 
-        let entity = spawn_character(commands, config, palette);
+        let entity = spawn_character(commands, config, palette, anim_clips);
         results.push((character, entity));
     }
 

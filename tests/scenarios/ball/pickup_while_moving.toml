@@ -7,18 +7,18 @@ description = "Player walks toward ball and picks it up without stopping"
 [setup]
 level = "test_flat_floor"
 
-# Floor is at y=-450, spawn at -350 (100 above floor)
+# Floor is at y=-450, player half-height=64, ground center=-386
 [[setup.entities]]
 type = "player"
 id = "p1"
 team = "left"
 x = -100.0
-y = -350.0
+y = -386.0
 
 [[setup.entities]]
 type = "ball"
 x = 0.0
-y = -350.0
+y = -386.0
 
 # Walk right continuously and press pickup when near ball
 [[input]]

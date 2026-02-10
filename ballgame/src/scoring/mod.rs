@@ -94,7 +94,7 @@ pub fn check_scoring(
     time: Res<Time>,
     mut ball_query: Query<(&mut Transform, &mut Velocity, &mut BallState, &Sprite), With<Ball>>,
     basket_query: Query<(Entity, &Transform, &Basket, &Sprite), Without<Ball>>,
-    player_query: Query<(Entity, &Sprite, &Team, Option<&Character>), With<Player>>,
+    player_query: Query<(Entity, &Team, Option<&Character>), With<Player>>,
     mut ai_query: Query<(&mut AiState, &mut AiNavState, &mut InputState), With<Player>>,
 ) {
     let palette = palette_db
@@ -136,7 +136,7 @@ pub fn check_scoring(
                     player_query
                         .get(entity)
                         .ok()
-                        .and_then(|(_, _, _, char)| char.map(|c| c.0))
+                        .and_then(|(_, _, char)| char.map(|c| c.0))
                 });
 
                 // Record goal attribution
@@ -180,7 +180,7 @@ pub fn check_scoring(
 
                 // If held, also flash the player who scored
                 if let BallState::Held(holder) = *ball_state {
-                    if let Ok((player_entity, _player_sprite, team, _)) = player_query.get(holder) {
+                    if let Ok((player_entity, team, _)) = player_query.get(holder) {
                         // Player color based on team (from current palette)
                         let player_original_color = match team {
                             Team::Left => palette.left,

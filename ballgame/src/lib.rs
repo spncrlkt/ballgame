@@ -73,11 +73,12 @@ pub use input::{
 pub use levels::{LevelData, LevelDatabase, PlatformDef};
 pub use palettes::{Palette, PaletteDatabase, PALETTES_FILE};
 pub use player::{
-    color_for_character, initial_facing, spawn_character, spawn_characters_for_mode,
-    spawn_charge_gauge, spawn_position, target_basket_for_character, team_for_character,
-    BlockState, Buff, Character, CharacterSpawnConfig, ControlledBy, CoyoteTimer, Facing, Grounded,
-    HoldingBall, HumanControlled, JumpState, Player, RemoteControlled, TargetBasket, Team,
-    TurboGauge, Velocity,
+    animate_player_sprites, color_for_character, initial_facing, load_player_animations,
+    spawn_character, spawn_characters_for_mode, spawn_charge_gauge, spawn_position,
+    target_basket_for_character, team_for_character, update_player_animation_state, BlockState,
+    Buff, Character, CharacterSpawnConfig, ControlledBy, CoyoteTimer, Facing, Grounded,
+    HoldingBall, HumanControlled, JumpState, Player, PlayerAnimClips, PlayerAnimState,
+    PlayerAnimTimer, PlayerCurrentAnim, RemoteControlled, TargetBasket, Team, TurboGauge, Velocity,
 };
 pub use presets::{
     apply_composite_preset, apply_preset_to_tweaks, BallPreset, CompositePreset, CurrentPresets,

@@ -20,6 +20,18 @@ steps: 0
 center: 150 180
 debug: true
 
+# HIGH PLATFORM - One center platform high up, well above player head
+# Use for: ceiling collision (head bonk), testing jump into platform from below
+# center format: y_offset width (parts[0]=y, parts[1]=width)
+# Platform at y=-150 (ARENA_FLOOR_Y + 300), width 150
+# Player top on ground at ~-302.5, platform bottom at -160, clearance=142.5
+level: test_high_platform
+basket_height: 250
+basket_push_in: 60
+steps: 0
+center: 300 150
+debug: true
+
 # SHOOTING RANGE - Low, close baskets for easy scoring
 # Use for: scoring tests, shot trajectory validation
 level: test_shooting_range

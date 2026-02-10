@@ -11,16 +11,16 @@ description = "Player is stopped by arena wall when walking into it"
 [setup]
 level = "test_flat_floor"
 
-# Floor at y=-450, floor top at -430, player center at -398
+# Floor at y=-450, player half-height=64, ground center=-386
 # Arena width is 1600, wall inner edge at x=-780
-# Player half-width is 16 (PLAYER_SIZE.x = 32)
-# So player center min x = -780 + 16 = -764
+# Player half-width is 32 (PLAYER_SIZE.x = 64)
+# So player center min x = -780 + 32 = -748
 [[setup.entities]]
 type = "player"
 id = "p1"
 team = "left"
 x = -600.0
-y = -398.0
+y = -386.0
 
 # Move left continuously
 [[input]]
@@ -43,6 +43,6 @@ checks = [
 [[expect.state]]
 after_frame = 120
 checks = [
-    "p1.x > -770",            # Should be stopped by wall (with ~6 unit tolerance)
-    "p1.x < -760",            # Should be close to wall (tighter than before)
+    "p1.x > -755",            # Should be stopped by wall (with ~7 unit tolerance from -748)
+    "p1.x < -744",            # Should be close to wall
 ]

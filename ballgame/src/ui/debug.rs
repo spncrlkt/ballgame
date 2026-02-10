@@ -214,9 +214,14 @@ pub fn apply_palette_colors(
     palette_db: Res<PaletteDatabase>,
     ball_textures: Res<BallTextures>,
     mut clear_color: ResMut<ClearColor>,
-    mut player_query: Query<
-        (&mut Sprite, &Character),
-        (With<Player>, Without<Ball>, Without<Basket>),
+    player_query: Query<(&Character, &Children), With<Player>>,
+    mut visual_query: Query<
+        &mut Sprite,
+        (
+            With<crate::player::animation::PlayerVisual>,
+            Without<Ball>,
+            Without<Basket>,
+        ),
     >,
     basket_query: Query<(&Basket, &Children), Without<Player>>,
     mut stripe_query: Query<
@@ -289,9 +294,14 @@ pub fn apply_palette_colors(
     // Background
     clear_color.0 = palette.background;
 
-    // Players - use character-specific colors (slot 1 players are darker)
-    for (mut sprite, character) in &mut player_query {
-        sprite.color = crate::player::color_for_character(character.0, palette);
+    // Players - set color on PlayerVisual child sprite (slot 1 players are darker)
+    for (character, children) in &player_query {
+        let color = crate::player::color_for_character(character.0, palette);
+        for child in children.iter() {
+            if let Ok(mut sprite) = visual_query.get_mut(child) {
+                sprite.color = color;
+            }
+        }
     }
 
     // Baskets - update stripe colors and rims

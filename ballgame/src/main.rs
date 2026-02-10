@@ -456,6 +456,17 @@ fn main() {
     app.add_systems(Update, ui::debug_menu_apply_cycle);
     app.add_systems(Update, ui::update_debug_menu_display);
 
+    // Player sprite animation (state selection + frame advance, chained)
+    app.add_systems(
+        Update,
+        (
+            player::update_player_animation_state,
+            player::animate_player_sprites,
+        )
+            .chain()
+            .run_if(replay::not_replay_active),
+    );
+
     // Palette application and preset application
     app.add_systems(
         Update,
@@ -712,6 +723,7 @@ fn setup(
     level_db: Res<LevelDatabase>,
     palette_db: Res<PaletteDatabase>,
     asset_server: Res<AssetServer>,
+    mut atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     current_palette: Res<CurrentPalette>,
     current_level: Res<CurrentLevel>,
     current_settings: Res<CurrentSettings>,
@@ -763,6 +775,10 @@ fn setup(
         None
     };
 
+    // Load player animation clips from sprite sheets
+    let anim_clips = player::load_player_animations(&asset_server, &mut atlas_layouts);
+    commands.insert_resource(anim_clips.clone());
+
     // Spawn characters using the helper function (2v2 mode)
     let spawned_characters = spawn_characters_for_mode(
         &mut commands,
@@ -773,6 +789,7 @@ fn setup(
         human_controlled,
         is_special_level,
         &profile_db,
+        Some(&anim_clips),
     );
 
     // Spawn charge gauges and steal indicators for all spawned characters

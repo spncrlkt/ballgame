@@ -561,7 +561,7 @@ pub fn ai_navigation_update(
                         nav_state.set_path(path_result.actions, target);
                     } else {
                         // No path found - clear and let simple movement take over
-                        warn!(
+                        debug!(
                             "AI nav: No path found from ({:.0},{:.0}) to ({:.0},{:.0})",
                             ai_pos.x, ai_pos.y, target.x, target.y
                         );

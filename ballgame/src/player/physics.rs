@@ -215,16 +215,16 @@ pub fn block_update(
 
 /// Check player collisions with platforms
 pub fn check_collisions(
-    mut player_query: Query<(&mut Transform, &mut Velocity, &mut Grounded, &Sprite), With<Player>>,
+    mut player_query: Query<(&mut Transform, &mut Velocity, &mut Grounded), With<Player>>,
     platform_query: Query<
         (&Transform, &Sprite),
         (With<Platform>, Without<Player>, Without<BasketRim>),
     >,
 ) {
-    for (mut player_transform, mut player_velocity, mut grounded, player_sprite) in
+    for (mut player_transform, mut player_velocity, mut grounded) in
         &mut player_query
     {
-        let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
+        let player_size = PLAYER_SIZE;
         let player_half = player_size / 2.0;
 
         // Assume not grounded until we find a floor beneath us
@@ -291,7 +291,7 @@ pub fn check_collisions(
 /// - Single opponent: soft collision with proportional drag, can pass through
 /// - Two overlapping opponents: hard block at their intersection, eject if inside
 pub fn player_player_collision(
-    mut players: Query<(Entity, &mut Transform, &mut Velocity, &Sprite, &Team), With<Player>>,
+    mut players: Query<(Entity, &mut Transform, &mut Velocity, &Team), With<Player>>,
     time: Res<Time>,
 ) {
     // Use minimum dt for headless mode compatibility
@@ -300,12 +300,12 @@ pub fn player_player_collision(
     // Collect all player data first to avoid borrow issues
     let player_data: Vec<(Entity, Vec3, Vec2, Vec2, Team)> = players
         .iter()
-        .map(|(e, t, v, s, team)| {
+        .map(|(e, t, v, team)| {
             (
                 e,
                 t.translation,
                 v.0,
-                s.custom_size.unwrap_or(PLAYER_SIZE),
+                PLAYER_SIZE,
                 *team,
             )
         })
@@ -422,7 +422,7 @@ pub fn player_player_collision(
                 intersection_left - half_i.x - COLLISION_EPSILON
             };
 
-            if let Ok((_, mut trans_i, mut vel_i, _, _)) = players.get_mut(*entity_i) {
+            if let Ok((_, mut trans_i, mut vel_i, _)) = players.get_mut(*entity_i) {
                 trans_i.translation.x = target_x;
                 // Stop horizontal velocity when hitting hard block
                 vel_i.0.x = 0.0;
@@ -456,7 +456,7 @@ pub fn player_player_collision(
                 let drag_factor = drag_per_second.powf(dt);
 
                 // Apply drag to this player
-                if let Ok((_, _, mut vel_i, _, _)) = players.get_mut(*entity_i) {
+                if let Ok((_, _, mut vel_i, _)) = players.get_mut(*entity_i) {
                     vel_i.0.x *= drag_factor;
                 }
 
@@ -466,7 +466,7 @@ pub fn player_player_collision(
                         continue;
                     }
                     let (entity_j, _, _, _, _) = &player_data[*idx_j];
-                    if let Ok((_, _, mut vel_j, _, _)) = players.get_mut(*entity_j) {
+                    if let Ok((_, _, mut vel_j, _)) = players.get_mut(*entity_j) {
                         vel_j.0.x *= drag_factor;
                     }
                 }

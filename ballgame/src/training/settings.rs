@@ -115,18 +115,16 @@ pub struct TrainingSettings {
     /// Timeout if no score within this many seconds (null = no timeout)
     pub first_point_timeout_secs: Option<f32>,
 
-    /// Viewport preset index
-    pub viewport_index: usize,
-    /// Color palette index
-    pub palette_index: usize,
-    /// Ball visual style (None = random)
-    pub ball_style: Option<String>,
     /// Drive mode (start with ball, regain on loss, first point wins)
     #[serde(default)]
     pub drive_mode: bool,
     /// Headless mode (no window, for automated simulation)
     #[serde(default)]
     pub headless: bool,
+
+    /// Palette index override (null = use init_settings default)
+    #[serde(default)]
+    pub palette_index: Option<usize>,
 
     // AI Client Support
     /// AI client ID to use instead of embedded profile (e.g., "ai-v1", "ai-v2")
@@ -139,6 +137,10 @@ pub struct TrainingSettings {
     /// Connection timeout for AI clients in seconds
     #[serde(default = "default_client_timeout")]
     pub client_timeout_secs: u64,
+
+    /// CLI-only level override (set by --level flag, not serialized)
+    #[serde(skip)]
+    pub cli_level: Option<LevelSelector>,
 }
 
 fn default_client_timeout() -> u64 {
@@ -162,15 +164,14 @@ impl Default for TrainingSettings {
             seed: None,
             time_limit_secs: None,
             first_point_timeout_secs: None,
-            viewport_index: 2,
-            palette_index: 0,
-            ball_style: None,
             drive_mode: false,
             headless: false,
+            palette_index: None,
             // AI Client support
             ai_client: None,
             clients_file: None,
             client_timeout_secs: default_client_timeout(),
+            cli_level: None,
         }
     }
 }
@@ -231,10 +232,6 @@ impl TrainingSettings {
                     if let Some(val) = args.get(i + 1) {
                         if let Some(protocol) = TrainingProtocol::from_str(val) {
                             self.protocol = protocol;
-                            // Apply protocol defaults - fixed level always overrides
-                            if let Some(level_name) = protocol.fixed_level() {
-                                self.level = Some(LevelSelector::Name(level_name.to_string()));
-                            }
                             if self.time_limit_secs.is_none() {
                                 self.time_limit_secs = protocol.default_time_limit();
                             }
@@ -291,11 +288,12 @@ impl TrainingSettings {
                 }
                 "--level" | "-l" => {
                     if let Some(val) = args.get(i + 1) {
-                        if let Ok(n) = val.parse::<u32>() {
-                            self.level = Some(LevelSelector::Number(n));
+                        let selector = if let Ok(n) = val.parse::<u32>() {
+                            LevelSelector::Number(n)
                         } else {
-                            self.level = Some(LevelSelector::Name(val.clone()));
-                        }
+                            LevelSelector::Name(val.clone())
+                        };
+                        self.cli_level = Some(selector);
                         i += 1;
                     }
                 }
@@ -323,32 +321,6 @@ impl TrainingSettings {
                         i += 1;
                     }
                 }
-                "--viewport" => {
-                    if let Some(val) = args.get(i + 1) {
-                        if let Ok(n) = val.parse() {
-                            self.viewport_index = n;
-                        }
-                        i += 1;
-                    }
-                }
-                "--palette" => {
-                    if let Some(val) = args.get(i + 1) {
-                        if let Ok(n) = val.parse() {
-                            self.palette_index = n;
-                        }
-                        i += 1;
-                    }
-                }
-                "--ball-style" => {
-                    if let Some(val) = args.get(i + 1) {
-                        if val.to_lowercase() == "random" {
-                            self.ball_style = None;
-                        } else {
-                            self.ball_style = Some(val.clone());
-                        }
-                        i += 1;
-                    }
-                }
                 "--profiles-file" => {
                     if let Some(val) = args.get(i + 1) {
                         self.profiles_file = Some(val.clone());
@@ -369,6 +341,14 @@ impl TrainingSettings {
                 }
                 "--headless" => {
                     self.headless = true;
+                }
+                "--palette" => {
+                    if let Some(val) = args.get(i + 1) {
+                        if let Ok(n) = val.parse() {
+                            self.palette_index = Some(n);
+                        }
+                        i += 1;
+                    }
                 }
                 // AI Client arguments
                 "--ai-client" => {
@@ -424,6 +404,7 @@ PROTOCOLS:
     pursuit2                    - Platform chase test (pursuit with center obstacle)
     reachability                - Solo level exploration for coverage mapping (LB to advance)
     auto-reachability           - Automated random walk/hop exploration (headless compatible)
+    animation                   - Solo animation testing (aliases: anim, sprite)
 
 MODES:
     goal  (default) - Each iteration ends after one goal, then reset
@@ -440,12 +421,10 @@ OPTIONS:
     -s, --seed N               RNG seed for determinism (default: random)
     -t, --time-limit SECS      Time limit per iteration (default: none or protocol default)
     --first-point-timeout SECS End if no score within SECS (default: none)
-    --viewport N               Viewport preset index (default: 2)
-    --palette N                Color palette index (default: 0)
-    --ball-style NAME          Ball visual style (default: random)
     --profiles-file PATH       AI profiles file (default: config/ai_profiles.txt)
     --profile-list PATH        File with profile names (one per line) for multi-profile training
     --debug-log                Enable debug sample logging to SQLite
+    --palette N                Color palette index (default: from init_settings)
     --headless                 Run without window (for auto-reachability)
     --ai-client ID             Use external AI client instead of embedded profile
     --clients-file PATH        AI clients registry file (default: config/ai_clients.txt)

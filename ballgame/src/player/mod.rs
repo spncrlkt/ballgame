@@ -1,9 +1,14 @@
 //! Player module - components and physics systems
 
+pub mod animation;
 mod components;
 mod physics;
 pub mod spawn;
 
+pub use animation::{
+    animate_player_sprites, load_player_animations, update_player_animation_state,
+    PlayerAnimClips, PlayerAnimState, PlayerAnimTimer, PlayerCurrentAnim, PlayerVisual,
+};
 pub use components::{
     BlockState, Buff, Character, ControlledBy, CoyoteTimer, Facing, Grounded, HoldingBall,
     HumanControlled, JumpState, Player, RemoteControlled, TargetBasket, Team, TurboGauge, Velocity,

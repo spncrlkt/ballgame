@@ -24,7 +24,8 @@ pub const TEXT_ACCENT: Color = Color::srgb(0.9, 0.75, 0.4); // Gold/amber
 // SIZE CONSTANTS
 // =============================================================================
 
-pub const PLAYER_SIZE: Vec2 = Vec2::new(32.0, 64.0);
+pub const PLAYER_SIZE: Vec2 = Vec2::new(64.0, 128.0);
+pub const PLAYER_SPRITE_SIZE: Vec2 = Vec2::new(128.0, 192.0); // Animated sprite visual size
 pub const BALL_SIZE: Vec2 = Vec2::new(26.0, 26.0); // 10% larger than original 24x24
 pub const CHARGE_GAUGE_WIDTH: f32 = 8.0;
 pub const CHARGE_GAUGE_HEIGHT: f32 = PLAYER_SIZE.y; // Same height as player
@@ -62,7 +63,7 @@ pub const BALL_AIR_FRICTION: f32 = 0.95; // Horizontal velocity retained after 1
 pub const BALL_GROUND_FRICTION: f32 = 0.6; // Horizontal velocity retained per bounce
 pub const BALL_ROLL_FRICTION: f32 = 0.6; // Horizontal velocity retained after 1 second while rolling
 pub const BALL_BOUNCE_HEIGHT_MULT: f32 = 1.0; // Ball must bounce this × its height to keep bouncing, else rolls
-pub const BALL_PICKUP_RADIUS: f32 = 50.0; // How close player must be to pick up ball
+pub const BALL_PICKUP_RADIUS: f32 = 75.0; // How close player must be to pick up ball (must exceed player-ball vertical gap on floor)
 pub const BALL_FREE_SPEED: f32 = 200.0; // Ball becomes Free when speed drops below this (2x pickup radius speed)
 
 // =============================================================================
@@ -321,3 +322,27 @@ pub const BUFF_JUMP_BONUS: f32 = 1.10;
 pub const BUFF_DEFENSE_BONUS: f32 = 0.20;
 /// Recovery buff: cooldown multiplier (0.70 = -30%)
 pub const BUFF_RECOVERY_BONUS: f32 = 0.70;
+
+// =============================================================================
+// SPRITE ANIMATION
+// =============================================================================
+
+/// Y offset for the visual sprite child entity relative to the physics entity.
+/// Positive = raise sprite. Tune so character feet sit on the ground.
+/// Formula: (PLAYER_SPRITE_SIZE.y - PLAYER_SIZE.y) / 2.0 - bottom_padding_scaled
+pub const PLAYER_SPRITE_OFFSET_Y: f32 = 4.0;
+
+/// Sprite sheet frame size (all sheets use 48×48 frames)
+pub const ANIM_FRAME_SIZE: u32 = 48;
+/// Idle animation FPS
+pub const ANIM_FPS_IDLE: f32 = 8.0;
+/// Run animation FPS
+pub const ANIM_FPS_RUN: f32 = 10.0;
+/// Jump/Fall animation FPS
+pub const ANIM_FPS_JUMP: f32 = 8.0;
+/// Jab (block) animation FPS
+pub const ANIM_FPS_JAB: f32 = 12.0;
+/// Last frame index for jab animation (use first 6 of 10 frames: indices 0-5)
+pub const ANIM_JAB_LAST_FRAME: usize = 5;
+/// Horizontal speed threshold to switch from Idle to Run animation
+pub const ANIM_RUN_THRESHOLD: f32 = 10.0;

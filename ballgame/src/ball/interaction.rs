@@ -31,7 +31,7 @@ pub fn ball_player_collision(
         With<Ball>,
     >,
     mut player_query: Query<
-        (Entity, &Transform, &mut Velocity, &Sprite),
+        (Entity, &Transform, &mut Velocity),
         (With<Player>, Without<Ball>),
     >,
 ) {
@@ -64,10 +64,10 @@ pub fn ball_player_collision(
             _ => None,
         };
 
-        for (player_entity, player_transform, mut player_velocity, player_sprite) in
+        for (player_entity, player_transform, mut player_velocity) in
             &mut player_query
         {
-            let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
+            let player_size = PLAYER_SIZE;
             let player_half = player_size / 2.0;
             let player_pos = player_transform.translation.truncate();
 
@@ -392,7 +392,6 @@ pub fn block_intercept(
         (
             Entity,
             &Transform,
-            &Sprite,
             &BlockState,
             &Team,
             Option<&HoldingBall>,
@@ -412,7 +411,7 @@ pub fn block_intercept(
         let ball_size = ball_sprite.custom_size.unwrap_or(BALL_SIZE);
         let ball_half = ball_size / 2.0;
 
-        for (player_entity, player_transform, player_sprite, block_state, _team, holding) in
+        for (player_entity, player_transform, block_state, _team, holding) in
             &player_query
         {
             // Can't intercept if:
@@ -427,7 +426,7 @@ pub fn block_intercept(
             }
 
             let player_pos = player_transform.translation.truncate();
-            let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
+            let player_size = PLAYER_SIZE;
 
             // Block hitbox is larger than regular player hitbox
             let block_half = Vec2::new(
@@ -473,7 +472,7 @@ pub fn pass_completion(
     mut event_bus: ResMut<EventBus>,
     mut ball_query: Query<(Entity, &Transform, &mut BallState, &Sprite), With<Ball>>,
     player_query: Query<
-        (Entity, &Transform, &Sprite, Option<&HoldingBall>, Option<&Character>),
+        (Entity, &Transform, Option<&HoldingBall>, Option<&Character>),
         With<Player>,
     >,
 ) {
@@ -488,7 +487,7 @@ pub fn pass_completion(
         let ball_size = ball_sprite.custom_size.unwrap_or(BALL_SIZE);
         let ball_half = ball_size / 2.0;
 
-        for (player_entity, player_transform, player_sprite, holding, character) in &player_query {
+        for (player_entity, player_transform, holding, character) in &player_query {
             // Skip if already holding a ball
             if holding.is_some() {
                 continue;
@@ -500,7 +499,7 @@ pub fn pass_completion(
             }
 
             let player_pos = player_transform.translation.truncate();
-            let player_size = player_sprite.custom_size.unwrap_or(PLAYER_SIZE);
+            let player_size = PLAYER_SIZE;
             let player_half = player_size / 2.0;
 
             // Check for collision
@@ -520,7 +519,7 @@ pub fn pass_completion(
                 let passer_char = player_query
                     .get(passer_entity)
                     .ok()
-                    .and_then(|(_, _, _, _, c)| c.map(|ch| ch.0));
+                    .and_then(|(_, _, _, c)| c.map(|ch| ch.0));
 
                 if let (Some(passer), Some(receiver)) = (passer_char, receiver_char) {
                     event_bus.emit(GameEvent::PassCompleted { passer, receiver });
