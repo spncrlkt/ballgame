@@ -16,6 +16,6 @@ pub use components::{
 pub use physics::*;
 pub use spawn::{
     color_for_character, initial_facing, spawn_character, spawn_characters_for_mode,
-    spawn_charge_gauge, spawn_position, target_basket_for_character, team_for_character,
-    CharacterSpawnConfig,
+    spawn_charge_gauge, spawn_position, spawn_position_for_level, target_basket_for_character,
+    team_for_character, CharacterSpawnConfig,
 };

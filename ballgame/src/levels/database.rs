@@ -42,6 +42,8 @@ pub struct LevelData {
     pub heatmap_los_margin: f32, // Line-of-sight margin for shooting decisions
     pub ball_start: Option<Vec2>,    // Custom ball spawn position (x, y relative to floor)
     pub ball_velocity: Option<Vec2>, // Initial ball velocity when countdown ends
+    pub spawn_primary: Option<Vec2>,   // Slot 0 players: L0 at (-x, y), R0 at (+x, y)
+    pub spawn_secondary: Option<Vec2>, // Slot 1 players: L1 at (-x, y), R1 at (+x, y)
 }
 
 /// Database of all loaded levels
@@ -104,6 +106,8 @@ impl LevelDatabase {
                     heatmap_los_margin: HEATMAP_LOS_MARGIN_DEFAULT,
                     ball_start: None,    // default: use BALL_SPAWN constant
                     ball_velocity: None, // default: no initial velocity
+                    spawn_primary: None,   // default: use SPAWN_L0/R0 constants
+                    spawn_secondary: None, // default: use SPAWN_L1/R1 constants
                 });
             } else if let Some(id_str) = line.strip_prefix("id:") {
                 if let Some(level) = &mut current_level {
@@ -213,6 +217,26 @@ impl LevelDatabase {
                         }
                     }
                 }
+            } else if let Some(params) = line.strip_prefix("spawn:") {
+                // Primary player spawn: L0 at (-x, y), R0 at (+x, y)
+                if let Some(level) = &mut current_level {
+                    let parts: Vec<&str> = params.trim().split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let (Ok(x), Ok(y)) = (parts[0].parse::<f32>(), parts[1].parse::<f32>()) {
+                            level.spawn_primary = Some(Vec2::new(x, y));
+                        }
+                    }
+                }
+            } else if let Some(params) = line.strip_prefix("spawn2:") {
+                // Secondary player spawn: L1 at (-x, y), R1 at (+x, y)
+                if let Some(level) = &mut current_level {
+                    let parts: Vec<&str> = params.trim().split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        if let (Ok(x), Ok(y)) = (parts[0].parse::<f32>(), parts[1].parse::<f32>()) {
+                            level.spawn_secondary = Some(Vec2::new(x, y));
+                        }
+                    }
+                }
             }
         }
 
@@ -255,6 +279,8 @@ impl LevelDatabase {
                     heatmap_los_margin: HEATMAP_LOS_MARGIN_DEFAULT,
                     ball_start: None,
                     ball_velocity: None,
+                    spawn_primary: None,
+                    spawn_secondary: None,
                 },
                 LevelData {
                     id: generate_uuid_from_name("Default"),
@@ -283,6 +309,8 @@ impl LevelDatabase {
                     heatmap_los_margin: HEATMAP_LOS_MARGIN_DEFAULT,
                     ball_start: None,
                     ball_velocity: None,
+                    spawn_primary: None,
+                    spawn_secondary: None,
                 },
             ],
         }

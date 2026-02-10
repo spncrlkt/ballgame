@@ -75,7 +75,8 @@ pub use palettes::{Palette, PaletteDatabase, PALETTES_FILE};
 pub use player::{
     animate_player_sprites, color_for_character, initial_facing, load_player_animations,
     spawn_character, spawn_characters_for_mode, spawn_charge_gauge, spawn_position,
-    target_basket_for_character, team_for_character, update_player_animation_state, BlockState,
+    spawn_position_for_level, target_basket_for_character, team_for_character,
+    update_player_animation_state, BlockState,
     Buff, Character, CharacterSpawnConfig, ControlledBy, CoyoteTimer, Facing, Grounded,
     HoldingBall, HumanControlled, JumpState, Player, PlayerAnimClips, PlayerAnimState,
     PlayerAnimTimer, PlayerCurrentAnim, RemoteControlled, TargetBasket, Team, TurboGauge, Velocity,

@@ -19,13 +19,54 @@ use crate::steal::StealCooldown;
 use crate::ui::{ChargeGaugeBackground, ChargeGaugeFill, ChargeGaugeOutline};
 use crate::world::{Basket, Collider};
 
-/// Get spawn position for a character
+/// Get spawn position for a character (uses default constants)
 pub fn spawn_position(character: CharacterId) -> Vec3 {
     match character {
         CharacterId::L0 => SPAWN_L0,
         CharacterId::L1 => SPAWN_L1,
         CharacterId::R0 => SPAWN_R0,
         CharacterId::R1 => SPAWN_R1,
+    }
+}
+
+/// Get spawn position for a character in a specific level
+/// Uses level's custom spawn positions if defined, otherwise falls back to defaults
+pub fn spawn_position_for_level(
+    character: CharacterId,
+    level: &crate::levels::LevelData,
+) -> Vec3 {
+    // Check for custom spawn positions in the level
+    // spawn_primary: L0 at (-x, y), R0 at (+x, y)
+    // spawn_secondary: L1 at (-x, y), R1 at (+x, y)
+    match character {
+        CharacterId::L0 => {
+            if let Some(pos) = level.spawn_primary {
+                Vec3::new(-pos.x, ARENA_FLOOR_Y + pos.y, 0.0)
+            } else {
+                SPAWN_L0
+            }
+        }
+        CharacterId::R0 => {
+            if let Some(pos) = level.spawn_primary {
+                Vec3::new(pos.x, ARENA_FLOOR_Y + pos.y, 0.0)
+            } else {
+                SPAWN_R0
+            }
+        }
+        CharacterId::L1 => {
+            if let Some(pos) = level.spawn_secondary {
+                Vec3::new(-pos.x, ARENA_FLOOR_Y + pos.y, 0.0)
+            } else {
+                SPAWN_L1
+            }
+        }
+        CharacterId::R1 => {
+            if let Some(pos) = level.spawn_secondary {
+                Vec3::new(pos.x, ARENA_FLOOR_Y + pos.y, 0.0)
+            } else {
+                SPAWN_R1
+            }
+        }
     }
 }
 

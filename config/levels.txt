@@ -18,6 +18,8 @@
 #   heatmap_los_margin: <m>     LOS margin to allow shooting (default = 0.05)
 #   ball_start: <x> <y>     Ball spawn position (y relative to floor; default = 0, 50)
 #   ball_velocity: <vx> <vy>  Ball velocity when countdown ends (default = 0, 0)
+#   spawn: <x> <y>          Slot 0 players: L0 at (-x, y), R0 at (+x, y) (y relative to floor)
+#   spawn2: <x> <y>         Slot 1 players: L1 at (-x, y), R1 at (+x, y) (y relative to floor)
 #
 # Heights are relative to ARENA_FLOOR_Y
 # Player max jump = 215 units above platform
@@ -143,6 +145,15 @@ basket_push_in: 166
 steps: 0
 center: 200 600
 mirror: 200 200 120
+
+level: Twin Towers
+id: 69d755aa56384746
+basket_height: 720
+basket_push_in: 260
+steps: 0
+mirror: 520 120 100
+mirror: 520 300 160
+mirror: 520 500 60
 
 # =============================================================================
 # TRAINING PROTOCOL LEVELS
