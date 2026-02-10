@@ -16,7 +16,7 @@ use crate::player::{
 };
 use crate::shooting::ChargingShot;
 use crate::steal::StealCooldown;
-use crate::ui::{ChargeGaugeBackground, ChargeGaugeFill};
+use crate::ui::{ChargeGaugeBackground, ChargeGaugeFill, ChargeGaugeOutline};
 use crate::world::{Basket, Collider};
 
 /// Get spawn position for a character
@@ -297,38 +297,49 @@ pub fn spawn_characters_for_mode(
 
 /// Spawn charge gauge UI elements as children of a player entity.
 ///
-/// The gauge position depends on facing direction:
-/// - Facing right (1.0): gauge on left side (opposite of ball)
-/// - Facing left (-1.0): gauge on right side (opposite of ball)
-pub fn spawn_charge_gauge(commands: &mut Commands, player_entity: Entity, facing: f32) {
-    // Gauge is on opposite side from ball (ball follows facing direction)
-    let gauge_x = if facing >= 0.0 {
-        -PLAYER_SIZE.x / 4.0 // Facing right, gauge on left
-    } else {
-        PLAYER_SIZE.x / 4.0 // Facing left, gauge on right
-    };
+/// The gauge is a horizontal bar centered above the player's head.
+pub fn spawn_charge_gauge(commands: &mut Commands, player_entity: Entity, _facing: f32) {
+    // Gauge centered horizontally, positioned above player's head
+    let gauge_y = CHARGE_GAUGE_Y_OFFSET;
+    let outline_thickness = 2.0;
 
-    // Background (black bar, always visible, centered vertically on player)
-    let gauge_bg = commands
+    // Black outline (slightly larger, behind everything)
+    let gauge_outline = commands
         .spawn((
             Sprite::from_color(
                 Color::BLACK,
+                Vec2::new(
+                    CHARGE_GAUGE_WIDTH + outline_thickness * 2.0,
+                    CHARGE_GAUGE_HEIGHT + outline_thickness * 2.0,
+                ),
+            ),
+            Transform::from_xyz(0.0, gauge_y, 0.4),
+            ChargeGaugeOutline,
+        ))
+        .id();
+    commands.entity(player_entity).add_child(gauge_outline);
+
+    // White background
+    let gauge_bg = commands
+        .spawn((
+            Sprite::from_color(
+                Color::WHITE,
                 Vec2::new(CHARGE_GAUGE_WIDTH, CHARGE_GAUGE_HEIGHT),
             ),
-            Transform::from_xyz(gauge_x, 0.0, 0.5),
+            Transform::from_xyz(0.0, gauge_y, 0.5),
             ChargeGaugeBackground,
         ))
         .id();
     commands.entity(player_entity).add_child(gauge_bg);
 
-    // Fill (green->red, scales with charge) - starts invisible
+    // Fill (green->red, scales with charge) - starts invisible (scale.x = 0)
     let gauge_fill = commands
         .spawn((
             Sprite::from_color(
                 Color::srgb(0.0, 0.8, 0.0),
                 Vec2::new(CHARGE_GAUGE_WIDTH - 2.0, CHARGE_GAUGE_HEIGHT - 2.0),
             ),
-            Transform::from_xyz(gauge_x, 0.0, 0.6).with_scale(Vec3::new(1.0, 0.0, 1.0)),
+            Transform::from_xyz(0.0, gauge_y, 0.6).with_scale(Vec3::new(0.0, 1.0, 1.0)),
             ChargeGaugeFill,
         ))
         .id();

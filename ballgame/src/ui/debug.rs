@@ -10,6 +10,7 @@ use crate::ball::{Ball, BallStyle, BallTextures};
 use crate::constants::{DEFAULT_VIEWPORT_INDEX, VIEWPORT_PRESETS};
 use crate::palettes::PaletteDatabase;
 use crate::player::{Character, Player};
+use crate::ui::charge_gauge::{ChargeGaugeBackground, ChargeGaugeFill, ChargeGaugeOutline};
 use crate::ui::hud::ScoreLevelText;
 use crate::world::{Basket, BasketRim, CornerRamp, LevelPlatform, Platform};
 
@@ -221,6 +222,14 @@ pub fn apply_palette_colors(
             With<crate::player::animation::PlayerVisual>,
             Without<Ball>,
             Without<Basket>,
+            Without<BasketRim>,
+            Without<crate::world::BasketStripe>,
+            Without<Platform>,
+            Without<LevelPlatform>,
+            Without<CornerRamp>,
+            Without<ChargeGaugeOutline>,
+            Without<ChargeGaugeBackground>,
+            Without<ChargeGaugeFill>,
         ),
     >,
     basket_query: Query<(&Basket, &Children), Without<Player>>,
@@ -231,6 +240,9 @@ pub fn apply_palette_colors(
             Without<Player>,
             Without<Ball>,
             Without<Platform>,
+            Without<ChargeGaugeOutline>,
+            Without<ChargeGaugeBackground>,
+            Without<ChargeGaugeFill>,
         ),
     >,
     mut rim_query: Query<
@@ -240,6 +252,9 @@ pub fn apply_palette_colors(
             Without<Player>,
             Without<Ball>,
             Without<Basket>,
+            Without<ChargeGaugeOutline>,
+            Without<ChargeGaugeBackground>,
+            Without<ChargeGaugeFill>,
         ),
     >,
     mut floor_query: Query<
@@ -253,6 +268,9 @@ pub fn apply_palette_colors(
             Without<Basket>,
             Without<BasketRim>,
             Without<crate::world::BasketStripe>,
+            Without<ChargeGaugeOutline>,
+            Without<ChargeGaugeBackground>,
+            Without<ChargeGaugeFill>,
         ),
     >,
     mut level_platform_query: Query<
@@ -265,6 +283,9 @@ pub fn apply_palette_colors(
             Without<Basket>,
             Without<BasketRim>,
             Without<crate::world::BasketStripe>,
+            Without<ChargeGaugeOutline>,
+            Without<ChargeGaugeBackground>,
+            Without<ChargeGaugeFill>,
         ),
     >,
     mut corner_ramp_query: Query<
@@ -277,6 +298,9 @@ pub fn apply_palette_colors(
             Without<Basket>,
             Without<BasketRim>,
             Without<crate::world::BasketStripe>,
+            Without<ChargeGaugeOutline>,
+            Without<ChargeGaugeBackground>,
+            Without<ChargeGaugeFill>,
         ),
     >,
     mut ball_query: Query<(&BallStyle, &mut Sprite), With<Ball>>,

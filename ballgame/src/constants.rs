@@ -27,8 +27,9 @@ pub const TEXT_ACCENT: Color = Color::srgb(0.9, 0.75, 0.4); // Gold/amber
 pub const PLAYER_SIZE: Vec2 = Vec2::new(64.0, 128.0);
 pub const PLAYER_SPRITE_SIZE: Vec2 = Vec2::new(128.0, 192.0); // Animated sprite visual size
 pub const BALL_SIZE: Vec2 = Vec2::new(26.0, 26.0); // 10% larger than original 24x24
-pub const CHARGE_GAUGE_WIDTH: f32 = 8.0;
-pub const CHARGE_GAUGE_HEIGHT: f32 = PLAYER_SIZE.y; // Same height as player
+pub const CHARGE_GAUGE_WIDTH: f32 = 50.0; // Horizontal bar width
+pub const CHARGE_GAUGE_HEIGHT: f32 = 6.0; // Thin horizontal bar
+pub const CHARGE_GAUGE_Y_OFFSET: f32 = PLAYER_SIZE.y / 2.0 + 12.0; // Above player's head
 
 // =============================================================================
 // PHYSICS CONSTANTS
