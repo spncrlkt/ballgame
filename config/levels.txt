@@ -124,8 +124,8 @@ steps: 15
 step_push_in: 100
 corner_height: 450
 corner_width: 260
-mirror: 400 320 140
-center: 450 200
+mirror: 300 320 140
+center: 550 200
 heatmap_score_weight: 0.300
 heatmap_los_threshold: 0.600
 heatmap_los_margin: 0.200
