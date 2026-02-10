@@ -13,7 +13,7 @@ use crate::helpers::*;
 use crate::levels::{LevelDatabase, reload_level_geometry};
 use crate::palettes::PaletteDatabase;
 use crate::player::components::*;
-use crate::player::spawn::spawn_position;
+use crate::player::spawn::{spawn_position, spawn_position_for_level};
 use crate::scoring::CurrentLevel;
 use crate::tuning::PhysicsTweaks;
 use crate::world::{Basket, BasketRim, CornerRamp, LevelPlatform, Platform};
@@ -582,10 +582,17 @@ pub fn respawn_player(
         score.left = 0;
         score.right = 0;
 
+        // Get level data for spawn positions
+        let level_data = level_db.get_by_id(&current_level.0);
+
         // Reset player positions
         for (player_entity, mut p_transform, mut p_velocity, holding, character) in &mut players {
-            // Use Character component to determine spawn position
-            p_transform.translation = spawn_position(character.0);
+            // Use Character component and level data to determine spawn position
+            p_transform.translation = if let Some(level) = level_data {
+                spawn_position_for_level(character.0, level)
+            } else {
+                spawn_position(character.0)
+            };
             p_velocity.0 = Vec2::ZERO;
 
             // Drop ball if holding
@@ -633,9 +640,16 @@ pub fn respawn_player(
             .get(current_palette.0)
             .expect("Palette index out of bounds");
 
+        // Get level data for spawn positions
+        let new_level_data = level_db.get_by_id(&current_level.0);
+
         // Reset player positions
         for (player_entity, mut p_transform, mut p_velocity, holding, character) in &mut players {
-            p_transform.translation = spawn_position(character.0);
+            p_transform.translation = if let Some(level) = new_level_data {
+                spawn_position_for_level(character.0, level)
+            } else {
+                spawn_position(character.0)
+            };
             p_velocity.0 = Vec2::ZERO;
 
             if holding.is_some() {

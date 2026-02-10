@@ -38,31 +38,39 @@ pub fn spawn_position_for_level(
     // Check for custom spawn positions in the level
     // spawn_primary: L0 at (-x, y), R0 at (+x, y)
     // spawn_secondary: L1 at (-x, y), R1 at (+x, y)
+    // y=0 means use default y (feet on floor), otherwise y is height above floor
+    let player_half_height = PLAYER_SIZE.y / 2.0;
+    let default_y = ARENA_FLOOR_Y + player_half_height;
+
     match character {
         CharacterId::L0 => {
             if let Some(pos) = level.spawn_primary {
-                Vec3::new(-pos.x, ARENA_FLOOR_Y + pos.y, 0.0)
+                let y = if pos.y == 0.0 { default_y } else { ARENA_FLOOR_Y + pos.y + player_half_height };
+                Vec3::new(-pos.x, y, 0.0)
             } else {
                 SPAWN_L0
             }
         }
         CharacterId::R0 => {
             if let Some(pos) = level.spawn_primary {
-                Vec3::new(pos.x, ARENA_FLOOR_Y + pos.y, 0.0)
+                let y = if pos.y == 0.0 { default_y } else { ARENA_FLOOR_Y + pos.y + player_half_height };
+                Vec3::new(pos.x, y, 0.0)
             } else {
                 SPAWN_R0
             }
         }
         CharacterId::L1 => {
             if let Some(pos) = level.spawn_secondary {
-                Vec3::new(-pos.x, ARENA_FLOOR_Y + pos.y, 0.0)
+                let y = if pos.y == 0.0 { default_y } else { ARENA_FLOOR_Y + pos.y + player_half_height };
+                Vec3::new(-pos.x, y, 0.0)
             } else {
                 SPAWN_L1
             }
         }
         CharacterId::R1 => {
             if let Some(pos) = level.spawn_secondary {
-                Vec3::new(pos.x, ARENA_FLOOR_Y + pos.y, 0.0)
+                let y = if pos.y == 0.0 { default_y } else { ARENA_FLOOR_Y + pos.y + player_half_height };
+                Vec3::new(pos.x, y, 0.0)
             } else {
                 SPAWN_R1
             }
@@ -294,6 +302,7 @@ pub fn spawn_characters_for_mode(
     start_idle: bool,
     profile_db: &AiProfileDatabase,
     anim_clips: Option<&PlayerAnimClips>,
+    level: Option<&crate::levels::LevelData>,
 ) -> Vec<(CharacterId, Entity)> {
     let characters = mode.characters();
     let mut results = Vec::with_capacity(characters.len());
@@ -317,6 +326,11 @@ pub fn spawn_characters_for_mode(
             None // Will use AI source ID
         };
 
+        // Use level-specific spawn position if available
+        let position = level
+            .map(|l| spawn_position_for_level(character, l))
+            .unwrap_or_else(|| spawn_position(character));
+
         let config = CharacterSpawnConfig {
             character,
             controller,
@@ -324,7 +338,7 @@ pub fn spawn_characters_for_mode(
             start_idle,
             is_human_controlled: is_human,
             ability,
-            position_override: None,
+            position_override: Some(position),
             facing_override: None,
             initial_goal_override: None,
         };

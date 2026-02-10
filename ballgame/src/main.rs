@@ -790,6 +790,7 @@ fn setup(
         is_special_level,
         &profile_db,
         Some(&anim_clips),
+        level_data,
     );
 
     // Spawn charge gauges and steal indicators for all spawned characters
